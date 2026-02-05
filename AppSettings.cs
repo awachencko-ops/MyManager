@@ -9,6 +9,8 @@ namespace MyManager
         public string OrdersRootPath { get; set; } = @"C:\Андрей ПК";
         public string GrandpaPath { get; set; } = @"\\NAS\work\Temp\!!!Дедушка";
         public int RunTimeoutMinutes { get; set; } = 10;
+        public bool UseExtendedMode { get; set; } = true;
+        public string TempFolderName { get; set; } = "TempMyManager";
 
         public static string FileName => "settings.json";
 
