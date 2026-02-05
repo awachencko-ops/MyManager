@@ -11,6 +11,9 @@ namespace MyManager
         public event Action<string> OnLog;
 
         private readonly string _rootPath;
+        private const string TempInFolder = "in";
+        private const string TempPrepressFolder = "prepress";
+        private const string TempPrintFolder = "print";
 
         public OrderProcessor(string rootPath)
         {
@@ -21,6 +24,9 @@ namespace MyManager
         {
             var settings = AppSettings.Load();
             var timeout = TimeSpan.FromMinutes(settings.RunTimeoutMinutes);
+            bool useExtendedMode = settings.UseExtendedMode;
+            string tempRoot = Path.Combine(_rootPath, settings.TempFolderName);
+            EnsureTempFolders(tempRoot);
 
             try
             {
@@ -66,7 +72,7 @@ namespace MyManager
                         string okFile = await WaitForFileAsync(pitCfg.ProcessedSuccess, fileName, timeout, ct);
                         if (okFile == null) throw new Exception("Таймаут PitStop.");
                         string newName = $"{Path.GetFileNameWithoutExtension(fileName)}_pitstop{Path.GetExtension(fileName)}";
-                        order.PreparedPath = CopyIntoStage(order, 2, okFile, newName);
+                        order.PreparedPath = CopyIntoStage(order, 2, okFile, newName, tempRoot);
                         Notify(order, "🟡 PitStop готово", "Версия сохранена.");
                     }
                 }
@@ -86,8 +92,16 @@ namespace MyManager
                     string outFile = await WaitForFileAsync(impCfg.Out, fileName, timeout, ct);
                     if (outFile == null) throw new Exception("Таймаут Imposing.");
 
-                    order.PrintPath = CopyIntoStage(order, 3, outFile, $"{order.Id}.pdf");
+                    order.PrintPath = CopyIntoStage(order, 3, outFile, $"{order.Id}.pdf", tempRoot);
                     try { File.Delete(outFile); } catch { }
+                }
+
+                if (!string.IsNullOrEmpty(order.PrintPath) && File.Exists(order.PrintPath))
+                {
+                    if (useExtendedMode)
+                        MoveTempToOrderFolder(order, tempRoot);
+                    else
+                        MovePrintToGrandpa(order, settings.GrandpaPath);
                 }
 
                 Notify(order, "✅ Готово", "Заказ успешно выполнен.");
@@ -101,14 +115,93 @@ namespace MyManager
 
         private void Notify(OrderData o, string s, string l) { OnStatusChanged?.Invoke(o.Id, s); OnLog?.Invoke(l); }
 
-        private string CopyIntoStage(OrderData o, int stage, string src, string name)
+        private string CopyIntoStage(OrderData o, int stage, string src, string name, string rootPath)
         {
-            string sub = stage switch { 1 => "1. исходные", 2 => "2. подготовка", 3 => "3. печать", _ => "" };
-            string path = Path.Combine(_rootPath, o.FolderName, sub);
+            string sub = stage switch { 1 => TempInFolder, 2 => TempPrepressFolder, 3 => TempPrintFolder, _ => "" };
+            string path = Path.Combine(rootPath, sub);
             Directory.CreateDirectory(path);
             string dest = Path.Combine(path, name);
             File.Copy(src, dest, true);
             return dest;
+        }
+
+        private void MoveTempToOrderFolder(OrderData order, string tempRoot)
+        {
+            if (string.IsNullOrWhiteSpace(order.FolderName)) return;
+
+            string sourcePath = MoveFileIfExists(order.SourcePath, GetOrderStagePath(order, 1));
+            string preparedPath = MoveFileIfExists(order.PreparedPath, GetOrderStagePath(order, 2));
+            string printPath = MoveFileIfExists(order.PrintPath, GetOrderStagePath(order, 3));
+
+            if (!string.IsNullOrEmpty(sourcePath)) order.SourcePath = sourcePath;
+            if (!string.IsNullOrEmpty(preparedPath)) order.PreparedPath = preparedPath;
+            if (!string.IsNullOrEmpty(printPath)) order.PrintPath = printPath;
+
+            TryDeleteEmptyFolders(tempRoot);
+        }
+
+        private void MovePrintToGrandpa(OrderData order, string grandpaPath)
+        {
+            if (string.IsNullOrWhiteSpace(grandpaPath)) return;
+            Directory.CreateDirectory(grandpaPath);
+
+            string target = Path.Combine(grandpaPath, Path.GetFileName(order.PrintPath));
+            MoveFileWithOverwrite(order.PrintPath, target);
+            order.PrintPath = target;
+
+            if (!string.IsNullOrEmpty(order.SourcePath) && File.Exists(order.SourcePath))
+            {
+                try { File.Delete(order.SourcePath); } catch { }
+            }
+        }
+
+        private string GetOrderStagePath(OrderData order, int stage)
+        {
+            string sub = stage switch { 1 => "1. исходные", 2 => "2. подготовка", 3 => "3. печать", _ => "" };
+            string path = Path.Combine(_rootPath, order.FolderName, sub);
+            Directory.CreateDirectory(path);
+            return path;
+        }
+
+        private string MoveFileIfExists(string sourcePath, string targetFolder)
+        {
+            if (string.IsNullOrEmpty(sourcePath) || !File.Exists(sourcePath)) return "";
+            string targetPath = Path.Combine(targetFolder, Path.GetFileName(sourcePath));
+            if (string.Equals(Path.GetFullPath(sourcePath), Path.GetFullPath(targetPath), StringComparison.OrdinalIgnoreCase))
+                return sourcePath;
+            MoveFileWithOverwrite(sourcePath, targetPath);
+            return targetPath;
+        }
+
+        private void MoveFileWithOverwrite(string sourcePath, string targetPath)
+        {
+            if (string.IsNullOrEmpty(sourcePath) || !File.Exists(sourcePath)) return;
+            if (File.Exists(targetPath))
+            {
+                try { File.Delete(targetPath); } catch { }
+            }
+            File.Move(sourcePath, targetPath);
+        }
+
+        private void EnsureTempFolders(string tempRoot)
+        {
+            Directory.CreateDirectory(Path.Combine(tempRoot, TempInFolder));
+            Directory.CreateDirectory(Path.Combine(tempRoot, TempPrepressFolder));
+            Directory.CreateDirectory(Path.Combine(tempRoot, TempPrintFolder));
+        }
+
+        private void TryDeleteEmptyFolders(string tempRoot)
+        {
+            try
+            {
+                foreach (var folder in new[] { TempInFolder, TempPrepressFolder, TempPrintFolder })
+                {
+                    string path = Path.Combine(tempRoot, folder);
+                    if (Directory.Exists(path) && Directory.GetFiles(path).Length == 0)
+                        Directory.Delete(path, true);
+                }
+            }
+            catch { }
         }
 
         private async Task<string> WaitForFileAsync(string folder, string fileName, TimeSpan timeout, CancellationToken ct)

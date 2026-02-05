@@ -4,6 +4,7 @@ namespace MyManager
 {
     public class OrderData
     {
+        public string InternalId { get; set; } = Guid.NewGuid().ToString("N");
         public string Id { get; set; } = "";
 
         public string Keyword { get; set; } = ""; // Новое поле
