@@ -1,0 +1,837 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Drawing;
+using System.IO;
+using System.Linq;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+
+namespace MyManager
+{
+    public partial class Form1 : Form
+    {
+
+        private string sourceColumnName = ""; // Добавь эту переменную в начало класса
+        private readonly OrderProcessor _processor;
+        private readonly OrderGridContextMenu _gridMenu = new OrderGridContextMenu();
+        private List<OrderData> _orderHistory = new List<OrderData>();
+        private string _ordersRootPath = @"C:\Андрей ПК";
+        private readonly string _jsonHistoryFile = "history.json";
+
+        private Rectangle dragBoxFromMouseDown;
+        private object itemFromMouseDown;
+        private int sourceColumnIndex = -1;
+        private int sourceRowIndex = -1;
+
+        private int _hoveredRowIndex = -1;
+        private int _ctxRow = -1;
+        private int _ctxCol = -1; // Добавлено
+        private readonly string _grandpaFolder = @"\\NAS\work\Temp\!!!Дедушка";
+
+        public Form1()
+        {
+            InitializeComponent();
+            this.StartPosition = FormStartPosition.CenterScreen; // Добавь это
+            var settings = AppSettings.Load();
+            _ordersRootPath = settings.OrdersRootPath;
+
+            _processor = new OrderProcessor(_ordersRootPath);
+            _processor.OnStatusChanged += (id, status) =>
+            {
+                var order = _orderHistory.FirstOrDefault(x => x.Id == id);
+                if (order != null) SetOrderStatus(order, status);
+            };
+            _processor.OnLog += (msg) => SetBottomStatus(msg);
+
+            PdfSharp.Fonts.GlobalFontSettings.FontResolver = new SimpleFontResolver();
+            SetupContextMenuActions();
+            LoadHistory();
+            ApplyModernDesign();
+            EnsureGridStyle();
+            FillGrid();
+
+            btnCreateOrder.Click += (s, e) => ShowOrderEditor(null);
+            ButtonSettings.Click += (s, e) => ShowSettingsMenu();
+
+            gridOrders.CellDoubleClick += GridOrders_CellDoubleClick;
+            gridOrders.CellContentClick += GridOrders_CellContentClick;
+            gridOrders.CellMouseDown += GridOrders_CellMouseDown;
+            gridOrders.CellFormatting += GridOrders_CellFormatting;
+            gridOrders.CellMouseEnter += GridOrders_CellMouseEnter;
+            gridOrders.CellMouseLeave += GridOrders_CellMouseLeave;
+
+            // ВКЛЮЧАЕМ DRAG AND DROP
+            gridOrders.AllowDrop = true;
+            gridOrders.DragEnter += GridOrders_DragEnter;
+            gridOrders.DragDrop += GridOrders_DragDrop;
+
+            gridOrders.MouseDown += GridOrders_MouseDown;
+            gridOrders.MouseMove += GridOrders_MouseMove;
+            gridOrders.DragOver += GridOrders_DragOver;
+            gridOrders.DragDrop += GridOrders_DragDrop;
+
+            // Подписываемся на клик (если еще не подписаны)
+            gridOrders.CellClick += GridOrders_CellClick;
+
+            SetBottomStatus("Готово");
+        }
+
+        private void SetupContextMenuActions()
+        {
+            // --- ОСНОВНЫЕ ДЕЙСТВИЯ ---
+            // Передаем stage (0, 1, 2 или 3), чтобы открывать конкретную подпапку
+            _gridMenu.OpenFolder = (stage) => {
+                var o = GetOrderByRow(_ctxRow);
+                if (o != null) OpenOrderStageFolder(o, stage);
+            };
+
+            _gridMenu.Delete = () => { var o = GetOrderByRow(_ctxRow); if (o != null) DeleteOrder(o); };
+
+            _gridMenu.Run = async () => { var o = GetOrderByRow(_ctxRow); if (o != null) await RunForOrderAsync(o); };
+
+            // --- УПРАВЛЕНИЕ ФАЙЛАМИ ---
+            _gridMenu.PickFile = (stage, type) => { var o = GetOrderByRow(_ctxRow); if (o != null) PickAndCopyFile(o, stage, type); };
+
+            _gridMenu.RemoveFile = (stage) => { var o = GetOrderByRow(_ctxRow); if (o != null) RemoveFileFromOrder(o, stage); };
+
+            _gridMenu.CopyToPrepared = () => { var o = GetOrderByRow(_ctxRow); if (o != null) CopySourceToPrepared(o); };
+
+            _gridMenu.CopyToGrandpa = () => { var o = GetOrderByRow(_ctxRow); if (o != null) CopyToGrandpa(o); };
+
+            // --- ПЕРЕИМЕНОВАНИЕ И ВСТАВКА ИЗ БУФЕРА ---
+            _gridMenu.RenameFile = (stage) => {
+                var o = GetOrderByRow(_ctxRow);
+                if (o != null) RenameFileHandler(o, stage);
+            };
+
+            _gridMenu.PastePathFromClipboard = (stage) => {
+                var o = GetOrderByRow(_ctxRow);
+                if (o != null) PasteFileFromClipboard(o, stage);
+            };
+
+            // --- ВОДЯНЫЕ ЗНАКИ ---
+            _gridMenu.ApplyWatermark = () => {
+                var o = GetOrderByRow(_ctxRow);
+                if (o != null) ProcessWatermark(o, false);
+            };
+
+            _gridMenu.ApplyWatermarkLeft = () => {
+                var o = GetOrderByRow(_ctxRow);
+                if (o != null) ProcessWatermark(o, true);
+            };
+
+            // --- ДИСПЕТЧЕРЫ ---
+            _gridMenu.OpenPitStopMan = OpenPitStopManager;
+            _gridMenu.OpenImpMan = OpenImposingManager;
+        }
+
+        private string SmartCopy(string sourceFile, OrderData o, int stage, string targetName, bool isInternal)
+        {
+            // 1. Очищаем входящий путь от кавычек и пробелов (частая причина глюков)
+            sourceFile = sourceFile.Trim().Replace("\"", "");
+
+            string sub = stage switch { 1 => "1. исходные", 2 => "2. подготовка", 3 => "3. печать", _ => "" };
+            string folder = Path.Combine(_ordersRootPath, o.FolderName, sub);
+
+            // Создаем папку, если её нет
+            if (!Directory.Exists(folder)) Directory.CreateDirectory(folder);
+
+            string destPath = Path.Combine(folder, targetName);
+
+            // 2. ГЛАВНАЯ ПРОВЕРКА: Сравниваем полные канонические пути
+            // Если это физически один и тот же файл — просто выходим без вопросов
+            if (string.Equals(Path.GetFullPath(sourceFile).TrimEnd('\\'),
+                              Path.GetFullPath(destPath).TrimEnd('\\'),
+                              StringComparison.OrdinalIgnoreCase))
+            {
+                return destPath;
+            }
+
+            // 3. Если файл реально существует в целевой папке
+            if (File.Exists(destPath))
+            {
+                // Если это внутренний перенос в рамках одного заказа — заменяем молча (чтобы не бесить)
+                if (isInternal)
+                {
+                    try { File.Delete(destPath); } catch { /* файл может быть занят */ }
+                }
+                else
+                {
+                    // Если это внешний файл из Windows — спрашиваем
+                    var result = MessageBox.Show(
+                        $"Файл '{targetName}' уже есть в папке '{sub}'.\n\nЗАМЕНИТЬ его? (Да)\nСОЗДАТЬ версию с '+'? (Нет)\nОТМЕНИТЬ? (Cancel)",
+                        "Подстраховка: Конфликт имен", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+
+                    if (result == DialogResult.Yes)
+                    {
+                        try { File.Delete(destPath); } catch { throw new Exception("Не удалось заменить файл, он открыт в другой программе."); }
+                    }
+                    else if (result == DialogResult.No)
+                    {
+                        string name = Path.GetFileNameWithoutExtension(targetName);
+                        string ext = Path.GetExtension(targetName);
+                        string newName = name;
+                        while (File.Exists(Path.Combine(folder, newName + "+" + ext))) newName += "+";
+                        destPath = Path.Combine(folder, newName + "+" + ext);
+                    }
+                    else return sourceFile; // Отмена
+                }
+            }
+
+            // 4. Само копирование
+            File.Copy(sourceFile, destPath, true);
+            return destPath;
+        }
+
+        // Добавьте этот вспомогательный метод в Form1.cs, чтобы не дублировать логику
+        private void ProcessWatermark(OrderData o, bool isVertical)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(o.PrintPath) || !File.Exists(o.PrintPath))
+                {
+                    MessageBox.Show("Файл печатного спуска не найден!", "Ошибка");
+                    return;
+                }
+
+                PdfWatermark.Apply(o, isVertical);
+
+                string pos = isVertical ? "слева" : "сверху";
+                SetBottomStatus($"✅ Водяной знак ({pos}) нанесен на {o.Id}");
+            }
+            catch (IOException)
+            {
+                MessageBox.Show("Файл занят! Закройте PDF в Acrobat или PitStop.", "Ошибка доступа");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка: {ex.Message}");
+            }
+        }
+
+        private void GridOrders_MouseDown(object sender, MouseEventArgs e)
+        {
+            var hit = gridOrders.HitTest(e.X, e.Y);
+            if (hit.RowIndex >= 0 && hit.ColumnIndex >= 0)
+            {
+                sourceRowIndex = hit.RowIndex;
+                sourceColumnIndex = hit.ColumnIndex;
+                sourceColumnName = gridOrders.Columns[hit.ColumnIndex].Name; // Запоминаем имя
+
+                Size dragSize = SystemInformation.DragSize;
+                dragBoxFromMouseDown = new Rectangle(new Point(e.X - (dragSize.Width / 2),
+                                                               e.Y - (dragSize.Height / 2)), dragSize);
+            }
+        }
+
+        private void GridOrders_MouseMove(object sender, MouseEventArgs e)
+        {
+            if ((e.Button & MouseButtons.Left) == MouseButtons.Left)
+            {
+                // Проверяем, что мы вообще начали движение (вышли за пределы dragBox)
+                if (dragBoxFromMouseDown != Rectangle.Empty && !dragBoxFromMouseDown.Contains(e.X, e.Y))
+                {
+                    // Проверяем, что тянем из правильных колонок (Исходники, Подготовка или Печать)
+                    // Индексы колонок: colSource=2, colReady=3, colPrint=6 (согласно твоему коду)
+                    if (sourceColumnName == "colSource" || sourceColumnName == "colReady" || sourceColumnName == "colPrint")
+                    {
+                        var o = GetOrderByRow(sourceRowIndex);
+                        if (o == null) return;
+
+                        string filePath = sourceColumnIndex switch
+                        {
+                            2 => o.SourcePath,
+                            3 => o.PreparedPath,
+                            6 => o.PrintPath,
+                            _ => ""
+                        };
+
+                        // Если в ячейке реально есть файл — начинаем перетаскивание
+                        if (!string.IsNullOrEmpty(filePath) && File.Exists(filePath))
+                        {
+                            DataObject dragData = new DataObject();
+                            dragData.SetData(DataFormats.FileDrop, new string[] { filePath });
+                            dragData.SetData("InternalSourceColumn", sourceColumnIndex);
+                            dragData.SetData("InternalSourceRow", sourceRowIndex);
+
+                            // Запускаем процесс!
+                            gridOrders.DoDragDrop(dragData, DragDropEffects.Copy | DragDropEffects.Move);
+                        }
+                    }
+                }
+            }
+        }
+
+        private void ApplyModernDesign()
+        {
+            gridOrders.EnableHeadersVisualStyles = false;
+            gridOrders.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            gridOrders.MultiSelect = false;
+            gridOrders.ShowCellToolTips = false;
+            gridOrders.RowTemplate.Height = 45;
+
+            Color hBg = Color.FromArgb(245, 245, 247);
+            gridOrders.ColumnHeadersDefaultCellStyle.BackColor = hBg;
+            gridOrders.ColumnHeadersDefaultCellStyle.SelectionBackColor = hBg;
+            gridOrders.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
+            gridOrders.DefaultCellStyle.SelectionBackColor = Color.FromArgb(235, 240, 250);
+            gridOrders.BackgroundColor = Color.White;
+            gridOrders.BorderStyle = BorderStyle.None;
+        }
+
+        private void RenameFileHandler(OrderData o, int stage)
+        {
+            string currentPath = stage switch { 1 => o.SourcePath, 2 => o.PreparedPath, 3 => o.PrintPath, _ => "" };
+            if (string.IsNullOrEmpty(currentPath) || !File.Exists(currentPath)) return;
+
+            string oldName = Path.GetFileNameWithoutExtension(currentPath);
+            string extension = Path.GetExtension(currentPath);
+
+            // Вызов диалогового окна (метод ShowInputDialog мы создавали ранее)
+            string newName = ShowInputDialog("Переименование", "Введите новое имя:", oldName);
+
+            if (string.IsNullOrWhiteSpace(newName) || newName == oldName) return;
+
+            foreach (char c in Path.GetInvalidFileNameChars()) newName = newName.Replace(c, '_');
+
+            string newPath = Path.Combine(Path.GetDirectoryName(currentPath), newName + extension);
+
+            try
+            {
+                File.Move(currentPath, newPath);
+                UpdateOrderFilePath(o, stage, newPath);
+                SaveHistory(); FillGrid();
+                SetBottomStatus("✅ Файл переименован");
+            }
+            catch (Exception ex) { MessageBox.Show("Ошибка: " + ex.Message); }
+        }
+        private string ShowInputDialog(string title, string promptText, string value)
+        {
+            Form form = new Form();
+            Label label = new Label();
+            TextBox textBox = new TextBox();
+            Button buttonOk = new Button();
+            Button buttonCancel = new Button();
+
+            form.Text = title;
+            label.Text = promptText;
+            textBox.Text = value;
+
+            buttonOk.Text = "ОК";
+            buttonCancel.Text = "Отмена";
+            buttonOk.DialogResult = DialogResult.OK;
+            buttonCancel.DialogResult = DialogResult.Cancel;
+
+            label.SetBounds(20, 20, 350, 20);
+            textBox.SetBounds(20, 50, 350, 20);
+            buttonOk.SetBounds(210, 90, 75, 30);
+            buttonCancel.SetBounds(295, 90, 75, 30);
+
+            form.ClientSize = new Size(390, 140);
+            form.Controls.AddRange(new Control[] { label, textBox, buttonOk, buttonCancel });
+            form.FormBorderStyle = FormBorderStyle.FixedDialog;
+            form.StartPosition = FormStartPosition.CenterParent;
+            form.AcceptButton = buttonOk;
+            form.CancelButton = buttonCancel;
+
+            return form.ShowDialog() == DialogResult.OK ? textBox.Text : value;
+        }
+        private void PasteFileFromClipboard(OrderData o, int stage)
+        {
+            try
+            {
+                string text = Clipboard.GetText().Trim();
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    SetBottomStatus("Буфер обмена пуст");
+                    return;
+                }
+
+                // Очистка пути: убираем кавычки (бывает в начале и конце)
+                string cleanPath = text.Replace("\"", "").Trim();
+
+                if (File.Exists(cleanPath))
+                {
+                    // Копируем файл в структуру заказа
+                    string newPath = CopyIntoStage(o, stage, cleanPath);
+                    UpdateOrderFilePath(o, stage, newPath);
+
+                    SaveHistory();
+                    FillGrid();
+                    SetBottomStatus($"✅ Файл подхвачен: {Path.GetFileName(cleanPath)}");
+                }
+                else
+                {
+                    MessageBox.Show($"Файл не найден по указанному пути:\n{cleanPath}", "Ошибка пути");
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Ошибка при вставке пути: " + ex.Message);
+            }
+        }
+
+        private void EnsureGridStyle()
+        {
+            gridOrders.RowHeadersVisible = false;
+            gridOrders.AllowUserToAddRows = false;
+            gridOrders.ReadOnly = true;
+            gridOrders.AllowUserToResizeRows = false;   
+            gridOrders.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+        }
+
+        private void FillGrid()
+        {
+            if (gridOrders.Columns.Count == 0) return;
+            string? selId = gridOrders.CurrentRow?.Cells["colId"].Value?.ToString();
+            var sorted = _orderHistory.OrderByDescending(x => x.OrderDate).ToList();
+
+            if (gridOrders.Rows.Count != sorted.Count)
+            {
+                gridOrders.Rows.Clear();
+                foreach (var o in sorted)
+                    gridOrders.Rows.Add(o.Status, o.Id, GetFileName(o.SourcePath), GetFileName(o.PreparedPath), o.PitStopAction, o.ImposingAction, GetFileName(o.PrintPath));
+            }
+            else
+            {
+                for (int i = 0; i < sorted.Count; i++)
+                {
+                    var o = sorted[i]; var r = gridOrders.Rows[i];
+                    UpdateCell(r, "colState", o.Status); UpdateCell(r, "colId", o.Id);
+                    UpdateCell(r, "colSource", GetFileName(o.SourcePath)); UpdateCell(r, "colReady", GetFileName(o.PreparedPath));
+                    UpdateCell(r, "colPitStop", o.PitStopAction); UpdateCell(r, "colImposing", o.ImposingAction);
+                    UpdateCell(r, "colPrint", GetFileName(o.PrintPath));
+                }
+            }
+            if (!string.IsNullOrEmpty(selId))
+                foreach (DataGridViewRow row in gridOrders.Rows) if (row.Cells["colId"].Value?.ToString() == selId) { gridOrders.CurrentCell = row.Cells[0]; break; }
+        }
+
+        private void OpenOrderStageFolder(OrderData o, int stage)
+        {
+            try
+            {
+                string sub = stage switch { 1 => "1. исходные", 2 => "2. подготовка", 3 => "3. печать", _ => "" };
+                string path = Path.Combine(_ordersRootPath, o.FolderName, sub);
+
+                if (!Directory.Exists(path))
+                    Directory.CreateDirectory(path);
+
+                // ИСПОЛЬЗУЕМ SHELL EXECUTE ВМЕСТО ПРЯМОГО ВЫЗОВА EXPLORER.EXE
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = path,
+                    UseShellExecute = true // Это заставляет Windows использовать программу по умолчанию
+                });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Не удалось открыть папку: {ex.Message}");
+            }
+        }
+
+        private void UpdateCell(DataGridViewRow r, string n, object? v) { if (r.Cells[n].Value?.ToString() != v?.ToString()) r.Cells[n].Value = v; }
+        private string GetFileName(string? p) => (string.IsNullOrWhiteSpace(p) || p == "..." || Directory.Exists(p)) ? "..." : Path.GetFileName(p);
+
+        private void GridOrders_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
+        {
+            if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
+            var o = GetOrderByRow(e.RowIndex); if (o == null) return;
+            string col = gridOrders.Columns[e.ColumnIndex].Name;
+
+            Color selC = Color.FromArgb(235, 240, 250);
+            Color hovC = Color.FromArgb(248, 250, 255);
+            Color bg = gridOrders.Rows[e.RowIndex].Selected ? selC : (e.RowIndex == _hoveredRowIndex ? hovC : Color.White);
+
+            if (col == "colState")
+            {
+                string s = (o.Status ?? "").ToLower(); Color b, f;
+                if (s.Contains("ошибка")) { b = Color.FromArgb(255, 210, 210); f = Color.FromArgb(150, 0, 0); }
+                else if (!string.IsNullOrEmpty(o.PrintPath) && File.Exists(o.PrintPath)) { b = Color.FromArgb(210, 255, 210); f = Color.FromArgb(0, 100, 0); }
+                else { b = Color.FromArgb(255, 235, 200); f = Color.FromArgb(150, 80, 0); }
+                e.CellStyle.BackColor = e.CellStyle.SelectionBackColor = b;
+                e.CellStyle.ForeColor = e.CellStyle.SelectionForeColor = f;
+            }
+            else if (col == "colSource" || col == "colReady" || col == "colPrint")
+            {
+                string p = col == "colSource" ? o.SourcePath : (col == "colReady" ? o.PreparedPath : o.PrintPath);
+                Color txt = (string.IsNullOrEmpty(p) || p == "...") ? Color.Gray : (File.Exists(p) ? Color.DodgerBlue : Color.Red);
+                e.CellStyle.ForeColor = e.CellStyle.SelectionForeColor = txt;
+                e.CellStyle.BackColor = e.CellStyle.SelectionBackColor = bg;
+            }
+            else { e.CellStyle.BackColor = e.CellStyle.SelectionBackColor = bg; }
+        }
+
+        private void GridOrders_CellMouseEnter(object? sender, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex >= 0)
+            {
+                gridOrders.Cursor = (e.ColumnIndex == 2 || e.ColumnIndex == 3 || e.ColumnIndex == 6) ? Cursors.Hand : Cursors.Default;
+                if (e.RowIndex != _hoveredRowIndex) { int old = _hoveredRowIndex; _hoveredRowIndex = e.RowIndex; if (old >= 0) gridOrders.InvalidateRow(old); gridOrders.InvalidateRow(_hoveredRowIndex); }
+            }
+        }
+        private void GridOrders_CellMouseLeave(object? sender, EventArgs e) { if (_hoveredRowIndex != -1) { int old = _hoveredRowIndex; _hoveredRowIndex = -1; gridOrders.InvalidateRow(old); } gridOrders.Cursor = Cursors.Default; }
+
+        private void GridOrders_CellMouseDown(object? sender, DataGridViewCellMouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Right && e.RowIndex >= 0)
+            {
+                _ctxRow = e.RowIndex; _ctxCol = e.ColumnIndex;
+                gridOrders.CurrentCell = gridOrders.Rows[e.RowIndex].Cells[e.ColumnIndex];
+                _gridMenu.Build(gridOrders.Columns[e.ColumnIndex].Name).Show(Cursor.Position);
+            }
+        }
+
+        private async Task RunForOrderAsync(OrderData order)
+        {
+            using var cts = new CancellationTokenSource();
+            await _processor.RunAsync(order, cts.Token);
+            SaveHistory(); FillGrid();
+        }
+
+        private void ShowOrderEditor(OrderData? existing)
+        {
+            using var f = new OrderForm(_ordersRootPath, existing);
+            if (f.ShowDialog() == DialogResult.OK && f.ResultOrder != null)
+            {
+                if (existing == null) _orderHistory.Add(f.ResultOrder);
+                else { int idx = _orderHistory.FindIndex(x => x.Id == existing.Id); if (idx >= 0) _orderHistory[idx] = f.ResultOrder; }
+                SaveHistory(); FillGrid();
+            }
+        }
+
+        private void RemoveFileFromOrder(OrderData order, int stage)
+        {
+            string? path = stage == 1 ? order.SourcePath : stage == 2 ? order.PreparedPath : order.PrintPath;
+
+            if (string.IsNullOrEmpty(path)) return;
+
+            if (MessageBox.Show($"Удалить {Path.GetFileName(path)}?", "Удаление", MessageBoxButtons.YesNo) == DialogResult.Yes)
+            {
+                try
+                {
+                    if (File.Exists(path)) File.Delete(path);
+                }
+                catch (Exception ex) { MessageBox.Show(ex.Message); }
+
+                // Обновляем путь на пустой — сработает наш авто-статус и вернет "В работе" или "Ожидание"
+                UpdateOrderFilePath(order, stage, "");
+
+                SaveHistory();
+                FillGrid();
+            }
+        }
+
+        private void UpdateOrderFilePath(OrderData o, int s, string p)
+        {
+            // 1. Обновляем путь в зависимости от стадии
+            if (s == 1) o.SourcePath = p;
+            else if (s == 2) o.PreparedPath = p;
+            else if (s == 3) o.PrintPath = p;
+
+            // 2. ЛОГИКА АВТО-СТАТУСА
+            // Если в колонке "Печать" есть существующий файл
+            if (!string.IsNullOrEmpty(o.PrintPath) && File.Exists(o.PrintPath))
+            {
+                o.Status = "✅ Готово";
+            }
+            // Если файла в печати нет, но есть в "Подготовке"
+            else if (!string.IsNullOrEmpty(o.PreparedPath) && File.Exists(o.PreparedPath))
+            {
+                // Только если статус не "Ошибка", чтобы не затереть важное уведомление
+                if (!o.Status.Contains("Ошибка"))
+                    o.Status = "📂 В работе";
+            }
+            // Если файлов нет (удалили)
+            else if (string.IsNullOrEmpty(o.SourcePath))
+            {
+                o.Status = "⚪ Ожидание";
+            }
+        }
+
+        private OrderData? GetOrderByRow(int idx)
+        {
+            if (idx < 0 || idx >= gridOrders.Rows.Count) return null;
+            string id = gridOrders.Rows[idx].Cells["colId"].Value?.ToString() ?? "";
+            return _orderHistory.FirstOrDefault(x => x.Id == id);
+        }
+
+        private void OpenOrderFolder(OrderData o) { try { Process.Start("explorer.exe", Path.Combine(_ordersRootPath, o.FolderName)); } catch { } }
+        private void OpenPitStopManager() { using var f = new ActionManagerForm(); f.ShowDialog(); }
+        private void OpenImposingManager() { using var f = new ImposingManagerForm(); f.ShowDialog(); }
+
+        private void GridOrders_CellClick(object sender, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
+
+            var o = GetOrderByRow(e.RowIndex);
+            if (o == null) return;
+
+            // Проверяем, что нажали именно на "..."
+            var cellValue = gridOrders.Rows[e.RowIndex].Cells[e.ColumnIndex].Value?.ToString();
+            if (cellValue == "...")
+            {
+                string col = gridOrders.Columns[e.ColumnIndex].Name;
+                if (col == "colSource") PickAndCopyFile(o, 1, "source");
+                else if (col == "colReady") PickAndCopyFile(o, 2, "prepared");
+                else if (col == "colPrint") PickAndCopyFile(o, 3, "print");
+            }
+        }
+
+        private void GridOrders_DragEnter(object sender, DragEventArgs e)
+        {
+            // Проверяем, что перетаскивают именно файлы
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+                e.Effect = DragDropEffects.Copy;
+            else
+                e.Effect = DragDropEffects.None;
+        }
+
+        private void GridOrders_DragDrop(object sender, DragEventArgs e)
+        {
+            string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
+            if (files == null || files.Length == 0) return;
+
+            // Очищаем путь от мусора сразу
+            string sourceFile = files[0].Trim().Replace("\"", "");
+
+            Point clientPoint = gridOrders.PointToClient(new Point(e.X, e.Y));
+            var hit = gridOrders.HitTest(clientPoint.X, clientPoint.Y);
+
+            if (hit.RowIndex >= 0 && hit.ColumnIndex >= 0)
+            {
+                var targetOrder = GetOrderByRow(hit.RowIndex);
+                if (targetOrder == null) return;
+
+                string colName = gridOrders.Columns[hit.ColumnIndex].Name;
+                int targetStage = colName switch { "colSource" => 1, "colReady" => 2, "colPrint" => 3, _ => 0 };
+                if (targetStage == 0) return;
+
+                bool isInternal = e.Data.GetDataPresent("InternalSourceColumn");
+
+                string targetName = (targetStage == 3)
+                    ? $"{targetOrder.Id}{Path.GetExtension(sourceFile)}"
+                    : Path.GetFileName(sourceFile);
+
+                try
+                {
+                    string newPath = SmartCopy(sourceFile, targetOrder, targetStage, targetName, isInternal);
+
+                    // Если путь обновился — сохраняем
+                    if (!string.Equals(Path.GetFullPath(sourceFile), Path.GetFullPath(newPath), StringComparison.OrdinalIgnoreCase))
+                    {
+                        UpdateOrderFilePath(targetOrder, targetStage, newPath);
+                        SaveHistory();
+                        FillGrid();
+                        SetBottomStatus("Файл добавлен");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(ex.Message, "Ошибка");
+                }
+            }
+        }
+
+        // Вспомогательный метод для определения стадии по индексу колонки (для очистки при Move)
+        private int GetStageByColumnIndex(int index)
+        {
+            string name = gridOrders.Columns[index].Name;
+            return name switch { "colSource" => 1, "colReady" => 2, "colPrint" => 3, _ => 0 };
+        }
+
+        private void GridOrders_DragOver(object sender, DragEventArgs e)
+        {
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                Point clientPoint = gridOrders.PointToClient(new Point(e.X, e.Y));
+                var hit = gridOrders.HitTest(clientPoint.X, clientPoint.Y);
+
+                if (hit.RowIndex >= 0 && hit.ColumnIndex >= 0)
+                {
+                    var targetOrder = GetOrderByRow(hit.RowIndex);
+                    string colName = gridOrders.Columns[hit.ColumnIndex].Name;
+
+                    // Проверяем, в какую стадию целимся
+                    string existingPath = colName switch
+                    {
+                        "colSource" => targetOrder.SourcePath,
+                        "colReady" => targetOrder.PreparedPath,
+                        "colPrint" => targetOrder.PrintPath,
+                        _ => ""
+                    };
+
+                    string[] draggedFiles = (string[])e.Data.GetData(DataFormats.FileDrop);
+                    string draggingFile = (draggedFiles != null && draggedFiles.Length > 0) ? draggedFiles[0] : "";
+
+                    // Если файл в ячейке уже ТОТ ЖЕ САМЫЙ — показываем КРЕСТИК
+                    if (!string.IsNullOrEmpty(draggingFile) && !string.IsNullOrEmpty(existingPath) &&
+                        string.Equals(Path.GetFullPath(draggingFile), Path.GetFullPath(existingPath), StringComparison.OrdinalIgnoreCase))
+                    {
+                        e.Effect = DragDropEffects.None;
+                    }
+                    else
+                    {
+                        // В остальных случаях — всегда Копирование (иконка с плюсиком)
+                        e.Effect = DragDropEffects.Copy;
+                    }
+                }
+                else { e.Effect = DragDropEffects.None; }
+            }
+        }
+
+        private void PickAndCopyFile(OrderData o, int s, string t)
+        {
+            // Определяем целевую подпапку в зависимости от стадии
+            string sub = s switch { 1 => "1. исходные", 2 => "2. подготовка", 3 => "3. печать", _ => "" };
+            string targetFolder = Path.Combine(_ordersRootPath, o.FolderName, sub);
+
+            // Если папки еще нет (вдруг удалили), создаем её
+            if (!Directory.Exists(targetFolder))
+                Directory.CreateDirectory(targetFolder);
+
+            using (var ofd = new OpenFileDialog())
+            {
+                ofd.Filter = "PDF|*.pdf|Все файлы|*.*";
+
+                // ВОТ ТУТ МАГИЯ: заставляем проводник открыться в папке этого заказа
+                ofd.InitialDirectory = targetFolder;
+
+                // Это свойство заставляет диалог восстанавливать папку, если пользователь её сменит
+                ofd.RestoreDirectory = false;
+
+                if (ofd.ShowDialog() == DialogResult.OK)
+                {
+                    try
+                    {
+                        string newPath = CopyIntoStage(o, s, ofd.FileName);
+                        UpdateOrderFilePath(o, s, newPath);
+                        SaveHistory();
+                        FillGrid();
+                        SetBottomStatus("Файл успешно добавлен в заказ");
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show("Ошибка: " + ex.Message);
+                    }
+                }
+            }
+        }
+
+        private void CopySourceToPrepared(OrderData o)
+        {
+            if (string.IsNullOrEmpty(o.SourcePath) || !File.Exists(o.SourcePath)) return;
+            using var f = new CopyForm(o.Keyword, Path.GetExtension(o.SourcePath));
+            if (f.ShowDialog() == DialogResult.OK) { o.PreparedPath = CopyIntoStage(o, 2, o.SourcePath, f.ResultName); SaveHistory(); FillGrid(); }
+        }
+
+        private string CopyIntoStage(OrderData o, int s, string src, string? name = null)
+        {
+            string sub = s switch { 1 => "1. исходные", 2 => "2. подготовка", 3 => "3. печать", _ => "" };
+            string path = Path.Combine(_ordersRootPath, o.FolderName, sub);
+            Directory.CreateDirectory(path);
+
+            string dest = Path.Combine(path, name ?? Path.GetFileName(src));
+
+            // Если мы пытаемся скопировать файл сам в себя - ничего не делаем
+            if (string.Equals(Path.GetFullPath(src), Path.GetFullPath(dest), StringComparison.OrdinalIgnoreCase))
+                return dest;
+
+            try
+            {
+                File.Copy(src, dest, true);
+                return dest;
+            }
+            catch (IOException)
+            {
+                MessageBox.Show("Ошибка доступа: Файл занят другой программой (Acrobat, PitStop или браузер).\n\nЗакройте файл и попробуйте снова.", "Файл заблокирован");
+                throw; // "Пробрасываем" ошибку выше, чтобы не обновлять путь в базе
+            }
+        }
+
+        private void GridOrders_CellContentClick(object? s, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex < 0) return;
+            var o = GetOrderByRow(e.RowIndex); if (o == null) return;
+            string col = gridOrders.Columns[e.ColumnIndex].Name;
+            string? p = col == "colSource" ? o.SourcePath : col == "colReady" ? o.PreparedPath : col == "colPrint" ? o.PrintPath : null;
+            if (!string.IsNullOrEmpty(p) && File.Exists(p)) OpenPdfDefault(p);
+        }
+
+        private void OpenPdfDefault(string p) { try { Process.Start(new ProcessStartInfo { FileName = p, UseShellExecute = true }); } catch { } }
+        private void DeleteOrder(OrderData o)
+        {
+            string orderDir = Path.Combine(_ordersRootPath, o.FolderName);
+
+            var res = MessageBox.Show(
+                $"Заказ №{o.Id}\n\n" +
+                "Желаете удалить папку заказа физически с диска?\n\n" +
+                "[Да] — Удалить папку со всеми файлами и убрать из списка.\n" +
+                "[Нет] — Только убрать из списка (папка останется на диске).\n" +
+                "[Отмена] — Ничего не менять.",
+                "Удаление заказа",
+                MessageBoxButtons.YesNoCancel,
+                MessageBoxIcon.Warning);
+
+            if (res == DialogResult.Cancel) return;
+
+            if (res == DialogResult.Yes)
+            {
+                try
+                {
+                    if (Directory.Exists(orderDir))
+                    {
+                        // Удаляем папку со всем содержимым
+                        Directory.Delete(orderDir, true);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Не удалось удалить папку: {ex.Message}\nВозможно, файл из папки открыт в другой программе.", "Ошибка удаления");
+                    return; // Не удаляем из списка, если физическое удаление сорвалось
+                }
+            }
+
+            _orderHistory.Remove(o);
+            SaveHistory();
+            FillGrid();
+            SetBottomStatus($"Заказ {o.Id} удален");
+        }
+        private void LoadHistory() { if (File.Exists(_jsonHistoryFile)) try { _orderHistory = JsonSerializer.Deserialize<List<OrderData>>(File.ReadAllText(_jsonHistoryFile)) ?? new List<OrderData>(); } catch { } }
+        private void SaveHistory() { File.WriteAllText(_jsonHistoryFile, JsonSerializer.Serialize(_orderHistory, new JsonSerializerOptions { WriteIndented = true })); }
+        private void SetOrderStatus(OrderData o, string s) { o.Status = s; SaveHistory(); if (InvokeRequired) Invoke(new Action(FillGrid)); else FillGrid(); }
+        private void SetBottomStatus(string t) { if (InvokeRequired) Invoke(new Action(() => lblBottomStatus.Text = t)); else lblBottomStatus.Text = t; }
+
+        private void ShowSettingsMenu()
+        {
+            var m = new ContextMenuStrip();
+            m.Items.Add("Папка хранения", null, (s, e) => { using var f = new FolderBrowserDialog(); if (f.ShowDialog() == DialogResult.OK) { _ordersRootPath = f.SelectedPath; SetBottomStatus("Путь обновлен"); } });
+            m.Items.Add("Диспетчер PitStop", null, (s, e) => OpenPitStopManager());
+            m.Items.Add("Диспетчер Imposing", null, (s, e) => OpenImposingManager());
+            m.Items.Add(new ToolStripSeparator());
+            m.Items.Add("Открыть лог", null, (s, e) => { if (File.Exists("manager.log")) Process.Start(new ProcessStartInfo { FileName = "manager.log", UseShellExecute = true }); });
+            m.Show(ButtonSettings, new Point(0, ButtonSettings.Height));
+        }
+
+        private void CopyToGrandpa(OrderData o)
+        {
+            if (string.IsNullOrEmpty(o.PrintPath) || !File.Exists(o.PrintPath)) return;
+            Directory.CreateDirectory(_grandpaFolder);
+            string d = Path.Combine(_grandpaFolder, Path.GetFileName(o.PrintPath));
+            File.Copy(o.PrintPath, d, true); Clipboard.SetText(d); SetBottomStatus("Скопировано в Дедушку");
+        }
+
+        private void GridOrders_CellDoubleClick(object? sender, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex < 0) return;
+            var o = GetOrderByRow(e.RowIndex); if (o == null) return;
+            string col = gridOrders.Columns[e.ColumnIndex].Name;
+            if (col == "colId") ShowOrderEditor(o);
+            else if (col == "colPitStop") { using var f = new PitStopSelectForm(o.PitStopAction); if (f.ShowDialog() == DialogResult.OK) { o.PitStopAction = f.SelectedName; SaveHistory(); FillGrid(); } }
+            else if (col == "colImposing") { using var f = new ImposingSelectForm(o.ImposingAction); if (f.ShowDialog() == DialogResult.OK) { o.ImposingAction = f.SelectedName; SaveHistory(); FillGrid(); } }
+        }
+    }
+}
