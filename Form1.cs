@@ -40,7 +40,9 @@ namespace MyManager
             _ordersRootPath = settings.OrdersRootPath;
             _grandpaFolder = settings.GrandpaPath;
             _useExtendedMode = settings.UseExtendedMode;
-            _tempRootPath = Path.Combine(_ordersRootPath, settings.TempFolderName);
+            _tempRootPath = string.IsNullOrWhiteSpace(settings.TempFolderPath)
+                ? Path.Combine(_ordersRootPath, settings.TempFolderName)
+                : settings.TempFolderPath;
             EnsureTempFolders();
 
             InitializeProcessor();
@@ -52,7 +54,13 @@ namespace MyManager
             EnsureGridStyle();
             FillGrid();
 
-            btnCreateOrder.Click += (s, e) => CreateEmptyOrder();
+            btnCreateOrder.Click += (s, e) =>
+            {
+                if (_useExtendedMode)
+                    ShowOrderEditor(null);
+                else
+                    CreateEmptyOrder();
+            };
             ButtonSettings.Click += (s, e) => ShowSettingsMenu();
 
             gridOrders.CellDoubleClick += GridOrders_CellDoubleClick;
@@ -160,36 +168,9 @@ namespace MyManager
                 return destPath;
             }
 
-            // 3. Если файл реально существует в целевой папке
+            // 3. Если файл реально существует в целевой папке — дубликаты не создаем
             if (File.Exists(destPath))
-            {
-                // Если это внутренний перенос в рамках одного заказа — заменяем молча (чтобы не бесить)
-                if (isInternal)
-                {
-                    try { File.Delete(destPath); } catch { /* файл может быть занят */ }
-                }
-                else
-                {
-                    // Если это внешний файл из Windows — спрашиваем
-                    var result = MessageBox.Show(
-                        $"Файл '{targetName}' уже есть в папке '{sub}'.\n\nЗАМЕНИТЬ его? (Да)\nСОЗДАТЬ версию с '+'? (Нет)\nОТМЕНИТЬ? (Cancel)",
-                        "Подстраховка: Конфликт имен", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
-
-                    if (result == DialogResult.Yes)
-                    {
-                        try { File.Delete(destPath); } catch { throw new Exception("Не удалось заменить файл, он открыт в другой программе."); }
-                    }
-                    else if (result == DialogResult.No)
-                    {
-                        string name = Path.GetFileNameWithoutExtension(targetName);
-                        string ext = Path.GetExtension(targetName);
-                        string newName = name;
-                        while (File.Exists(Path.Combine(folder, newName + "+" + ext))) newName += "+";
-                        destPath = Path.Combine(folder, newName + "+" + ext);
-                    }
-                    else return sourceFile; // Отмена
-                }
-            }
+                return destPath;
 
             // 4. Само копирование
             File.Copy(sourceFile, destPath, true);
@@ -367,6 +348,8 @@ namespace MyManager
                 {
                     // Копируем файл в структуру заказа
                     string newPath = CopyIntoStage(o, stage, cleanPath);
+                    if (stage == 2)
+                        EnsureSourceCopy(o, cleanPath);
                     UpdateOrderFilePath(o, stage, newPath);
 
                     SaveHistory();
@@ -391,6 +374,8 @@ namespace MyManager
             gridOrders.ReadOnly = true;
             gridOrders.AllowUserToResizeRows = false;   
             gridOrders.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+            if (gridOrders.Columns.Contains("colSource"))
+                gridOrders.Columns["colSource"].Visible = false;
         }
 
         private void FillGrid()
@@ -751,6 +736,8 @@ namespace MyManager
                     // Если путь обновился — сохраняем
                     if (!string.Equals(Path.GetFullPath(sourceFile), Path.GetFullPath(newPath), StringComparison.OrdinalIgnoreCase))
                     {
+                        if (targetStage == 2)
+                            EnsureSourceCopy(targetOrder, sourceFile);
                         UpdateOrderFilePath(targetOrder, targetStage, newPath);
                         SaveHistory();
                         FillGrid();
@@ -835,6 +822,8 @@ namespace MyManager
                     try
                     {
                         string newPath = CopyIntoStage(o, s, ofd.FileName);
+                        if (s == 2)
+                            EnsureSourceCopy(o, ofd.FileName);
                         UpdateOrderFilePath(o, s, newPath);
                         SaveHistory();
                         FillGrid();
@@ -868,6 +857,8 @@ namespace MyManager
 
             try
             {
+                if (File.Exists(dest))
+                    return dest;
                 File.Copy(src, dest, true);
                 return dest;
             }
@@ -876,6 +867,18 @@ namespace MyManager
                 MessageBox.Show("Ошибка доступа: Файл занят другой программой (Acrobat, PitStop или браузер).\n\nЗакройте файл и попробуйте снова.", "Файл заблокирован");
                 throw; // "Пробрасываем" ошибку выше, чтобы не обновлять путь в базе
             }
+        }
+
+        private void EnsureSourceCopy(OrderData order, string sourceFile)
+        {
+            if (string.IsNullOrWhiteSpace(sourceFile) || !File.Exists(sourceFile))
+                return;
+
+            if (!string.IsNullOrEmpty(order.SourcePath) && File.Exists(order.SourcePath))
+                return;
+
+            string newPath = CopyIntoStage(order, 1, sourceFile);
+            UpdateOrderFilePath(order, 1, newPath);
         }
 
         private void GridOrders_CellContentClick(object? s, DataGridViewCellEventArgs e)
@@ -968,10 +971,24 @@ namespace MyManager
                     var settings = AppSettings.Load();
                     settings.OrdersRootPath = _ordersRootPath;
                     settings.Save();
-                    _tempRootPath = Path.Combine(_ordersRootPath, settings.TempFolderName);
+                    _tempRootPath = string.IsNullOrWhiteSpace(settings.TempFolderPath)
+                        ? Path.Combine(_ordersRootPath, settings.TempFolderName)
+                        : settings.TempFolderPath;
                     EnsureTempFolders();
                     InitializeProcessor();
                     SetBottomStatus("Путь обновлен");
+                }
+            });
+            m.Items.Add("Папка временных файлов", null, (s, e) =>
+            {
+                using var f = new FolderBrowserDialog();
+                if (f.ShowDialog() == DialogResult.OK)
+                {
+                    _tempRootPath = f.SelectedPath;
+                    var settings = AppSettings.Load();
+                    settings.TempFolderPath = _tempRootPath;
+                    settings.Save();
+                    EnsureTempFolders();
                 }
             });
             var modeItem = new ToolStripMenuItem("Расширенный режим") { Checked = _useExtendedMode, CheckOnClick = true };
@@ -1003,7 +1020,7 @@ namespace MyManager
             if (e.RowIndex < 0) return;
             var o = GetOrderByRow(e.RowIndex); if (o == null) return;
             string col = gridOrders.Columns[e.ColumnIndex].Name;
-            if (col == "colId") ShowOrderEditor(o);
+            if (col == "colId" && _useExtendedMode) ShowOrderEditor(o);
             else if (col == "colPitStop") { using var f = new PitStopSelectForm(o.PitStopAction); if (f.ShowDialog() == DialogResult.OK) { o.PitStopAction = f.SelectedName; SaveHistory(); FillGrid(); } }
             else if (col == "colImposing") { using var f = new ImposingSelectForm(o.ImposingAction); if (f.ShowDialog() == DialogResult.OK) { o.ImposingAction = f.SelectedName; SaveHistory(); FillGrid(); } }
         }

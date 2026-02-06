@@ -25,7 +25,9 @@ namespace MyManager
             var settings = AppSettings.Load();
             var timeout = TimeSpan.FromMinutes(settings.RunTimeoutMinutes);
             bool useExtendedMode = settings.UseExtendedMode;
-            string tempRoot = Path.Combine(_rootPath, settings.TempFolderName);
+            string tempRoot = string.IsNullOrWhiteSpace(settings.TempFolderPath)
+                ? Path.Combine(_rootPath, settings.TempFolderName)
+                : settings.TempFolderPath;
             EnsureTempFolders(tempRoot);
 
             try

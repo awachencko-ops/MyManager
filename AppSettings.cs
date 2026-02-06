@@ -11,6 +11,7 @@ namespace MyManager
         public int RunTimeoutMinutes { get; set; } = 10;
         public bool UseExtendedMode { get; set; } = true;
         public string TempFolderName { get; set; } = "TempMyManager";
+        public string TempFolderPath { get; set; } = "";
 
         public static string FileName => "settings.json";
 
