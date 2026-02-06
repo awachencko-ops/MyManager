@@ -16,7 +16,8 @@ namespace MyManager
         public OrderStartMode StartMode { get; set; } = OrderStartMode.Unknown;
 
         public string Keyword { get; set; } = ""; // Новое поле
-        public DateTime OrderDate { get; set; } = DateTime.Now;
+        public DateTime ArrivalDate { get; set; } = DateTime.Now; // Дата поступления заказа в препресс-менеджер
+        public DateTime OrderDate { get; set; } = DateTime.Now; // Дата формирования заказа (ДелаемДело)
         public string FolderName { get; set; } = ""; // Например: "23_10_25 №123"
         public string Status { get; set; } = "⚪ Ожидание";
 
