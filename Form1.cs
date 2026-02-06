@@ -348,8 +348,22 @@ namespace MyManager
 
                 if (File.Exists(cleanPath))
                 {
+                    if (stage == 3 && !EnsureSimpleOrderInfoForPrint(o))
+                    {
+                        UpdateOrderFilePath(o, 3, "");
+                        SaveHistory();
+                        FillGrid();
+                        return;
+                    }
+
                     // Копируем файл в структуру заказа
-                    string newPath = CopyIntoStage(o, stage, cleanPath);
+                    string newPath = CopyIntoStage(
+                        o,
+                        stage,
+                        cleanPath,
+                        stage == 3 && !string.IsNullOrWhiteSpace(o.Id)
+                            ? $"{o.Id}{Path.GetExtension(cleanPath)}"
+                            : null);
                     if (stage == 2)
                         EnsureSourceCopy(o, cleanPath);
                     UpdateOrderFilePath(o, stage, newPath);
@@ -623,6 +637,17 @@ namespace MyManager
             target.FolderName = source.FolderName;
         }
 
+        private bool EnsureSimpleOrderInfoForPrint(OrderData order)
+        {
+            using var f = new SimpleOrderForm(order);
+            if (f.ShowDialog() != DialogResult.OK)
+                return false;
+
+            order.Id = f.OrderNumber.Trim();
+            order.OrderDate = f.OrderDate;
+            return true;
+        }
+
         private void EnsureOrderFolder(OrderData order)
         {
             if (string.IsNullOrWhiteSpace(order.FolderName)) return;
@@ -741,6 +766,14 @@ namespace MyManager
                 int targetStage = colName switch { "colSource" => 1, "colReady" => 2, "colPrint" => 3, _ => 0 };
                 if (targetStage == 0) return;
 
+                if (targetStage == 3 && !EnsureSimpleOrderInfoForPrint(targetOrder))
+                {
+                    UpdateOrderFilePath(targetOrder, 3, "");
+                    SaveHistory();
+                    FillGrid();
+                    return;
+                }
+
                 bool isInternal = e.Data.GetDataPresent("InternalSourceColumn");
 
                 string targetName = (targetStage == 3 && !string.IsNullOrWhiteSpace(targetOrder.Id))
@@ -839,7 +872,21 @@ namespace MyManager
                 {
                     try
                     {
-                        string newPath = CopyIntoStage(o, s, ofd.FileName);
+                        if (s == 3 && !EnsureSimpleOrderInfoForPrint(o))
+                        {
+                            UpdateOrderFilePath(o, 3, "");
+                            SaveHistory();
+                            FillGrid();
+                            return;
+                        }
+
+                        string newPath = CopyIntoStage(
+                            o,
+                            s,
+                            ofd.FileName,
+                            s == 3 && !string.IsNullOrWhiteSpace(o.Id)
+                                ? $"{o.Id}{Path.GetExtension(ofd.FileName)}"
+                                : null);
                         if (s == 2)
                             EnsureSourceCopy(o, ofd.FileName);
                         UpdateOrderFilePath(o, s, newPath);
