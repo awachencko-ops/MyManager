@@ -117,6 +117,8 @@ namespace MyManager
 
             _gridMenu.CopyToPrepared = () => { var o = GetOrderByRow(_ctxRow); if (o != null) CopySourceToPrepared(o); };
 
+            _gridMenu.CopyToPrint = () => { var o = GetOrderByRow(_ctxRow); if (o != null) CopyPreparedToPrint(o); };
+
             _gridMenu.CopyToGrandpa = () => { var o = GetOrderByRow(_ctxRow); if (o != null) CopyToGrandpa(o); };
 
             // --- ПЕРЕИМЕНОВАНИЕ И ВСТАВКА ИЗ БУФЕРА ---
@@ -557,6 +559,7 @@ namespace MyManager
             var order = new OrderData
             {
                 Id = "",
+                StartMode = _useExtendedMode ? OrderStartMode.Extended : OrderStartMode.Simple,
                 Keyword = "",
                 OrderDate = DateTime.Now,
                 FolderName = "",
@@ -572,7 +575,8 @@ namespace MyManager
 
         private bool EnsureOrderInfo(OrderData order)
         {
-            if (_useExtendedMode)
+            var mode = GetOrderStartMode(order);
+            if (mode == OrderStartMode.Extended)
             {
                 using var f = new OrderForm(_ordersRootPath, order, infoOnly: true);
                 if (f.ShowDialog() != DialogResult.OK || f.ResultOrder == null)
@@ -595,6 +599,20 @@ namespace MyManager
             SaveHistory();
             FillGrid();
             return true;
+        }
+
+        private OrderStartMode GetOrderStartMode(OrderData order)
+        {
+            if (order.StartMode == OrderStartMode.Unknown)
+                order.StartMode = InferOrderStartMode(order);
+            return order.StartMode;
+        }
+
+        private OrderStartMode InferOrderStartMode(OrderData order)
+        {
+            return string.IsNullOrWhiteSpace(order.FolderName)
+                ? OrderStartMode.Simple
+                : OrderStartMode.Extended;
         }
 
         private void ApplyOrderInfo(OrderData target, OrderData source)
@@ -844,6 +862,21 @@ namespace MyManager
             if (f.ShowDialog() == DialogResult.OK) { o.PreparedPath = CopyIntoStage(o, 2, o.SourcePath, f.ResultName); SaveHistory(); FillGrid(); }
         }
 
+        private void CopyPreparedToPrint(OrderData o)
+        {
+            if (string.IsNullOrEmpty(o.PreparedPath) || !File.Exists(o.PreparedPath)) return;
+
+            string extension = Path.GetExtension(o.PreparedPath);
+            string fileName = !string.IsNullOrWhiteSpace(o.Id)
+                ? $"{o.Id}{extension}"
+                : Path.GetFileName(o.PreparedPath);
+
+            o.PrintPath = CopyIntoStage(o, 3, o.PreparedPath, fileName);
+            UpdateOrderFilePath(o, 3, o.PrintPath);
+            SaveHistory();
+            FillGrid();
+        }
+
         private string CopyIntoStage(OrderData o, int s, string src, string? name = null)
         {
             string path = GetStageFolder(o, s);
@@ -953,6 +986,8 @@ namespace MyManager
             {
                 if (string.IsNullOrWhiteSpace(order.InternalId))
                     order.InternalId = Guid.NewGuid().ToString("N");
+                if (order.StartMode == OrderStartMode.Unknown)
+                    order.StartMode = InferOrderStartMode(order);
             }
         }
         private void SaveHistory() { File.WriteAllText(_jsonHistoryFile, JsonSerializer.Serialize(_orderHistory, new JsonSerializerOptions { WriteIndented = true })); }
@@ -1020,7 +1055,25 @@ namespace MyManager
             if (e.RowIndex < 0) return;
             var o = GetOrderByRow(e.RowIndex); if (o == null) return;
             string col = gridOrders.Columns[e.ColumnIndex].Name;
-            if (col == "colId" && _useExtendedMode) ShowOrderEditor(o);
+            if (col == "colId")
+            {
+                if (GetOrderStartMode(o) == OrderStartMode.Extended)
+                {
+                    ShowOrderEditor(o);
+                }
+                else
+                {
+                    using var f = new SimpleOrderForm(o);
+                    if (f.ShowDialog() == DialogResult.OK)
+                    {
+                        o.Id = f.OrderNumber.Trim();
+                        o.OrderDate = f.OrderDate;
+                        o.FolderName = "";
+                        SaveHistory();
+                        FillGrid();
+                    }
+                }
+            }
             else if (col == "colPitStop") { using var f = new PitStopSelectForm(o.PitStopAction); if (f.ShowDialog() == DialogResult.OK) { o.PitStopAction = f.SelectedName; SaveHistory(); FillGrid(); } }
             else if (col == "colImposing") { using var f = new ImposingSelectForm(o.ImposingAction); if (f.ShowDialog() == DialogResult.OK) { o.ImposingAction = f.SelectedName; SaveHistory(); FillGrid(); } }
         }
