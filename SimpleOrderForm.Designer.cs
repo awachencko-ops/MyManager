@@ -71,9 +71,9 @@
             labelDate.AutoSize = true;
             labelDate.Location = new Point(36, 102);
             labelDate.Name = "labelDate";
-            labelDate.Size = new Size(110, 25);
+            labelDate.Size = new Size(106, 25);
             labelDate.TabIndex = 0;
-            labelDate.Text = "Дата заказа (ДелаемДело):";
+            labelDate.Text = "Дата заказа";
             // 
             // SimpleOrderForm
             // 
