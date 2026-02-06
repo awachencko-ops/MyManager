@@ -78,7 +78,6 @@ namespace MyManager
             gridOrders.MouseDown += GridOrders_MouseDown;
             gridOrders.MouseMove += GridOrders_MouseMove;
             gridOrders.DragOver += GridOrders_DragOver;
-            gridOrders.DragDrop += GridOrders_DragDrop;
 
             // Подписываемся на клик (если еще не подписаны)
             gridOrders.CellClick += GridOrders_CellClick;
@@ -346,8 +345,22 @@ namespace MyManager
 
                 if (File.Exists(cleanPath))
                 {
+                    if (stage == 3 && !EnsureSimpleOrderInfoForPrint(o))
+                    {
+                        UpdateOrderFilePath(o, 3, "");
+                        SaveHistory();
+                        FillGrid();
+                        return;
+                    }
+
                     // Копируем файл в структуру заказа
-                    string newPath = CopyIntoStage(o, stage, cleanPath);
+                    string newPath = CopyIntoStage(
+                        o,
+                        stage,
+                        cleanPath,
+                        stage == 3 && !string.IsNullOrWhiteSpace(o.Id)
+                            ? $"{o.Id}{Path.GetExtension(cleanPath)}"
+                            : null);
                     if (stage == 2)
                         EnsureSourceCopy(o, cleanPath);
                     UpdateOrderFilePath(o, stage, newPath);
@@ -557,6 +570,7 @@ namespace MyManager
             var order = new OrderData
             {
                 Id = "",
+                StartMode = _useExtendedMode ? OrderStartMode.Extended : OrderStartMode.Simple,
                 Keyword = "",
                 OrderDate = DateTime.Now,
                 FolderName = "",
@@ -572,7 +586,8 @@ namespace MyManager
 
         private bool EnsureOrderInfo(OrderData order)
         {
-            if (_useExtendedMode)
+            var mode = GetOrderStartMode(order);
+            if (mode == OrderStartMode.Extended)
             {
                 using var f = new OrderForm(_ordersRootPath, order, infoOnly: true);
                 if (f.ShowDialog() != DialogResult.OK || f.ResultOrder == null)
@@ -597,12 +612,37 @@ namespace MyManager
             return true;
         }
 
+        private OrderStartMode GetOrderStartMode(OrderData order)
+        {
+            if (order.StartMode == OrderStartMode.Unknown)
+                order.StartMode = InferOrderStartMode(order);
+            return order.StartMode;
+        }
+
+        private OrderStartMode InferOrderStartMode(OrderData order)
+        {
+            return string.IsNullOrWhiteSpace(order.FolderName)
+                ? OrderStartMode.Simple
+                : OrderStartMode.Extended;
+        }
+
         private void ApplyOrderInfo(OrderData target, OrderData source)
         {
             target.Id = source.Id;
             target.Keyword = source.Keyword;
             target.OrderDate = source.OrderDate;
             target.FolderName = source.FolderName;
+        }
+
+        private bool EnsureSimpleOrderInfoForPrint(OrderData order)
+        {
+            using var f = new SimpleOrderForm(order);
+            if (f.ShowDialog() != DialogResult.OK)
+                return false;
+
+            order.Id = f.OrderNumber.Trim();
+            order.OrderDate = f.OrderDate;
+            return true;
         }
 
         private void EnsureOrderFolder(OrderData order)
@@ -723,6 +763,14 @@ namespace MyManager
                 int targetStage = colName switch { "colSource" => 1, "colReady" => 2, "colPrint" => 3, _ => 0 };
                 if (targetStage == 0) return;
 
+                if (targetStage == 3 && !EnsureSimpleOrderInfoForPrint(targetOrder))
+                {
+                    UpdateOrderFilePath(targetOrder, 3, "");
+                    SaveHistory();
+                    FillGrid();
+                    return;
+                }
+
                 bool isInternal = e.Data.GetDataPresent("InternalSourceColumn");
 
                 string targetName = (targetStage == 3 && !string.IsNullOrWhiteSpace(targetOrder.Id))
@@ -821,7 +869,21 @@ namespace MyManager
                 {
                     try
                     {
-                        string newPath = CopyIntoStage(o, s, ofd.FileName);
+                        if (s == 3 && !EnsureSimpleOrderInfoForPrint(o))
+                        {
+                            UpdateOrderFilePath(o, 3, "");
+                            SaveHistory();
+                            FillGrid();
+                            return;
+                        }
+
+                        string newPath = CopyIntoStage(
+                            o,
+                            s,
+                            ofd.FileName,
+                            s == 3 && !string.IsNullOrWhiteSpace(o.Id)
+                                ? $"{o.Id}{Path.GetExtension(ofd.FileName)}"
+                                : null);
                         if (s == 2)
                             EnsureSourceCopy(o, ofd.FileName);
                         UpdateOrderFilePath(o, s, newPath);
@@ -953,6 +1015,8 @@ namespace MyManager
             {
                 if (string.IsNullOrWhiteSpace(order.InternalId))
                     order.InternalId = Guid.NewGuid().ToString("N");
+                if (order.StartMode == OrderStartMode.Unknown)
+                    order.StartMode = InferOrderStartMode(order);
             }
         }
         private void SaveHistory() { File.WriteAllText(_jsonHistoryFile, JsonSerializer.Serialize(_orderHistory, new JsonSerializerOptions { WriteIndented = true })); }
@@ -1020,7 +1084,25 @@ namespace MyManager
             if (e.RowIndex < 0) return;
             var o = GetOrderByRow(e.RowIndex); if (o == null) return;
             string col = gridOrders.Columns[e.ColumnIndex].Name;
-            if (col == "colId" && _useExtendedMode) ShowOrderEditor(o);
+            if (col == "colId")
+            {
+                if (GetOrderStartMode(o) == OrderStartMode.Extended)
+                {
+                    ShowOrderEditor(o);
+                }
+                else
+                {
+                    using var f = new SimpleOrderForm(o);
+                    if (f.ShowDialog() == DialogResult.OK)
+                    {
+                        o.Id = f.OrderNumber.Trim();
+                        o.OrderDate = f.OrderDate;
+                        o.FolderName = "";
+                        SaveHistory();
+                        FillGrid();
+                    }
+                }
+            }
             else if (col == "colPitStop") { using var f = new PitStopSelectForm(o.PitStopAction); if (f.ShowDialog() == DialogResult.OK) { o.PitStopAction = f.SelectedName; SaveHistory(); FillGrid(); } }
             else if (col == "colImposing") { using var f = new ImposingSelectForm(o.ImposingAction); if (f.ShowDialog() == DialogResult.OK) { o.ImposingAction = f.SelectedName; SaveHistory(); FillGrid(); } }
         }
