@@ -39,7 +39,7 @@
             // 
             // _btnOk
             // 
-            _btnOk.Location = new Point(306, 184);
+            _btnOk.Location = new Point(203, 185);
             _btnOk.Name = "_btnOk";
             _btnOk.Size = new Size(97, 35);
             _btnOk.TabIndex = 2;
@@ -49,7 +49,7 @@
             // 
             // _btnCancel
             // 
-            _btnCancel.Location = new Point(197, 184);
+            _btnCancel.Location = new Point(306, 185);
             _btnCancel.Name = "_btnCancel";
             _btnCancel.Size = new Size(97, 35);
             _btnCancel.TabIndex = 3;
