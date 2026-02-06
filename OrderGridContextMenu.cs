@@ -20,6 +20,7 @@ namespace MyManager
         public Action ApplyWatermarkLeft { get; set; }
 
         public Action CopyToPrepared { get; set; }
+        public Action CopyToPrint { get; set; }
         public Action CopyToGrandpa { get; set; }
 
         public Action OpenPitStopMan { get; set; }
@@ -54,7 +55,6 @@ namespace MyManager
                 case "colSource":
                     AddItem("📋 Вставить путь из буфера", () => PastePathFromClipboard?.Invoke(1));
                     AddItem("✏️ Переименовать файл", () => RenameFile?.Invoke(1));
-                    AddItem("Копировать в Подготовку", CopyToPrepared);
                     AddItem("Указать файл...", () => PickFile?.Invoke(1, "source"));
                     AddItem("Удалить файл", () => RemoveFile?.Invoke(1));
                     break;
