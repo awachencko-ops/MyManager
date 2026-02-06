@@ -546,9 +546,17 @@ namespace MyManager
                 _ctxRow = e.RowIndex; _ctxCol = e.ColumnIndex;
                 gridOrders.CurrentCell = gridOrders.Rows[e.RowIndex].Cells[e.ColumnIndex];
                 var order = GetOrderByRow(e.RowIndex);
-                bool allowCopyToGrandpa = order == null || GetOrderStartMode(order) != OrderStartMode.Simple;
+                bool allowCopyToGrandpa = order == null || ResolveMenuStartMode(order) != OrderStartMode.Simple;
                 _gridMenu.Build(gridOrders.Columns[e.ColumnIndex].Name, allowCopyToGrandpa).Show(Cursor.Position);
             }
+        }
+
+        private OrderStartMode ResolveMenuStartMode(OrderData order)
+        {
+            if (order.StartMode == OrderStartMode.Unknown)
+                return _useExtendedMode ? OrderStartMode.Extended : OrderStartMode.Simple;
+
+            return order.StartMode;
         }
 
         private async Task RunForOrderAsync(OrderData order)
