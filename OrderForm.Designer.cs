@@ -103,7 +103,7 @@
             label1.Name = "label1";
             label1.Size = new Size(238, 25);
             label1.TabIndex = 5;
-            label1.Text = "Дата формирования заказа";
+            label1.Text = "Дата формирования заказа (ДелаемДело)";
             // 
             // label3
             // 

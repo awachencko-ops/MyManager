@@ -23,6 +23,7 @@ namespace MyManager
         private string _tempRootPath = "";
         private string _grandpaFolder = @"\\NAS\work\Temp\!!!Дедушка";
         private bool _useExtendedMode = true;
+        private bool _sortArrivalDescending = true;
 
         private Rectangle dragBoxFromMouseDown;
         private object itemFromMouseDown;
@@ -40,6 +41,7 @@ namespace MyManager
             _ordersRootPath = settings.OrdersRootPath;
             _grandpaFolder = settings.GrandpaPath;
             _useExtendedMode = settings.UseExtendedMode;
+            _sortArrivalDescending = settings.SortArrivalDescending;
             _tempRootPath = string.IsNullOrWhiteSpace(settings.TempFolderPath)
                 ? Path.Combine(_ordersRootPath, settings.TempFolderName)
                 : settings.TempFolderPath;
@@ -110,7 +112,7 @@ namespace MyManager
             _gridMenu.Run = async () => { var o = GetOrderByRow(_ctxRow); if (o != null) await RunForOrderAsync(o); };
 
             // --- УПРАВЛЕНИЕ ФАЙЛАМИ ---
-            _gridMenu.PickFile = (stage, type) => { var o = GetOrderByRow(_ctxRow); if (o != null) PickAndCopyFile(o, stage, type); };
+            _gridMenu.PickFile = async (stage, type) => { var o = GetOrderByRow(_ctxRow); if (o != null) await PickAndCopyFileAsync(o, stage, type); };
 
             _gridMenu.RemoveFile = (stage) => { var o = GetOrderByRow(_ctxRow); if (o != null) RemoveFileFromOrder(o, stage); };
 
@@ -129,6 +131,11 @@ namespace MyManager
             _gridMenu.CopyPathToClipboard = (stage) => {
                 var o = GetOrderByRow(_ctxRow);
                 if (o != null) CopyPathToClipboard(o, stage);
+            };
+
+            _gridMenu.PastePathFromClipboard = async (stage) => {
+                var o = GetOrderByRow(_ctxRow);
+                if (o != null) await PasteFileFromClipboardAsync(o, stage);
             };
 
             // --- ВОДЯНЫЕ ЗНАКИ ---
@@ -333,7 +340,7 @@ namespace MyManager
 
             return form.ShowDialog() == DialogResult.OK ? textBox.Text : value;
         }
-        private void PasteFileFromClipboard(OrderData o, int stage)
+        private async Task PasteFileFromClipboardAsync(OrderData o, int stage)
         {
             try
             {
@@ -349,7 +356,7 @@ namespace MyManager
 
                 if (File.Exists(cleanPath))
                 {
-                    if (stage == 3 && !EnsureSimpleOrderInfoForPrint(o))
+                    if (stage == 3 && !await EnsureSimpleOrderInfoForPrintAsync(o))
                     {
                         UpdateOrderFilePath(o, 3, "");
                         SaveHistory();
@@ -420,7 +427,9 @@ namespace MyManager
         {
             if (gridOrders.Columns.Count == 0) return;
             string? selInternalId = gridOrders.CurrentRow?.Tag?.ToString();
-            var sorted = _orderHistory.OrderByDescending(x => x.OrderDate).ToList();
+            var sorted = _sortArrivalDescending
+                ? _orderHistory.OrderByDescending(x => x.ArrivalDate).ToList()
+                : _orderHistory.OrderBy(x => x.ArrivalDate).ToList();
 
             if (gridOrders.Rows.Count != sorted.Count)
             {
@@ -581,7 +590,7 @@ namespace MyManager
 
         private async Task RunForOrderAsync(OrderData order)
         {
-            if (!EnsureOrderInfo(order))
+            if (!await EnsureOrderInfoAsync(order))
                 return;
 
             using var cts = new CancellationTokenSource();
@@ -607,6 +616,7 @@ namespace MyManager
                 Id = "",
                 StartMode = _useExtendedMode ? OrderStartMode.Extended : OrderStartMode.Simple,
                 Keyword = "",
+                ArrivalDate = DateTime.Now,
                 OrderDate = DateTime.Now,
                 FolderName = "",
                 Status = "⚪ Ожидание",
@@ -619,7 +629,15 @@ namespace MyManager
             FillGrid();
         }
 
-        private bool EnsureOrderInfo(OrderData order)
+        private Task<DialogResult> ShowSimpleOrderFormAsync(SimpleOrderForm form)
+        {
+            var tcs = new TaskCompletionSource<DialogResult>();
+            form.FormClosed += (s, e) => tcs.TrySetResult(form.DialogResult);
+            form.Show(this);
+            return tcs.Task;
+        }
+
+        private async Task<bool> EnsureOrderInfoAsync(OrderData order)
         {
             var mode = GetOrderStartMode(order);
             if (mode == OrderStartMode.Extended)
@@ -634,11 +652,13 @@ namespace MyManager
             else
             {
                 using var f = new SimpleOrderForm(order);
-                if (f.ShowDialog() != DialogResult.OK)
+                if (await ShowSimpleOrderFormAsync(f) != DialogResult.OK)
                     return false;
 
                 order.Id = f.OrderNumber.Trim();
                 order.OrderDate = f.OrderDate;
+                if (order.ArrivalDate == default)
+                    order.ArrivalDate = DateTime.Now;
                 order.FolderName = "";
             }
 
@@ -665,18 +685,21 @@ namespace MyManager
         {
             target.Id = source.Id;
             target.Keyword = source.Keyword;
+            target.ArrivalDate = source.ArrivalDate;
             target.OrderDate = source.OrderDate;
             target.FolderName = source.FolderName;
         }
 
-        private bool EnsureSimpleOrderInfoForPrint(OrderData order)
+        private async Task<bool> EnsureSimpleOrderInfoForPrintAsync(OrderData order)
         {
             using var f = new SimpleOrderForm(order);
-            if (f.ShowDialog() != DialogResult.OK)
+            if (await ShowSimpleOrderFormAsync(f) != DialogResult.OK)
                 return false;
 
             order.Id = f.OrderNumber.Trim();
             order.OrderDate = f.OrderDate;
+            if (order.ArrivalDate == default)
+                order.ArrivalDate = DateTime.Now;
             return true;
         }
 
@@ -751,7 +774,7 @@ namespace MyManager
         private void OpenPitStopManager() { using var f = new ActionManagerForm(); f.ShowDialog(); }
         private void OpenImposingManager() { using var f = new ImposingManagerForm(); f.ShowDialog(); }
 
-        private void GridOrders_CellClick(object sender, DataGridViewCellEventArgs e)
+        private async void GridOrders_CellClick(object sender, DataGridViewCellEventArgs e)
         {
             if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
 
@@ -763,9 +786,9 @@ namespace MyManager
             if (cellValue == "...")
             {
                 string col = gridOrders.Columns[e.ColumnIndex].Name;
-                if (col == "colSource") PickAndCopyFile(o, 1, "source");
-                else if (col == "colReady") PickAndCopyFile(o, 2, "prepared");
-                else if (col == "colPrint") PickAndCopyFile(o, 3, "print");
+                if (col == "colSource") await PickAndCopyFileAsync(o, 1, "source");
+                else if (col == "colReady") await PickAndCopyFileAsync(o, 2, "prepared");
+                else if (col == "colPrint") await PickAndCopyFileAsync(o, 3, "print");
             }
         }
 
@@ -778,7 +801,7 @@ namespace MyManager
                 e.Effect = DragDropEffects.None;
         }
 
-        private void GridOrders_DragDrop(object sender, DragEventArgs e)
+        private async void GridOrders_DragDrop(object sender, DragEventArgs e)
         {
             string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
             if (files == null || files.Length == 0) return;
@@ -798,7 +821,7 @@ namespace MyManager
                 int targetStage = colName switch { "colSource" => 1, "colReady" => 2, "colPrint" => 3, _ => 0 };
                 if (targetStage == 0) return;
 
-                if (targetStage == 3 && !EnsureSimpleOrderInfoForPrint(targetOrder))
+                if (targetStage == 3 && !await EnsureSimpleOrderInfoForPrintAsync(targetOrder))
                 {
                     UpdateOrderFilePath(targetOrder, 3, "");
                     SaveHistory();
@@ -881,7 +904,7 @@ namespace MyManager
             }
         }
 
-        private void PickAndCopyFile(OrderData o, int s, string t)
+        private async Task PickAndCopyFileAsync(OrderData o, int s, string t)
         {
             // Определяем целевую подпапку в зависимости от стадии
             string targetFolder = GetStageFolder(o, s);
@@ -904,7 +927,7 @@ namespace MyManager
                 {
                     try
                     {
-                        if (s == 3 && !EnsureSimpleOrderInfoForPrint(o))
+                        if (s == 3 && !await EnsureSimpleOrderInfoForPrintAsync(o))
                         {
                             UpdateOrderFilePath(o, 3, "");
                             SaveHistory();
@@ -1104,11 +1127,20 @@ namespace MyManager
                     order.InternalId = Guid.NewGuid().ToString("N");
                 if (order.StartMode == OrderStartMode.Unknown)
                     order.StartMode = InferOrderStartMode(order);
+                if (order.ArrivalDate == default)
+                    order.ArrivalDate = order.OrderDate != default ? order.OrderDate : DateTime.Now;
             }
         }
         private void SaveHistory() { File.WriteAllText(_jsonHistoryFile, JsonSerializer.Serialize(_orderHistory, new JsonSerializerOptions { WriteIndented = true })); }
         private void SetOrderStatus(OrderData o, string s) { o.Status = s; SaveHistory(); if (InvokeRequired) Invoke(new Action(FillGrid)); else FillGrid(); }
         private void SetBottomStatus(string t) { if (InvokeRequired) Invoke(new Action(() => lblBottomStatus.Text = t)); else lblBottomStatus.Text = t; }
+
+        private string GetSortArrivalMenuText()
+        {
+            return _sortArrivalDescending
+                ? "Сортировка: поступление (сначала новые)"
+                : "Сортировка: поступление (сначала старые)";
+        }
 
         private void ShowSettingsMenu()
         {
@@ -1151,6 +1183,17 @@ namespace MyManager
                 settings.Save();
             };
             m.Items.Add(modeItem);
+            var sortArrivalItem = new ToolStripMenuItem(GetSortArrivalMenuText());
+            sortArrivalItem.Click += (s, e) =>
+            {
+                _sortArrivalDescending = !_sortArrivalDescending;
+                var settings = AppSettings.Load();
+                settings.SortArrivalDescending = _sortArrivalDescending;
+                settings.Save();
+                sortArrivalItem.Text = GetSortArrivalMenuText();
+                FillGrid();
+            };
+            m.Items.Add(sortArrivalItem);
             m.Items.Add("Диспетчер PitStop", null, (s, e) => OpenPitStopManager());
             m.Items.Add("Диспетчер Imposing", null, (s, e) => OpenImposingManager());
             m.Items.Add(new ToolStripSeparator());
@@ -1166,7 +1209,7 @@ namespace MyManager
             File.Copy(o.PrintPath, d, true); Clipboard.SetText(d); SetBottomStatus("Скопировано в Дедушку");
         }
 
-        private void GridOrders_CellDoubleClick(object? sender, DataGridViewCellEventArgs e)
+        private async void GridOrders_CellDoubleClick(object? sender, DataGridViewCellEventArgs e)
         {
             if (e.RowIndex < 0) return;
             var o = GetOrderByRow(e.RowIndex); if (o == null) return;
@@ -1180,10 +1223,12 @@ namespace MyManager
                 else
                 {
                     using var f = new SimpleOrderForm(o);
-                    if (f.ShowDialog() == DialogResult.OK)
+                    if (await ShowSimpleOrderFormAsync(f) == DialogResult.OK)
                     {
                         o.Id = f.OrderNumber.Trim();
                         o.OrderDate = f.OrderDate;
+                        if (o.ArrivalDate == default)
+                            o.ArrivalDate = DateTime.Now;
                         o.FolderName = "";
                         SaveHistory();
                         FillGrid();

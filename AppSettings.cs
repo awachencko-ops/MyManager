@@ -12,6 +12,7 @@ namespace MyManager
         public bool UseExtendedMode { get; set; } = true;
         public string TempFolderName { get; set; } = "TempMyManager";
         public string TempFolderPath { get; set; } = "";
+        public bool SortArrivalDescending { get; set; } = true;
 
         public static string FileName => "settings.json";
 

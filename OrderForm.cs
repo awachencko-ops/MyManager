@@ -13,6 +13,7 @@ namespace MyManager
         private readonly bool _infoOnly;
         private readonly string _internalId;
         private readonly OrderStartMode _startMode;
+        private readonly DateTime _arrivalDate;
 
         public OrderForm(string ordersRootPath, OrderData data = null, bool infoOnly = false)
         {
@@ -23,6 +24,7 @@ namespace MyManager
             _infoOnly = infoOnly;
             _internalId = data?.InternalId ?? Guid.NewGuid().ToString("N");
             _startMode = data?.StartMode ?? OrderStartMode.Extended;
+            _arrivalDate = data?.ArrivalDate ?? DateTime.Now;
 
             LoadConfigLists();
             SetupValidation();
@@ -176,6 +178,7 @@ namespace MyManager
                 Id = textBoxNumberOrder.Text.Trim(),
                 StartMode = _startMode,
                 Keyword = textKey.Text.Trim(),
+                ArrivalDate = _arrivalDate,
                 OrderDate = dateTimeOrder.Value,
                 FolderName = $"{datePart} {textKey.Text.Trim()}",
                 SourcePath = textOriginal.Text,

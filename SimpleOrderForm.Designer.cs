@@ -73,7 +73,7 @@
             labelDate.Name = "labelDate";
             labelDate.Size = new Size(110, 25);
             labelDate.TabIndex = 0;
-            labelDate.Text = "Дата заказа:";
+            labelDate.Text = "Дата заказа (ДелаемДело):";
             // 
             // SimpleOrderForm
             // 
