@@ -16,6 +16,8 @@ namespace MyManager
                 _textNumber.Text = data.Id;
                 if (data.OrderDate != default) _datePicker.Value = data.OrderDate;
             }
+            _textNumber.TextChanged += (s, e) => ValidateForm();
+            ValidateForm();
         }
 
         private void _btnOk_Click(object sender, EventArgs e)
@@ -29,6 +31,11 @@ namespace MyManager
             OrderDate = _datePicker.Value;
             this.DialogResult = DialogResult.OK;
             this.Close();
+        }
+
+        private void ValidateForm()
+        {
+            _btnOk.Enabled = !string.IsNullOrWhiteSpace(_textNumber.Text);
         }
 
         private void _btnCancel_Click(object sender, EventArgs e)
