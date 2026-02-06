@@ -116,6 +116,8 @@ namespace MyManager
 
             _gridMenu.CopyToPrepared = () => { var o = GetOrderByRow(_ctxRow); if (o != null) CopySourceToPrepared(o); };
 
+            _gridMenu.CopyToPrint = () => { var o = GetOrderByRow(_ctxRow); if (o != null) CopyPreparedToPrint(o); };
+
             _gridMenu.CopyToGrandpa = () => { var o = GetOrderByRow(_ctxRow); if (o != null) CopyToGrandpa(o); };
 
             // --- ПЕРЕИМЕНОВАНИЕ И ВСТАВКА ИЗ БУФЕРА ---
@@ -124,9 +126,9 @@ namespace MyManager
                 if (o != null) RenameFileHandler(o, stage);
             };
 
-            _gridMenu.PastePathFromClipboard = (stage) => {
+            _gridMenu.CopyPathToClipboard = (stage) => {
                 var o = GetOrderByRow(_ctxRow);
-                if (o != null) PasteFileFromClipboard(o, stage);
+                if (o != null) CopyPathToClipboard(o, stage);
             };
 
             _gridMenu.CopyPathToClipboard = (stage) => {
@@ -949,6 +951,21 @@ namespace MyManager
             if (string.IsNullOrEmpty(o.SourcePath) || !File.Exists(o.SourcePath)) return;
             using var f = new CopyForm(o.Keyword, Path.GetExtension(o.SourcePath));
             if (f.ShowDialog() == DialogResult.OK) { o.PreparedPath = CopyIntoStage(o, 2, o.SourcePath, f.ResultName); SaveHistory(); FillGrid(); }
+        }
+
+        private void CopyPreparedToPrint(OrderData o)
+        {
+            if (string.IsNullOrEmpty(o.PreparedPath) || !File.Exists(o.PreparedPath)) return;
+
+            string extension = Path.GetExtension(o.PreparedPath);
+            string fileName = !string.IsNullOrWhiteSpace(o.Id)
+                ? $"{o.Id}{extension}"
+                : Path.GetFileName(o.PreparedPath);
+
+            o.PrintPath = CopyIntoStage(o, 3, o.PreparedPath, fileName);
+            UpdateOrderFilePath(o, 3, o.PrintPath);
+            SaveHistory();
+            FillGrid();
         }
 
         private string CopyIntoStage(OrderData o, int s, string src, string? name = null)
