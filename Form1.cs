@@ -126,9 +126,9 @@ namespace MyManager
                 if (o != null) RenameFileHandler(o, stage);
             };
 
-            _gridMenu.PastePathFromClipboard = (stage) => {
+            _gridMenu.CopyPathToClipboard = (stage) => {
                 var o = GetOrderByRow(_ctxRow);
-                if (o != null) PasteFileFromClipboard(o, stage);
+                if (o != null) CopyPathToClipboard(o, stage);
             };
 
             // --- ВОДЯНЫЕ ЗНАКИ ---
@@ -383,6 +383,26 @@ namespace MyManager
             {
                 MessageBox.Show("Ошибка при вставке пути: " + ex.Message);
             }
+        }
+
+        private void CopyPathToClipboard(OrderData order, int stage)
+        {
+            string? path = stage switch
+            {
+                1 => order.SourcePath,
+                2 => order.PreparedPath,
+                3 => order.PrintPath,
+                _ => null
+            };
+
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            {
+                SetBottomStatus("Путь к файлу не найден");
+                return;
+            }
+
+            Clipboard.SetText(path);
+            SetBottomStatus("Путь скопирован в буфер");
         }
 
         private void EnsureGridStyle()
@@ -994,12 +1014,19 @@ namespace MyManager
             string destPath = Path.Combine(_grandpaFolder, targetName);
 
             if (string.Equals(Path.GetFullPath(sourceFile), Path.GetFullPath(destPath), StringComparison.OrdinalIgnoreCase))
+            {
+                Clipboard.SetText(destPath);
                 return destPath;
+            }
 
             if (File.Exists(destPath))
+            {
+                Clipboard.SetText(destPath);
                 return destPath;
+            }
 
             File.Copy(sourceFile, destPath, true);
+            Clipboard.SetText(destPath);
             return destPath;
         }
 

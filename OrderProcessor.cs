@@ -2,6 +2,7 @@
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows.Forms;
 
 namespace MyManager
 {
@@ -161,6 +162,7 @@ namespace MyManager
             string target = Path.Combine(grandpaPath, Path.GetFileName(order.PrintPath));
             MoveFileWithOverwrite(order.PrintPath, target);
             order.PrintPath = target;
+            TryCopyPathToClipboard(target);
 
             if (!string.IsNullOrEmpty(order.SourcePath) && File.Exists(order.SourcePath))
             {
@@ -174,7 +176,20 @@ namespace MyManager
             Directory.CreateDirectory(grandpaPath);
             string target = Path.Combine(grandpaPath, fileName);
             File.Copy(sourcePath, target, true);
+            TryCopyPathToClipboard(target);
             return target;
+        }
+
+        private void TryCopyPathToClipboard(string path)
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(path))
+                    Clipboard.SetText(path);
+            }
+            catch
+            {
+            }
         }
 
         private bool IsInGrandpa(string path, string grandpaPath)
