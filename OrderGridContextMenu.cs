@@ -14,7 +14,7 @@ namespace MyManager
         public Action<int> RemoveFile { get; set; }
         public Action<int, string> PickFile { get; set; }
         public Action<int> RenameFile { get; set; }
-        public Action<int> PastePathFromClipboard { get; set; }
+        public Action<int> CopyPathToClipboard { get; set; }
 
         public Action ApplyWatermark { get; set; }
         public Action ApplyWatermarkLeft { get; set; }
@@ -25,7 +25,7 @@ namespace MyManager
         public Action OpenPitStopMan { get; set; }
         public Action OpenImpMan { get; set; }
 
-        public ContextMenuStrip Build(string colName)
+        public ContextMenuStrip Build(string colName, bool allowCopyToGrandpa = true)
         {
             _menu.Items.Clear();
 
@@ -52,7 +52,7 @@ namespace MyManager
             switch (colName)
             {
                 case "colSource":
-                    AddItem("📋 Вставить путь из буфера", () => PastePathFromClipboard?.Invoke(1));
+                    AddItem("📋 Копировать путь в буфер", () => CopyPathToClipboard?.Invoke(1));
                     AddItem("✏️ Переименовать файл", () => RenameFile?.Invoke(1));
                     AddItem("Копировать в Подготовку", CopyToPrepared);
                     AddItem("Указать файл...", () => PickFile?.Invoke(1, "source"));
@@ -60,7 +60,7 @@ namespace MyManager
                     break;
 
                 case "colReady":
-                    AddItem("📋 Вставить путь из буфера", () => PastePathFromClipboard?.Invoke(2));
+                    AddItem("📋 Копировать путь в буфер", () => CopyPathToClipboard?.Invoke(2));
                     AddItem("✏️ Переименовать файл", () => RenameFile?.Invoke(2));
                     AddItem("Указать файл...", () => PickFile?.Invoke(2, "prepared"));
                     AddItem("Удалить файл", () => RemoveFile?.Invoke(2));
@@ -70,9 +70,12 @@ namespace MyManager
                     AddItem("⏺️ Водяной знак (сверху)", ApplyWatermark);
                     AddItem("⏺️ Водяной знак (слева)", ApplyWatermarkLeft);
                     AddItem("✏️ Переименовать файл", () => RenameFile?.Invoke(3));
-                    AddItem("📋 Вставить путь из буфера", () => PastePathFromClipboard?.Invoke(3));
-                    _menu.Items.Add(new ToolStripSeparator());
-                    AddItem("Копировать в Дедушку", CopyToGrandpa);
+                    AddItem("📋 Копировать путь в буфер", () => CopyPathToClipboard?.Invoke(3));
+                    if (allowCopyToGrandpa)
+                    {
+                        _menu.Items.Add(new ToolStripSeparator());
+                        AddItem("Копировать в Дедушку", CopyToGrandpa);
+                    }
                     AddItem("Указать файл...", () => PickFile?.Invoke(3, "print"));
                     AddItem("Удалить файл", () => RemoveFile?.Invoke(3));
                     break;
