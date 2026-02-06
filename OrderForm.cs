@@ -10,24 +10,30 @@ namespace MyManager
     {
         public OrderData ResultOrder { get; private set; }
         private readonly string ordersRootPath;
+        private readonly bool _infoOnly;
+        private readonly string _internalId;
 
-        public OrderForm(string ordersRootPath, OrderData data = null)
+        public OrderForm(string ordersRootPath, OrderData data = null, bool infoOnly = false)
         {
             InitializeComponent();
             this.StartPosition = FormStartPosition.CenterParent;
 
             this.ordersRootPath = ordersRootPath;
+            _infoOnly = infoOnly;
+            _internalId = data?.InternalId ?? Guid.NewGuid().ToString("N");
 
             LoadConfigLists();
             SetupValidation();
 
             if (data != null) // РЕДАКТИРОВАНИЕ
             {
-                label2.Text = "Редактирование заказа";
+                label2.Text = _infoOnly ? "Данные заказа" : "Редактирование заказа";
                 textBoxNumberOrder.Text = data.Id;
                 textKey.Text = data.Keyword;
                 dateTimeOrder.Value = data.OrderDate;
-                textFolder.Text = Path.Combine(ordersRootPath, data.FolderName);
+                textFolder.Text = string.IsNullOrWhiteSpace(data.FolderName)
+                    ? ""
+                    : Path.Combine(ordersRootPath, data.FolderName);
                 textOriginal.Text = data.SourcePath;
                 textPrepared.Text = data.PreparedPath;
                 textPrint.Text = data.PrintPath;
@@ -35,6 +41,12 @@ namespace MyManager
                 comboBoxHotImposing.Text = data.ImposingAction;
 
                 ToggleFields(true);
+                if (_infoOnly && string.IsNullOrWhiteSpace(textFolder.Text))
+                {
+                    ToggleFields(false);
+                    buttonCreateFolder.Enabled = !string.IsNullOrWhiteSpace(textBoxNumberOrder.Text) &&
+                                                 !string.IsNullOrWhiteSpace(textKey.Text);
+                }
             }
             else // СОЗДАНИЕ
             {
@@ -52,14 +64,15 @@ namespace MyManager
 
         private void ToggleFields(bool enabled)
         {
-            textOriginal.Enabled = enabled;
-            textPrepared.Enabled = enabled;
-            textPrint.Enabled = enabled;
-            btnSelectOriginal.Enabled = enabled;
-            btnSelectPrepared.Enabled = enabled;
-            btnSelectPrint.Enabled = enabled;
-            comboBoxPitStop.Enabled = enabled;
-            comboBoxHotImposing.Enabled = enabled;
+            bool allowFileEdits = enabled && !_infoOnly;
+            textOriginal.Enabled = allowFileEdits;
+            textPrepared.Enabled = allowFileEdits;
+            textPrint.Enabled = allowFileEdits;
+            btnSelectOriginal.Enabled = allowFileEdits;
+            btnSelectPrepared.Enabled = allowFileEdits;
+            btnSelectPrint.Enabled = allowFileEdits;
+            comboBoxPitStop.Enabled = allowFileEdits;
+            comboBoxHotImposing.Enabled = allowFileEdits;
             btnOk.Enabled = enabled;
         }
 
@@ -157,6 +170,7 @@ namespace MyManager
             string datePart = dateTimeOrder.Value.ToString("dd_MM_yy");
             ResultOrder = new OrderData
             {
+                InternalId = _internalId,
                 Id = textBoxNumberOrder.Text.Trim(),
                 Keyword = textKey.Text.Trim(),
                 OrderDate = dateTimeOrder.Value,

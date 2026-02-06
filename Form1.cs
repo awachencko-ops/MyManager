@@ -15,11 +15,14 @@ namespace MyManager
     {
 
         private string sourceColumnName = ""; // Добавь эту переменную в начало класса
-        private readonly OrderProcessor _processor;
+        private OrderProcessor _processor;
         private readonly OrderGridContextMenu _gridMenu = new OrderGridContextMenu();
         private List<OrderData> _orderHistory = new List<OrderData>();
         private string _ordersRootPath = @"C:\Андрей ПК";
         private readonly string _jsonHistoryFile = "history.json";
+        private string _tempRootPath = "";
+        private string _grandpaFolder = @"\\NAS\work\Temp\!!!Дедушка";
+        private bool _useExtendedMode = true;
 
         private Rectangle dragBoxFromMouseDown;
         private object itemFromMouseDown;
@@ -29,22 +32,20 @@ namespace MyManager
         private int _hoveredRowIndex = -1;
         private int _ctxRow = -1;
         private int _ctxCol = -1; // Добавлено
-        private readonly string _grandpaFolder = @"\\NAS\work\Temp\!!!Дедушка";
-
         public Form1()
         {
             InitializeComponent();
             this.StartPosition = FormStartPosition.CenterScreen; // Добавь это
             var settings = AppSettings.Load();
             _ordersRootPath = settings.OrdersRootPath;
+            _grandpaFolder = settings.GrandpaPath;
+            _useExtendedMode = settings.UseExtendedMode;
+            _tempRootPath = string.IsNullOrWhiteSpace(settings.TempFolderPath)
+                ? Path.Combine(_ordersRootPath, settings.TempFolderName)
+                : settings.TempFolderPath;
+            EnsureTempFolders();
 
-            _processor = new OrderProcessor(_ordersRootPath);
-            _processor.OnStatusChanged += (id, status) =>
-            {
-                var order = _orderHistory.FirstOrDefault(x => x.Id == id);
-                if (order != null) SetOrderStatus(order, status);
-            };
-            _processor.OnLog += (msg) => SetBottomStatus(msg);
+            InitializeProcessor();
 
             PdfSharp.Fonts.GlobalFontSettings.FontResolver = new SimpleFontResolver();
             SetupContextMenuActions();
@@ -53,7 +54,13 @@ namespace MyManager
             EnsureGridStyle();
             FillGrid();
 
-            btnCreateOrder.Click += (s, e) => ShowOrderEditor(null);
+            btnCreateOrder.Click += (s, e) =>
+            {
+                if (_useExtendedMode)
+                    ShowOrderEditor(null);
+                else
+                    CreateEmptyOrder();
+            };
             ButtonSettings.Click += (s, e) => ShowSettingsMenu();
 
             gridOrders.CellDoubleClick += GridOrders_CellDoubleClick;
@@ -77,6 +84,17 @@ namespace MyManager
             gridOrders.CellClick += GridOrders_CellClick;
 
             SetBottomStatus("Готово");
+        }
+
+        private void InitializeProcessor()
+        {
+            _processor = new OrderProcessor(_ordersRootPath);
+            _processor.OnStatusChanged += (id, status) =>
+            {
+                var order = _orderHistory.FirstOrDefault(x => x.Id == id);
+                if (order != null) SetOrderStatus(order, status);
+            };
+            _processor.OnLog += (msg) => SetBottomStatus(msg);
         }
 
         private void SetupContextMenuActions()
@@ -134,7 +152,7 @@ namespace MyManager
             sourceFile = sourceFile.Trim().Replace("\"", "");
 
             string sub = stage switch { 1 => "1. исходные", 2 => "2. подготовка", 3 => "3. печать", _ => "" };
-            string folder = Path.Combine(_ordersRootPath, o.FolderName, sub);
+            string folder = GetStageFolder(o, stage);
 
             // Создаем папку, если её нет
             if (!Directory.Exists(folder)) Directory.CreateDirectory(folder);
@@ -150,36 +168,9 @@ namespace MyManager
                 return destPath;
             }
 
-            // 3. Если файл реально существует в целевой папке
+            // 3. Если файл реально существует в целевой папке — дубликаты не создаем
             if (File.Exists(destPath))
-            {
-                // Если это внутренний перенос в рамках одного заказа — заменяем молча (чтобы не бесить)
-                if (isInternal)
-                {
-                    try { File.Delete(destPath); } catch { /* файл может быть занят */ }
-                }
-                else
-                {
-                    // Если это внешний файл из Windows — спрашиваем
-                    var result = MessageBox.Show(
-                        $"Файл '{targetName}' уже есть в папке '{sub}'.\n\nЗАМЕНИТЬ его? (Да)\nСОЗДАТЬ версию с '+'? (Нет)\nОТМЕНИТЬ? (Cancel)",
-                        "Подстраховка: Конфликт имен", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
-
-                    if (result == DialogResult.Yes)
-                    {
-                        try { File.Delete(destPath); } catch { throw new Exception("Не удалось заменить файл, он открыт в другой программе."); }
-                    }
-                    else if (result == DialogResult.No)
-                    {
-                        string name = Path.GetFileNameWithoutExtension(targetName);
-                        string ext = Path.GetExtension(targetName);
-                        string newName = name;
-                        while (File.Exists(Path.Combine(folder, newName + "+" + ext))) newName += "+";
-                        destPath = Path.Combine(folder, newName + "+" + ext);
-                    }
-                    else return sourceFile; // Отмена
-                }
-            }
+                return destPath;
 
             // 4. Само копирование
             File.Copy(sourceFile, destPath, true);
@@ -200,7 +191,7 @@ namespace MyManager
                 PdfWatermark.Apply(o, isVertical);
 
                 string pos = isVertical ? "слева" : "сверху";
-                SetBottomStatus($"✅ Водяной знак ({pos}) нанесен на {o.Id}");
+                SetBottomStatus($"✅ Водяной знак ({pos}) нанесен на {GetOrderDisplayId(o)}");
             }
             catch (IOException)
             {
@@ -357,6 +348,8 @@ namespace MyManager
                 {
                     // Копируем файл в структуру заказа
                     string newPath = CopyIntoStage(o, stage, cleanPath);
+                    if (stage == 2)
+                        EnsureSourceCopy(o, cleanPath);
                     UpdateOrderFilePath(o, stage, newPath);
 
                     SaveHistory();
@@ -381,41 +374,46 @@ namespace MyManager
             gridOrders.ReadOnly = true;
             gridOrders.AllowUserToResizeRows = false;   
             gridOrders.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+            if (gridOrders.Columns.Contains("colSource"))
+                gridOrders.Columns["colSource"].Visible = false;
         }
 
         private void FillGrid()
         {
             if (gridOrders.Columns.Count == 0) return;
-            string? selId = gridOrders.CurrentRow?.Cells["colId"].Value?.ToString();
+            string? selInternalId = gridOrders.CurrentRow?.Tag?.ToString();
             var sorted = _orderHistory.OrderByDescending(x => x.OrderDate).ToList();
 
             if (gridOrders.Rows.Count != sorted.Count)
             {
                 gridOrders.Rows.Clear();
                 foreach (var o in sorted)
-                    gridOrders.Rows.Add(o.Status, o.Id, GetFileName(o.SourcePath), GetFileName(o.PreparedPath), o.PitStopAction, o.ImposingAction, GetFileName(o.PrintPath));
+                {
+                    int index = gridOrders.Rows.Add(o.Status, GetOrderDisplayId(o), GetFileName(o.SourcePath), GetFileName(o.PreparedPath), o.PitStopAction, o.ImposingAction, GetFileName(o.PrintPath));
+                    gridOrders.Rows[index].Tag = o.InternalId;
+                }
             }
             else
             {
                 for (int i = 0; i < sorted.Count; i++)
                 {
                     var o = sorted[i]; var r = gridOrders.Rows[i];
-                    UpdateCell(r, "colState", o.Status); UpdateCell(r, "colId", o.Id);
+                    UpdateCell(r, "colState", o.Status); UpdateCell(r, "colId", GetOrderDisplayId(o));
                     UpdateCell(r, "colSource", GetFileName(o.SourcePath)); UpdateCell(r, "colReady", GetFileName(o.PreparedPath));
                     UpdateCell(r, "colPitStop", o.PitStopAction); UpdateCell(r, "colImposing", o.ImposingAction);
                     UpdateCell(r, "colPrint", GetFileName(o.PrintPath));
+                    r.Tag = o.InternalId;
                 }
             }
-            if (!string.IsNullOrEmpty(selId))
-                foreach (DataGridViewRow row in gridOrders.Rows) if (row.Cells["colId"].Value?.ToString() == selId) { gridOrders.CurrentCell = row.Cells[0]; break; }
+            if (!string.IsNullOrEmpty(selInternalId))
+                foreach (DataGridViewRow row in gridOrders.Rows) if (row.Tag?.ToString() == selInternalId) { gridOrders.CurrentCell = row.Cells[0]; break; }
         }
 
         private void OpenOrderStageFolder(OrderData o, int stage)
         {
             try
             {
-                string sub = stage switch { 1 => "1. исходные", 2 => "2. подготовка", 3 => "3. печать", _ => "" };
-                string path = Path.Combine(_ordersRootPath, o.FolderName, sub);
+                string path = stage == 0 ? GetOrderRootFolder(o) : GetStageFolder(o, stage);
 
                 if (!Directory.Exists(path))
                     Directory.CreateDirectory(path);
@@ -435,6 +433,54 @@ namespace MyManager
 
         private void UpdateCell(DataGridViewRow r, string n, object? v) { if (r.Cells[n].Value?.ToString() != v?.ToString()) r.Cells[n].Value = v; }
         private string GetFileName(string? p) => (string.IsNullOrWhiteSpace(p) || p == "..." || Directory.Exists(p)) ? "..." : Path.GetFileName(p);
+
+        private string GetOrderDisplayId(OrderData order)
+            => string.IsNullOrWhiteSpace(order.Id) ? "—" : order.Id;
+
+        private string GetOrderRootFolder(OrderData order)
+        {
+            return string.IsNullOrWhiteSpace(order.FolderName)
+                ? _tempRootPath
+                : Path.Combine(_ordersRootPath, order.FolderName);
+        }
+
+        private string GetStageFolder(OrderData order, int stage)
+        {
+            if (stage == 3 && !string.IsNullOrWhiteSpace(order.PrintPath) && File.Exists(order.PrintPath))
+                return Path.GetDirectoryName(order.PrintPath) ?? GetTempStageFolder(stage);
+
+            if (string.IsNullOrWhiteSpace(order.FolderName))
+                return GetTempStageFolder(stage);
+
+            string sub = stage switch { 1 => "1. исходные", 2 => "2. подготовка", 3 => "3. печать", _ => "" };
+            return Path.Combine(_ordersRootPath, order.FolderName, sub);
+        }
+
+        private string GetTempStageFolder(int stage)
+        {
+            string sub = stage switch { 1 => "in", 2 => "prepress", 3 => "print", _ => "" };
+            string path = Path.Combine(_tempRootPath, sub);
+            Directory.CreateDirectory(path);
+            return path;
+        }
+
+        private void EnsureTempFolders()
+        {
+            Directory.CreateDirectory(Path.Combine(_tempRootPath, "in"));
+            Directory.CreateDirectory(Path.Combine(_tempRootPath, "prepress"));
+            Directory.CreateDirectory(Path.Combine(_tempRootPath, "print"));
+        }
+
+        private void DeleteTempFiles(OrderData order)
+        {
+            foreach (var path in new[] { order.SourcePath, order.PreparedPath, order.PrintPath })
+            {
+                if (!string.IsNullOrEmpty(path) && File.Exists(path))
+                {
+                    try { File.Delete(path); } catch { }
+                }
+            }
+        }
 
         private void GridOrders_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
         {
@@ -487,6 +533,9 @@ namespace MyManager
 
         private async Task RunForOrderAsync(OrderData order)
         {
+            if (!EnsureOrderInfo(order))
+                return;
+
             using var cts = new CancellationTokenSource();
             await _processor.RunAsync(order, cts.Token);
             SaveHistory(); FillGrid();
@@ -498,9 +547,73 @@ namespace MyManager
             if (f.ShowDialog() == DialogResult.OK && f.ResultOrder != null)
             {
                 if (existing == null) _orderHistory.Add(f.ResultOrder);
-                else { int idx = _orderHistory.FindIndex(x => x.Id == existing.Id); if (idx >= 0) _orderHistory[idx] = f.ResultOrder; }
+                else { int idx = _orderHistory.FindIndex(x => x.InternalId == existing.InternalId); if (idx >= 0) _orderHistory[idx] = f.ResultOrder; }
                 SaveHistory(); FillGrid();
             }
+        }
+
+        private void CreateEmptyOrder()
+        {
+            var order = new OrderData
+            {
+                Id = "",
+                Keyword = "",
+                OrderDate = DateTime.Now,
+                FolderName = "",
+                Status = "⚪ Ожидание",
+                PitStopAction = "-",
+                ImposingAction = "-"
+            };
+
+            _orderHistory.Add(order);
+            SaveHistory();
+            FillGrid();
+        }
+
+        private bool EnsureOrderInfo(OrderData order)
+        {
+            if (_useExtendedMode)
+            {
+                using var f = new OrderForm(_ordersRootPath, order, infoOnly: true);
+                if (f.ShowDialog() != DialogResult.OK || f.ResultOrder == null)
+                    return false;
+
+                ApplyOrderInfo(order, f.ResultOrder);
+                EnsureOrderFolder(order);
+            }
+            else
+            {
+                using var f = new SimpleOrderForm(order);
+                if (f.ShowDialog() != DialogResult.OK)
+                    return false;
+
+                order.Id = f.OrderNumber.Trim();
+                order.OrderDate = f.OrderDate;
+                order.FolderName = "";
+            }
+
+            SaveHistory();
+            FillGrid();
+            return true;
+        }
+
+        private void ApplyOrderInfo(OrderData target, OrderData source)
+        {
+            target.Id = source.Id;
+            target.Keyword = source.Keyword;
+            target.OrderDate = source.OrderDate;
+            target.FolderName = source.FolderName;
+        }
+
+        private void EnsureOrderFolder(OrderData order)
+        {
+            if (string.IsNullOrWhiteSpace(order.FolderName)) return;
+
+            string root = Path.Combine(_ordersRootPath, order.FolderName);
+            Directory.CreateDirectory(root);
+            Directory.CreateDirectory(Path.Combine(root, "1. исходные"));
+            Directory.CreateDirectory(Path.Combine(root, "2. подготовка"));
+            Directory.CreateDirectory(Path.Combine(root, "3. печать"));
         }
 
         private void RemoveFileFromOrder(OrderData order, int stage)
@@ -555,11 +668,11 @@ namespace MyManager
         private OrderData? GetOrderByRow(int idx)
         {
             if (idx < 0 || idx >= gridOrders.Rows.Count) return null;
-            string id = gridOrders.Rows[idx].Cells["colId"].Value?.ToString() ?? "";
-            return _orderHistory.FirstOrDefault(x => x.Id == id);
+            string internalId = gridOrders.Rows[idx].Tag?.ToString() ?? "";
+            return _orderHistory.FirstOrDefault(x => x.InternalId == internalId);
         }
 
-        private void OpenOrderFolder(OrderData o) { try { Process.Start("explorer.exe", Path.Combine(_ordersRootPath, o.FolderName)); } catch { } }
+        private void OpenOrderFolder(OrderData o) { try { Process.Start("explorer.exe", GetOrderRootFolder(o)); } catch { } }
         private void OpenPitStopManager() { using var f = new ActionManagerForm(); f.ShowDialog(); }
         private void OpenImposingManager() { using var f = new ImposingManagerForm(); f.ShowDialog(); }
 
@@ -612,7 +725,7 @@ namespace MyManager
 
                 bool isInternal = e.Data.GetDataPresent("InternalSourceColumn");
 
-                string targetName = (targetStage == 3)
+                string targetName = (targetStage == 3 && !string.IsNullOrWhiteSpace(targetOrder.Id))
                     ? $"{targetOrder.Id}{Path.GetExtension(sourceFile)}"
                     : Path.GetFileName(sourceFile);
 
@@ -623,6 +736,8 @@ namespace MyManager
                     // Если путь обновился — сохраняем
                     if (!string.Equals(Path.GetFullPath(sourceFile), Path.GetFullPath(newPath), StringComparison.OrdinalIgnoreCase))
                     {
+                        if (targetStage == 2)
+                            EnsureSourceCopy(targetOrder, sourceFile);
                         UpdateOrderFilePath(targetOrder, targetStage, newPath);
                         SaveHistory();
                         FillGrid();
@@ -686,8 +801,7 @@ namespace MyManager
         private void PickAndCopyFile(OrderData o, int s, string t)
         {
             // Определяем целевую подпапку в зависимости от стадии
-            string sub = s switch { 1 => "1. исходные", 2 => "2. подготовка", 3 => "3. печать", _ => "" };
-            string targetFolder = Path.Combine(_ordersRootPath, o.FolderName, sub);
+            string targetFolder = GetStageFolder(o, s);
 
             // Если папки еще нет (вдруг удалили), создаем её
             if (!Directory.Exists(targetFolder))
@@ -708,6 +822,8 @@ namespace MyManager
                     try
                     {
                         string newPath = CopyIntoStage(o, s, ofd.FileName);
+                        if (s == 2)
+                            EnsureSourceCopy(o, ofd.FileName);
                         UpdateOrderFilePath(o, s, newPath);
                         SaveHistory();
                         FillGrid();
@@ -730,8 +846,7 @@ namespace MyManager
 
         private string CopyIntoStage(OrderData o, int s, string src, string? name = null)
         {
-            string sub = s switch { 1 => "1. исходные", 2 => "2. подготовка", 3 => "3. печать", _ => "" };
-            string path = Path.Combine(_ordersRootPath, o.FolderName, sub);
+            string path = GetStageFolder(o, s);
             Directory.CreateDirectory(path);
 
             string dest = Path.Combine(path, name ?? Path.GetFileName(src));
@@ -742,6 +857,8 @@ namespace MyManager
 
             try
             {
+                if (File.Exists(dest))
+                    return dest;
                 File.Copy(src, dest, true);
                 return dest;
             }
@@ -750,6 +867,18 @@ namespace MyManager
                 MessageBox.Show("Ошибка доступа: Файл занят другой программой (Acrobat, PitStop или браузер).\n\nЗакройте файл и попробуйте снова.", "Файл заблокирован");
                 throw; // "Пробрасываем" ошибку выше, чтобы не обновлять путь в базе
             }
+        }
+
+        private void EnsureSourceCopy(OrderData order, string sourceFile)
+        {
+            if (string.IsNullOrWhiteSpace(sourceFile) || !File.Exists(sourceFile))
+                return;
+
+            if (!string.IsNullOrEmpty(order.SourcePath) && File.Exists(order.SourcePath))
+                return;
+
+            string newPath = CopyIntoStage(order, 1, sourceFile);
+            UpdateOrderFilePath(order, 1, newPath);
         }
 
         private void GridOrders_CellContentClick(object? s, DataGridViewCellEventArgs e)
@@ -764,10 +893,12 @@ namespace MyManager
         private void OpenPdfDefault(string p) { try { Process.Start(new ProcessStartInfo { FileName = p, UseShellExecute = true }); } catch { } }
         private void DeleteOrder(OrderData o)
         {
-            string orderDir = Path.Combine(_ordersRootPath, o.FolderName);
+            string orderDir = string.IsNullOrWhiteSpace(o.FolderName)
+                ? ""
+                : Path.Combine(_ordersRootPath, o.FolderName);
 
             var res = MessageBox.Show(
-                $"Заказ №{o.Id}\n\n" +
+                $"Заказ №{GetOrderDisplayId(o)}\n\n" +
                 "Желаете удалить папку заказа физически с диска?\n\n" +
                 "[Да] — Удалить папку со всеми файлами и убрать из списка.\n" +
                 "[Нет] — Только убрать из списка (папка останется на диске).\n" +
@@ -782,10 +913,14 @@ namespace MyManager
             {
                 try
                 {
-                    if (Directory.Exists(orderDir))
+                    if (!string.IsNullOrEmpty(orderDir) && Directory.Exists(orderDir))
                     {
                         // Удаляем папку со всем содержимым
                         Directory.Delete(orderDir, true);
+                    }
+                    else
+                    {
+                        DeleteTempFiles(o);
                     }
                 }
                 catch (Exception ex)
@@ -798,9 +933,28 @@ namespace MyManager
             _orderHistory.Remove(o);
             SaveHistory();
             FillGrid();
-            SetBottomStatus($"Заказ {o.Id} удален");
+            SetBottomStatus($"Заказ {GetOrderDisplayId(o)} удален");
         }
-        private void LoadHistory() { if (File.Exists(_jsonHistoryFile)) try { _orderHistory = JsonSerializer.Deserialize<List<OrderData>>(File.ReadAllText(_jsonHistoryFile)) ?? new List<OrderData>(); } catch { } }
+        private void LoadHistory()
+        {
+            if (File.Exists(_jsonHistoryFile))
+            {
+                try
+                {
+                    _orderHistory = JsonSerializer.Deserialize<List<OrderData>>(File.ReadAllText(_jsonHistoryFile)) ?? new List<OrderData>();
+                }
+                catch
+                {
+                    _orderHistory = new List<OrderData>();
+                }
+            }
+
+            foreach (var order in _orderHistory)
+            {
+                if (string.IsNullOrWhiteSpace(order.InternalId))
+                    order.InternalId = Guid.NewGuid().ToString("N");
+            }
+        }
         private void SaveHistory() { File.WriteAllText(_jsonHistoryFile, JsonSerializer.Serialize(_orderHistory, new JsonSerializerOptions { WriteIndented = true })); }
         private void SetOrderStatus(OrderData o, string s) { o.Status = s; SaveHistory(); if (InvokeRequired) Invoke(new Action(FillGrid)); else FillGrid(); }
         private void SetBottomStatus(string t) { if (InvokeRequired) Invoke(new Action(() => lblBottomStatus.Text = t)); else lblBottomStatus.Text = t; }
@@ -808,7 +962,44 @@ namespace MyManager
         private void ShowSettingsMenu()
         {
             var m = new ContextMenuStrip();
-            m.Items.Add("Папка хранения", null, (s, e) => { using var f = new FolderBrowserDialog(); if (f.ShowDialog() == DialogResult.OK) { _ordersRootPath = f.SelectedPath; SetBottomStatus("Путь обновлен"); } });
+            m.Items.Add("Папка хранения", null, (s, e) =>
+            {
+                using var f = new FolderBrowserDialog();
+                if (f.ShowDialog() == DialogResult.OK)
+                {
+                    _ordersRootPath = f.SelectedPath;
+                    var settings = AppSettings.Load();
+                    settings.OrdersRootPath = _ordersRootPath;
+                    settings.Save();
+                    _tempRootPath = string.IsNullOrWhiteSpace(settings.TempFolderPath)
+                        ? Path.Combine(_ordersRootPath, settings.TempFolderName)
+                        : settings.TempFolderPath;
+                    EnsureTempFolders();
+                    InitializeProcessor();
+                    SetBottomStatus("Путь обновлен");
+                }
+            });
+            m.Items.Add("Папка временных файлов", null, (s, e) =>
+            {
+                using var f = new FolderBrowserDialog();
+                if (f.ShowDialog() == DialogResult.OK)
+                {
+                    _tempRootPath = f.SelectedPath;
+                    var settings = AppSettings.Load();
+                    settings.TempFolderPath = _tempRootPath;
+                    settings.Save();
+                    EnsureTempFolders();
+                }
+            });
+            var modeItem = new ToolStripMenuItem("Расширенный режим") { Checked = _useExtendedMode, CheckOnClick = true };
+            modeItem.CheckedChanged += (s, e) =>
+            {
+                _useExtendedMode = modeItem.Checked;
+                var settings = AppSettings.Load();
+                settings.UseExtendedMode = _useExtendedMode;
+                settings.Save();
+            };
+            m.Items.Add(modeItem);
             m.Items.Add("Диспетчер PitStop", null, (s, e) => OpenPitStopManager());
             m.Items.Add("Диспетчер Imposing", null, (s, e) => OpenImposingManager());
             m.Items.Add(new ToolStripSeparator());
@@ -829,7 +1020,7 @@ namespace MyManager
             if (e.RowIndex < 0) return;
             var o = GetOrderByRow(e.RowIndex); if (o == null) return;
             string col = gridOrders.Columns[e.ColumnIndex].Name;
-            if (col == "colId") ShowOrderEditor(o);
+            if (col == "colId" && _useExtendedMode) ShowOrderEditor(o);
             else if (col == "colPitStop") { using var f = new PitStopSelectForm(o.PitStopAction); if (f.ShowDialog() == DialogResult.OK) { o.PitStopAction = f.SelectedName; SaveHistory(); FillGrid(); } }
             else if (col == "colImposing") { using var f = new ImposingSelectForm(o.ImposingAction); if (f.ShowDialog() == DialogResult.OK) { o.ImposingAction = f.SelectedName; SaveHistory(); FillGrid(); } }
         }
