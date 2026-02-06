@@ -96,15 +96,24 @@ namespace MyManager
                     string outFile = await WaitForFileAsync(impCfg.Out, fileName, timeout, ct);
                     if (outFile == null) throw new Exception("Таймаут Imposing.");
 
-                    order.PrintPath = CopyIntoStage(order, 3, outFile, $"{order.Id}.pdf", tempRoot);
-                    try { File.Delete(outFile); } catch { }
+                    string printName = $"{order.Id}.pdf";
+                    if (useExtendedMode)
+                    {
+                        order.PrintPath = CopyIntoStage(order, 3, outFile, printName, tempRoot);
+                        try { File.Delete(outFile); } catch { }
+                    }
+                    else
+                    {
+                        order.PrintPath = CopyToGrandpa(outFile, printName, settings.GrandpaPath);
+                        try { File.Delete(outFile); } catch { }
+                    }
                 }
 
                 if (!string.IsNullOrEmpty(order.PrintPath) && File.Exists(order.PrintPath))
                 {
                     if (useExtendedMode)
                         MoveTempToOrderFolder(order, tempRoot);
-                    else
+                    else if (!IsInGrandpa(order.PrintPath, settings.GrandpaPath))
                         MovePrintToGrandpa(order, settings.GrandpaPath);
                 }
 
@@ -157,6 +166,24 @@ namespace MyManager
             {
                 try { File.Delete(order.SourcePath); } catch { }
             }
+        }
+
+        private string CopyToGrandpa(string sourcePath, string fileName, string grandpaPath)
+        {
+            if (string.IsNullOrWhiteSpace(grandpaPath)) return sourcePath;
+            Directory.CreateDirectory(grandpaPath);
+            string target = Path.Combine(grandpaPath, fileName);
+            File.Copy(sourcePath, target, true);
+            return target;
+        }
+
+        private bool IsInGrandpa(string path, string grandpaPath)
+        {
+            if (string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(grandpaPath)) return false;
+            string fullPath = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar);
+            string fullGrandpa = Path.GetFullPath(grandpaPath).TrimEnd(Path.DirectorySeparatorChar);
+            return fullPath.StartsWith(fullGrandpa + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(fullPath, fullGrandpa, StringComparison.OrdinalIgnoreCase);
         }
 
         private string GetOrderStagePath(OrderData order, int stage)

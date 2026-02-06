@@ -152,7 +152,9 @@ namespace MyManager
             // 1. Очищаем входящий путь от кавычек и пробелов (частая причина глюков)
             sourceFile = sourceFile.Trim().Replace("\"", "");
 
-            string sub = stage switch { 1 => "1. исходные", 2 => "2. подготовка", 3 => "3. печать", _ => "" };
+            if (stage == 3 && GetOrderStartMode(o) == OrderStartMode.Simple)
+                return CopyToGrandpaFromSource(sourceFile, targetName);
+
             string folder = GetStageFolder(o, stage);
 
             // Создаем папку, если её нет
@@ -356,13 +358,14 @@ namespace MyManager
                     }
 
                     // Копируем файл в структуру заказа
-                    string newPath = CopyIntoStage(
-                        o,
-                        stage,
-                        cleanPath,
-                        stage == 3 && !string.IsNullOrWhiteSpace(o.Id)
-                            ? $"{o.Id}{Path.GetExtension(cleanPath)}"
-                            : null);
+                    string newPath = stage == 3
+                        ? CopyPrintFile(
+                            o,
+                            cleanPath,
+                            !string.IsNullOrWhiteSpace(o.Id)
+                                ? $"{o.Id}{Path.GetExtension(cleanPath)}"
+                                : Path.GetFileName(cleanPath))
+                        : CopyIntoStage(o, stage, cleanPath);
                     if (stage == 2)
                         EnsureSourceCopy(o, cleanPath);
                     UpdateOrderFilePath(o, stage, newPath);
@@ -542,7 +545,9 @@ namespace MyManager
             {
                 _ctxRow = e.RowIndex; _ctxCol = e.ColumnIndex;
                 gridOrders.CurrentCell = gridOrders.Rows[e.RowIndex].Cells[e.ColumnIndex];
-                _gridMenu.Build(gridOrders.Columns[e.ColumnIndex].Name).Show(Cursor.Position);
+                var order = GetOrderByRow(e.RowIndex);
+                bool allowCopyToGrandpa = order == null || GetOrderStartMode(order) != OrderStartMode.Simple;
+                _gridMenu.Build(gridOrders.Columns[e.ColumnIndex].Name, allowCopyToGrandpa).Show(Cursor.Position);
             }
         }
 
@@ -879,13 +884,20 @@ namespace MyManager
                             return;
                         }
 
-                        string newPath = CopyIntoStage(
-                            o,
-                            s,
-                            ofd.FileName,
-                            s == 3 && !string.IsNullOrWhiteSpace(o.Id)
-                                ? $"{o.Id}{Path.GetExtension(ofd.FileName)}"
-                                : null);
+                        string newPath = s == 3
+                            ? CopyPrintFile(
+                                o,
+                                ofd.FileName,
+                                !string.IsNullOrWhiteSpace(o.Id)
+                                    ? $"{o.Id}{Path.GetExtension(ofd.FileName)}"
+                                    : Path.GetFileName(ofd.FileName))
+                            : CopyIntoStage(
+                                o,
+                                s,
+                                ofd.FileName,
+                                s == 3 && !string.IsNullOrWhiteSpace(o.Id)
+                                    ? $"{o.Id}{Path.GetExtension(ofd.FileName)}"
+                                    : null);
                         if (s == 2)
                             EnsureSourceCopy(o, ofd.FileName);
                         UpdateOrderFilePath(o, s, newPath);
@@ -958,6 +970,29 @@ namespace MyManager
 
             string newPath = CopyIntoStage(order, 1, sourceFile);
             UpdateOrderFilePath(order, 1, newPath);
+        }
+
+        private string CopyPrintFile(OrderData order, string sourceFile, string targetName)
+        {
+            if (GetOrderStartMode(order) == OrderStartMode.Simple)
+                return CopyToGrandpaFromSource(sourceFile, targetName);
+
+            return CopyIntoStage(order, 3, sourceFile, targetName);
+        }
+
+        private string CopyToGrandpaFromSource(string sourceFile, string targetName)
+        {
+            Directory.CreateDirectory(_grandpaFolder);
+            string destPath = Path.Combine(_grandpaFolder, targetName);
+
+            if (string.Equals(Path.GetFullPath(sourceFile), Path.GetFullPath(destPath), StringComparison.OrdinalIgnoreCase))
+                return destPath;
+
+            if (File.Exists(destPath))
+                return destPath;
+
+            File.Copy(sourceFile, destPath, true);
+            return destPath;
         }
 
         private void GridOrders_CellContentClick(object? s, DataGridViewCellEventArgs e)
