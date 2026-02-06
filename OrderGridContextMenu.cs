@@ -15,6 +15,7 @@ namespace MyManager
         public Action<int, string> PickFile { get; set; }
         public Action<int> RenameFile { get; set; }
         public Action<int> CopyPathToClipboard { get; set; }
+        public Action<int> PastePathFromClipboard { get; set; }
 
         public Action ApplyWatermark { get; set; }
         public Action ApplyWatermarkLeft { get; set; }
@@ -53,14 +54,14 @@ namespace MyManager
             switch (colName)
             {
                 case "colSource":
-                    AddItem("📋 Копировать путь в буфер", () => CopyPathToClipboard?.Invoke(1));
+                    AddItem("📋 Вставить путь из буфера", () => PastePathFromClipboard?.Invoke(1));
                     AddItem("✏️ Переименовать файл", () => RenameFile?.Invoke(1));
                     AddItem("Указать файл...", () => PickFile?.Invoke(1, "source"));
                     AddItem("Удалить файл", () => RemoveFile?.Invoke(1));
                     break;
 
                 case "colReady":
-                    AddItem("📋 Копировать путь в буфер", () => CopyPathToClipboard?.Invoke(2));
+                    AddItem("📋 Вставить путь из буфера", () => PastePathFromClipboard?.Invoke(2));
                     AddItem("✏️ Переименовать файл", () => RenameFile?.Invoke(2));
                     AddItem("Указать файл...", () => PickFile?.Invoke(2, "prepared"));
                     AddItem("Удалить файл", () => RemoveFile?.Invoke(2));

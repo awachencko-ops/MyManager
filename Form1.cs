@@ -131,6 +131,11 @@ namespace MyManager
                 if (o != null) CopyPathToClipboard(o, stage);
             };
 
+            _gridMenu.PastePathFromClipboard = (stage) => {
+                var o = GetOrderByRow(_ctxRow);
+                if (o != null) PasteFileFromClipboard(o, stage);
+            };
+
             // --- ВОДЯНЫЕ ЗНАКИ ---
             _gridMenu.ApplyWatermark = () => {
                 var o = GetOrderByRow(_ctxRow);
