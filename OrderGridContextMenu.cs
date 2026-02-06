@@ -55,7 +55,6 @@ namespace MyManager
                 case "colSource":
                     AddItem("📋 Вставить путь из буфера", () => PastePathFromClipboard?.Invoke(1));
                     AddItem("✏️ Переименовать файл", () => RenameFile?.Invoke(1));
-                    AddItem("Копировать в Подготовку", CopyToPrepared);
                     AddItem("Указать файл...", () => PickFile?.Invoke(1, "source"));
                     AddItem("Удалить файл", () => RemoveFile?.Invoke(1));
                     break;
@@ -63,7 +62,6 @@ namespace MyManager
                 case "colReady":
                     AddItem("📋 Вставить путь из буфера", () => PastePathFromClipboard?.Invoke(2));
                     AddItem("✏️ Переименовать файл", () => RenameFile?.Invoke(2));
-                    AddItem("Копировать в Печать", CopyToPrint);
                     AddItem("Указать файл...", () => PickFile?.Invoke(2, "prepared"));
                     AddItem("Удалить файл", () => RemoveFile?.Invoke(2));
                     break;
