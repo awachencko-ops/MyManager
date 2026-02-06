@@ -78,7 +78,6 @@ namespace MyManager
             gridOrders.MouseDown += GridOrders_MouseDown;
             gridOrders.MouseMove += GridOrders_MouseMove;
             gridOrders.DragOver += GridOrders_DragOver;
-            gridOrders.DragDrop += GridOrders_DragDrop;
 
             // Подписываемся на клик (если еще не подписаны)
             gridOrders.CellClick += GridOrders_CellClick;
