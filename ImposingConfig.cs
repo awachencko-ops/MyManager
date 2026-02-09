@@ -3,6 +3,7 @@
     public class ImposingConfig
     {
         public string Name { get; set; } = "";
+        public string Category { get; set; } = ""; // Группа из Acrobat
         public string BaseFolder { get; set; } = "";
         public string In { get; set; } = "";
         public string Out { get; set; } = "";

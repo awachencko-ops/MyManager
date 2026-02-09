@@ -2,15 +2,8 @@
 {
     partial class ImposingManagerForm
     {
-        /// <summary>
-        /// Required designer variable.
-        /// </summary>
         private System.ComponentModel.IContainer components = null;
 
-        /// <summary>
-        /// Clean up any resources being used.
-        /// </summary>
-        /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
         protected override void Dispose(bool disposing)
         {
             if (disposing && (components != null))
@@ -22,10 +15,6 @@
 
         #region Windows Form Designer generated code
 
-        /// <summary>
-        /// Required method for Designer support - do not modify
-        /// the contents of this method with the code editor.
-        /// </summary>
         private void InitializeComponent()
         {
             txtName = new TextBox();
@@ -44,21 +33,24 @@
             label3 = new Label();
             buttonDeleteSequance = new Button();
             buttonCreateSequance = new Button();
+            btnSyncMemory = new Button();
+            btnExportQHI = new Button();
+            treeCategories = new TreeView();
             ((System.ComponentModel.ISupportInitialize)dataGridView1).BeginInit();
             SuspendLayout();
             // 
             // txtName
             // 
-            txtName.Location = new Point(290, 623);
+            txtName.Location = new Point(568, 623);
             txtName.Name = "txtName";
-            txtName.Size = new Size(605, 31);
+            txtName.Size = new Size(327, 31);
             txtName.TabIndex = 1;
             // 
             // txtBaseFolder
             // 
-            txtBaseFolder.Location = new Point(290, 560);
+            txtBaseFolder.Location = new Point(568, 560);
             txtBaseFolder.Name = "txtBaseFolder";
-            txtBaseFolder.Size = new Size(605, 31);
+            txtBaseFolder.Size = new Size(327, 31);
             txtBaseFolder.TabIndex = 2;
             // 
             // btnBrowseBase
@@ -118,12 +110,15 @@
             // 
             // dataGridView1
             // 
+            dataGridView1.AllowUserToAddRows = false;
             dataGridView1.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            dataGridView1.Location = new Point(49, 40);
+            dataGridView1.Location = new Point(350, 40);
+            dataGridView1.MultiSelect = false;
             dataGridView1.Name = "dataGridView1";
+            dataGridView1.ReadOnly = true;
             dataGridView1.RowHeadersWidth = 62;
-            dataGridView1.RowTemplate.Height = 33;
-            dataGridView1.Size = new Size(1157, 472);
+            dataGridView1.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            dataGridView1.Size = new Size(545, 472);
             dataGridView1.TabIndex = 11;
             // 
             // inputLabel
@@ -132,7 +127,6 @@
             inputLabel.Location = new Point(49, 894);
             inputLabel.Name = "inputLabel";
             inputLabel.Size = new Size(225, 25);
-            inputLabel.TabIndex = 20;
             inputLabel.Text = "Input Folder / Original PDF";
             // 
             // label1
@@ -141,7 +135,6 @@
             label1.Location = new Point(49, 985);
             label1.Name = "label1";
             label1.Size = new Size(260, 25);
-            label1.TabIndex = 21;
             label1.Text = "Output Folder / Imposed result";
             // 
             // label2
@@ -150,7 +143,6 @@
             label2.Location = new Point(49, 1161);
             label2.Name = "label2";
             label2.Size = new Size(105, 25);
-            label2.TabIndex = 22;
             label2.Text = "Error Folder";
             // 
             // label3
@@ -159,7 +151,6 @@
             label3.Location = new Point(49, 1073);
             label3.Name = "label3";
             label3.Size = new Size(226, 25);
-            label3.TabIndex = 23;
             label3.Text = "Done Folder / Original PDF";
             // 
             // buttonDeleteSequance
@@ -180,11 +171,37 @@
             buttonCreateSequance.Text = "Создать сценарий";
             buttonCreateSequance.UseVisualStyleBackColor = true;
             // 
+            // btnSyncMemory
+            // 
+            btnSyncMemory.Location = new Point(916, 40);
+            btnSyncMemory.Name = "btnSyncMemory";
+            btnSyncMemory.Size = new Size(291, 45);
+            btnSyncMemory.Text = "🔄 Синхронизировать с Acrobat";
+            btnSyncMemory.UseVisualStyleBackColor = true;
+            // 
+            // btnExportQHI
+            // 
+            btnExportQHI.Location = new Point(916, 95);
+            btnExportQHI.Name = "btnExportQHI";
+            btnExportQHI.Size = new Size(291, 45);
+            btnExportQHI.Text = "💾 Записать в Hot Imposing";
+            btnExportQHI.UseVisualStyleBackColor = true;
+            // 
+            // treeCategories
+            // 
+            treeCategories.Location = new Point(49, 40);
+            treeCategories.Name = "treeCategories";
+            treeCategories.Size = new Size(280, 472);
+            treeCategories.TabIndex = 28;
+            // 
             // ImposingManagerForm
             // 
             AutoScaleDimensions = new SizeF(10F, 25F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(1246, 1421);
+            Controls.Add(treeCategories);
+            Controls.Add(btnExportQHI);
+            Controls.Add(btnSyncMemory);
             Controls.Add(buttonCreateSequance);
             Controls.Add(buttonDeleteSequance);
             Controls.Add(label3);
@@ -225,5 +242,8 @@
         private Label label3;
         private Button buttonDeleteSequance;
         private Button buttonCreateSequance;
+        private Button btnSyncMemory;
+        private Button btnExportQHI;
+        private TreeView treeCategories;
     }
 }

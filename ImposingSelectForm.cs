@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Data;
 using System.Linq;
 using System.Windows.Forms;
 
@@ -9,58 +10,90 @@ namespace MyManager
     public partial class ImposingSelectForm : Form
     {
         private readonly BindingList<ImposingConfig> _items = new BindingList<ImposingConfig>();
+        private List<ImposingConfig> _allData = new List<ImposingConfig>();
+        private readonly string _preselectName;
 
         public string SelectedName { get; private set; } = "-";
-        public string SelectedSequenceName => SelectedName; // Для совместимости
-
-        private readonly string _preselectName;
 
         public ImposingSelectForm(string currentName = "-")
         {
             InitializeComponent();
-            this.StartPosition = FormStartPosition.CenterParent;
             _preselectName = string.IsNullOrWhiteSpace(currentName) ? "-" : currentName.Trim();
-
-            Text = "Выбор HotImposing Sequence";
-            StartPosition = FormStartPosition.CenterParent;
-            KeyPreview = true;
 
             Load += (s, e) =>
             {
                 BuildGrid();
                 LoadItems();
+                UpdateCategoryTree();
                 ApplyFilter();
                 PreselectIfPossible();
             };
 
             txtSearch.TextChanged += (s, e) => ApplyFilter();
+            treeCategories.AfterSelect += (s, e) => ApplyFilter();
+
             btnCancel.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
             btnSelect.Click += (s, e) => SelectCurrent();
 
             grid.CellDoubleClick += (s, e) => { if (e.RowIndex >= 0) SelectCurrent(); };
-            KeyDown += (s, e) => { if (e.KeyCode == Keys.Enter) SelectCurrent(); if (e.KeyCode == Keys.Escape) Close(); };
-        }
 
-        private List<ImposingConfig> _allData = new List<ImposingConfig>();
+            // Быстрые клавиши
+            this.KeyPreview = true;
+            this.KeyDown += (s, e) =>
+            {
+                if (e.KeyCode == Keys.Enter) { e.Handled = true; SelectCurrent(); }
+                if (e.KeyCode == Keys.Escape) Close();
+            };
+        }
 
         private void LoadItems()
         {
-            // БЕРЕМ ДАННЫЕ ИЗ НАШЕГО НОВОГО СЕРВИСА
             _allData = ConfigService.GetAllImposingConfigs()
                         .OrderBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase)
                         .ToList();
         }
 
+        private void UpdateCategoryTree()
+        {
+            treeCategories.BeginUpdate();
+            treeCategories.Nodes.Clear();
+
+            var rootNode = treeCategories.Nodes.Add("ALL", "Все группы");
+
+            var categories = _allData
+                .Select(a => string.IsNullOrWhiteSpace(a.Category) ? "Без категории" : a.Category)
+                .Distinct()
+                .OrderBy(c => c);
+
+            foreach (var cat in categories)
+            {
+                treeCategories.Nodes.Add(cat, cat);
+            }
+
+            treeCategories.ExpandAll();
+            treeCategories.SelectedNode = rootNode;
+            treeCategories.EndUpdate();
+        }
+
         private void ApplyFilter()
         {
             string q = (txtSearch.Text ?? "").Trim();
-            var filtered = string.IsNullOrWhiteSpace(q)
+            string selectedCat = treeCategories.SelectedNode?.Name ?? "ALL";
+
+            // 1. Фильтр по категории
+            var filteredByCategory = (selectedCat == "ALL")
                 ? _allData
-                : _allData.Where(x => x.Name.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                                     x.BaseFolder.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0);
+                : _allData.Where(x => (string.IsNullOrWhiteSpace(x.Category) ? "Без категории" : x.Category) == selectedCat);
+
+            // 2. Фильтр по поиску
+            var finalFiltered = string.IsNullOrWhiteSpace(q)
+                ? filteredByCategory
+                : filteredByCategory.Where(x => x.Name.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                               x.BaseFolder.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0);
 
             _items.Clear();
-            foreach (var a in filtered) _items.Add(a);
+            foreach (var a in finalFiltered) _items.Add(a);
+
             grid.DataSource = _items;
             lblCount.Text = $"Секвенций: {_items.Count}";
         }
@@ -68,6 +101,8 @@ namespace MyManager
         private void PreselectIfPossible()
         {
             if (string.IsNullOrWhiteSpace(_preselectName) || _preselectName == "-") return;
+
+            // Пытаемся найти и выделить строку с текущей секвенцией
             foreach (DataGridViewRow row in grid.Rows)
             {
                 if (row.DataBoundItem is ImposingConfig cfg && cfg.Name == _preselectName)
@@ -87,6 +122,13 @@ namespace MyManager
                 DialogResult = DialogResult.OK;
                 Close();
             }
+            else if (grid.Rows.Count == 0 && string.IsNullOrWhiteSpace(txtSearch.Text))
+            {
+                // Если список пуст и ничего не выбрано, возвращаем прочерк
+                SelectedName = "-";
+                DialogResult = DialogResult.OK;
+                Close();
+            }
         }
 
         private void BuildGrid()
@@ -95,14 +137,16 @@ namespace MyManager
             grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             grid.ReadOnly = true;
             grid.RowHeadersVisible = false;
+            grid.AllowUserToAddRows = false;
             grid.Columns.Clear();
-            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Name", HeaderText = "Sequence", AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill });
-            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "BaseFolder", HeaderText = "Base Folder", AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill });
-        }
 
-        private void ImposingSelectForm_Load(object sender, EventArgs e)
-        {
-
+            // Оставляем только одну колонку с названием
+            grid.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                DataPropertyName = "Name",
+                HeaderText = "Сценарий (Sequence)",
+                AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
+            });
         }
     }
 }

@@ -9,6 +9,7 @@
         private Button btnCancel;
         private Label lblCount;
         private Label lblSearch;
+        private TreeView treeCategories; // Добавлено
 
         protected override void Dispose(bool disposing)
         {
@@ -24,6 +25,7 @@
             btnCancel = new Button();
             lblCount = new Label();
             lblSearch = new Label();
+            treeCategories = new TreeView();
             ((System.ComponentModel.ISupportInitialize)grid).BeginInit();
             SuspendLayout();
             // 
@@ -31,10 +33,10 @@
             // 
             grid.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
             grid.ColumnHeadersHeight = 34;
-            grid.Location = new Point(34, 69);
+            grid.Location = new Point(270, 69);
             grid.Name = "grid";
             grid.RowHeadersWidth = 62;
-            grid.Size = new Size(724, 512);
+            grid.Size = new Size(488, 512);
             grid.TabIndex = 2;
             // 
             // txtSearch
@@ -77,15 +79,24 @@
             // lblSearch
             // 
             lblSearch.AutoSize = true;
-            lblSearch.Location = new Point(34, 34);
+            lblSearch.Location = new Point(34, 31);
             lblSearch.Name = "lblSearch";
             lblSearch.Size = new Size(67, 25);
             lblSearch.TabIndex = 0;
             lblSearch.Text = "Поиск:";
             // 
+            // treeCategories
+            // 
+            treeCategories.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left;
+            treeCategories.Location = new Point(34, 69);
+            treeCategories.Name = "treeCategories";
+            treeCategories.Size = new Size(220, 512);
+            treeCategories.TabIndex = 6;
+            // 
             // ImposingSelectForm
             // 
             ClientSize = new Size(784, 669);
+            Controls.Add(treeCategories);
             Controls.Add(btnCancel);
             Controls.Add(btnSelect);
             Controls.Add(lblCount);
@@ -94,7 +105,8 @@
             Controls.Add(lblSearch);
             MinimumSize = new Size(700, 420);
             Name = "ImposingSelectForm";
-            Load += ImposingSelectForm_Load;
+            StartPosition = FormStartPosition.CenterParent;
+            Text = "Выбор HotImposing Sequence";
             ((System.ComponentModel.ISupportInitialize)grid).EndInit();
             ResumeLayout(false);
             PerformLayout();
