@@ -102,7 +102,8 @@ namespace MyManager
         {
             // --- ОСНОВНЫЕ ДЕЙСТВИЯ ---
             // Передаем stage (0, 1, 2 или 3), чтобы открывать конкретную подпапку
-            _gridMenu.OpenFolder = (stage) => {
+            _gridMenu.OpenFolder = (stage) =>
+            {
                 var o = GetOrderByRow(_ctxRow);
                 if (o != null) OpenOrderStageFolder(o, stage);
             };
@@ -123,28 +124,33 @@ namespace MyManager
             _gridMenu.CopyToGrandpa = () => { var o = GetOrderByRow(_ctxRow); if (o != null) CopyToGrandpa(o); };
 
             // --- ПЕРЕИМЕНОВАНИЕ И ВСТАВКА ИЗ БУФЕРА ---
-            _gridMenu.RenameFile = (stage) => {
+            _gridMenu.RenameFile = (stage) =>
+            {
                 var o = GetOrderByRow(_ctxRow);
                 if (o != null) RenameFileHandler(o, stage);
             };
 
-            _gridMenu.CopyPathToClipboard = (stage) => {
+            _gridMenu.CopyPathToClipboard = (stage) =>
+            {
                 var o = GetOrderByRow(_ctxRow);
                 if (o != null) CopyPathToClipboard(o, stage);
             };
 
-            _gridMenu.PastePathFromClipboard = async (stage) => {
+            _gridMenu.PastePathFromClipboard = async (stage) =>
+            {
                 var o = GetOrderByRow(_ctxRow);
                 if (o != null) await PasteFileFromClipboardAsync(o, stage);
             };
 
             // --- ВОДЯНЫЕ ЗНАКИ ---
-            _gridMenu.ApplyWatermark = () => {
+            _gridMenu.ApplyWatermark = () =>
+            {
                 var o = GetOrderByRow(_ctxRow);
                 if (o != null) ProcessWatermark(o, false);
             };
 
-            _gridMenu.ApplyWatermarkLeft = () => {
+            _gridMenu.ApplyWatermarkLeft = () =>
+            {
                 var o = GetOrderByRow(_ctxRow);
                 if (o != null) ProcessWatermark(o, true);
             };
@@ -417,7 +423,7 @@ namespace MyManager
             gridOrders.RowHeadersVisible = false;
             gridOrders.AllowUserToAddRows = false;
             gridOrders.ReadOnly = true;
-            gridOrders.AllowUserToResizeRows = false;   
+            gridOrders.AllowUserToResizeRows = false;
             gridOrders.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
             if (gridOrders.Columns.Contains("colSource"))
                 gridOrders.Columns["colSource"].Visible = false;
