@@ -8,7 +8,7 @@ namespace MyManager
 {
     public class OrderProcessor
     {
-        public event Action<string, string> OnStatusChanged;
+        public event Action<string, string, string> OnStatusChanged;
         public event Action<string> OnLog;
 
         private readonly string _rootPath;
@@ -43,7 +43,7 @@ namespace MyManager
 
                 if (pitCfg == null && impCfg == null)
                 {
-                    Notify(order, "Новый", "Сценарии не выбраны.");
+                    Notify(order, "⚪ Ожидание", "Сценарии не выбраны.");
                     return;
                 }
 
@@ -127,7 +127,12 @@ namespace MyManager
             }
         }
 
-        private void Notify(OrderData o, string s, string l) { OnStatusChanged?.Invoke(o.Id, s); OnLog?.Invoke(l); }
+        private void Notify(OrderData o, string s, string l)
+        {
+            OnStatusChanged?.Invoke(o.Id, s, l);
+            OnLog?.Invoke(l);
+            Logger.Info($"STATUS | order={o.Id} | source=processor | status={s} | reason={l}");
+        }
 
         private string CopyIntoStage(OrderData o, int stage, string src, string name, string rootPath)
         {

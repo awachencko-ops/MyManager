@@ -19,6 +19,10 @@ namespace MyManager
             {
                 lock (_lock)
                 {
+                    string? dir = Path.GetDirectoryName(LogFilePath);
+                    if (!string.IsNullOrWhiteSpace(dir))
+                        Directory.CreateDirectory(dir);
+
                     File.AppendAllText(LogFilePath,
                         $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} [{level}] {message}{Environment.NewLine}",
                         Encoding.UTF8);

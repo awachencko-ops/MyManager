@@ -29,5 +29,10 @@ namespace MyManager
         // Настройки автоматизации
         public string PitStopAction { get; set; } = "-";
         public string ImposingAction { get; set; } = "-";
+
+        // Служебные данные по последнему переходу статуса
+        public string LastStatusReason { get; set; } = "";
+        public string LastStatusSource { get; set; } = "";
+        public DateTime LastStatusAt { get; set; } = DateTime.Now;
     }
 }
