@@ -18,10 +18,13 @@ namespace MyManager
         private OrderProcessor _processor;
         private readonly OrderGridContextMenu _gridMenu = new OrderGridContextMenu();
         private List<OrderData> _orderHistory = new List<OrderData>();
-        private string _ordersRootPath = @"C:\Андрей ПК";
-        private readonly string _jsonHistoryFile = "history.json";
+        private string _ordersRootPath = @"C:\MyManager\Orders";
+        private string _jsonHistoryFile = "history.json";
         private string _tempRootPath = "";
-        private string _grandpaFolder = @"\\NAS\work\Temp\!!!Дедушка";
+        private string _grandpaFolder = @"C:\MyManager\Archive";
+        private string _archiveDoneSubfolder = "Готово";
+        private string _managerLogFilePath = "manager.log";
+        private string _orderLogsFolderPath = "";
         private bool _useExtendedMode = true;
         private bool _sortArrivalDescending = true;
 
@@ -40,11 +43,16 @@ namespace MyManager
             var settings = AppSettings.Load();
             _ordersRootPath = settings.OrdersRootPath;
             _grandpaFolder = settings.GrandpaPath;
+            _archiveDoneSubfolder = string.IsNullOrWhiteSpace(settings.ArchiveDoneSubfolder) ? "Готово" : settings.ArchiveDoneSubfolder;
+            _jsonHistoryFile = string.IsNullOrWhiteSpace(settings.HistoryFilePath) ? "history.json" : settings.HistoryFilePath;
+            _managerLogFilePath = string.IsNullOrWhiteSpace(settings.ManagerLogFilePath) ? "manager.log" : settings.ManagerLogFilePath;
+            _orderLogsFolderPath = settings.OrderLogsFolderPath ?? string.Empty;
             _useExtendedMode = settings.UseExtendedMode;
             _sortArrivalDescending = settings.SortArrivalDescending;
             _tempRootPath = string.IsNullOrWhiteSpace(settings.TempFolderPath)
                 ? Path.Combine(_ordersRootPath, settings.TempFolderName)
                 : settings.TempFolderPath;
+            Logger.LogFilePath = _managerLogFilePath;
             EnsureTempFolders();
 
             InitializeProcessor();
@@ -75,6 +83,7 @@ namespace MyManager
             gridOrders.CellFormatting += GridOrders_CellFormatting;
             gridOrders.CellMouseEnter += GridOrders_CellMouseEnter;
             gridOrders.CellMouseLeave += GridOrders_CellMouseLeave;
+            gridOrders.CellToolTipTextNeeded += GridOrders_CellToolTipTextNeeded;
 
             // ВКЛЮЧАЕМ DRAG AND DROP
             gridOrders.AllowDrop = true;
@@ -94,10 +103,10 @@ namespace MyManager
         private void InitializeProcessor()
         {
             _processor = new OrderProcessor(_ordersRootPath);
-            _processor.OnStatusChanged += (id, status) =>
+            _processor.OnStatusChanged += (id, status, reason) =>
             {
                 var order = _orderHistory.FirstOrDefault(x => x.Id == id);
-                if (order != null) SetOrderStatus(order, status);
+                if (order != null) SetOrderStatus(order, status, "processor", reason);
             };
             _processor.OnLog += (msg) => SetBottomStatus(msg);
         }
@@ -162,6 +171,11 @@ namespace MyManager
             // --- ДИСПЕТЧЕРЫ ---
             _gridMenu.OpenPitStopMan = OpenPitStopManager;
             _gridMenu.OpenImpMan = OpenImposingManager;
+            _gridMenu.OpenOrderLog = () =>
+            {
+                var o = GetOrderByRow(_ctxRow);
+                if (o != null) OpenOrderLog(o);
+            };
         }
 
         private string SmartCopy(string sourceFile, OrderData o, int stage, string targetName, bool isInternal)
@@ -573,6 +587,24 @@ namespace MyManager
             else { e.CellStyle.BackColor = e.CellStyle.SelectionBackColor = bg; }
         }
 
+
+        private void GridOrders_CellToolTipTextNeeded(object? sender, DataGridViewCellToolTipTextNeededEventArgs e)
+        {
+            if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
+            var o = GetOrderByRow(e.RowIndex);
+            if (o == null) return;
+
+            string col = gridOrders.Columns[e.ColumnIndex].Name;
+            if (col != "colState") return;
+
+            string status = o.Status ?? string.Empty;
+            if (!status.Contains("Ошибка", StringComparison.OrdinalIgnoreCase)) return;
+
+            string reason = string.IsNullOrWhiteSpace(o.LastStatusReason) ? "Причина не указана" : o.LastStatusReason;
+            string source = string.IsNullOrWhiteSpace(o.LastStatusSource) ? "неизвестно" : o.LastStatusSource;
+            e.ToolTipText = $"{status}\nИсточник: {source}\nПричина: {reason}\nВремя: {o.LastStatusAt:dd.MM.yyyy HH:mm:ss}";
+        }
+
         private void GridOrders_CellMouseEnter(object? sender, DataGridViewCellEventArgs e)
         {
             if (e.RowIndex >= 0)
@@ -762,19 +794,18 @@ namespace MyManager
             // Если в колонке "Печать" есть существующий файл
             if (!string.IsNullOrEmpty(o.PrintPath) && File.Exists(o.PrintPath))
             {
-                o.Status = "✅ Готово";
+                SetOrderStatus(o, "✅ Готово", "file-sync", "Найден печатный файл");
             }
             // Если файла в печати нет, но есть в "Подготовке"
             else if (!string.IsNullOrEmpty(o.PreparedPath) && File.Exists(o.PreparedPath))
             {
                 // Только если статус не "Ошибка", чтобы не затереть важное уведомление
-                if (!o.Status.Contains("Ошибка"))
-                    o.Status = "📂 В работе";
+                SetOrderStatus(o, "📂 В работе", "file-sync", "Найден файл подготовки");
             }
             // Если файлов нет (удалили)
             else if (string.IsNullOrEmpty(o.SourcePath))
             {
-                o.Status = "⚪ Ожидание";
+                SetOrderStatus(o, "⚪ Ожидание", "file-sync", "Нет исходного файла");
             }
         }
 
@@ -1146,35 +1177,89 @@ namespace MyManager
                     order.ArrivalDate = order.OrderDate != default ? order.OrderDate : DateTime.Now;
             }
         }
-        private void SaveHistory() { File.WriteAllText(_jsonHistoryFile, JsonSerializer.Serialize(_orderHistory, new JsonSerializerOptions { WriteIndented = true })); }
-        private void SetOrderStatus(OrderData o, string s) { o.Status = s; SaveHistory(); if (InvokeRequired) Invoke(new Action(FillGrid)); else FillGrid(); }
+        private void SaveHistory()
+        {
+            string? dir = Path.GetDirectoryName(_jsonHistoryFile);
+            if (!string.IsNullOrWhiteSpace(dir))
+                Directory.CreateDirectory(dir);
+
+            File.WriteAllText(_jsonHistoryFile, JsonSerializer.Serialize(_orderHistory, new JsonSerializerOptions { WriteIndented = true }));
+        }
+        private void SetOrderStatus(OrderData o, string s, string source = "manual", string reason = "", bool refreshGrid = true)
+        {
+            if (o == null)
+                return;
+
+            string old = o.Status ?? string.Empty;
+            o.Status = s;
+            o.LastStatusSource = source;
+            o.LastStatusReason = reason;
+            o.LastStatusAt = DateTime.Now;
+
+            AppendOrderStatusLog(o, old, s, source, reason);
+
+            SaveHistory();
+            if (!refreshGrid)
+                return;
+
+            if (InvokeRequired) Invoke(new Action(FillGrid)); else FillGrid();
+        }
         private void SetBottomStatus(string t) { if (InvokeRequired) Invoke(new Action(() => lblBottomStatus.Text = t)); else lblBottomStatus.Text = t; }
 
         private void RefreshArchivedStatuses()
         {
-            bool changed = false;
             foreach (var order in _orderHistory)
             {
+                if ((order.Status ?? string.Empty).Contains("Ошибка", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
                 bool archived = IsOrderInArchive(order);
                 if (archived)
                 {
                     if (!string.Equals(order.Status, "📦 В архиве", StringComparison.Ordinal))
                     {
-                        order.Status = "📦 В архиве";
-                        changed = true;
+                        SetOrderStatus(order, "📦 В архиве", "archive-sync", "Файл найден в архиве", refreshGrid: false);
                     }
                 }
                 else if (string.Equals(order.Status, "📦 В архиве", StringComparison.Ordinal))
                 {
-                    order.Status = (!string.IsNullOrWhiteSpace(order.PrintPath) && File.Exists(order.PrintPath))
+                    string nextStatus = (!string.IsNullOrWhiteSpace(order.PrintPath) && File.Exists(order.PrintPath))
                         ? "✅ Готово"
                         : "⚪ Ожидание";
-                    changed = true;
+                    SetOrderStatus(order, nextStatus, "archive-sync", "Заказ больше не считается архивным", refreshGrid: false);
                 }
             }
 
-            if (changed)
-                SaveHistory();
+        }
+
+
+        private string GetOrderLogFilePath(OrderData order)
+        {
+            string safeId = string.IsNullOrWhiteSpace(order.InternalId) ? order.Id : order.InternalId;
+            if (string.IsNullOrWhiteSpace(safeId))
+                safeId = "unknown-order";
+
+            foreach (char c in Path.GetInvalidFileNameChars())
+                safeId = safeId.Replace(c, '_');
+
+            string logFolder = string.IsNullOrWhiteSpace(_orderLogsFolderPath)
+                ? Path.Combine(AppContext.BaseDirectory, "order-logs")
+                : _orderLogsFolderPath;
+            Directory.CreateDirectory(logFolder);
+            return Path.Combine(logFolder, $"{safeId}.log");
+        }
+
+        private void AppendOrderStatusLog(OrderData order, string oldStatus, string newStatus, string source, string reason)
+        {
+            try
+            {
+                string line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} | status: {oldStatus} -> {newStatus} | source: {source} | reason: {reason}";
+                File.AppendAllText(GetOrderLogFilePath(order), line + Environment.NewLine);
+                Logger.Info($"ORDER-STATUS | order={GetOrderDisplayId(order)} | {line}");
+            }
+            catch
+            {
+            }
         }
 
         private bool IsOrderInArchive(OrderData order)
@@ -1186,7 +1271,11 @@ namespace MyManager
             if (string.IsNullOrWhiteSpace(fileName) || string.IsNullOrWhiteSpace(_grandpaFolder))
                 return false;
 
-            string archivedPath = Path.Combine(_grandpaFolder, fileName);
+            // Бизнес-правило:
+            // - файл в корне архивной папки => статус "Готово"
+            // - файл в подпапке архивации => статус "В архиве"
+            string archivedFolder = Path.Combine(_grandpaFolder, _archiveDoneSubfolder);
+            string archivedPath = Path.Combine(archivedFolder, fileName);
             return File.Exists(archivedPath);
         }
 
@@ -1222,30 +1311,62 @@ namespace MyManager
             FillGrid();
         }
 
+
+        private void OpenOrderLog(OrderData order)
+        {
+            string path = GetOrderLogFilePath(order);
+            if (!File.Exists(path))
+            {
+                SetBottomStatus("Лог заказа пока не создан");
+                return;
+            }
+
+            using var viewer = new OrderLogViewerForm(path, GetOrderDisplayId(order));
+            viewer.ShowDialog(this);
+        }
+
         private void OpenLogFile()
         {
-            if (!File.Exists("manager.log"))
+            if (!File.Exists(_managerLogFilePath))
             {
                 SetBottomStatus("Лог пока не создан");
                 return;
             }
 
-            Process.Start(new ProcessStartInfo { FileName = "manager.log", UseShellExecute = true });
+            Process.Start(new ProcessStartInfo { FileName = _managerLogFilePath, UseShellExecute = true });
         }
 
         private void ShowSettingsDialog()
         {
-            using var settingsForm = new SettingsDialogForm(_ordersRootPath, _tempRootPath);
+            using var settingsForm = new SettingsDialogForm(
+                _ordersRootPath,
+                _tempRootPath,
+                _grandpaFolder,
+                _archiveDoneSubfolder,
+                _jsonHistoryFile,
+                _managerLogFilePath,
+                _orderLogsFolderPath);
             if (settingsForm.ShowDialog(this) != DialogResult.OK)
                 return;
 
             _ordersRootPath = settingsForm.OrdersRootPath;
             _tempRootPath = settingsForm.TempRootPath;
+            _grandpaFolder = settingsForm.GrandpaPath;
+            _archiveDoneSubfolder = settingsForm.ArchiveDoneSubfolder;
+            _jsonHistoryFile = settingsForm.HistoryFilePath;
+            _managerLogFilePath = settingsForm.ManagerLogFilePath;
+            _orderLogsFolderPath = settingsForm.OrderLogsFolderPath;
 
             var settings = AppSettings.Load();
             settings.OrdersRootPath = _ordersRootPath;
             settings.TempFolderPath = _tempRootPath;
+            settings.GrandpaPath = _grandpaFolder;
+            settings.ArchiveDoneSubfolder = _archiveDoneSubfolder;
+            settings.HistoryFilePath = _jsonHistoryFile;
+            settings.ManagerLogFilePath = _managerLogFilePath;
+            settings.OrderLogsFolderPath = _orderLogsFolderPath;
             settings.Save();
+            Logger.LogFilePath = _managerLogFilePath;
 
             EnsureTempFolders();
             InitializeProcessor();
