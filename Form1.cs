@@ -18,10 +18,13 @@ namespace MyManager
         private OrderProcessor _processor;
         private readonly OrderGridContextMenu _gridMenu = new OrderGridContextMenu();
         private List<OrderData> _orderHistory = new List<OrderData>();
-        private string _ordersRootPath = @"C:\Андрей ПК";
-        private readonly string _jsonHistoryFile = "history.json";
+        private string _ordersRootPath = @"C:\MyManager\Orders";
+        private string _jsonHistoryFile = "history.json";
         private string _tempRootPath = "";
-        private string _grandpaFolder = @"\\NAS\work\Temp\!!!Дедушка";
+        private string _grandpaFolder = @"C:\MyManager\Archive";
+        private string _archiveDoneSubfolder = "Готово";
+        private string _managerLogFilePath = "manager.log";
+        private string _orderLogsFolderPath = "";
         private bool _useExtendedMode = true;
         private bool _sortArrivalDescending = true;
 
@@ -40,11 +43,16 @@ namespace MyManager
             var settings = AppSettings.Load();
             _ordersRootPath = settings.OrdersRootPath;
             _grandpaFolder = settings.GrandpaPath;
+            _archiveDoneSubfolder = string.IsNullOrWhiteSpace(settings.ArchiveDoneSubfolder) ? "Готово" : settings.ArchiveDoneSubfolder;
+            _jsonHistoryFile = string.IsNullOrWhiteSpace(settings.HistoryFilePath) ? "history.json" : settings.HistoryFilePath;
+            _managerLogFilePath = string.IsNullOrWhiteSpace(settings.ManagerLogFilePath) ? "manager.log" : settings.ManagerLogFilePath;
+            _orderLogsFolderPath = settings.OrderLogsFolderPath ?? string.Empty;
             _useExtendedMode = settings.UseExtendedMode;
             _sortArrivalDescending = settings.SortArrivalDescending;
             _tempRootPath = string.IsNullOrWhiteSpace(settings.TempFolderPath)
                 ? Path.Combine(_ordersRootPath, settings.TempFolderName)
                 : settings.TempFolderPath;
+            Logger.LogFilePath = _managerLogFilePath;
             EnsureTempFolders();
 
             InitializeProcessor();
@@ -1169,7 +1177,14 @@ namespace MyManager
                     order.ArrivalDate = order.OrderDate != default ? order.OrderDate : DateTime.Now;
             }
         }
-        private void SaveHistory() { File.WriteAllText(_jsonHistoryFile, JsonSerializer.Serialize(_orderHistory, new JsonSerializerOptions { WriteIndented = true })); }
+        private void SaveHistory()
+        {
+            string? dir = Path.GetDirectoryName(_jsonHistoryFile);
+            if (!string.IsNullOrWhiteSpace(dir))
+                Directory.CreateDirectory(dir);
+
+            File.WriteAllText(_jsonHistoryFile, JsonSerializer.Serialize(_orderHistory, new JsonSerializerOptions { WriteIndented = true }));
+        }
         private void SetOrderStatus(OrderData o, string s, string source = "manual", string reason = "", bool refreshGrid = true)
         {
             if (o == null)
@@ -1227,7 +1242,9 @@ namespace MyManager
             foreach (char c in Path.GetInvalidFileNameChars())
                 safeId = safeId.Replace(c, '_');
 
-            string logFolder = Path.Combine(AppContext.BaseDirectory, "order-logs");
+            string logFolder = string.IsNullOrWhiteSpace(_orderLogsFolderPath)
+                ? Path.Combine(AppContext.BaseDirectory, "order-logs")
+                : _orderLogsFolderPath;
             Directory.CreateDirectory(logFolder);
             return Path.Combine(logFolder, $"{safeId}.log");
         }
@@ -1255,9 +1272,9 @@ namespace MyManager
                 return false;
 
             // Бизнес-правило:
-            // - файл в корне "Дедушка" => статус "Готово"
-            // - файл в "Дедушка\Готово" => статус "В архиве"
-            string archivedFolder = Path.Combine(_grandpaFolder, "Готово");
+            // - файл в корне архивной папки => статус "Готово"
+            // - файл в подпапке архивации => статус "В архиве"
+            string archivedFolder = Path.Combine(_grandpaFolder, _archiveDoneSubfolder);
             string archivedPath = Path.Combine(archivedFolder, fileName);
             return File.Exists(archivedPath);
         }
@@ -1310,28 +1327,46 @@ namespace MyManager
 
         private void OpenLogFile()
         {
-            if (!File.Exists("manager.log"))
+            if (!File.Exists(_managerLogFilePath))
             {
                 SetBottomStatus("Лог пока не создан");
                 return;
             }
 
-            Process.Start(new ProcessStartInfo { FileName = "manager.log", UseShellExecute = true });
+            Process.Start(new ProcessStartInfo { FileName = _managerLogFilePath, UseShellExecute = true });
         }
 
         private void ShowSettingsDialog()
         {
-            using var settingsForm = new SettingsDialogForm(_ordersRootPath, _tempRootPath);
+            using var settingsForm = new SettingsDialogForm(
+                _ordersRootPath,
+                _tempRootPath,
+                _grandpaFolder,
+                _archiveDoneSubfolder,
+                _jsonHistoryFile,
+                _managerLogFilePath,
+                _orderLogsFolderPath);
             if (settingsForm.ShowDialog(this) != DialogResult.OK)
                 return;
 
             _ordersRootPath = settingsForm.OrdersRootPath;
             _tempRootPath = settingsForm.TempRootPath;
+            _grandpaFolder = settingsForm.GrandpaPath;
+            _archiveDoneSubfolder = settingsForm.ArchiveDoneSubfolder;
+            _jsonHistoryFile = settingsForm.HistoryFilePath;
+            _managerLogFilePath = settingsForm.ManagerLogFilePath;
+            _orderLogsFolderPath = settingsForm.OrderLogsFolderPath;
 
             var settings = AppSettings.Load();
             settings.OrdersRootPath = _ordersRootPath;
             settings.TempFolderPath = _tempRootPath;
+            settings.GrandpaPath = _grandpaFolder;
+            settings.ArchiveDoneSubfolder = _archiveDoneSubfolder;
+            settings.HistoryFilePath = _jsonHistoryFile;
+            settings.ManagerLogFilePath = _managerLogFilePath;
+            settings.OrderLogsFolderPath = _orderLogsFolderPath;
             settings.Save();
+            Logger.LogFilePath = _managerLogFilePath;
 
             EnsureTempFolders();
             InitializeProcessor();
