@@ -1235,7 +1235,7 @@ namespace MyManager
 
         private void ShowSettingsDialog()
         {
-            using var settingsForm = new SettingsDialogForm(_ordersRootPath, _tempRootPath, OpenPitStopManager, OpenImposingManager);
+            using var settingsForm = new SettingsDialogForm(_ordersRootPath, _tempRootPath);
             if (settingsForm.ShowDialog(this) != DialogResult.OK)
                 return;
 

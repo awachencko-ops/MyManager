@@ -93,6 +93,22 @@ namespace MyManager
             UpdateCategoryTree();
         }
 
+        public void SetEmbeddedMode(bool embedded)
+        {
+            if (embedded)
+            {
+                btnOk.Visible = false;
+                StartPosition = FormStartPosition.Manual;
+                MaximizeBox = false;
+                MinimizeBox = false;
+            }
+            else
+            {
+                btnOk.Visible = true;
+                StartPosition = FormStartPosition.CenterParent;
+            }
+        }
+
         private void DataGridView1_SelectionChanged(object sender, EventArgs e)
         {
             if (dataGridView1.CurrentRow != null &&

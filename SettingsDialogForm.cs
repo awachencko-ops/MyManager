@@ -6,25 +6,28 @@ namespace MyManager
 {
     public class SettingsDialogForm : Form
     {
-        private readonly Action _openPitStopManager;
-        private readonly Action _openImposingManager;
-
         private readonly TabControl _tabs = new TabControl();
         private readonly TextBox _txtOrdersRoot = new TextBox();
         private readonly TextBox _txtTempRoot = new TextBox();
 
+        private readonly ActionManagerForm _pitStopForm;
+        private readonly ImposingManagerForm _imposingForm;
+
         public string OrdersRootPath => _txtOrdersRoot.Text.Trim();
         public string TempRootPath => _txtTempRoot.Text.Trim();
 
-        public SettingsDialogForm(string ordersRootPath, string tempRootPath, Action openPitStopManager, Action openImposingManager)
+        public SettingsDialogForm(string ordersRootPath, string tempRootPath)
         {
-            _openPitStopManager = openPitStopManager;
-            _openImposingManager = openImposingManager;
-
             Text = "Настройки";
             StartPosition = FormStartPosition.CenterParent;
-            MinimumSize = new Size(700, 420);
-            Size = new Size(760, 480);
+            MinimumSize = new Size(980, 720);
+            Size = new Size(1120, 820);
+
+            _pitStopForm = new ActionManagerForm();
+            _pitStopForm.SetEmbeddedMode(true);
+
+            _imposingForm = new ImposingManagerForm();
+            _imposingForm.SetEmbeddedMode(true);
 
             var root = new TableLayoutPanel
             {
@@ -38,8 +41,8 @@ namespace MyManager
 
             _tabs.Dock = DockStyle.Fill;
             _tabs.TabPages.Add(CreateGeneralTab(ordersRootPath, tempRootPath));
-            _tabs.TabPages.Add(CreatePitStopTab());
-            _tabs.TabPages.Add(CreateImposingTab());
+            _tabs.TabPages.Add(CreateEmbeddedManagerTab("Диспетчер PitStop", _pitStopForm));
+            _tabs.TabPages.Add(CreateEmbeddedManagerTab("Диспетчер Imposing", _imposingForm));
 
             var bottomPanel = new FlowLayoutPanel
             {
@@ -81,38 +84,57 @@ namespace MyManager
         private TabPage CreateGeneralTab(string ordersRootPath, string tempRootPath)
         {
             var page = new TabPage("Основное");
+
             var panel = new TableLayoutPanel
             {
-                Dock = DockStyle.Fill,
+                Dock = DockStyle.Top,
+                AutoSize = true,
                 ColumnCount = 3,
                 RowCount = 2,
-                Padding = new Padding(10)
+                Padding = new Padding(18, 18, 18, 0)
             };
 
-            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 180));
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220));
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
 
-            panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            var lblOrders = new Label
+            {
+                Text = "Папка хранения",
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleLeft,
+                AutoSize = false
+            };
+
+            var lblTemp = new Label
+            {
+                Text = "Папка временных файлов",
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleLeft,
+                AutoSize = false
+            };
 
             _txtOrdersRoot.Dock = DockStyle.Fill;
+            _txtOrdersRoot.Margin = new Padding(0, 6, 8, 6);
             _txtOrdersRoot.Text = ordersRootPath;
 
             _txtTempRoot.Dock = DockStyle.Fill;
+            _txtTempRoot.Margin = new Padding(0, 6, 8, 6);
             _txtTempRoot.Text = tempRootPath;
 
-            var btnBrowseOrders = new Button { Text = "Обзор...", Dock = DockStyle.Fill };
+            var btnBrowseOrders = new Button { Text = "Обзор...", Dock = DockStyle.Fill, Margin = new Padding(0, 6, 0, 6) };
             btnBrowseOrders.Click += (s, e) => BrowseFolder(_txtOrdersRoot);
 
-            var btnBrowseTemp = new Button { Text = "Обзор...", Dock = DockStyle.Fill };
+            var btnBrowseTemp = new Button { Text = "Обзор...", Dock = DockStyle.Fill, Margin = new Padding(0, 6, 0, 6) };
             btnBrowseTemp.Click += (s, e) => BrowseFolder(_txtTempRoot);
 
-            panel.Controls.Add(new Label { Text = "Папка хранения", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 0);
+            panel.Controls.Add(lblOrders, 0, 0);
             panel.Controls.Add(_txtOrdersRoot, 1, 0);
             panel.Controls.Add(btnBrowseOrders, 2, 0);
 
-            panel.Controls.Add(new Label { Text = "Папка временных файлов", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 1);
+            panel.Controls.Add(lblTemp, 0, 1);
             panel.Controls.Add(_txtTempRoot, 1, 1);
             panel.Controls.Add(btnBrowseTemp, 2, 1);
 
@@ -120,54 +142,36 @@ namespace MyManager
             return page;
         }
 
-        private TabPage CreatePitStopTab()
+        private TabPage CreateEmbeddedManagerTab(string title, Form managerForm)
         {
-            var page = new TabPage("Диспетчер PitStop");
-            var panel = new FlowLayoutPanel
+            var page = new TabPage(title);
+            var host = new Panel
             {
                 Dock = DockStyle.Fill,
-                FlowDirection = FlowDirection.TopDown,
-                Padding = new Padding(16),
-                WrapContents = false
+                AutoScroll = true,
+                Padding = new Padding(8)
             };
 
-            panel.Controls.Add(new Label
-            {
-                Text = "Управление пресетами PitStop.",
-                AutoSize = true
-            });
+            managerForm.TopLevel = false;
+            managerForm.FormBorderStyle = FormBorderStyle.None;
+            managerForm.Dock = DockStyle.Top;
+            managerForm.AutoScroll = true;
+            host.Controls.Add(managerForm);
+            managerForm.Show();
 
-            var btnOpen = new Button { Text = "Открыть диспетчер PitStop", AutoSize = true };
-            btnOpen.Click += (s, e) => _openPitStopManager();
-            panel.Controls.Add(btnOpen);
-
-            page.Controls.Add(panel);
+            page.Controls.Add(host);
             return page;
         }
 
-        private TabPage CreateImposingTab()
+        protected override void Dispose(bool disposing)
         {
-            var page = new TabPage("Диспетчер Imposing");
-            var panel = new FlowLayoutPanel
+            if (disposing)
             {
-                Dock = DockStyle.Fill,
-                FlowDirection = FlowDirection.TopDown,
-                Padding = new Padding(16),
-                WrapContents = false
-            };
+                _pitStopForm?.Dispose();
+                _imposingForm?.Dispose();
+            }
 
-            panel.Controls.Add(new Label
-            {
-                Text = "Управление пресетами Imposing.",
-                AutoSize = true
-            });
-
-            var btnOpen = new Button { Text = "Открыть диспетчер Imposing", AutoSize = true };
-            btnOpen.Click += (s, e) => _openImposingManager();
-            panel.Controls.Add(btnOpen);
-
-            page.Controls.Add(panel);
-            return page;
+            base.Dispose(disposing);
         }
 
         private void BrowseFolder(TextBox target)

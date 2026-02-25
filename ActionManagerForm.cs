@@ -92,6 +92,22 @@ namespace MyManager
             };
         }
 
+        public void SetEmbeddedMode(bool embedded)
+        {
+            if (embedded)
+            {
+                btnOk.Visible = false;
+                StartPosition = FormStartPosition.Manual;
+                MaximizeBox = false;
+                MinimizeBox = false;
+            }
+            else
+            {
+                btnOk.Visible = true;
+                StartPosition = FormStartPosition.CenterParent;
+            }
+        }
+
         private void GridActions_SelectionChanged(object sender, EventArgs e)
         {
             if (gridActions.CurrentRow != null &&
