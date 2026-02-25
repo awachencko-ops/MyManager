@@ -26,6 +26,7 @@ namespace MyManager
 
         public Action OpenPitStopMan { get; set; }
         public Action OpenImpMan { get; set; }
+        public Action OpenOrderLog { get; set; }
 
         public ContextMenuStrip Build(string colName, bool allowCopyToGrandpa = true)
         {
@@ -87,6 +88,10 @@ namespace MyManager
 
                 case "colImposing":
                     AddItem("Открыть диспетчер Imposing", OpenImpMan);
+                    break;
+
+                case "colState":
+                    AddItem("📜 Открыть лог заказа", OpenOrderLog);
                     break;
             }
 
