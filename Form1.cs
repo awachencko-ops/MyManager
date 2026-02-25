@@ -1254,7 +1254,11 @@ namespace MyManager
             if (string.IsNullOrWhiteSpace(fileName) || string.IsNullOrWhiteSpace(_grandpaFolder))
                 return false;
 
-            string archivedPath = Path.Combine(_grandpaFolder, fileName);
+            // Бизнес-правило:
+            // - файл в корне "Дедушка" => статус "Готово"
+            // - файл в "Дедушка\Готово" => статус "В архиве"
+            string archivedFolder = Path.Combine(_grandpaFolder, "Готово");
+            string archivedPath = Path.Combine(archivedFolder, fileName);
             return File.Exists(archivedPath);
         }
 
