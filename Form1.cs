@@ -63,7 +63,11 @@ namespace MyManager
                 else
                     CreateEmptyOrder();
             };
-            ButtonSettings.Click += (s, e) => ShowSettingsMenu();
+            ButtonSettings.Click += (s, e) => ShowSettingsDialog();
+            btnExtendedMode.Click += (s, e) => ToggleExtendedMode();
+            btnSortArrival.Click += (s, e) => ToggleArrivalSort();
+            btnOpenLog.Click += (s, e) => OpenLogFile();
+            UpdateTopButtons();
 
             gridOrders.CellDoubleClick += GridOrders_CellDoubleClick;
             gridOrders.CellContentClick += GridOrders_CellContentClick;
@@ -432,6 +436,7 @@ namespace MyManager
         private void FillGrid()
         {
             if (gridOrders.Columns.Count == 0) return;
+            RefreshArchivedStatuses();
             string? selInternalId = gridOrders.CurrentRow?.Tag?.ToString();
             var sorted = _sortArrivalDescending
                 ? _orderHistory.OrderByDescending(x => x.ArrivalDate).ToList()
@@ -549,6 +554,7 @@ namespace MyManager
             {
                 string s = (o.Status ?? "").ToLower(); Color b, f;
                 if (s.Contains("ошибка")) { b = Color.FromArgb(255, 210, 210); f = Color.FromArgb(150, 0, 0); }
+                else if (IsOrderInArchive(o)) { b = Color.FromArgb(220, 235, 255); f = Color.FromArgb(0, 70, 140); }
                 else if (!string.IsNullOrEmpty(o.PrintPath) && File.Exists(o.PrintPath)) { b = Color.FromArgb(210, 255, 210); f = Color.FromArgb(0, 100, 0); }
                 else { b = Color.FromArgb(255, 235, 200); f = Color.FromArgb(150, 80, 0); }
                 e.CellStyle.BackColor = e.CellStyle.SelectionBackColor = b;
@@ -557,7 +563,10 @@ namespace MyManager
             else if (col == "colSource" || col == "colReady" || col == "colPrint")
             {
                 string p = col == "colSource" ? o.SourcePath : (col == "colReady" ? o.PreparedPath : o.PrintPath);
-                Color txt = (string.IsNullOrEmpty(p) || p == "...") ? Color.Gray : (File.Exists(p) ? Color.DodgerBlue : Color.Red);
+                bool isArchivedPrint = col == "colPrint" && IsOrderInArchive(o);
+                Color txt = (string.IsNullOrEmpty(p) || p == "...")
+                    ? Color.Gray
+                    : (File.Exists(p) || isArchivedPrint ? Color.DodgerBlue : Color.Red);
                 e.CellStyle.ForeColor = e.CellStyle.SelectionForeColor = txt;
                 e.CellStyle.BackColor = e.CellStyle.SelectionBackColor = bg;
             }
@@ -1141,6 +1150,46 @@ namespace MyManager
         private void SetOrderStatus(OrderData o, string s) { o.Status = s; SaveHistory(); if (InvokeRequired) Invoke(new Action(FillGrid)); else FillGrid(); }
         private void SetBottomStatus(string t) { if (InvokeRequired) Invoke(new Action(() => lblBottomStatus.Text = t)); else lblBottomStatus.Text = t; }
 
+        private void RefreshArchivedStatuses()
+        {
+            bool changed = false;
+            foreach (var order in _orderHistory)
+            {
+                bool archived = IsOrderInArchive(order);
+                if (archived)
+                {
+                    if (!string.Equals(order.Status, "📦 В архиве", StringComparison.Ordinal))
+                    {
+                        order.Status = "📦 В архиве";
+                        changed = true;
+                    }
+                }
+                else if (string.Equals(order.Status, "📦 В архиве", StringComparison.Ordinal))
+                {
+                    order.Status = (!string.IsNullOrWhiteSpace(order.PrintPath) && File.Exists(order.PrintPath))
+                        ? "✅ Готово"
+                        : "⚪ Ожидание";
+                    changed = true;
+                }
+            }
+
+            if (changed)
+                SaveHistory();
+        }
+
+        private bool IsOrderInArchive(OrderData order)
+        {
+            if (string.IsNullOrWhiteSpace(order.PrintPath))
+                return false;
+
+            string fileName = Path.GetFileName(order.PrintPath);
+            if (string.IsNullOrWhiteSpace(fileName) || string.IsNullOrWhiteSpace(_grandpaFolder))
+                return false;
+
+            string archivedPath = Path.Combine(_grandpaFolder, fileName);
+            return File.Exists(archivedPath);
+        }
+
         private string GetSortArrivalMenuText()
         {
             return _sortArrivalDescending
@@ -1148,63 +1197,59 @@ namespace MyManager
                 : "Сортировка: поступление (сначала старые)";
         }
 
-        private void ShowSettingsMenu()
+        private void UpdateTopButtons()
         {
-            var m = new ContextMenuStrip();
-            m.Items.Add("Папка хранения", null, (s, e) =>
+            btnExtendedMode.Text = _useExtendedMode ? "Расширенный: ВКЛ" : "Расширенный: ВЫКЛ";
+            btnSortArrival.Text = _sortArrivalDescending ? "Поступление: новые сверху" : "Поступление: старые сверху";
+        }
+
+        private void ToggleExtendedMode()
+        {
+            _useExtendedMode = !_useExtendedMode;
+            var settings = AppSettings.Load();
+            settings.UseExtendedMode = _useExtendedMode;
+            settings.Save();
+            UpdateTopButtons();
+        }
+
+        private void ToggleArrivalSort()
+        {
+            _sortArrivalDescending = !_sortArrivalDescending;
+            var settings = AppSettings.Load();
+            settings.SortArrivalDescending = _sortArrivalDescending;
+            settings.Save();
+            UpdateTopButtons();
+            FillGrid();
+        }
+
+        private void OpenLogFile()
+        {
+            if (!File.Exists("manager.log"))
             {
-                using var f = new FolderBrowserDialog();
-                if (f.ShowDialog() == DialogResult.OK)
-                {
-                    _ordersRootPath = f.SelectedPath;
-                    var settings = AppSettings.Load();
-                    settings.OrdersRootPath = _ordersRootPath;
-                    settings.Save();
-                    _tempRootPath = string.IsNullOrWhiteSpace(settings.TempFolderPath)
-                        ? Path.Combine(_ordersRootPath, settings.TempFolderName)
-                        : settings.TempFolderPath;
-                    EnsureTempFolders();
-                    InitializeProcessor();
-                    SetBottomStatus("Путь обновлен");
-                }
-            });
-            m.Items.Add("Папка временных файлов", null, (s, e) =>
-            {
-                using var f = new FolderBrowserDialog();
-                if (f.ShowDialog() == DialogResult.OK)
-                {
-                    _tempRootPath = f.SelectedPath;
-                    var settings = AppSettings.Load();
-                    settings.TempFolderPath = _tempRootPath;
-                    settings.Save();
-                    EnsureTempFolders();
-                }
-            });
-            var modeItem = new ToolStripMenuItem("Расширенный режим") { Checked = _useExtendedMode, CheckOnClick = true };
-            modeItem.CheckedChanged += (s, e) =>
-            {
-                _useExtendedMode = modeItem.Checked;
-                var settings = AppSettings.Load();
-                settings.UseExtendedMode = _useExtendedMode;
-                settings.Save();
-            };
-            m.Items.Add(modeItem);
-            var sortArrivalItem = new ToolStripMenuItem(GetSortArrivalMenuText());
-            sortArrivalItem.Click += (s, e) =>
-            {
-                _sortArrivalDescending = !_sortArrivalDescending;
-                var settings = AppSettings.Load();
-                settings.SortArrivalDescending = _sortArrivalDescending;
-                settings.Save();
-                sortArrivalItem.Text = GetSortArrivalMenuText();
-                FillGrid();
-            };
-            m.Items.Add(sortArrivalItem);
-            m.Items.Add("Диспетчер PitStop", null, (s, e) => OpenPitStopManager());
-            m.Items.Add("Диспетчер Imposing", null, (s, e) => OpenImposingManager());
-            m.Items.Add(new ToolStripSeparator());
-            m.Items.Add("Открыть лог", null, (s, e) => { if (File.Exists("manager.log")) Process.Start(new ProcessStartInfo { FileName = "manager.log", UseShellExecute = true }); });
-            m.Show(ButtonSettings, new Point(0, ButtonSettings.Height));
+                SetBottomStatus("Лог пока не создан");
+                return;
+            }
+
+            Process.Start(new ProcessStartInfo { FileName = "manager.log", UseShellExecute = true });
+        }
+
+        private void ShowSettingsDialog()
+        {
+            using var settingsForm = new SettingsDialogForm(_ordersRootPath, _tempRootPath);
+            if (settingsForm.ShowDialog(this) != DialogResult.OK)
+                return;
+
+            _ordersRootPath = settingsForm.OrdersRootPath;
+            _tempRootPath = settingsForm.TempRootPath;
+
+            var settings = AppSettings.Load();
+            settings.OrdersRootPath = _ordersRootPath;
+            settings.TempFolderPath = _tempRootPath;
+            settings.Save();
+
+            EnsureTempFolders();
+            InitializeProcessor();
+            SetBottomStatus("Настройки сохранены");
         }
 
         private void CopyToGrandpa(OrderData o)
