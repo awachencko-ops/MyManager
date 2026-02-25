@@ -186,7 +186,7 @@ namespace MyManager
                 PrintPath = textPrint.Text,
                 PitStopAction = comboBoxPitStop.Text,
                 ImposingAction = comboBoxHotImposing.Text,
-                Status = "📂 В работе"
+                Status = "⚪ Ожидание"
             };
             this.DialogResult = DialogResult.OK;
             this.Close();
