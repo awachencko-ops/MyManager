@@ -32,10 +32,10 @@
             DataGridViewCellStyle dataGridViewCellStyle2 = new DataGridViewCellStyle();
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(Form1));
             panel1 = new Panel();
-            btnOpenLog = new Button();
-            btnSortArrival = new Button();
-            btnExtendedMode = new Button();
             ButtonSettings = new Button();
+            btnExtendedMode = new Button();
+            btnSortArrival = new Button();
+            btnOpenLog = new Button();
             label1 = new Label();
             btnCreateOrder = new Button();
             gridOrders = new DataGridView();
@@ -65,18 +65,30 @@
             panel1.Size = new Size(2564, 60);
             panel1.TabIndex = 6;
             // 
-            // btnOpenLog
+            // ButtonSettings
             // 
-            btnOpenLog.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            btnOpenLog.FlatAppearance.BorderSize = 0;
-            btnOpenLog.FlatStyle = FlatStyle.Flat;
-            btnOpenLog.ForeColor = Color.White;
-            btnOpenLog.Location = new Point(2360, 17);
-            btnOpenLog.Name = "btnOpenLog";
-            btnOpenLog.Size = new Size(149, 33);
-            btnOpenLog.TabIndex = 5;
-            btnOpenLog.Text = "Открыть лог";
-            btnOpenLog.UseVisualStyleBackColor = true;
+            ButtonSettings.FlatAppearance.BorderSize = 0;
+            ButtonSettings.FlatStyle = FlatStyle.Flat;
+            ButtonSettings.ForeColor = Color.White;
+            ButtonSettings.Location = new Point(213, 17);
+            ButtonSettings.Name = "ButtonSettings";
+            ButtonSettings.Size = new Size(111, 33);
+            ButtonSettings.TabIndex = 2;
+            ButtonSettings.Text = "Settings";
+            ButtonSettings.UseVisualStyleBackColor = true;
+            // 
+            // btnExtendedMode
+            // 
+            btnExtendedMode.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            btnExtendedMode.FlatAppearance.BorderSize = 0;
+            btnExtendedMode.FlatStyle = FlatStyle.Flat;
+            btnExtendedMode.ForeColor = Color.White;
+            btnExtendedMode.Location = new Point(1747, 17);
+            btnExtendedMode.Name = "btnExtendedMode";
+            btnExtendedMode.Size = new Size(321, 33);
+            btnExtendedMode.TabIndex = 3;
+            btnExtendedMode.Text = "Режим: Расширенный";
+            btnExtendedMode.UseVisualStyleBackColor = true;
             // 
             // btnSortArrival
             // 
@@ -91,30 +103,18 @@
             btnSortArrival.Text = "Сортировка: поступление";
             btnSortArrival.UseVisualStyleBackColor = true;
             // 
-            // btnExtendedMode
+            // btnOpenLog
             // 
-            btnExtendedMode.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            btnExtendedMode.FlatAppearance.BorderSize = 0;
-            btnExtendedMode.FlatStyle = FlatStyle.Flat;
-            btnExtendedMode.ForeColor = Color.White;
-            btnExtendedMode.Location = new Point(1904, 17);
-            btnExtendedMode.Name = "btnExtendedMode";
-            btnExtendedMode.Size = new Size(164, 33);
-            btnExtendedMode.TabIndex = 3;
-            btnExtendedMode.Text = "Расширенный";
-            btnExtendedMode.UseVisualStyleBackColor = true;
-            // 
-            // ButtonSettings
-            // 
-            ButtonSettings.FlatAppearance.BorderSize = 0;
-            ButtonSettings.FlatStyle = FlatStyle.Flat;
-            ButtonSettings.ForeColor = Color.White;
-            ButtonSettings.Location = new Point(213, 17);
-            ButtonSettings.Name = "ButtonSettings";
-            ButtonSettings.Size = new Size(111, 33);
-            ButtonSettings.TabIndex = 2;
-            ButtonSettings.Text = "Settings";
-            ButtonSettings.UseVisualStyleBackColor = true;
+            btnOpenLog.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            btnOpenLog.FlatAppearance.BorderSize = 0;
+            btnOpenLog.FlatStyle = FlatStyle.Flat;
+            btnOpenLog.ForeColor = Color.White;
+            btnOpenLog.Location = new Point(2360, 17);
+            btnOpenLog.Name = "btnOpenLog";
+            btnOpenLog.Size = new Size(149, 33);
+            btnOpenLog.TabIndex = 5;
+            btnOpenLog.Text = "Открыть лог";
+            btnOpenLog.UseVisualStyleBackColor = true;
             // 
             // label1
             // 

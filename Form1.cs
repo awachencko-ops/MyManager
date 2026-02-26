@@ -1314,7 +1314,7 @@ namespace MyManager
 
         private void UpdateTopButtons()
         {
-            btnExtendedMode.Text = _useExtendedMode ? "Расширенный: ВКЛ" : "Расширенный: ВЫКЛ";
+            btnExtendedMode.Text = _useExtendedMode ? "Режим: Расширенный" : "Режим: Обычный";
             btnSortArrival.Text = _sortArrivalDescending ? "Поступление: новые сверху" : "Поступление: старые сверху";
         }
 
