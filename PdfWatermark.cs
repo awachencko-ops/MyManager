@@ -29,8 +29,8 @@ namespace MyManager
                 if (isVertical)
                 {
                     // --- ВЕРТИКАЛЬНЫЙ (СЛЕВА) ---
-                    // 1. Переносим начало координат в точку рисования (5мм слева, центр по высоте)
-                    double x = MmToPt(5);
+                    // 1. Переносим начало координат в точку рисования (7мм слева, центр по высоте)
+                    double x = MmToPt(7);
                     double y = page.Height / 2;
 
                     gfx.TranslateTransform(x, y);
