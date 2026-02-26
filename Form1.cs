@@ -171,6 +171,16 @@ namespace MyManager
             // --- ДИСПЕТЧЕРЫ ---
             _gridMenu.OpenPitStopMan = OpenPitStopManager;
             _gridMenu.OpenImpMan = OpenImposingManager;
+            _gridMenu.RemovePitStopAction = () =>
+            {
+                var o = GetOrderByRow(_ctxRow);
+                if (o != null) RemovePitStopAction(o);
+            };
+            _gridMenu.RemoveImposingAction = () =>
+            {
+                var o = GetOrderByRow(_ctxRow);
+                if (o != null) RemoveImposingAction(o);
+            };
             _gridMenu.OpenOrderLog = () =>
             {
                 var o = GetOrderByRow(_ctxRow);
@@ -819,6 +829,22 @@ namespace MyManager
         private void OpenOrderFolder(OrderData o) { try { Process.Start("explorer.exe", GetOrderRootFolder(o)); } catch { } }
         private void OpenPitStopManager() { using var f = new ActionManagerForm(); f.ShowDialog(); }
         private void OpenImposingManager() { using var f = new ImposingManagerForm(); f.ShowDialog(); }
+
+        private void RemovePitStopAction(OrderData o)
+        {
+            o.PitStopAction = "-";
+            SaveHistory();
+            FillGrid();
+            SetBottomStatus($"✅ Секвенция PitStop удалена из {GetOrderDisplayId(o)}");
+        }
+
+        private void RemoveImposingAction(OrderData o)
+        {
+            o.ImposingAction = "-";
+            SaveHistory();
+            FillGrid();
+            SetBottomStatus($"✅ Секвенция Imposing удалена из {GetOrderDisplayId(o)}");
+        }
 
         private async void GridOrders_CellClick(object sender, DataGridViewCellEventArgs e)
         {

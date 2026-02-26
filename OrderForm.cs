@@ -84,7 +84,8 @@ namespace MyManager
         {
             textBoxNumberOrder.TextChanged += (s, e) => ValidateMainFields();
             textKey.TextChanged += (s, e) => ValidateMainFields();
-            textKey.TextChanged += (s, e) => {
+            textKey.TextChanged += (s, e) =>
+            {
                 int cursor = textKey.SelectionStart;
                 string clean = SanitizeInput(textKey.Text);
                 if (textKey.Text != clean)
@@ -221,5 +222,10 @@ namespace MyManager
         }
 
         private void label2_Click(object sender, EventArgs e) { }
+
+        private void label1_Click(object sender, EventArgs e)
+        {
+
+        }
     }
 }
