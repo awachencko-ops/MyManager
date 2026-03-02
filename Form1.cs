@@ -137,7 +137,7 @@ namespace MyManager
 
                 var o = GetOrderByRow(_ctxRow);
                 if (o == null) return;
-                if (o.Items != null && o.Items.Count > 0)
+                if (IsVisualGroupOrder(o))
                 {
                     SetBottomStatus("Головная строка группы заблокирована для файловых операций");
                     return;
@@ -156,7 +156,7 @@ namespace MyManager
 
                 var o = GetOrderByRow(_ctxRow);
                 if (o == null) return;
-                if (o.Items != null && o.Items.Count > 0)
+                if (IsVisualGroupOrder(o))
                 {
                     SetBottomStatus("Головная строка группы заблокирована для файловых операций");
                     return;
@@ -180,7 +180,7 @@ namespace MyManager
                     RenameFileHandler(itemOrder, item, stage);
                     return;
                 }
-                if (o.Items != null && o.Items.Count > 0)
+                if (IsVisualGroupOrder(o))
                 {
                     SetBottomStatus("Головная строка группы заблокирована для файловых операций");
                     return;
@@ -197,7 +197,7 @@ namespace MyManager
                     CopyPathToClipboard(item, stage);
                     return;
                 }
-                if (o.Items != null && o.Items.Count > 0)
+                if (IsVisualGroupOrder(o))
                 {
                     SetBottomStatus("Головная строка группы заблокирована для файловых операций");
                     return;
@@ -214,7 +214,7 @@ namespace MyManager
                     await PasteFileFromClipboardAsync(itemOrder, item, stage);
                     return;
                 }
-                if (o.Items != null && o.Items.Count > 0)
+                if (IsVisualGroupOrder(o))
                 {
                     SetBottomStatus("Головная строка группы заблокирована для файловых операций");
                     return;
@@ -232,7 +232,7 @@ namespace MyManager
                     ProcessWatermark(itemOrder, item, false);
                     return;
                 }
-                if (o.Items != null && o.Items.Count > 0)
+                if (IsVisualGroupOrder(o))
                 {
                     SetBottomStatus("Головная строка группы заблокирована для файловых операций");
                     return;
@@ -249,7 +249,7 @@ namespace MyManager
                     ProcessWatermark(itemOrder, item, true);
                     return;
                 }
-                if (o.Items != null && o.Items.Count > 0)
+                if (IsVisualGroupOrder(o))
                 {
                     SetBottomStatus("Головная строка группы заблокирована для файловых операций");
                     return;
@@ -289,6 +289,17 @@ namespace MyManager
             {
                 var o = GetOrderByRow(_ctxRow);
                 if (o != null) ConvertOrderToGroup(o);
+            };
+            _gridMenu.AddItemRow = () =>
+            {
+                var o = GetOrderByRow(_ctxRow);
+                if (o == null)
+                    return;
+
+                if (!IsVisualGroupOrder(o) && (o.Items == null || o.Items.Count == 0))
+                    ConvertOrderToGroup(o);
+
+                CreateEmptyItemRow(o);
             };
         }
 
@@ -504,7 +515,7 @@ namespace MyManager
                         }
                         else
                         {
-                            if (o.Items != null && o.Items.Count > 0)
+                            if (IsVisualGroupOrder(o))
                                 return;
 
                             filePath = sourceColumnIndex switch
@@ -702,7 +713,7 @@ namespace MyManager
 
             foreach (var o in sorted)
             {
-                bool isGroup = o.Items != null && o.Items.Count > 0;
+                bool isGroup = IsVisualGroupOrder(o);
                 bool expanded = isGroup && IsGroupExpanded(o.InternalId);
                 string statePrefix = isGroup ? (expanded ? "☑ " : "☐ ") : string.Empty;
 
@@ -733,15 +744,6 @@ namespace MyManager
                     gridOrders.Rows[itemRowIndex].Tag = $"item|{o.InternalId}|{item.ItemId}";
                 }
 
-                int draftRowIndex = gridOrders.Rows.Add(
-                    "   +",
-                    "   └ Добавить файл…",
-                    "...",
-                    "...",
-                    "—",
-                    "—",
-                    "...");
-                gridOrders.Rows[draftRowIndex].Tag = $"draft|{o.InternalId}";
             }
 
             if (!string.IsNullOrEmpty(selTag))
@@ -784,6 +786,9 @@ namespace MyManager
 
         private string GetOrderDisplayId(OrderData order)
             => string.IsNullOrWhiteSpace(order.Id) ? "—" : order.Id;
+
+        private bool IsVisualGroupOrder(OrderData order)
+            => order?.Items != null && order.Items.Count > 1;
 
         private string GetOrderRootFolder(OrderData order)
         {
@@ -895,17 +900,8 @@ namespace MyManager
         {
             if (e.RowIndex >= 0)
             {
-                if (IsDraftRow(e.RowIndex))
-                {
-                    gridOrders.Cursor = gridOrders.Columns[e.ColumnIndex].Name == "colState" ? Cursors.Hand : Cursors.Default;
-                    return;
-                }
-
                 bool fileColumn = e.ColumnIndex == 2 || e.ColumnIndex == 3 || e.ColumnIndex == 6;
-                if (IsGroupOrderRow(e.RowIndex) && fileColumn)
-                    gridOrders.Cursor = Cursors.No;
-                else
-                    gridOrders.Cursor = fileColumn ? Cursors.Hand : Cursors.Default;
+                gridOrders.Cursor = fileColumn ? Cursors.Hand : Cursors.Default;
                 if (e.RowIndex != _hoveredRowIndex) { int old = _hoveredRowIndex; _hoveredRowIndex = e.RowIndex; if (old >= 0) gridOrders.InvalidateRow(old); gridOrders.InvalidateRow(_hoveredRowIndex); }
             }
         }
@@ -991,7 +987,7 @@ namespace MyManager
             order.Items ??= new List<OrderFileItem>();
             var item = new OrderFileItem
             {
-                ClientFileLabel = $"item_{order.Items.Count + 1}",
+                ClientFileLabel = GetOrderDisplayId(order),
                 SequenceNo = order.Items.Count == 0 ? 0 : order.Items.Max(x => x.SequenceNo) + 1,
                 FileStatus = "⚪ Ожидание",
                 PitStopAction = string.IsNullOrWhiteSpace(order.PitStopAction) ? "-" : order.PitStopAction,
@@ -1267,7 +1263,7 @@ namespace MyManager
                 return false;
 
             var order = GetOrderByRow(rowIndex);
-            return order?.Items != null && order.Items.Count > 0;
+            return order != null && IsVisualGroupOrder(order);
         }
 
         private string GetItemStagePath(OrderFileItem item, int stage)
@@ -1307,11 +1303,7 @@ namespace MyManager
 
         private bool IsDraftRow(int rowIndex)
         {
-            if (rowIndex < 0 || rowIndex >= gridOrders.Rows.Count)
-                return false;
-
-            string tag = gridOrders.Rows[rowIndex].Tag?.ToString() ?? string.Empty;
-            return tag.StartsWith("draft|", StringComparison.Ordinal);
+            return false;
         }
 
         private string ExtractItemIdFromTag(string tag)
@@ -1449,13 +1441,6 @@ namespace MyManager
             var o = GetOrderByRow(e.RowIndex);
             if (o == null) return;
 
-            if (IsDraftRow(e.RowIndex))
-            {
-                if (gridOrders.Columns[e.ColumnIndex].Name == "colState")
-                    CreateEmptyItemRow(o);
-                return;
-            }
-
             if (IsItemRow(e.RowIndex))
             {
                 if (!TryGetItemByRow(e.RowIndex, out var itemOrder, out var item) || itemOrder == null || item == null)
@@ -1478,7 +1463,7 @@ namespace MyManager
                 return;
             }
 
-            bool isGroup = o.Items != null && o.Items.Count > 0;
+            bool isGroup = IsVisualGroupOrder(o);
             string colName = gridOrders.Columns[e.ColumnIndex].Name;
             if (isGroup && (colName == "colSource" || colName == "colReady" || colName == "colPrint"))
                 return;
@@ -1522,12 +1507,6 @@ namespace MyManager
                 string colName = gridOrders.Columns[hit.ColumnIndex].Name;
                 int targetStage = colName switch { "colSource" => 1, "colReady" => 2, "colPrint" => 3, _ => 0 };
                 if (targetStage == 0) return;
-
-                if (IsDraftRow(hit.RowIndex))
-                {
-                    await AddItemFromFileAsync(targetOrder, sourceFile, targetStage);
-                    return;
-                }
 
                 if (IsItemRow(hit.RowIndex))
                 {
@@ -1575,21 +1554,6 @@ namespace MyManager
             }
         }
 
-        private async Task AddItemFromFileAsync(OrderData order, string sourceFile, int stage)
-        {
-            order.Items ??= new List<OrderFileItem>();
-            string label = Path.GetFileNameWithoutExtension(sourceFile);
-            var item = new OrderFileItem
-            {
-                ClientFileLabel = label,
-                SequenceNo = order.Items.Count == 0 ? 0 : order.Items.Max(x => x.SequenceNo) + 1,
-                PitStopAction = string.IsNullOrWhiteSpace(order.PitStopAction) ? "-" : order.PitStopAction,
-                ImposingAction = string.IsNullOrWhiteSpace(order.ImposingAction) ? "-" : order.ImposingAction
-            };
-            order.Items.Add(item);
-            await AddFileToItemAsync(order, item, sourceFile, stage);
-        }
-
         private async Task AddFileToItemAsync(OrderData order, OrderFileItem item, string sourceFile, int stage)
         {
             try
@@ -1597,9 +1561,13 @@ namespace MyManager
                 if (stage == 3 && !await EnsureSimpleOrderInfoForPrintAsync(order))
                     return;
 
+                string sourceLabel = Path.GetFileNameWithoutExtension(sourceFile);
                 string label = string.IsNullOrWhiteSpace(item.ClientFileLabel)
-                    ? Path.GetFileNameWithoutExtension(sourceFile)
+                    ? sourceLabel
                     : item.ClientFileLabel;
+                if (label == "—" || label == GetOrderDisplayId(order) || label.StartsWith("item_", StringComparison.OrdinalIgnoreCase))
+                    label = sourceLabel;
+                item.ClientFileLabel = label;
                 string ext = Path.GetExtension(sourceFile);
                 string targetName = EnsureUniqueStageFileName(order, stage, label + ext);
 
@@ -1645,7 +1613,7 @@ namespace MyManager
                     string existingPath = string.Empty;
                     if (IsItemRow(hit.RowIndex) && TryGetItemByRow(hit.RowIndex, out var itemOrder, out var item) && item != null)
                         existingPath = GetItemStagePath(item, stage);
-                    else if (!IsDraftRow(hit.RowIndex))
+                    else
                         existingPath = colName switch
                         {
                             "colSource" => targetOrder.SourcePath,
@@ -1694,9 +1662,13 @@ namespace MyManager
                 if (stage == 3 && !await EnsureSimpleOrderInfoForPrintAsync(order))
                     return;
 
+                string sourceLabel = Path.GetFileNameWithoutExtension(ofd.FileName);
                 string label = string.IsNullOrWhiteSpace(item.ClientFileLabel)
-                    ? Path.GetFileNameWithoutExtension(ofd.FileName)
+                    ? sourceLabel
                     : item.ClientFileLabel;
+                if (label == "—" || label == GetOrderDisplayId(order) || label.StartsWith("item_", StringComparison.OrdinalIgnoreCase))
+                    label = sourceLabel;
+                item.ClientFileLabel = label;
                 string ext = Path.GetExtension(ofd.FileName);
                 string targetName = EnsureUniqueStageFileName(order, stage, label + ext);
 
@@ -2270,14 +2242,14 @@ namespace MyManager
                 if (f.ShowDialog() == DialogResult.OK)
                 {
                     o.PitStopAction = f.SelectedName;
-                    if (o.Items != null && o.Items.Count > 0)
+                    if (IsVisualGroupOrder(o))
                     {
                         foreach (var item in o.Items)
                             item.PitStopAction = f.SelectedName;
                     }
                     SaveHistory();
                     FillGrid();
-                    if (o.Items != null && o.Items.Count > 0)
+                    if (IsVisualGroupOrder(o))
                         SetBottomStatus($"PitStop обновлен для группы {GetOrderDisplayId(o)} (применяется ко всем item)");
                 }
             }
@@ -2287,14 +2259,14 @@ namespace MyManager
                 if (f.ShowDialog() == DialogResult.OK)
                 {
                     o.ImposingAction = f.SelectedName;
-                    if (o.Items != null && o.Items.Count > 0)
+                    if (IsVisualGroupOrder(o))
                     {
                         foreach (var item in o.Items)
                             item.ImposingAction = f.SelectedName;
                     }
                     SaveHistory();
                     FillGrid();
-                    if (o.Items != null && o.Items.Count > 0)
+                    if (IsVisualGroupOrder(o))
                         SetBottomStatus($"Imposing обновлен для группы {GetOrderDisplayId(o)} (применяется ко всем item)");
                 }
             }
