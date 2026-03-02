@@ -509,6 +509,16 @@ namespace MyManager
                         GetFileName(item.PrintPath));
                     gridOrders.Rows[itemRowIndex].Tag = $"item|{o.InternalId}|{item.ItemId}";
                 }
+
+                int draftRowIndex = gridOrders.Rows.Add(
+                    "   +",
+                    "   └ Добавить файл…",
+                    "...",
+                    "...",
+                    "—",
+                    "—",
+                    "...");
+                gridOrders.Rows[draftRowIndex].Tag = $"draft|{o.InternalId}";
             }
 
             if (!string.IsNullOrEmpty(selTag))
@@ -702,9 +712,105 @@ namespace MyManager
             if (!await EnsureOrderInfoAsync(order))
                 return;
 
+            List<string>? selectedItemIds = null;
+            if (order.Items != null && order.Items.Count > 0)
+            {
+                var mode = MessageBox.Show(
+                    "Обработать только выбранные item?\nДа = только выбранные, Нет = все item, Отмена = отмена.",
+                    "Режим запуска",
+                    MessageBoxButtons.YesNoCancel,
+                    MessageBoxIcon.Question);
+                if (mode == DialogResult.Cancel)
+                    return;
+
+                if (mode == DialogResult.Yes)
+                {
+                    selectedItemIds = GetSelectedItemIdsForOrder(order);
+                    if (selectedItemIds.Count == 0)
+                    {
+                        MessageBox.Show("Не выбраны строки item для запуска.", "Запуск", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        return;
+                    }
+                }
+            }
+
             using var cts = new CancellationTokenSource();
-            await _processor.RunAsync(order, cts.Token);
+            await _processor.RunAsync(order, cts.Token, selectedItemIds);
             SaveHistory(); FillGrid();
+        }
+
+        private List<string> GetSelectedItemIdsForOrder(OrderData order)
+        {
+            var result = new List<string>();
+            foreach (DataGridViewRow row in gridOrders.SelectedRows)
+            {
+                string tag = row.Tag?.ToString() ?? string.Empty;
+                if (!tag.StartsWith("item|", StringComparison.Ordinal))
+                    continue;
+
+                if (ExtractOrderInternalIdFromTag(tag) != order.InternalId)
+                    continue;
+
+                string itemId = ExtractItemIdFromTag(tag);
+                if (!string.IsNullOrWhiteSpace(itemId))
+                    result.Add(itemId);
+            }
+
+            return result;
+        }
+
+        private async Task AddItemFromPickerAsync(OrderData order, int stage)
+        {
+            using var ofd = new OpenFileDialog { Filter = "PDF|*.pdf|Все файлы|*.*" };
+            if (ofd.ShowDialog() != DialogResult.OK)
+                return;
+
+            order.Items ??= new List<OrderFileItem>();
+
+            string source = ofd.FileName;
+            string label = Path.GetFileNameWithoutExtension(source);
+            var item = new OrderFileItem
+            {
+                ClientFileLabel = label,
+                SequenceNo = order.Items.Count == 0 ? 0 : order.Items.Max(x => x.SequenceNo) + 1,
+                PitStopAction = string.IsNullOrWhiteSpace(order.PitStopAction) ? "-" : order.PitStopAction,
+                ImposingAction = string.IsNullOrWhiteSpace(order.ImposingAction) ? "-" : order.ImposingAction
+            };
+
+            string ext = Path.GetExtension(source);
+            if (stage == 1)
+                item.SourcePath = CopyIntoStage(order, 1, source, EnsureUniqueStageFileName(order, 1, label + ext));
+            else if (stage == 2)
+            {
+                item.PreparedPath = CopyIntoStage(order, 2, source, EnsureUniqueStageFileName(order, 2, label + ext));
+                if (string.IsNullOrWhiteSpace(item.SourcePath))
+                    item.SourcePath = item.PreparedPath;
+            }
+            else if (stage == 3)
+                item.PrintPath = CopyPrintFile(order, source, EnsureUniqueStageFileName(order, 3, label + ext));
+
+            item.FileStatus = stage == 3 ? "✅ Готово" : "⚪ Ожидание";
+            item.UpdatedAt = DateTime.Now;
+            order.Items.Add(item);
+            order.RefreshAggregatedStatus();
+            SaveHistory();
+            FillGrid();
+        }
+
+        private string EnsureUniqueStageFileName(OrderData order, int stage, string fileName)
+        {
+            string folder = GetStageFolder(order, stage);
+            Directory.CreateDirectory(folder);
+            string ext = Path.GetExtension(fileName);
+            string baseName = Path.GetFileNameWithoutExtension(fileName);
+            string candidate = fileName;
+            int index = 1;
+            while (File.Exists(Path.Combine(folder, candidate)))
+            {
+                candidate = $"{baseName}_{index}{ext}";
+                index++;
+            }
+            return candidate;
         }
 
         private void ShowOrderEditor(OrderData? existing)
@@ -896,6 +1002,21 @@ namespace MyManager
             return tag.StartsWith("item|", StringComparison.Ordinal);
         }
 
+        private bool IsDraftRow(int rowIndex)
+        {
+            if (rowIndex < 0 || rowIndex >= gridOrders.Rows.Count)
+                return false;
+
+            string tag = gridOrders.Rows[rowIndex].Tag?.ToString() ?? string.Empty;
+            return tag.StartsWith("draft|", StringComparison.Ordinal);
+        }
+
+        private string ExtractItemIdFromTag(string tag)
+        {
+            var parts = (tag ?? string.Empty).Split('|');
+            return parts.Length >= 3 ? parts[2] : string.Empty;
+        }
+
         private string ExtractOrderInternalIdFromTag(string tag)
         {
             if (tag.StartsWith("order|", StringComparison.Ordinal) || tag.StartsWith("item|", StringComparison.Ordinal))
@@ -944,7 +1065,9 @@ namespace MyManager
                     order.Items.Add(new OrderFileItem
                     {
                         ClientFileLabel = $"{GetOrderDisplayId(order)}_item",
-                        SequenceNo = 0
+                        SequenceNo = 0,
+                        PitStopAction = string.IsNullOrWhiteSpace(order.PitStopAction) ? "-" : order.PitStopAction,
+                        ImposingAction = string.IsNullOrWhiteSpace(order.ImposingAction) ? "-" : order.ImposingAction
                     });
                 }
                 else
@@ -956,7 +1079,9 @@ namespace MyManager
                         PreparedPath = order.PreparedPath ?? string.Empty,
                         PrintPath = order.PrintPath ?? string.Empty,
                         FileStatus = order.Status ?? "⚪ Ожидание",
-                        SequenceNo = 0
+                        SequenceNo = 0,
+                        PitStopAction = string.IsNullOrWhiteSpace(order.PitStopAction) ? "-" : order.PitStopAction,
+                        ImposingAction = string.IsNullOrWhiteSpace(order.ImposingAction) ? "-" : order.ImposingAction
                     });
                 }
             }
@@ -975,6 +1100,11 @@ namespace MyManager
         private void RemovePitStopAction(OrderData o)
         {
             o.PitStopAction = "-";
+            if (o.Items != null)
+            {
+                foreach (var item in o.Items)
+                    item.PitStopAction = "-";
+            }
             SaveHistory();
             FillGrid();
             SetBottomStatus($"✅ Секвенция PitStop удалена из {GetOrderDisplayId(o)}");
@@ -983,6 +1113,11 @@ namespace MyManager
         private void RemoveImposingAction(OrderData o)
         {
             o.ImposingAction = "-";
+            if (o.Items != null)
+            {
+                foreach (var item in o.Items)
+                    item.ImposingAction = "-";
+            }
             SaveHistory();
             FillGrid();
             SetBottomStatus($"✅ Секвенция Imposing удалена из {GetOrderDisplayId(o)}");
@@ -992,11 +1127,20 @@ namespace MyManager
         {
             if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
 
+            var o = GetOrderByRow(e.RowIndex);
+            if (o == null) return;
+
             if (IsItemRow(e.RowIndex))
                 return;
 
-            var o = GetOrderByRow(e.RowIndex);
-            if (o == null) return;
+            if (IsDraftRow(e.RowIndex))
+            {
+                string draftCol = gridOrders.Columns[e.ColumnIndex].Name;
+                if (draftCol == "colSource") await AddItemFromPickerAsync(o, 1);
+                else if (draftCol == "colReady") await AddItemFromPickerAsync(o, 2);
+                else if (draftCol == "colPrint") await AddItemFromPickerAsync(o, 3);
+                return;
+            }
 
             if (gridOrders.Columns[e.ColumnIndex].Name == "colState")
             {
@@ -1389,7 +1533,9 @@ namespace MyManager
                 PrintPath = order.PrintPath ?? string.Empty,
                 FileStatus = order.Status ?? "⚪ Ожидание",
                 SequenceNo = 0,
-                UpdatedAt = DateTime.Now
+                UpdatedAt = DateTime.Now,
+                PitStopAction = string.IsNullOrWhiteSpace(order.PitStopAction) ? "-" : order.PitStopAction,
+                ImposingAction = string.IsNullOrWhiteSpace(order.ImposingAction) ? "-" : order.ImposingAction
             });
 
             order.RefreshAggregatedStatus();
@@ -1580,7 +1726,8 @@ namespace MyManager
                 _archiveDoneSubfolder,
                 _jsonHistoryFile,
                 _managerLogFilePath,
-                _orderLogsFolderPath);
+                _orderLogsFolderPath,
+                AppSettings.Load().MaxParallelism);
             if (settingsForm.ShowDialog(this) != DialogResult.OK)
                 return;
 
@@ -1600,6 +1747,7 @@ namespace MyManager
             settings.HistoryFilePath = _jsonHistoryFile;
             settings.ManagerLogFilePath = _managerLogFilePath;
             settings.OrderLogsFolderPath = _orderLogsFolderPath;
+            settings.MaxParallelism = settingsForm.MaxParallelism;
             settings.Save();
             Logger.LogFilePath = _managerLogFilePath;
 
@@ -1649,6 +1797,11 @@ namespace MyManager
                 if (f.ShowDialog() == DialogResult.OK)
                 {
                     o.PitStopAction = f.SelectedName;
+                    if (o.Items != null && o.Items.Count > 0)
+                    {
+                        foreach (var item in o.Items)
+                            item.PitStopAction = f.SelectedName;
+                    }
                     SaveHistory();
                     FillGrid();
                     if (o.Items != null && o.Items.Count > 0)
@@ -1661,6 +1814,11 @@ namespace MyManager
                 if (f.ShowDialog() == DialogResult.OK)
                 {
                     o.ImposingAction = f.SelectedName;
+                    if (o.Items != null && o.Items.Count > 0)
+                    {
+                        foreach (var item in o.Items)
+                            item.ImposingAction = f.SelectedName;
+                    }
                     SaveHistory();
                     FillGrid();
                     if (o.Items != null && o.Items.Count > 0)
