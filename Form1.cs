@@ -290,6 +290,11 @@ namespace MyManager
                 var o = GetOrderByRow(_ctxRow);
                 if (o != null) ConvertOrderToGroup(o);
             };
+            _gridMenu.ConvertToSingle = () =>
+            {
+                var o = GetOrderByRow(_ctxRow);
+                if (o != null) ConvertGroupToSingle(o);
+            };
             _gridMenu.AddItemRow = () =>
             {
                 var o = GetOrderByRow(_ctxRow);
@@ -715,7 +720,7 @@ namespace MyManager
             {
                 bool isGroup = IsVisualGroupOrder(o);
                 bool expanded = isGroup && IsGroupExpanded(o.InternalId);
-                string statePrefix = isGroup ? (expanded ? "☑ " : "☐ ") : string.Empty;
+                string statePrefix = isGroup ? (expanded ? "∧ " : "∨ ") : string.Empty;
 
                 int orderRowIndex = gridOrders.Rows.Add(
                     statePrefix + o.Status,
@@ -842,8 +847,22 @@ namespace MyManager
             {
                 e.CellStyle.BackColor = Color.FromArgb(248, 248, 248);
                 e.CellStyle.SelectionBackColor = Color.FromArgb(235, 240, 250);
-                e.CellStyle.ForeColor = Color.DimGray;
-                e.CellStyle.SelectionForeColor = Color.Black;
+
+                string colName = gridOrders.Columns[e.ColumnIndex].Name;
+                if (TryGetItemByRow(e.RowIndex, out _, out var item) && item != null
+                    && (colName == "colSource" || colName == "colReady" || colName == "colPrint"))
+                {
+                    string p = colName == "colSource" ? item.SourcePath : (colName == "colReady" ? item.PreparedPath : item.PrintPath);
+                    Color txt = (string.IsNullOrEmpty(p) || p == "...")
+                        ? Color.Gray
+                        : (File.Exists(p) ? Color.DodgerBlue : Color.Red);
+                    e.CellStyle.ForeColor = e.CellStyle.SelectionForeColor = txt;
+                }
+                else
+                {
+                    e.CellStyle.ForeColor = Color.DimGray;
+                    e.CellStyle.SelectionForeColor = Color.Black;
+                }
                 return;
             }
 
@@ -915,7 +934,9 @@ namespace MyManager
                 gridOrders.CurrentCell = gridOrders.Rows[e.RowIndex].Cells[e.ColumnIndex];
                 var order = GetOrderByRow(e.RowIndex);
                 bool allowCopyToGrandpa = order == null || ResolveMenuStartMode(order) != OrderStartMode.Simple;
-                _gridMenu.Build(gridOrders.Columns[e.ColumnIndex].Name, allowCopyToGrandpa).Show(Cursor.Position);
+                bool canConvertToGroup = order != null && (order.Items == null || order.Items.Count == 0);
+                bool canConvertToSingle = order != null && order.Items != null && order.Items.Count == 1;
+                _gridMenu.Build(gridOrders.Columns[e.ColumnIndex].Name, allowCopyToGrandpa, canConvertToGroup, canConvertToSingle).Show(Cursor.Position);
             }
         }
 
@@ -1386,6 +1407,31 @@ namespace MyManager
             SaveHistory();
             FillGrid();
             SetBottomStatus($"Заказ {GetOrderDisplayId(order)} преобразован в группу");
+        }
+
+        private void ConvertGroupToSingle(OrderData order)
+        {
+            if (order?.Items == null || order.Items.Count != 1)
+            {
+                SetBottomStatus("Преобразование в одиночный заказ доступно только для группы с одним файлом");
+                return;
+            }
+
+            var item = order.Items.OrderBy(x => x.SequenceNo).First();
+            order.SourcePath = item.SourcePath ?? string.Empty;
+            order.PreparedPath = item.PreparedPath ?? string.Empty;
+            order.PrintPath = item.PrintPath ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(item.PitStopAction) && item.PitStopAction != "-")
+                order.PitStopAction = item.PitStopAction;
+            if (!string.IsNullOrWhiteSpace(item.ImposingAction) && item.ImposingAction != "-")
+                order.ImposingAction = item.ImposingAction;
+
+            order.Status = item.FileStatus;
+            order.Items.Clear();
+            _expandedGroups[order.InternalId] = false;
+            SaveHistory();
+            FillGrid();
+            SetBottomStatus($"Группа {GetOrderDisplayId(order)} преобразована в одиночный заказ");
         }
 
         private void OpenOrderFolder(OrderData o) { try { Process.Start("explorer.exe", GetOrderRootFolder(o)); } catch { } }
