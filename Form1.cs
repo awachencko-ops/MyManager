@@ -76,6 +76,7 @@ namespace MyManager
             btnExtendedMode.Click += (s, e) => ToggleExtendedMode();
             btnSortArrival.Click += (s, e) => ToggleArrivalSort();
             btnOpenLog.Click += (s, e) => OpenLogFile();
+            txtSearch.TextChanged += (s, e) => FillGrid();
             UpdateTopButtons();
 
             gridOrders.CellDoubleClick += GridOrders_CellDoubleClick;
@@ -714,6 +715,10 @@ namespace MyManager
                 ? _orderHistory.OrderByDescending(x => x.ArrivalDate).ToList()
                 : _orderHistory.OrderBy(x => x.ArrivalDate).ToList();
 
+            string search = (txtSearch?.Text ?? string.Empty).Trim();
+            if (!string.IsNullOrWhiteSpace(search))
+                sorted = sorted.Where(o => OrderMatchesSearch(o, search)).ToList();
+
             gridOrders.Rows.Clear();
 
             foreach (var o in sorted)
@@ -813,6 +818,46 @@ namespace MyManager
                 .ToList();
 
             return values.Count == 1 ? values[0] : "-";
+        }
+
+        private bool OrderMatchesSearch(OrderData order, string search)
+        {
+            if (order == null)
+                return false;
+
+            string q = search.Trim();
+            if (string.IsNullOrWhiteSpace(q))
+                return true;
+
+            bool Contains(string? value)
+                => !string.IsNullOrWhiteSpace(value) && value.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0;
+
+            if (Contains(order.Id)
+                || Contains(Path.GetFileName(order.SourcePath))
+                || Contains(Path.GetFileName(order.PreparedPath))
+                || Contains(Path.GetFileName(order.PrintPath)))
+            {
+                return true;
+            }
+
+            if (order.Items == null || order.Items.Count == 0)
+                return false;
+
+            foreach (var item in order.Items)
+            {
+                if (item == null)
+                    continue;
+
+                if (Contains(item.ClientFileLabel)
+                    || Contains(Path.GetFileName(item.SourcePath))
+                    || Contains(Path.GetFileName(item.PreparedPath))
+                    || Contains(Path.GetFileName(item.PrintPath)))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private string GetOrderRootFolder(OrderData order)
