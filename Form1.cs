@@ -384,7 +384,8 @@ namespace MyManager
                 order.PrintPath = original;
 
                 string pos = isVertical ? "слева" : "сверху";
-                SetBottomStatus($"✅ Водяной знак ({pos}) нанесен на item {item.ClientFileLabel}");
+                SetBottomStatus($"✅ Водяной знак ({pos}) нанесен на {Path.GetFileName(item.PrintPath)}");
+                AppendItemOperationLog(order, item, "watermark", $"vertical={isVertical}");
             }
             catch (IOException)
             {
@@ -414,6 +415,7 @@ namespace MyManager
                 UpdateItemFilePath(order, item, stage, newPath);
                 SaveHistory(); FillGrid();
                 SetBottomStatus("✅ Файл item переименован");
+                AppendItemOperationLog(order, item, "rename", Path.GetFileName(newPath));
             }
             catch (Exception ex) { MessageBox.Show("Ошибка: " + ex.Message); }
         }
@@ -437,6 +439,7 @@ namespace MyManager
                 }
 
                 await AddFileToItemAsync(order, item, cleanPath, stage);
+                AppendItemOperationLog(order, item, "paste", cleanPath);
             }
             catch (Exception ex)
             {
@@ -804,7 +807,7 @@ namespace MyManager
             => string.IsNullOrWhiteSpace(order.Id) ? "—" : order.Id;
 
         private bool IsVisualGroupOrder(OrderData order)
-            => order?.Items != null && order.Items.Count > 1;
+            => order?.Items != null && order.Items.Count > 0;
 
         private string GetCommonGroupAction(List<OrderFileItem> items, Func<OrderFileItem, string> selector)
         {
@@ -942,6 +945,7 @@ namespace MyManager
             {
                 string s = (o.Status ?? "").ToLower(); Color b, f;
                 if (s.Contains("ошибка")) { b = Color.FromArgb(255, 210, 210); f = Color.FromArgb(150, 0, 0); }
+                else if (s.Contains("готов")) { b = Color.FromArgb(210, 255, 210); f = Color.FromArgb(0, 100, 0); }
                 else if (IsOrderInArchive(o)) { b = Color.FromArgb(220, 235, 255); f = Color.FromArgb(0, 70, 140); }
                 else if (!string.IsNullOrEmpty(o.PrintPath) && File.Exists(o.PrintPath)) { b = Color.FromArgb(210, 255, 210); f = Color.FromArgb(0, 100, 0); }
                 else { b = Color.FromArgb(255, 235, 200); f = Color.FromArgb(150, 80, 0); }
@@ -1182,6 +1186,16 @@ namespace MyManager
                 index++;
             }
             return candidate;
+        }
+
+        private string BuildItemPrintFileName(OrderData order, OrderFileItem item, string sourceFile)
+        {
+            string ext = Path.GetExtension(sourceFile);
+            string orderNo = string.IsNullOrWhiteSpace(order.Id) ? "order" : order.Id;
+            var ordered = (order.Items ?? new List<OrderFileItem>()).OrderBy(x => x.SequenceNo).ToList();
+            int idx = ordered.FindIndex(x => x.ItemId == item.ItemId);
+            int itemIndex = idx >= 0 ? idx + 1 : 1;
+            return $"{orderNo}_{itemIndex}{ext}";
         }
 
         private void ShowOrderEditor(OrderData? existing)
@@ -1725,13 +1739,14 @@ namespace MyManager
                 string targetName = EnsureUniqueStageFileName(order, stage, Path.GetFileName(sourceFile));
 
                 string newPath = stage == 3
-                    ? CopyPrintFile(order, sourceFile, targetName)
+                    ? CopyPrintFile(order, sourceFile, EnsureUniqueStageFileName(order, 3, BuildItemPrintFileName(order, item, sourceFile)))
                     : CopyIntoStage(order, stage, sourceFile, targetName);
 
                 UpdateItemFilePath(order, item, stage, newPath);
                 SaveHistory();
                 FillGrid();
                 SetBottomStatus("Файл добавлен в item");
+                AppendItemOperationLog(order, item, "add-file", Path.GetFileName(newPath));
             }
             catch (Exception ex)
             {
@@ -1825,7 +1840,7 @@ namespace MyManager
                 string targetName = EnsureUniqueStageFileName(order, stage, Path.GetFileName(ofd.FileName));
 
                 string newPath = stage == 3
-                    ? CopyPrintFile(order, ofd.FileName, targetName)
+                    ? CopyPrintFile(order, ofd.FileName, EnsureUniqueStageFileName(order, 3, BuildItemPrintFileName(order, item, ofd.FileName)))
                     : CopyIntoStage(order, stage, ofd.FileName, targetName);
 
                 if (stage == 2 && string.IsNullOrWhiteSpace(item.SourcePath))
@@ -1835,6 +1850,7 @@ namespace MyManager
                 SaveHistory();
                 FillGrid();
                 SetBottomStatus("Файл успешно добавлен в item");
+                AppendItemOperationLog(order, item, "pick-file", Path.GetFileName(newPath));
             }
             catch (Exception ex)
             {
@@ -2221,6 +2237,26 @@ namespace MyManager
             catch
             {
             }
+        }
+
+        private void AppendItemOperationLog(OrderData order, OrderFileItem item, string operation, string details = "")
+        {
+            try
+            {
+                string safeItemId = string.IsNullOrWhiteSpace(item.ItemId) ? "unknown-item" : item.ItemId;
+                foreach (char c in Path.GetInvalidFileNameChars())
+                    safeItemId = safeItemId.Replace(c, '_');
+
+                string logFolder = string.IsNullOrWhiteSpace(_orderLogsFolderPath)
+                    ? Path.Combine(AppContext.BaseDirectory, "order-logs")
+                    : _orderLogsFolderPath;
+                Directory.CreateDirectory(logFolder);
+
+                string line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} | item={item.ClientFileLabel} | op={operation} | {details}";
+                File.AppendAllText(Path.Combine(logFolder, $"{order.InternalId}_{safeItemId}.log"), line + Environment.NewLine);
+                File.AppendAllText(GetOrderLogFilePath(order), line + Environment.NewLine);
+            }
+            catch { }
         }
 
         private bool IsOrderInArchive(OrderData order)
