@@ -318,7 +318,7 @@ namespace MyManager
                 if (!IsVisualGroupOrder(o) && (o.Items == null || o.Items.Count == 0))
                     ConvertOrderToGroup(o);
 
-                CreateEmptyItemRow(o);
+                CreateEmptyItemRowCore(o);
             };
         }
 
@@ -1360,7 +1360,7 @@ namespace MyManager
 
                 if (mode == GroupRunMode.SelectedOnly)
                 {
-                    selectedItemIds = GetSelectedItemIdsForOrder(order);
+                    selectedItemIds = GetSelectedItemIdsForOrderCore(order);
                     if (selectedItemIds.Count == 0)
                     {
                         MessageBox.Show("Не выбраны строки item для запуска.", "Запуск", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -1374,7 +1374,7 @@ namespace MyManager
             SaveHistory(); FillGrid();
         }
 
-        private List<string> GetSelectedItemIdsForOrder(OrderData order)
+        private List<string> GetSelectedItemIdsForOrderCore(OrderData order)
         {
             var result = new List<string>();
             foreach (DataGridViewRow row in gridOrders.SelectedRows)
@@ -1394,7 +1394,7 @@ namespace MyManager
             return result;
         }
 
-        private void CreateEmptyItemRow(OrderData order)
+        private void CreateEmptyItemRowCore(OrderData order)
         {
             if (order == null)
                 return;
@@ -1416,7 +1416,7 @@ namespace MyManager
             SetBottomStatus("Добавлена новая строка item");
         }
 
-        private async Task AddItemFromPickerAsync(OrderData order, int stage)
+        private async Task AddItemFromPickerAsyncCore(OrderData order, int stage)
         {
             using var ofd = new OpenFileDialog { Filter = "PDF|*.pdf|Все файлы|*.*" };
             if (ofd.ShowDialog() != DialogResult.OK)
@@ -1436,15 +1436,15 @@ namespace MyManager
 
             string ext = Path.GetExtension(source);
             if (stage == 1)
-                item.SourcePath = CopyIntoStage(order, 1, source, EnsureUniqueStageFileName(order, 1, label + ext));
+                item.SourcePath = CopyIntoStage(order, 1, source, EnsureUniqueStageFileNameCore(order, 1, label + ext));
             else if (stage == 2)
             {
-                item.PreparedPath = CopyIntoStage(order, 2, source, EnsureUniqueStageFileName(order, 2, label + ext));
+                item.PreparedPath = CopyIntoStage(order, 2, source, EnsureUniqueStageFileNameCore(order, 2, label + ext));
                 if (string.IsNullOrWhiteSpace(item.SourcePath))
                     item.SourcePath = item.PreparedPath;
             }
             else if (stage == 3)
-                item.PrintPath = CopyPrintFile(order, source, EnsureUniqueStageFileName(order, 3, label + ext));
+                item.PrintPath = CopyPrintFile(order, source, EnsureUniqueStageFileNameCore(order, 3, label + ext));
 
             item.FileStatus = stage == 3 ? "✅ Готово" : "⚪ Ожидание";
             item.UpdatedAt = DateTime.Now;
@@ -1454,7 +1454,7 @@ namespace MyManager
             FillGrid();
         }
 
-        private string EnsureUniqueStageFileName(OrderData order, int stage, string fileName)
+        private string EnsureUniqueStageFileNameCore(OrderData order, int stage, string fileName)
         {
             string folder = GetStageFolder(order, stage);
             Directory.CreateDirectory(folder);
@@ -1470,113 +1470,7 @@ namespace MyManager
             return candidate;
         }
 
-        private string BuildItemPrintFileName(OrderData order, OrderFileItem item, string sourceFile)
-        {
-            string ext = Path.GetExtension(sourceFile);
-            string orderNo = string.IsNullOrWhiteSpace(order.Id) ? "order" : order.Id;
-            var ordered = (order.Items ?? new List<OrderFileItem>()).OrderBy(x => x.SequenceNo).ToList();
-            int idx = ordered.FindIndex(x => x.ItemId == item.ItemId);
-            int itemIndex = idx >= 0 ? idx + 1 : 1;
-            return $"{orderNo}_{itemIndex}{ext}";
-        }
-
-        private List<string> GetSelectedItemIdsForOrder(OrderData order)
-        {
-            var result = new List<string>();
-            foreach (DataGridViewRow row in gridOrders.SelectedRows)
-            {
-                string tag = row.Tag?.ToString() ?? string.Empty;
-                if (!tag.StartsWith("item|", StringComparison.Ordinal))
-                    continue;
-
-                if (ExtractOrderInternalIdFromTag(tag) != order.InternalId)
-                    continue;
-
-                string itemId = ExtractItemIdFromTag(tag);
-                if (!string.IsNullOrWhiteSpace(itemId))
-                    result.Add(itemId);
-            }
-
-            return result;
-        }
-
-        private void CreateEmptyItemRow(OrderData order)
-        {
-            if (order == null)
-                return;
-
-            order.Items ??= new List<OrderFileItem>();
-            var item = new OrderFileItem
-            {
-                ClientFileLabel = GetOrderDisplayId(order),
-                SequenceNo = order.Items.Count == 0 ? 0 : order.Items.Max(x => x.SequenceNo) + 1,
-                FileStatus = "⚪ Ожидание",
-                PitStopAction = string.IsNullOrWhiteSpace(order.PitStopAction) ? "-" : order.PitStopAction,
-                ImposingAction = string.IsNullOrWhiteSpace(order.ImposingAction) ? "-" : order.ImposingAction,
-                UpdatedAt = DateTime.Now
-            };
-            order.Items.Add(item);
-            order.RefreshAggregatedStatus();
-            SaveHistory();
-            FillGrid();
-            SetBottomStatus("Добавлена новая строка item");
-        }
-
-        private async Task AddItemFromPickerAsync(OrderData order, int stage)
-        {
-            using var ofd = new OpenFileDialog { Filter = "PDF|*.pdf|Все файлы|*.*" };
-            if (ofd.ShowDialog() != DialogResult.OK)
-                return;
-
-            order.Items ??= new List<OrderFileItem>();
-
-            string source = ofd.FileName;
-            string label = Path.GetFileNameWithoutExtension(source);
-            var item = new OrderFileItem
-            {
-                ClientFileLabel = label,
-                SequenceNo = order.Items.Count == 0 ? 0 : order.Items.Max(x => x.SequenceNo) + 1,
-                PitStopAction = string.IsNullOrWhiteSpace(order.PitStopAction) ? "-" : order.PitStopAction,
-                ImposingAction = string.IsNullOrWhiteSpace(order.ImposingAction) ? "-" : order.ImposingAction
-            };
-
-            string ext = Path.GetExtension(source);
-            if (stage == 1)
-                item.SourcePath = CopyIntoStage(order, 1, source, EnsureUniqueStageFileName(order, 1, label + ext));
-            else if (stage == 2)
-            {
-                item.PreparedPath = CopyIntoStage(order, 2, source, EnsureUniqueStageFileName(order, 2, label + ext));
-                if (string.IsNullOrWhiteSpace(item.SourcePath))
-                    item.SourcePath = item.PreparedPath;
-            }
-            else if (stage == 3)
-                item.PrintPath = CopyPrintFile(order, source, EnsureUniqueStageFileName(order, 3, label + ext));
-
-            item.FileStatus = stage == 3 ? "✅ Готово" : "⚪ Ожидание";
-            item.UpdatedAt = DateTime.Now;
-            order.Items.Add(item);
-            order.RefreshAggregatedStatus();
-            SaveHistory();
-            FillGrid();
-        }
-
-        private string EnsureUniqueStageFileName(OrderData order, int stage, string fileName)
-        {
-            string folder = GetStageFolder(order, stage);
-            Directory.CreateDirectory(folder);
-            string ext = Path.GetExtension(fileName);
-            string baseName = Path.GetFileNameWithoutExtension(fileName);
-            string candidate = fileName;
-            int index = 1;
-            while (File.Exists(Path.Combine(folder, candidate)))
-            {
-                candidate = $"{baseName}_{index}{ext}";
-                index++;
-            }
-            return candidate;
-        }
-
-        private string BuildItemPrintFileName(OrderData order, OrderFileItem item, string sourceFile)
+        private string BuildItemPrintFileNameCore(OrderData order, OrderFileItem item, string sourceFile)
         {
             string ext = Path.GetExtension(sourceFile);
             string orderNo = string.IsNullOrWhiteSpace(order.Id) ? "order" : order.Id;
@@ -2139,10 +2033,10 @@ namespace MyManager
                 if (label == "—" || label == GetOrderDisplayId(order) || label.StartsWith("item_", StringComparison.OrdinalIgnoreCase))
                     label = sourceLabel;
                 item.ClientFileLabel = label;
-                string targetName = EnsureUniqueStageFileName(order, stage, Path.GetFileName(sourceFile));
+                string targetName = EnsureUniqueStageFileNameCore(order, stage, Path.GetFileName(sourceFile));
 
                 string newPath = stage == 3
-                    ? CopyPrintFile(order, sourceFile, EnsureUniqueStageFileName(order, 3, BuildItemPrintFileName(order, item, sourceFile)))
+                    ? CopyPrintFile(order, sourceFile, EnsureUniqueStageFileNameCore(order, 3, BuildItemPrintFileNameCore(order, item, sourceFile)))
                     : CopyIntoStage(order, stage, sourceFile, targetName);
 
                 UpdateItemFilePath(order, item, stage, newPath);
@@ -2240,10 +2134,10 @@ namespace MyManager
                 if (label == "—" || label == GetOrderDisplayId(order) || label.StartsWith("item_", StringComparison.OrdinalIgnoreCase))
                     label = sourceLabel;
                 item.ClientFileLabel = label;
-                string targetName = EnsureUniqueStageFileName(order, stage, Path.GetFileName(ofd.FileName));
+                string targetName = EnsureUniqueStageFileNameCore(order, stage, Path.GetFileName(ofd.FileName));
 
                 string newPath = stage == 3
-                    ? CopyPrintFile(order, ofd.FileName, EnsureUniqueStageFileName(order, 3, BuildItemPrintFileName(order, item, ofd.FileName)))
+                    ? CopyPrintFile(order, ofd.FileName, EnsureUniqueStageFileNameCore(order, 3, BuildItemPrintFileNameCore(order, item, ofd.FileName)))
                     : CopyIntoStage(order, stage, ofd.FileName, targetName);
 
                 if (stage == 2 && string.IsNullOrWhiteSpace(item.SourcePath))
