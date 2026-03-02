@@ -37,9 +37,20 @@ namespace MyManager
         private int _ctxRow = -1;
         private int _ctxCol = -1; // Добавлено
         private readonly Dictionary<string, bool> _expandedGroups = new Dictionary<string, bool>();
+        private string _queueFilter = "all";
+        private OrderData? _selectedOrder;
+        private OrderFileItem? _selectedItem;
+
+        private SplitContainer? _splitMain;
+        private SplitContainer? _splitCenterRight;
+        private ListBox? _lstQueues;
+        private TabControl? _inspectorTabs;
+        private TextBox? _txtInspectorSummary;
+        private TextBox? _txtInspectorLog;
         public Form1()
         {
             InitializeComponent();
+            InitializeFieryShellLayout();
             this.StartPosition = FormStartPosition.CenterScreen; // Добавь это
             var settings = AppSettings.Load();
             _ordersRootPath = settings.OrdersRootPath;
@@ -98,8 +109,10 @@ namespace MyManager
 
             // Подписываемся на клик (если еще не подписаны)
             gridOrders.CellClick += GridOrders_CellClick;
+            gridOrders.SelectionChanged += GridOrders_SelectionChanged;
 
             SetBottomStatus("Готово");
+            UpdateInspectorFromSelection();
         }
 
         private void InitializeProcessor()
@@ -709,6 +722,156 @@ namespace MyManager
                 gridOrders.Columns["colSource"].Visible = false;
         }
 
+        private void InitializeFieryShellLayout()
+        {
+            _splitMain = new SplitContainer
+            {
+                Name = "splitMain",
+                Dock = DockStyle.Fill,
+                SplitterDistance = 220,
+                FixedPanel = FixedPanel.Panel1,
+                BackColor = Color.FromArgb(244, 245, 247)
+            };
+
+            _splitCenterRight = new SplitContainer
+            {
+                Name = "splitCenterRight",
+                Dock = DockStyle.Fill,
+                SplitterDistance = Math.Max(900, ClientSize.Width - 620),
+                FixedPanel = FixedPanel.Panel2,
+                BackColor = Color.FromArgb(244, 245, 247)
+            };
+
+            var leftPanel = BuildLeftQueuePanel();
+            var inspectorPanel = BuildRightInspectorPanel();
+
+            Controls.Add(_splitMain);
+            _splitMain.BringToFront();
+            panel1.BringToFront();
+
+            _splitMain.Panel1.Controls.Add(leftPanel);
+            _splitMain.Panel2.Controls.Add(_splitCenterRight);
+
+            var centerPanel = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(244, 245, 247) };
+            _splitCenterRight.Panel1.Controls.Add(centerPanel);
+            _splitCenterRight.Panel2.Controls.Add(inspectorPanel);
+
+            btnCreateOrder.Parent = centerPanel;
+            lblSearch.Parent = centerPanel;
+            txtSearch.Parent = centerPanel;
+            gridOrders.Parent = centerPanel;
+            lblBottomStatus.Parent = centerPanel;
+
+            btnCreateOrder.Location = new Point(24, 24);
+            lblSearch.Location = new Point(300, 38);
+            txtSearch.Location = new Point(370, 32);
+            txtSearch.Width = Math.Max(360, centerPanel.Width - 410);
+            gridOrders.Location = new Point(24, 88);
+            gridOrders.Size = new Size(Math.Max(480, centerPanel.Width - 48), Math.Max(260, centerPanel.Height - 128));
+            lblBottomStatus.Location = new Point(24, Math.Max(90, centerPanel.Height - 30));
+
+            centerPanel.Resize += (s, e) =>
+            {
+                txtSearch.Width = Math.Max(360, centerPanel.Width - 410);
+                gridOrders.Size = new Size(Math.Max(480, centerPanel.Width - 48), Math.Max(260, centerPanel.Height - 128));
+                lblBottomStatus.Location = new Point(24, Math.Max(90, centerPanel.Height - 30));
+            };
+        }
+
+        private Control BuildLeftQueuePanel()
+        {
+            var panel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12), BackColor = Color.White };
+            var title = new Label
+            {
+                Dock = DockStyle.Top,
+                Height = 30,
+                Text = "Очереди",
+                Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(50, 50, 50)
+            };
+
+            _lstQueues = new ListBox
+            {
+                Dock = DockStyle.Fill,
+                BorderStyle = BorderStyle.None,
+                Font = new Font("Segoe UI", 10F, FontStyle.Regular),
+                BackColor = Color.White
+            };
+            _lstQueues.Items.AddRange(new object[]
+            {
+                "Все задания",
+                "Ожидание",
+                "В работе",
+                "Ошибка",
+                "Готово",
+                "Частично"
+            });
+            _lstQueues.SelectedIndex = 0;
+            _lstQueues.SelectedIndexChanged += (s, e) =>
+            {
+                _queueFilter = _lstQueues.SelectedIndex switch
+                {
+                    1 => "waiting",
+                    2 => "running",
+                    3 => "error",
+                    4 => "ready",
+                    5 => "partial",
+                    _ => "all"
+                };
+                FillGrid();
+            };
+
+            panel.Controls.Add(_lstQueues);
+            panel.Controls.Add(title);
+            return panel;
+        }
+
+        private Control BuildRightInspectorPanel()
+        {
+            var panel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(10), BackColor = Color.White };
+            _inspectorTabs = new TabControl { Dock = DockStyle.Fill };
+
+            var tabSummary = new TabPage("Сводка");
+            var tabPreview = new TabPage("Предпросмотр");
+            var tabLog = new TabPage("Журнал");
+
+            _txtInspectorSummary = new TextBox
+            {
+                Dock = DockStyle.Fill,
+                Multiline = true,
+                ReadOnly = true,
+                BorderStyle = BorderStyle.None,
+                BackColor = Color.White,
+                ScrollBars = ScrollBars.Vertical
+            };
+            tabSummary.Controls.Add(_txtInspectorSummary);
+
+            var previewLabel = new Label
+            {
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleCenter,
+                ForeColor = Color.Gray,
+                Text = "Предпросмотр недоступен"
+            };
+            tabPreview.Controls.Add(previewLabel);
+
+            _txtInspectorLog = new TextBox
+            {
+                Dock = DockStyle.Fill,
+                Multiline = true,
+                ReadOnly = true,
+                ScrollBars = ScrollBars.Vertical,
+                Font = new Font("Consolas", 9F)
+            };
+            tabLog.Controls.Add(_txtInspectorLog);
+
+            _inspectorTabs.TabPages.Add(tabSummary);
+            _inspectorTabs.TabPages.Add(tabPreview);
+            _inspectorTabs.TabPages.Add(tabLog);
+            panel.Controls.Add(_inspectorTabs);
+            return panel;
+        }
+
         private void FillGrid()
         {
             if (gridOrders.Columns.Count == 0) return;
@@ -721,6 +884,8 @@ namespace MyManager
             string search = (txtSearch?.Text ?? string.Empty).Trim();
             if (!string.IsNullOrWhiteSpace(search))
                 sorted = sorted.Where(o => OrderMatchesSearch(o, search)).ToList();
+
+            sorted = sorted.Where(OrderMatchesQueueFilter).ToList();
 
             gridOrders.Rows.Clear();
 
@@ -776,6 +941,8 @@ namespace MyManager
                     }
                 }
             }
+
+            UpdateInspectorFromSelection();
         }
 
         private void OpenOrderStageFolder(OrderData o, int stage)
@@ -861,6 +1028,121 @@ namespace MyManager
             }
 
             return false;
+        }
+
+        private bool OrderMatchesQueueFilter(OrderData order)
+        {
+            if (order == null)
+                return false;
+
+            string status = (order.Status ?? string.Empty).ToLowerInvariant();
+            bool isPartial = status.Contains("частич");
+
+            return _queueFilter switch
+            {
+                "waiting" => status.Contains("ожид"),
+                "running" => status.Contains("в работе") || status.Contains("запуск"),
+                "error" => status.Contains("ошиб"),
+                "ready" => status.Contains("готов") && !isPartial,
+                "partial" => isPartial,
+                _ => true
+            };
+        }
+
+        private void GridOrders_SelectionChanged(object? sender, EventArgs e)
+        {
+            UpdateInspectorFromSelection();
+        }
+
+        private void UpdateInspectorFromSelection()
+        {
+            _selectedOrder = null;
+            _selectedItem = null;
+
+            if (gridOrders.CurrentCell != null)
+            {
+                int row = gridOrders.CurrentCell.RowIndex;
+                if (TryGetItemByRow(row, out var itemOrder, out var item) && itemOrder != null && item != null)
+                {
+                    _selectedOrder = itemOrder;
+                    _selectedItem = item;
+                }
+                else
+                {
+                    _selectedOrder = GetOrderByRow(row);
+                }
+            }
+
+            if (_txtInspectorSummary != null)
+                _txtInspectorSummary.Text = BuildInspectorSummaryText(_selectedOrder, _selectedItem);
+            if (_txtInspectorLog != null)
+                _txtInspectorLog.Text = BuildInspectorLogText(_selectedOrder, _selectedItem);
+        }
+
+        private string BuildInspectorSummaryText(OrderData? order, OrderFileItem? item)
+        {
+            if (order == null)
+                return "Ничего не выбрано.";
+
+            var lines = new List<string>
+            {
+                $"Заказ: {GetOrderDisplayId(order)}",
+                $"Статус: {order.Status}",
+                $"Режим: {GetOrderStartMode(order)}",
+                $"PitStop: {order.PitStopAction}",
+                $"Imposing: {order.ImposingAction}",
+                $"Source: {order.SourcePath}",
+                $"Prepared: {order.PreparedPath}",
+                $"Print: {order.PrintPath}"
+            };
+
+            if (item != null)
+            {
+                lines.Add(string.Empty);
+                lines.Add($"Item: {item.ClientFileLabel}");
+                lines.Add($"Item status: {item.FileStatus}");
+                lines.Add($"Item PitStop: {item.PitStopAction}");
+                lines.Add($"Item Imposing: {item.ImposingAction}");
+                lines.Add($"Item Source: {item.SourcePath}");
+                lines.Add($"Item Prepared: {item.PreparedPath}");
+                lines.Add($"Item Print: {item.PrintPath}");
+                if (!string.IsNullOrWhiteSpace(item.LastReason))
+                    lines.Add($"Причина: {item.LastReason}");
+            }
+
+            return string.Join(Environment.NewLine, lines);
+        }
+
+        private string BuildInspectorLogText(OrderData? order, OrderFileItem? item)
+        {
+            try
+            {
+                if (order == null)
+                    return string.Empty;
+
+                string path = item == null ? GetOrderLogFilePath(order) : GetItemLogFilePath(order, item);
+                if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+                    return "Лог не найден.";
+
+                return File.ReadAllText(path);
+            }
+            catch (Exception ex)
+            {
+                return $"Не удалось загрузить лог: {ex.Message}";
+            }
+        }
+
+        private string GetItemLogFilePath(OrderData order, OrderFileItem item)
+        {
+            string safeItemId = string.IsNullOrWhiteSpace(item.ItemId) ? "unknown-item" : item.ItemId;
+            foreach (char c in Path.GetInvalidFileNameChars())
+                safeItemId = safeItemId.Replace(c, '_');
+
+            string logFolder = string.IsNullOrWhiteSpace(_orderLogsFolderPath)
+                ? Path.Combine(AppContext.BaseDirectory, "order-logs")
+                : _orderLogsFolderPath;
+
+            return Path.Combine(logFolder, $"{order.InternalId}_{safeItemId}.log");
         }
 
         private string GetOrderRootFolder(OrderData order)
@@ -1090,6 +1372,112 @@ namespace MyManager
             using var cts = new CancellationTokenSource();
             await _processor.RunAsync(order, cts.Token, selectedItemIds);
             SaveHistory(); FillGrid();
+        }
+
+        private List<string> GetSelectedItemIdsForOrder(OrderData order)
+        {
+            var result = new List<string>();
+            foreach (DataGridViewRow row in gridOrders.SelectedRows)
+            {
+                string tag = row.Tag?.ToString() ?? string.Empty;
+                if (!tag.StartsWith("item|", StringComparison.Ordinal))
+                    continue;
+
+                if (ExtractOrderInternalIdFromTag(tag) != order.InternalId)
+                    continue;
+
+                string itemId = ExtractItemIdFromTag(tag);
+                if (!string.IsNullOrWhiteSpace(itemId))
+                    result.Add(itemId);
+            }
+
+            return result;
+        }
+
+        private void CreateEmptyItemRow(OrderData order)
+        {
+            if (order == null)
+                return;
+
+            order.Items ??= new List<OrderFileItem>();
+            var item = new OrderFileItem
+            {
+                ClientFileLabel = GetOrderDisplayId(order),
+                SequenceNo = order.Items.Count == 0 ? 0 : order.Items.Max(x => x.SequenceNo) + 1,
+                FileStatus = "⚪ Ожидание",
+                PitStopAction = string.IsNullOrWhiteSpace(order.PitStopAction) ? "-" : order.PitStopAction,
+                ImposingAction = string.IsNullOrWhiteSpace(order.ImposingAction) ? "-" : order.ImposingAction,
+                UpdatedAt = DateTime.Now
+            };
+            order.Items.Add(item);
+            order.RefreshAggregatedStatus();
+            SaveHistory();
+            FillGrid();
+            SetBottomStatus("Добавлена новая строка item");
+        }
+
+        private async Task AddItemFromPickerAsync(OrderData order, int stage)
+        {
+            using var ofd = new OpenFileDialog { Filter = "PDF|*.pdf|Все файлы|*.*" };
+            if (ofd.ShowDialog() != DialogResult.OK)
+                return;
+
+            order.Items ??= new List<OrderFileItem>();
+
+            string source = ofd.FileName;
+            string label = Path.GetFileNameWithoutExtension(source);
+            var item = new OrderFileItem
+            {
+                ClientFileLabel = label,
+                SequenceNo = order.Items.Count == 0 ? 0 : order.Items.Max(x => x.SequenceNo) + 1,
+                PitStopAction = string.IsNullOrWhiteSpace(order.PitStopAction) ? "-" : order.PitStopAction,
+                ImposingAction = string.IsNullOrWhiteSpace(order.ImposingAction) ? "-" : order.ImposingAction
+            };
+
+            string ext = Path.GetExtension(source);
+            if (stage == 1)
+                item.SourcePath = CopyIntoStage(order, 1, source, EnsureUniqueStageFileName(order, 1, label + ext));
+            else if (stage == 2)
+            {
+                item.PreparedPath = CopyIntoStage(order, 2, source, EnsureUniqueStageFileName(order, 2, label + ext));
+                if (string.IsNullOrWhiteSpace(item.SourcePath))
+                    item.SourcePath = item.PreparedPath;
+            }
+            else if (stage == 3)
+                item.PrintPath = CopyPrintFile(order, source, EnsureUniqueStageFileName(order, 3, label + ext));
+
+            item.FileStatus = stage == 3 ? "✅ Готово" : "⚪ Ожидание";
+            item.UpdatedAt = DateTime.Now;
+            order.Items.Add(item);
+            order.RefreshAggregatedStatus();
+            SaveHistory();
+            FillGrid();
+        }
+
+        private string EnsureUniqueStageFileName(OrderData order, int stage, string fileName)
+        {
+            string folder = GetStageFolder(order, stage);
+            Directory.CreateDirectory(folder);
+            string ext = Path.GetExtension(fileName);
+            string baseName = Path.GetFileNameWithoutExtension(fileName);
+            string candidate = fileName;
+            int index = 1;
+            while (File.Exists(Path.Combine(folder, candidate)))
+            {
+                candidate = $"{baseName}_{index}{ext}";
+                index++;
+            }
+            return candidate;
+        }
+
+        private string BuildItemPrintFileName(OrderData order, OrderFileItem item, string sourceFile)
+        {
+            string ext = Path.GetExtension(sourceFile);
+            string orderNo = string.IsNullOrWhiteSpace(order.Id) ? "order" : order.Id;
+            var ordered = (order.Items ?? new List<OrderFileItem>()).OrderBy(x => x.SequenceNo).ToList();
+            int idx = ordered.FindIndex(x => x.ItemId == item.ItemId);
+            int itemIndex = idx >= 0 ? idx + 1 : 1;
+            return $"{orderNo}_{itemIndex}{ext}";
         }
 
         private List<string> GetSelectedItemIdsForOrder(OrderData order)
