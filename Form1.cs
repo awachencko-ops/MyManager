@@ -724,12 +724,22 @@ namespace MyManager
 
         private void InitializeFieryShellLayout()
         {
+            var contentHost = new Panel
+            {
+                Name = "contentHost",
+                Dock = DockStyle.Fill,
+                BackColor = Color.FromArgb(244, 245, 247)
+            };
+
             _splitMain = new SplitContainer
             {
                 Name = "splitMain",
                 Dock = DockStyle.Fill,
                 SplitterDistance = 220,
                 FixedPanel = FixedPanel.Panel1,
+                Panel1MinSize = 170,
+                Panel2MinSize = 700,
+                SplitterWidth = 6,
                 BackColor = Color.FromArgb(244, 245, 247)
             };
 
@@ -737,16 +747,20 @@ namespace MyManager
             {
                 Name = "splitCenterRight",
                 Dock = DockStyle.Fill,
-                SplitterDistance = Math.Max(900, ClientSize.Width - 620),
+                SplitterDistance = 900,
                 FixedPanel = FixedPanel.Panel2,
+                Panel1MinSize = 650,
+                Panel2MinSize = 340,
+                SplitterWidth = 6,
                 BackColor = Color.FromArgb(244, 245, 247)
             };
 
             var leftPanel = BuildLeftQueuePanel();
             var inspectorPanel = BuildRightInspectorPanel();
 
-            Controls.Add(_splitMain);
-            _splitMain.BringToFront();
+            Controls.Add(contentHost);
+            contentHost.Controls.Add(_splitMain);
+            contentHost.BringToFront();
             panel1.BringToFront();
 
             _splitMain.Panel1.Controls.Add(leftPanel);
@@ -755,6 +769,11 @@ namespace MyManager
             var centerPanel = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(244, 245, 247) };
             _splitCenterRight.Panel1.Controls.Add(centerPanel);
             _splitCenterRight.Panel2.Controls.Add(inspectorPanel);
+
+            _splitMain.Panel1.BackColor = Color.White;
+            _splitMain.Panel2.BackColor = Color.FromArgb(244, 245, 247);
+            _splitCenterRight.Panel1.BackColor = Color.FromArgb(244, 245, 247);
+            _splitCenterRight.Panel2.BackColor = Color.White;
 
             btnCreateOrder.Parent = centerPanel;
             lblSearch.Parent = centerPanel;
@@ -776,26 +795,42 @@ namespace MyManager
                 gridOrders.Size = new Size(Math.Max(480, centerPanel.Width - 48), Math.Max(260, centerPanel.Height - 128));
                 lblBottomStatus.Location = new Point(24, Math.Max(90, centerPanel.Height - 30));
             };
+
+            contentHost.Resize += (s, e) =>
+            {
+                if (_splitMain != null)
+                    _splitMain.SplitterDistance = Math.Max(_splitMain.Panel1MinSize, Math.Min(240, _splitMain.Width - _splitMain.Panel2MinSize - _splitMain.SplitterWidth));
+
+                if (_splitCenterRight != null)
+                {
+                    int desiredRightWidth = 420;
+                    int maxDistance = _splitCenterRight.Width - _splitCenterRight.Panel2MinSize - _splitCenterRight.SplitterWidth;
+                    int distance = Math.Max(_splitCenterRight.Panel1MinSize, Math.Min(maxDistance, _splitCenterRight.Width - desiredRightWidth));
+                    _splitCenterRight.SplitterDistance = distance;
+                }
+            };
         }
 
         private Control BuildLeftQueuePanel()
         {
-            var panel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12), BackColor = Color.White };
+            var panel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(10, 8, 10, 10), BackColor = Color.White };
             var title = new Label
             {
                 Dock = DockStyle.Top,
-                Height = 30,
+                Height = 28,
                 Text = "Очереди",
-                Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(50, 50, 50)
+                Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(70, 70, 70)
             };
 
             _lstQueues = new ListBox
             {
                 Dock = DockStyle.Fill,
                 BorderStyle = BorderStyle.None,
-                Font = new Font("Segoe UI", 10F, FontStyle.Regular),
-                BackColor = Color.White
+                Font = new Font("Segoe UI", 9.5F, FontStyle.Regular),
+                BackColor = Color.White,
+                IntegralHeight = false,
+                ItemHeight = 24
             };
             _lstQueues.Items.AddRange(new object[]
             {
@@ -820,6 +855,23 @@ namespace MyManager
                 };
                 FillGrid();
             };
+            _lstQueues.DrawMode = DrawMode.OwnerDrawFixed;
+            _lstQueues.DrawItem += (s, e) =>
+            {
+                if (e.Index < 0 || _lstQueues == null)
+                    return;
+
+                bool selected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+                Color back = selected ? Color.FromArgb(232, 238, 250) : Color.White;
+                Color fore = selected ? Color.FromArgb(40, 65, 120) : Color.FromArgb(55, 55, 55);
+
+                using var b = new SolidBrush(back);
+                e.Graphics.FillRectangle(b, e.Bounds);
+                TextRenderer.DrawText(e.Graphics, _lstQueues.Items[e.Index].ToString() ?? string.Empty, _lstQueues.Font,
+                    new Rectangle(e.Bounds.X + 6, e.Bounds.Y + 2, e.Bounds.Width - 6, e.Bounds.Height - 2), fore,
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+                e.DrawFocusRectangle();
+            };
 
             panel.Controls.Add(_lstQueues);
             panel.Controls.Add(title);
@@ -828,8 +880,8 @@ namespace MyManager
 
         private Control BuildRightInspectorPanel()
         {
-            var panel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(10), BackColor = Color.White };
-            _inspectorTabs = new TabControl { Dock = DockStyle.Fill };
+            var panel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8), BackColor = Color.White };
+            _inspectorTabs = new TabControl { Dock = DockStyle.Fill, Font = new Font("Segoe UI", 9F) };
 
             var tabSummary = new TabPage("Сводка");
             var tabPreview = new TabPage("Предпросмотр");
@@ -842,6 +894,7 @@ namespace MyManager
                 ReadOnly = true,
                 BorderStyle = BorderStyle.None,
                 BackColor = Color.White,
+                Font = new Font("Segoe UI", 9.5F),
                 ScrollBars = ScrollBars.Vertical
             };
             tabSummary.Controls.Add(_txtInspectorSummary);
