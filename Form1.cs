@@ -735,7 +735,6 @@ namespace MyManager
             {
                 Name = "splitMain",
                 Dock = DockStyle.Fill,
-                SplitterDistance = 180,
                 FixedPanel = FixedPanel.Panel1,
                 Panel1MinSize = 170,
                 Panel2MinSize = 700,
@@ -747,7 +746,6 @@ namespace MyManager
             {
                 Name = "splitCenterRight",
                 Dock = DockStyle.Fill,
-                SplitterDistance = 700,
                 FixedPanel = FixedPanel.Panel2,
                 Panel1MinSize = 650,
                 Panel2MinSize = 340,
