@@ -740,7 +740,7 @@ namespace MyManager
                 {
                     int itemRowIndex = gridOrders.Rows.Add(
                         $"   • {item.FileStatus}",
-                        $"   └ {item.ClientFileLabel}",
+                        $"   └ {GetOrderDisplayId(o)}",
                         GetFileName(item.SourcePath),
                         GetFileName(item.PreparedPath),
                         string.IsNullOrWhiteSpace(item.PitStopAction) ? "-" : item.PitStopAction,
@@ -1562,7 +1562,7 @@ namespace MyManager
                     return;
                 }
 
-                if (targetOrder.Items != null && targetOrder.Items.Count > 0)
+                if (IsVisualGroupOrder(targetOrder))
                     return;
 
                 if (targetStage == 3 && !await EnsureSimpleOrderInfoForPrintAsync(targetOrder))
@@ -1614,8 +1614,7 @@ namespace MyManager
                 if (label == "—" || label == GetOrderDisplayId(order) || label.StartsWith("item_", StringComparison.OrdinalIgnoreCase))
                     label = sourceLabel;
                 item.ClientFileLabel = label;
-                string ext = Path.GetExtension(sourceFile);
-                string targetName = EnsureUniqueStageFileName(order, stage, label + ext);
+                string targetName = EnsureUniqueStageFileName(order, stage, Path.GetFileName(sourceFile));
 
                 string newPath = stage == 3
                     ? CopyPrintFile(order, sourceFile, targetName)
@@ -1715,8 +1714,7 @@ namespace MyManager
                 if (label == "—" || label == GetOrderDisplayId(order) || label.StartsWith("item_", StringComparison.OrdinalIgnoreCase))
                     label = sourceLabel;
                 item.ClientFileLabel = label;
-                string ext = Path.GetExtension(ofd.FileName);
-                string targetName = EnsureUniqueStageFileName(order, stage, label + ext);
+                string targetName = EnsureUniqueStageFileName(order, stage, Path.GetFileName(ofd.FileName));
 
                 string newPath = stage == 3
                     ? CopyPrintFile(order, ofd.FileName, targetName)
@@ -1888,11 +1886,22 @@ namespace MyManager
         private void GridOrders_CellContentClick(object? s, DataGridViewCellEventArgs e)
         {
             if (e.RowIndex < 0) return;
-            if (IsItemRow(e.RowIndex)) return;
-            var o = GetOrderByRow(e.RowIndex); if (o == null) return;
+
             string col = gridOrders.Columns[e.ColumnIndex].Name;
-            string? p = col == "colSource" ? o.SourcePath : col == "colReady" ? o.PreparedPath : col == "colPrint" ? o.PrintPath : null;
-            if (!string.IsNullOrEmpty(p) && File.Exists(p)) OpenPdfDefault(p);
+            if (IsItemRow(e.RowIndex))
+            {
+                if (!TryGetItemByRow(e.RowIndex, out _, out var item) || item == null)
+                    return;
+
+                string p = col == "colSource" ? item.SourcePath : col == "colReady" ? item.PreparedPath : col == "colPrint" ? item.PrintPath : string.Empty;
+                if (!string.IsNullOrEmpty(p) && File.Exists(p))
+                    OpenPdfDefault(p);
+                return;
+            }
+
+            var o = GetOrderByRow(e.RowIndex); if (o == null) return;
+            string? pOrder = col == "colSource" ? o.SourcePath : col == "colReady" ? o.PreparedPath : col == "colPrint" ? o.PrintPath : null;
+            if (!string.IsNullOrEmpty(pOrder) && File.Exists(pOrder)) OpenPdfDefault(pOrder);
         }
 
         private void OpenPdfDefault(string p) { try { Process.Start(new ProcessStartInfo { FileName = p, UseShellExecute = true }); } catch { } }
