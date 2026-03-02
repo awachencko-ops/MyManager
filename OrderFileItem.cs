@@ -24,6 +24,10 @@ namespace MyManager
         public string LastReason { get; set; } = "";
         public DateTime UpdatedAt { get; set; } = DateTime.Now;
 
+        // Локальные операции item (если пусто/"-", используются операции заказа)
+        public string PitStopAction { get; set; } = "-";
+        public string ImposingAction { get; set; } = "-";
+
         // Порядок поступления (FIFO)
         public long SequenceNo { get; set; }
     }
