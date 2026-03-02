@@ -250,7 +250,7 @@ namespace MyManager
                 if (outFile == null) throw new Exception("Таймаут Imposing.");
 
                 string printNameBase = string.IsNullOrWhiteSpace(order.Id) ? "order" : order.Id;
-                string printName = EnsureUniqueFileName($"{printNameBase}_{itemIndex}.pdf", item.ItemId);
+                string printName = $"{printNameBase}_{itemIndex}.pdf";
                 if (useExtendedMode)
                 {
                     item.PrintPath = CopyIntoStage(order, 3, outFile, printName, tempRoot);
@@ -266,15 +266,6 @@ namespace MyManager
             item.FileStatus = !string.IsNullOrWhiteSpace(item.PrintPath) && File.Exists(item.PrintPath) ? "✅ Готово" : "⚪ Ожидание";
             item.LastReason = string.Empty;
             item.UpdatedAt = DateTime.Now;
-        }
-
-        private string EnsureUniqueFileName(string fileName, string suffixSeed)
-        {
-            string ext = Path.GetExtension(fileName);
-            string name = Path.GetFileNameWithoutExtension(fileName);
-            if (string.IsNullOrWhiteSpace(suffixSeed))
-                return fileName;
-            return $"{name}_{suffixSeed[..Math.Min(6, suffixSeed.Length)]}{ext}";
         }
 
         private string EnsureUniquePath(string fullPath)
