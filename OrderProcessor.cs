@@ -202,8 +202,15 @@ namespace MyManager
 
         private async Task RunSingleItemAsync(OrderData order, OrderFileItem item, AppSettings settings, TimeSpan timeout, bool useExtendedMode, string tempRoot, CancellationToken ct)
         {
-            var pitCfg = ConfigService.GetPitStopConfigByName(order.PitStopAction);
-            var impCfg = ConfigService.GetImposingConfigByName(order.ImposingAction);
+            string pitAction = string.IsNullOrWhiteSpace(item.PitStopAction) || item.PitStopAction == "-"
+                ? order.PitStopAction
+                : item.PitStopAction;
+            string impAction = string.IsNullOrWhiteSpace(item.ImposingAction) || item.ImposingAction == "-"
+                ? order.ImposingAction
+                : item.ImposingAction;
+
+            var pitCfg = ConfigService.GetPitStopConfigByName(pitAction);
+            var impCfg = ConfigService.GetImposingConfigByName(impAction);
 
             if (pitCfg == null && impCfg == null)
                 throw new Exception("Сценарии не выбраны.");

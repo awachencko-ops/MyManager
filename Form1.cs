@@ -772,7 +772,9 @@ namespace MyManager
             var item = new OrderFileItem
             {
                 ClientFileLabel = label,
-                SequenceNo = order.Items.Count == 0 ? 0 : order.Items.Max(x => x.SequenceNo) + 1
+                SequenceNo = order.Items.Count == 0 ? 0 : order.Items.Max(x => x.SequenceNo) + 1,
+                PitStopAction = string.IsNullOrWhiteSpace(order.PitStopAction) ? "-" : order.PitStopAction,
+                ImposingAction = string.IsNullOrWhiteSpace(order.ImposingAction) ? "-" : order.ImposingAction
             };
 
             string ext = Path.GetExtension(source);
@@ -1063,7 +1065,9 @@ namespace MyManager
                     order.Items.Add(new OrderFileItem
                     {
                         ClientFileLabel = $"{GetOrderDisplayId(order)}_item",
-                        SequenceNo = 0
+                        SequenceNo = 0,
+                        PitStopAction = string.IsNullOrWhiteSpace(order.PitStopAction) ? "-" : order.PitStopAction,
+                        ImposingAction = string.IsNullOrWhiteSpace(order.ImposingAction) ? "-" : order.ImposingAction
                     });
                 }
                 else
@@ -1075,7 +1079,9 @@ namespace MyManager
                         PreparedPath = order.PreparedPath ?? string.Empty,
                         PrintPath = order.PrintPath ?? string.Empty,
                         FileStatus = order.Status ?? "⚪ Ожидание",
-                        SequenceNo = 0
+                        SequenceNo = 0,
+                        PitStopAction = string.IsNullOrWhiteSpace(order.PitStopAction) ? "-" : order.PitStopAction,
+                        ImposingAction = string.IsNullOrWhiteSpace(order.ImposingAction) ? "-" : order.ImposingAction
                     });
                 }
             }
@@ -1094,6 +1100,11 @@ namespace MyManager
         private void RemovePitStopAction(OrderData o)
         {
             o.PitStopAction = "-";
+            if (o.Items != null)
+            {
+                foreach (var item in o.Items)
+                    item.PitStopAction = "-";
+            }
             SaveHistory();
             FillGrid();
             SetBottomStatus($"✅ Секвенция PitStop удалена из {GetOrderDisplayId(o)}");
@@ -1102,6 +1113,11 @@ namespace MyManager
         private void RemoveImposingAction(OrderData o)
         {
             o.ImposingAction = "-";
+            if (o.Items != null)
+            {
+                foreach (var item in o.Items)
+                    item.ImposingAction = "-";
+            }
             SaveHistory();
             FillGrid();
             SetBottomStatus($"✅ Секвенция Imposing удалена из {GetOrderDisplayId(o)}");
@@ -1517,7 +1533,9 @@ namespace MyManager
                 PrintPath = order.PrintPath ?? string.Empty,
                 FileStatus = order.Status ?? "⚪ Ожидание",
                 SequenceNo = 0,
-                UpdatedAt = DateTime.Now
+                UpdatedAt = DateTime.Now,
+                PitStopAction = string.IsNullOrWhiteSpace(order.PitStopAction) ? "-" : order.PitStopAction,
+                ImposingAction = string.IsNullOrWhiteSpace(order.ImposingAction) ? "-" : order.ImposingAction
             });
 
             order.RefreshAggregatedStatus();
@@ -1779,6 +1797,11 @@ namespace MyManager
                 if (f.ShowDialog() == DialogResult.OK)
                 {
                     o.PitStopAction = f.SelectedName;
+                    if (o.Items != null && o.Items.Count > 0)
+                    {
+                        foreach (var item in o.Items)
+                            item.PitStopAction = f.SelectedName;
+                    }
                     SaveHistory();
                     FillGrid();
                     if (o.Items != null && o.Items.Count > 0)
@@ -1791,6 +1814,11 @@ namespace MyManager
                 if (f.ShowDialog() == DialogResult.OK)
                 {
                     o.ImposingAction = f.SelectedName;
+                    if (o.Items != null && o.Items.Count > 0)
+                    {
+                        foreach (var item in o.Items)
+                            item.ImposingAction = f.SelectedName;
+                    }
                     SaveHistory();
                     FillGrid();
                     if (o.Items != null && o.Items.Count > 0)
