@@ -722,14 +722,20 @@ namespace MyManager
                 bool expanded = isGroup && IsGroupExpanded(o.InternalId);
                 string statePrefix = isGroup ? (expanded ? "∧ " : "∨ ") : string.Empty;
 
+                string groupSource = isGroup ? "..." : GetFileName(o.SourcePath);
+                string groupPrepared = isGroup ? "..." : GetFileName(o.PreparedPath);
+                string groupPrint = isGroup ? "..." : GetFileName(o.PrintPath);
+                string groupPit = isGroup ? GetCommonGroupAction(o.Items, x => x.PitStopAction) : o.PitStopAction;
+                string groupImp = isGroup ? GetCommonGroupAction(o.Items, x => x.ImposingAction) : o.ImposingAction;
+
                 int orderRowIndex = gridOrders.Rows.Add(
                     statePrefix + o.Status,
                     GetOrderDisplayId(o),
-                    GetFileName(o.SourcePath),
-                    GetFileName(o.PreparedPath),
-                    o.PitStopAction,
-                    o.ImposingAction,
-                    GetFileName(o.PrintPath));
+                    groupSource,
+                    groupPrepared,
+                    groupPit,
+                    groupImp,
+                    groupPrint);
                 gridOrders.Rows[orderRowIndex].Tag = $"order|{o.InternalId}";
 
                 if (!expanded)
@@ -794,6 +800,20 @@ namespace MyManager
 
         private bool IsVisualGroupOrder(OrderData order)
             => order?.Items != null && order.Items.Count > 1;
+
+        private string GetCommonGroupAction(List<OrderFileItem> items, Func<OrderFileItem, string> selector)
+        {
+            if (items == null || items.Count == 0)
+                return "-";
+
+            var values = items
+                .Where(x => x != null)
+                .Select(x => string.IsNullOrWhiteSpace(selector(x)) ? "-" : selector(x).Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            return values.Count == 1 ? values[0] : "-";
+        }
 
         private string GetOrderRootFolder(OrderData order)
         {
@@ -948,6 +968,53 @@ namespace MyManager
             return order.StartMode;
         }
 
+        private enum GroupRunMode
+        {
+            Cancel = 0,
+            All = 1,
+            SelectedOnly = 2
+        }
+
+        private GroupRunMode ShowGroupRunModeDialog()
+        {
+            using var form = new Form
+            {
+                Text = "Режим запуска",
+                StartPosition = FormStartPosition.CenterParent,
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                MinimizeBox = false,
+                MaximizeBox = false,
+                ClientSize = new Size(520, 150)
+            };
+
+            var lbl = new Label
+            {
+                Text = "Запустить обработку для выделенного файла или для всех?",
+                AutoSize = false,
+                TextAlign = ContentAlignment.MiddleLeft,
+                Bounds = new Rectangle(16, 16, 488, 44)
+            };
+
+            var btnAll = new Button { Text = "Да, все", Bounds = new Rectangle(16, 88, 150, 34), DialogResult = DialogResult.Yes };
+            var btnSel = new Button { Text = "Только выделенный", Bounds = new Rectangle(182, 88, 170, 34), DialogResult = DialogResult.No };
+            var btnCancel = new Button { Text = "Не запускать", Bounds = new Rectangle(368, 88, 136, 34), DialogResult = DialogResult.Cancel };
+
+            form.Controls.Add(lbl);
+            form.Controls.Add(btnAll);
+            form.Controls.Add(btnSel);
+            form.Controls.Add(btnCancel);
+            form.AcceptButton = btnAll;
+            form.CancelButton = btnCancel;
+
+            var result = form.ShowDialog(this);
+            return result switch
+            {
+                DialogResult.Yes => GroupRunMode.All,
+                DialogResult.No => GroupRunMode.SelectedOnly,
+                _ => GroupRunMode.Cancel
+            };
+        }
+
         private async Task RunForOrderAsync(OrderData order)
         {
             if (!await EnsureOrderInfoAsync(order))
@@ -956,15 +1023,11 @@ namespace MyManager
             List<string>? selectedItemIds = null;
             if (order.Items != null && order.Items.Count > 0)
             {
-                var mode = MessageBox.Show(
-                    "Обработать только выбранные item?\nДа = только выбранные, Нет = все item, Отмена = отмена.",
-                    "Режим запуска",
-                    MessageBoxButtons.YesNoCancel,
-                    MessageBoxIcon.Question);
-                if (mode == DialogResult.Cancel)
+                var mode = ShowGroupRunModeDialog();
+                if (mode == GroupRunMode.Cancel)
                     return;
 
-                if (mode == DialogResult.Yes)
+                if (mode == GroupRunMode.SelectedOnly)
                 {
                     selectedItemIds = GetSelectedItemIdsForOrder(order);
                     if (selectedItemIds.Count == 0)

@@ -159,8 +159,10 @@ namespace MyManager
             using var semaphore = new SemaphoreSlim(Math.Max(1, maxParallel));
             int done = 0;
 
-            var tasks = runItems.Select(async item =>
+            var tasks = runItems.Select((item, index) => new { item, index }).Select(async payload =>
             {
+                var item = payload.item;
+                int itemIndex = payload.index + 1;
                 await semaphore.WaitAsync(ct);
                 try
                 {
@@ -168,7 +170,7 @@ namespace MyManager
                     item.UpdatedAt = DateTime.Now;
                     order.RefreshAggregatedStatus();
                     Notify(order, order.Status, $"Обработка {item.ClientFileLabel}");
-                    await RunSingleItemAsync(order, item, settings, timeout, useExtendedMode, tempRoot, ct);
+                    await RunSingleItemAsync(order, item, itemIndex, settings, timeout, useExtendedMode, tempRoot, ct);
                 }
                 catch (Exception ex)
                 {
@@ -188,19 +190,11 @@ namespace MyManager
 
             await Task.WhenAll(tasks);
 
-            var first = allItems.OrderBy(x => x.SequenceNo).FirstOrDefault();
-            if (first != null)
-            {
-                order.SourcePath = first.SourcePath ?? string.Empty;
-                order.PreparedPath = first.PreparedPath ?? string.Empty;
-                order.PrintPath = first.PrintPath ?? string.Empty;
-            }
-
             order.RefreshAggregatedStatus();
             Notify(order, order.Status, "Обработка группы завершена");
         }
 
-        private async Task RunSingleItemAsync(OrderData order, OrderFileItem item, AppSettings settings, TimeSpan timeout, bool useExtendedMode, string tempRoot, CancellationToken ct)
+        private async Task RunSingleItemAsync(OrderData order, OrderFileItem item, int itemIndex, AppSettings settings, TimeSpan timeout, bool useExtendedMode, string tempRoot, CancellationToken ct)
         {
             string pitAction = string.IsNullOrWhiteSpace(item.PitStopAction) || item.PitStopAction == "-"
                 ? order.PitStopAction
@@ -255,8 +249,8 @@ namespace MyManager
                 string outFile = await WaitForFileAsync(impCfg.Out, fileName, timeout, ct);
                 if (outFile == null) throw new Exception("Таймаут Imposing.");
 
-                string printNameBase = !string.IsNullOrWhiteSpace(order.Id) ? order.Id : Path.GetFileNameWithoutExtension(fileName);
-                string printName = EnsureUniqueFileName(printNameBase + ".pdf", item.ItemId);
+                string printNameBase = string.IsNullOrWhiteSpace(order.Id) ? "order" : order.Id;
+                string printName = EnsureUniqueFileName($"{printNameBase}_{itemIndex}.pdf", item.ItemId);
                 if (useExtendedMode)
                 {
                     item.PrintPath = CopyIntoStage(order, 3, outFile, printName, tempRoot);
