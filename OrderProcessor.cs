@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -21,7 +23,7 @@ namespace MyManager
             _rootPath = rootPath;
         }
 
-        public async Task RunAsync(OrderData order, CancellationToken ct)
+        public async Task RunAsync(OrderData order, CancellationToken ct, IEnumerable<string>? selectedItemIds = null)
         {
             var settings = AppSettings.Load();
             var timeout = TimeSpan.FromMinutes(settings.RunTimeoutMinutes);
@@ -32,6 +34,16 @@ namespace MyManager
                 ? Path.Combine(_rootPath, settings.TempFolderName)
                 : settings.TempFolderPath;
             EnsureTempFolders(tempRoot);
+
+            var selectedSet = selectedItemIds == null
+                ? null
+                : new HashSet<string>(selectedItemIds.Where(x => !string.IsNullOrWhiteSpace(x)), StringComparer.Ordinal);
+
+            if (order.Items != null && order.Items.Count > 0)
+            {
+                await RunGroupAsync(order, settings, timeout, useExtendedMode, tempRoot, selectedSet, ct);
+                return;
+            }
 
             try
             {
@@ -125,6 +137,170 @@ namespace MyManager
                 Logger.Error($"Ошибка в {order.Id}: {ex.Message}");
                 Notify(order, "🔴 Ошибка", ex.Message);
             }
+        }
+
+        private async Task RunGroupAsync(OrderData order, AppSettings settings, TimeSpan timeout, bool useExtendedMode, string tempRoot, HashSet<string>? selectedSet, CancellationToken ct)
+        {
+            var allItems = order.Items
+                .Where(x => x != null)
+                .OrderBy(x => x.SequenceNo)
+                .ToList();
+            var runItems = selectedSet == null || selectedSet.Count == 0
+                ? allItems
+                : allItems.Where(x => selectedSet.Contains(x.ItemId)).ToList();
+
+            if (runItems.Count == 0)
+            {
+                Notify(order, "⚪ Ожидание", "Нет выбранных файлов для обработки");
+                return;
+            }
+
+            int maxParallel = settings.MaxParallelism <= 0 ? runItems.Count : Math.Min(settings.MaxParallelism, runItems.Count);
+            using var semaphore = new SemaphoreSlim(Math.Max(1, maxParallel));
+            int done = 0;
+
+            var tasks = runItems.Select(async item =>
+            {
+                await semaphore.WaitAsync(ct);
+                try
+                {
+                    item.FileStatus = "🟡 В работе";
+                    item.UpdatedAt = DateTime.Now;
+                    order.RefreshAggregatedStatus();
+                    Notify(order, order.Status, $"Обработка {item.ClientFileLabel}");
+                    await RunSingleItemAsync(order, item, settings, timeout, useExtendedMode, tempRoot, ct);
+                }
+                catch (Exception ex)
+                {
+                    item.FileStatus = "🔴 Ошибка";
+                    item.LastReason = ex.Message;
+                    item.UpdatedAt = DateTime.Now;
+                    Logger.Error($"Ошибка item {item.ClientFileLabel}: {ex.Message}");
+                }
+                finally
+                {
+                    Interlocked.Increment(ref done);
+                    order.RefreshAggregatedStatus();
+                    Notify(order, order.Status, $"Прогресс {done}/{runItems.Count}");
+                    semaphore.Release();
+                }
+            });
+
+            await Task.WhenAll(tasks);
+
+            var first = allItems.OrderBy(x => x.SequenceNo).FirstOrDefault();
+            if (first != null)
+            {
+                order.SourcePath = first.SourcePath ?? string.Empty;
+                order.PreparedPath = first.PreparedPath ?? string.Empty;
+                order.PrintPath = first.PrintPath ?? string.Empty;
+            }
+
+            order.RefreshAggregatedStatus();
+            Notify(order, order.Status, "Обработка группы завершена");
+        }
+
+        private async Task RunSingleItemAsync(OrderData order, OrderFileItem item, AppSettings settings, TimeSpan timeout, bool useExtendedMode, string tempRoot, CancellationToken ct)
+        {
+            string pitAction = string.IsNullOrWhiteSpace(item.PitStopAction) || item.PitStopAction == "-"
+                ? order.PitStopAction
+                : item.PitStopAction;
+            string impAction = string.IsNullOrWhiteSpace(item.ImposingAction) || item.ImposingAction == "-"
+                ? order.ImposingAction
+                : item.ImposingAction;
+
+            var pitCfg = ConfigService.GetPitStopConfigByName(pitAction);
+            var impCfg = ConfigService.GetImposingConfigByName(impAction);
+
+            if (pitCfg == null && impCfg == null)
+                throw new Exception("Сценарии не выбраны.");
+
+            if (pitCfg != null)
+            {
+                if (!File.Exists(item.PreparedPath))
+                    throw new Exception("Файл для PitStop не найден.");
+
+                string fileName = Path.GetFileName(item.PreparedPath);
+                string targetIn = Path.Combine(pitCfg.InputFolder, fileName);
+                File.Copy(item.PreparedPath, EnsureUniquePath(targetIn), true);
+
+                if (impCfg != null)
+                {
+                    var places = new (string folder, string label)[] {
+                        (pitCfg.ProcessedSuccess, "PitStop Success"),
+                        (pitCfg.ProcessedError,   "PitStop Error"),
+                        (impCfg.In,               "Imposing In"),
+                        (impCfg.Out,              "Imposing Out")
+                    };
+                    var (foundPath, where) = await WaitForFileInAnyAsync(places, fileName, timeout, ct);
+                    if (foundPath == null) throw new Exception("Таймаут PitStop.");
+                    if (where == "PitStop Error") throw new Exception("Ошибка PitStop (см. отчет).");
+                }
+                else
+                {
+                    string okFile = await WaitForFileAsync(pitCfg.ProcessedSuccess, fileName, timeout, ct);
+                    if (okFile == null) throw new Exception("Таймаут PitStop.");
+                    string newName = $"{Path.GetFileNameWithoutExtension(fileName)}_pitstop{Path.GetExtension(fileName)}";
+                    item.PreparedPath = CopyIntoStage(order, 2, okFile, newName, tempRoot);
+                }
+            }
+
+            if (impCfg != null)
+            {
+                string fileName = Path.GetFileName(item.PreparedPath);
+                string targetIn = Path.Combine(impCfg.In, fileName);
+                if (!File.Exists(targetIn))
+                    File.Copy(item.PreparedPath, EnsureUniquePath(targetIn), true);
+
+                string outFile = await WaitForFileAsync(impCfg.Out, fileName, timeout, ct);
+                if (outFile == null) throw new Exception("Таймаут Imposing.");
+
+                string printNameBase = !string.IsNullOrWhiteSpace(order.Id) ? order.Id : Path.GetFileNameWithoutExtension(fileName);
+                string printName = EnsureUniqueFileName(printNameBase + ".pdf", item.ItemId);
+                if (useExtendedMode)
+                {
+                    item.PrintPath = CopyIntoStage(order, 3, outFile, printName, tempRoot);
+                    try { File.Delete(outFile); } catch { }
+                }
+                else
+                {
+                    item.PrintPath = CopyToGrandpa(outFile, printName, settings.GrandpaPath);
+                    try { File.Delete(outFile); } catch { }
+                }
+            }
+
+            item.FileStatus = !string.IsNullOrWhiteSpace(item.PrintPath) && File.Exists(item.PrintPath) ? "✅ Готово" : "⚪ Ожидание";
+            item.LastReason = string.Empty;
+            item.UpdatedAt = DateTime.Now;
+        }
+
+        private string EnsureUniqueFileName(string fileName, string suffixSeed)
+        {
+            string ext = Path.GetExtension(fileName);
+            string name = Path.GetFileNameWithoutExtension(fileName);
+            if (string.IsNullOrWhiteSpace(suffixSeed))
+                return fileName;
+            return $"{name}_{suffixSeed[..Math.Min(6, suffixSeed.Length)]}{ext}";
+        }
+
+        private string EnsureUniquePath(string fullPath)
+        {
+            if (!File.Exists(fullPath))
+                return fullPath;
+
+            string dir = Path.GetDirectoryName(fullPath) ?? string.Empty;
+            string ext = Path.GetExtension(fullPath);
+            string name = Path.GetFileNameWithoutExtension(fullPath);
+            int i = 1;
+            string candidate;
+            do
+            {
+                candidate = Path.Combine(dir, $"{name}_{i}{ext}");
+                i++;
+            }
+            while (File.Exists(candidate));
+
+            return candidate;
         }
 
         private void Notify(OrderData o, string s, string l)
