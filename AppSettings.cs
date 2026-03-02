@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 
@@ -19,6 +20,13 @@ namespace MyManager
         public string HistoryFilePath { get; set; } = "history.json";
         public string ManagerLogFilePath { get; set; } = "manager.log";
         public string OrderLogsFolderPath { get; set; } = "";
+
+        // Настройки многофайловых заказов
+        public bool AllowManualSequenceReordering { get; set; } = true;
+        public int MaxParallelism { get; set; } = 4;
+        public string DefaultOrderSortBy { get; set; } = "SequenceNo";
+        public List<string> VariantDictionary { get; set; } = new() { "A4", "A3", "Цветной", "Ч/Б", "draft", "final" };
+        public bool AutoRenameOnDuplicate { get; set; } = true;
 
         public static string FileName => "settings.json";
 

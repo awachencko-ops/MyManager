@@ -1193,6 +1193,7 @@ namespace MyManager
                 }
             }
 
+            bool migrationApplied = false;
             foreach (var order in _orderHistory)
             {
                 if (string.IsNullOrWhiteSpace(order.InternalId))
@@ -1201,6 +1202,60 @@ namespace MyManager
                     order.StartMode = InferOrderStartMode(order);
                 if (order.ArrivalDate == default)
                     order.ArrivalDate = order.OrderDate != default ? order.OrderDate : DateTime.Now;
+
+                if (MigrateLegacyOrderToItems(order))
+                    migrationApplied = true;
+            }
+
+            if (migrationApplied)
+            {
+                TryCreateHistoryBackup();
+                SaveHistory();
+            }
+        }
+
+        private bool MigrateLegacyOrderToItems(OrderData order)
+        {
+            order.Items ??= new List<OrderFileItem>();
+            if (order.Items.Count > 0)
+                return false;
+
+            if (string.IsNullOrWhiteSpace(order.SourcePath)
+                && string.IsNullOrWhiteSpace(order.PreparedPath)
+                && string.IsNullOrWhiteSpace(order.PrintPath))
+            {
+                return false;
+            }
+
+            order.Items.Add(new OrderFileItem
+            {
+                ClientFileLabel = Path.GetFileNameWithoutExtension(order.SourcePath),
+                SourcePath = order.SourcePath ?? string.Empty,
+                PreparedPath = order.PreparedPath ?? string.Empty,
+                PrintPath = order.PrintPath ?? string.Empty,
+                FileStatus = order.Status ?? "⚪ Ожидание",
+                SequenceNo = 0,
+                UpdatedAt = DateTime.Now
+            });
+
+            order.RefreshAggregatedStatus();
+            return true;
+        }
+
+        private void TryCreateHistoryBackup()
+        {
+            try
+            {
+                if (!File.Exists(_jsonHistoryFile))
+                    return;
+
+                string backupPath = _jsonHistoryFile + ".bak";
+                if (!File.Exists(backupPath))
+                    File.Copy(_jsonHistoryFile, backupPath, overwrite: false);
+            }
+            catch
+            {
+                // backup best-effort
             }
         }
         private void SaveHistory()
