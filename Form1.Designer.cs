@@ -38,6 +38,8 @@
             btnOpenLog = new Button();
             label1 = new Label();
             btnCreateOrder = new Button();
+            lblSearch = new Label();
+            txtSearch = new TextBox();
             gridOrders = new DataGridView();
             colState = new DataGridViewTextBoxColumn();
             colId = new DataGridViewTextBoxColumn();
@@ -50,9 +52,9 @@
             panel1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)gridOrders).BeginInit();
             SuspendLayout();
-            // 
+            //
             // panel1
-            // 
+            //
             panel1.BackColor = Color.IndianRed;
             panel1.Controls.Add(ButtonSettings);
             panel1.Controls.Add(btnExtendedMode);
@@ -64,9 +66,9 @@
             panel1.Name = "panel1";
             panel1.Size = new Size(2564, 60);
             panel1.TabIndex = 6;
-            // 
+            //
             // ButtonSettings
-            // 
+            //
             ButtonSettings.FlatAppearance.BorderSize = 0;
             ButtonSettings.FlatStyle = FlatStyle.Flat;
             ButtonSettings.ForeColor = Color.White;
@@ -76,9 +78,9 @@
             ButtonSettings.TabIndex = 2;
             ButtonSettings.Text = "Settings";
             ButtonSettings.UseVisualStyleBackColor = true;
-            // 
+            //
             // btnExtendedMode
-            // 
+            //
             btnExtendedMode.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             btnExtendedMode.FlatAppearance.BorderSize = 0;
             btnExtendedMode.FlatStyle = FlatStyle.Flat;
@@ -89,9 +91,9 @@
             btnExtendedMode.TabIndex = 3;
             btnExtendedMode.Text = "Режим: Расширенный";
             btnExtendedMode.UseVisualStyleBackColor = true;
-            // 
+            //
             // btnSortArrival
-            // 
+            //
             btnSortArrival.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             btnSortArrival.FlatAppearance.BorderSize = 0;
             btnSortArrival.FlatStyle = FlatStyle.Flat;
@@ -102,9 +104,9 @@
             btnSortArrival.TabIndex = 4;
             btnSortArrival.Text = "Сортировка: поступление";
             btnSortArrival.UseVisualStyleBackColor = true;
-            // 
+            //
             // btnOpenLog
-            // 
+            //
             btnOpenLog.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             btnOpenLog.FlatAppearance.BorderSize = 0;
             btnOpenLog.FlatStyle = FlatStyle.Flat;
@@ -115,9 +117,9 @@
             btnOpenLog.TabIndex = 5;
             btnOpenLog.Text = "Открыть лог";
             btnOpenLog.UseVisualStyleBackColor = true;
-            // 
+            //
             // label1
-            // 
+            //
             label1.AutoSize = true;
             label1.Font = new Font("Segoe UI Black", 9F, FontStyle.Bold, GraphicsUnit.Point);
             label1.ForeColor = Color.White;
@@ -126,9 +128,9 @@
             label1.Size = new Size(119, 25);
             label1.TabIndex = 0;
             label1.Text = "MyManager";
-            // 
+            //
             // btnCreateOrder
-            // 
+            //
             btnCreateOrder.BackColor = Color.White;
             btnCreateOrder.FlatStyle = FlatStyle.Flat;
             btnCreateOrder.Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold, GraphicsUnit.Point);
@@ -140,9 +142,28 @@
             btnCreateOrder.TabIndex = 3;
             btnCreateOrder.Text = "Создать заказ";
             btnCreateOrder.UseVisualStyleBackColor = false;
-            // 
+            //
+            // lblSearch
+            //
+            lblSearch.AutoSize = true;
+            lblSearch.Location = new Point(330, 114);
+            lblSearch.Name = "lblSearch";
+            lblSearch.Size = new Size(65, 25);
+            lblSearch.TabIndex = 10;
+            lblSearch.Text = "Поиск:";
+            //
+            // txtSearch
+            //
+            txtSearch.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            txtSearch.Location = new Point(401, 108);
+            txtSearch.Name = "txtSearch";
+            txtSearch.PlaceholderText = "Поиск по № заказа и имени файла...";
+            txtSearch.Size = new Size(872, 31);
+            txtSearch.TabIndex = 11;
+            //
+            //
             // gridOrders
-            // 
+            //
             gridOrders.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
             gridOrders.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
             gridOrders.BackgroundColor = Color.White;
@@ -169,90 +190,92 @@
             gridOrders.DefaultCellStyle = dataGridViewCellStyle2;
             gridOrders.EnableHeadersVisualStyles = false;
             gridOrders.GridColor = Color.FromArgb(230, 230, 230);
-            gridOrders.Location = new Point(47, 178);
+            gridOrders.Location = new Point(47, 196);
             gridOrders.Name = "gridOrders";
             gridOrders.RowHeadersVisible = false;
             gridOrders.RowHeadersWidth = 62;
             gridOrders.RowTemplate.Height = 50;
             gridOrders.Size = new Size(2463, 1083);
             gridOrders.TabIndex = 4;
-            // 
+            //
             // colState
-            // 
+            //
             colState.FillWeight = 50F;
             colState.HeaderText = "СОСТОЯНИЕ";
             colState.MinimumWidth = 8;
             colState.Name = "colState";
             colState.ReadOnly = true;
-            // 
+            //
             // colId
-            // 
+            //
             colId.HeaderText = "№ ЗАКАЗА";
             colId.MinimumWidth = 8;
             colId.Name = "colId";
             colId.ReadOnly = true;
-            // 
+            //
             // colSource
-            // 
+            //
             colSource.HeaderText = "ИСХОДНЫЕ";
             colSource.MinimumWidth = 8;
             colSource.Name = "colSource";
             colSource.ReadOnly = true;
             colSource.Resizable = DataGridViewTriState.True;
             colSource.SortMode = DataGridViewColumnSortMode.NotSortable;
-            // 
+            //
             // colReady
-            // 
+            //
             colReady.HeaderText = "ПОДГОТОВКА";
             colReady.MinimumWidth = 8;
             colReady.Name = "colReady";
             colReady.ReadOnly = true;
             colReady.Resizable = DataGridViewTriState.True;
             colReady.SortMode = DataGridViewColumnSortMode.NotSortable;
-            // 
+            //
             // colPitStop
-            // 
+            //
             colPitStop.HeaderText = "PITSTOP";
             colPitStop.MinimumWidth = 8;
             colPitStop.Name = "colPitStop";
             colPitStop.ReadOnly = true;
             colPitStop.Resizable = DataGridViewTriState.True;
             colPitStop.SortMode = DataGridViewColumnSortMode.NotSortable;
-            // 
+            //
             // colImposing
-            // 
+            //
             colImposing.HeaderText = "HOTIMPOSING";
             colImposing.MinimumWidth = 8;
             colImposing.Name = "colImposing";
             colImposing.ReadOnly = true;
             colImposing.Resizable = DataGridViewTriState.True;
             colImposing.SortMode = DataGridViewColumnSortMode.NotSortable;
-            // 
+            //
             // colPrint
-            // 
+            //
             colPrint.HeaderText = "ПЕЧАТЬ";
             colPrint.MinimumWidth = 8;
             colPrint.Name = "colPrint";
             colPrint.ReadOnly = true;
             colPrint.Resizable = DataGridViewTriState.True;
             colPrint.SortMode = DataGridViewColumnSortMode.NotSortable;
-            // 
+            //
             // lblBottomStatus
-            // 
+            //
             lblBottomStatus.AutoSize = true;
             lblBottomStatus.Location = new Point(47, 1294);
             lblBottomStatus.Name = "lblBottomStatus";
             lblBottomStatus.Size = new Size(158, 25);
             lblBottomStatus.TabIndex = 9;
             lblBottomStatus.Text = "Строка состояния";
-            // 
+            //
             // Form1
-            // 
+            //
             AutoScaleDimensions = new SizeF(10F, 25F);
             AutoScaleMode = AutoScaleMode.Font;
             BackColor = Color.FromArgb(244, 245, 247);
             ClientSize = new Size(2564, 1368);
             Controls.Add(lblBottomStatus);
+            Controls.Add(txtSearch);
+            Controls.Add(lblSearch);
             Controls.Add(btnCreateOrder);
             Controls.Add(gridOrders);
             Controls.Add(panel1);
@@ -274,6 +297,8 @@
         private Button ButtonSettings;
         private Label label1;
         private Button btnCreateOrder;
+        private Label lblSearch;
+        private TextBox txtSearch;
         private DataGridView gridOrders;
         private Label lblBottomStatus;
         private DataGridViewTextBoxColumn colState;
