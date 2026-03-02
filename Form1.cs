@@ -127,9 +127,42 @@ namespace MyManager
             _gridMenu.Run = async () => { var o = GetOrderByRow(_ctxRow); if (o != null) await RunForOrderAsync(o); };
 
             // --- УПРАВЛЕНИЕ ФАЙЛАМИ ---
-            _gridMenu.PickFile = async (stage, type) => { var o = GetOrderByRow(_ctxRow); if (o != null) await PickAndCopyFileAsync(o, stage, type); };
+            _gridMenu.PickFile = async (stage, type) =>
+            {
+                if (TryGetItemByRow(_ctxRow, out var itemOrder, out var item) && itemOrder != null && item != null)
+                {
+                    await PickAndCopyFileForItemAsync(itemOrder, item, stage);
+                    return;
+                }
 
-            _gridMenu.RemoveFile = (stage) => { var o = GetOrderByRow(_ctxRow); if (o != null) RemoveFileFromOrder(o, stage); };
+                var o = GetOrderByRow(_ctxRow);
+                if (o == null) return;
+                if (o.Items != null && o.Items.Count > 0)
+                {
+                    SetBottomStatus("Головная строка группы заблокирована для файловых операций");
+                    return;
+                }
+
+                await PickAndCopyFileAsync(o, stage, type);
+            };
+
+            _gridMenu.RemoveFile = (stage) =>
+            {
+                if (TryGetItemByRow(_ctxRow, out var itemOrder, out var item) && itemOrder != null && item != null)
+                {
+                    RemoveFileFromItem(itemOrder, item, stage);
+                    return;
+                }
+
+                var o = GetOrderByRow(_ctxRow);
+                if (o == null) return;
+                if (o.Items != null && o.Items.Count > 0)
+                {
+                    SetBottomStatus("Головная строка группы заблокирована для файловых операций");
+                    return;
+                }
+                RemoveFileFromOrder(o, stage);
+            };
 
             _gridMenu.CopyToPrepared = () => { var o = GetOrderByRow(_ctxRow); if (o != null) CopySourceToPrepared(o); };
 
@@ -141,32 +174,87 @@ namespace MyManager
             _gridMenu.RenameFile = (stage) =>
             {
                 var o = GetOrderByRow(_ctxRow);
-                if (o != null) RenameFileHandler(o, stage);
+                if (o == null) return;
+                if (TryGetItemByRow(_ctxRow, out var itemOrder, out var item) && itemOrder != null && item != null)
+                {
+                    RenameFileHandler(itemOrder, item, stage);
+                    return;
+                }
+                if (o.Items != null && o.Items.Count > 0)
+                {
+                    SetBottomStatus("Головная строка группы заблокирована для файловых операций");
+                    return;
+                }
+                RenameFileHandler(o, stage);
             };
 
             _gridMenu.CopyPathToClipboard = (stage) =>
             {
                 var o = GetOrderByRow(_ctxRow);
-                if (o != null) CopyPathToClipboard(o, stage);
+                if (o == null) return;
+                if (TryGetItemByRow(_ctxRow, out var itemOrder, out var item) && itemOrder != null && item != null)
+                {
+                    CopyPathToClipboard(item, stage);
+                    return;
+                }
+                if (o.Items != null && o.Items.Count > 0)
+                {
+                    SetBottomStatus("Головная строка группы заблокирована для файловых операций");
+                    return;
+                }
+                CopyPathToClipboard(o, stage);
             };
 
             _gridMenu.PastePathFromClipboard = async (stage) =>
             {
                 var o = GetOrderByRow(_ctxRow);
-                if (o != null) await PasteFileFromClipboardAsync(o, stage);
+                if (o == null) return;
+                if (TryGetItemByRow(_ctxRow, out var itemOrder, out var item) && itemOrder != null && item != null)
+                {
+                    await PasteFileFromClipboardAsync(itemOrder, item, stage);
+                    return;
+                }
+                if (o.Items != null && o.Items.Count > 0)
+                {
+                    SetBottomStatus("Головная строка группы заблокирована для файловых операций");
+                    return;
+                }
+                await PasteFileFromClipboardAsync(o, stage);
             };
 
             // --- ВОДЯНЫЕ ЗНАКИ ---
             _gridMenu.ApplyWatermark = () =>
             {
                 var o = GetOrderByRow(_ctxRow);
-                if (o != null) ProcessWatermark(o, false);
+                if (o == null) return;
+                if (TryGetItemByRow(_ctxRow, out var itemOrder, out var item) && itemOrder != null && item != null)
+                {
+                    ProcessWatermark(itemOrder, item, false);
+                    return;
+                }
+                if (o.Items != null && o.Items.Count > 0)
+                {
+                    SetBottomStatus("Головная строка группы заблокирована для файловых операций");
+                    return;
+                }
+                ProcessWatermark(o, false);
             };
 
             _gridMenu.ApplyWatermarkLeft = () =>
             {
                 var o = GetOrderByRow(_ctxRow);
-                if (o != null) ProcessWatermark(o, true);
+                if (o == null) return;
+                if (TryGetItemByRow(_ctxRow, out var itemOrder, out var item) && itemOrder != null && item != null)
+                {
+                    ProcessWatermark(itemOrder, item, true);
+                    return;
+                }
+                if (o.Items != null && o.Items.Count > 0)
+                {
+                    SetBottomStatus("Головная строка группы заблокирована для файловых операций");
+                    return;
+                }
+                ProcessWatermark(o, true);
             };
 
             // --- ДИСПЕТЧЕРЫ ---
@@ -174,11 +262,21 @@ namespace MyManager
             _gridMenu.OpenImpMan = OpenImposingManager;
             _gridMenu.RemovePitStopAction = () =>
             {
+                if (TryGetItemByRow(_ctxRow, out var itemOrder, out var item) && itemOrder != null && item != null)
+                {
+                    RemovePitStopAction(itemOrder, item);
+                    return;
+                }
                 var o = GetOrderByRow(_ctxRow);
                 if (o != null) RemovePitStopAction(o);
             };
             _gridMenu.RemoveImposingAction = () =>
             {
+                if (TryGetItemByRow(_ctxRow, out var itemOrder, out var item) && itemOrder != null && item != null)
+                {
+                    RemoveImposingAction(itemOrder, item);
+                    return;
+                }
                 var o = GetOrderByRow(_ctxRow);
                 if (o != null) RemoveImposingAction(o);
             };
@@ -253,12 +351,120 @@ namespace MyManager
             }
         }
 
+        private void ProcessWatermark(OrderData order, OrderFileItem item, bool isVertical)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(item.PrintPath) || !File.Exists(item.PrintPath))
+                {
+                    MessageBox.Show("Файл печатного спуска item не найден!", "Ошибка");
+                    return;
+                }
+
+                string original = order.PrintPath;
+                order.PrintPath = item.PrintPath;
+                PdfWatermark.Apply(order, isVertical);
+                order.PrintPath = original;
+
+                string pos = isVertical ? "слева" : "сверху";
+                SetBottomStatus($"✅ Водяной знак ({pos}) нанесен на item {item.ClientFileLabel}");
+            }
+            catch (IOException)
+            {
+                MessageBox.Show("Файл занят! Закройте PDF в Acrobat или PitStop.", "Ошибка доступа");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка: {ex.Message}");
+            }
+        }
+
+        private void RenameFileHandler(OrderData order, OrderFileItem item, int stage)
+        {
+            string currentPath = GetItemStagePath(item, stage);
+            if (string.IsNullOrEmpty(currentPath) || !File.Exists(currentPath)) return;
+
+            string oldName = Path.GetFileNameWithoutExtension(currentPath);
+            string extension = Path.GetExtension(currentPath);
+            string newName = ShowInputDialog("Переименование", "Введите новое имя:", oldName);
+            if (string.IsNullOrWhiteSpace(newName) || newName == oldName) return;
+            foreach (char c in Path.GetInvalidFileNameChars()) newName = newName.Replace(c, '_');
+
+            string newPath = Path.Combine(Path.GetDirectoryName(currentPath) ?? string.Empty, newName + extension);
+            try
+            {
+                File.Move(currentPath, newPath);
+                UpdateItemFilePath(order, item, stage, newPath);
+                SaveHistory(); FillGrid();
+                SetBottomStatus("✅ Файл item переименован");
+            }
+            catch (Exception ex) { MessageBox.Show("Ошибка: " + ex.Message); }
+        }
+
+        private async Task PasteFileFromClipboardAsync(OrderData order, OrderFileItem item, int stage)
+        {
+            try
+            {
+                string text = Clipboard.GetText().Trim();
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    SetBottomStatus("Буфер обмена пуст");
+                    return;
+                }
+
+                string cleanPath = text.Replace("\"", "").Trim();
+                if (!File.Exists(cleanPath))
+                {
+                    MessageBox.Show($"Файл не найден по указанному пути:\n{cleanPath}", "Ошибка пути");
+                    return;
+                }
+
+                await AddFileToItemAsync(order, item, cleanPath, stage);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Ошибка при вставке пути: " + ex.Message);
+            }
+        }
+
+        private void CopyPathToClipboard(OrderFileItem item, int stage)
+        {
+            string path = GetItemStagePath(item, stage);
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            {
+                SetBottomStatus("Путь к файлу item не найден");
+                return;
+            }
+
+            Clipboard.SetText(path);
+            SetBottomStatus("Путь item скопирован в буфер");
+        }
+
+        private void RemoveFileFromItem(OrderData order, OrderFileItem item, int stage)
+        {
+            string path = GetItemStagePath(item, stage);
+            if (string.IsNullOrEmpty(path)) return;
+
+            if (MessageBox.Show($"Удалить {Path.GetFileName(path)}?", "Удаление", MessageBoxButtons.YesNo) == DialogResult.Yes)
+            {
+                try
+                {
+                    if (File.Exists(path)) File.Delete(path);
+                }
+                catch (Exception ex) { MessageBox.Show(ex.Message); }
+
+                UpdateItemFilePath(order, item, stage, "");
+                SaveHistory();
+                FillGrid();
+            }
+        }
+
         private void GridOrders_MouseDown(object sender, MouseEventArgs e)
         {
             var hit = gridOrders.HitTest(e.X, e.Y);
             if (hit.RowIndex >= 0 && hit.ColumnIndex >= 0)
             {
-                if (IsItemRow(hit.RowIndex))
+                if (IsGroupOrderRow(hit.RowIndex))
                     return;
 
                 sourceRowIndex = hit.RowIndex;
@@ -285,13 +491,30 @@ namespace MyManager
                         var o = GetOrderByRow(sourceRowIndex);
                         if (o == null) return;
 
-                        string filePath = sourceColumnIndex switch
+                        string filePath;
+                        if (TryGetItemByRow(sourceRowIndex, out var itemOrder, out var item) && item != null)
                         {
-                            2 => o.SourcePath,
-                            3 => o.PreparedPath,
-                            6 => o.PrintPath,
-                            _ => ""
-                        };
+                            filePath = sourceColumnIndex switch
+                            {
+                                2 => item.SourcePath,
+                                3 => item.PreparedPath,
+                                6 => item.PrintPath,
+                                _ => ""
+                            };
+                        }
+                        else
+                        {
+                            if (o.Items != null && o.Items.Count > 0)
+                                return;
+
+                            filePath = sourceColumnIndex switch
+                            {
+                                2 => o.SourcePath,
+                                3 => o.PreparedPath,
+                                6 => o.PrintPath,
+                                _ => ""
+                            };
+                        }
 
                         // Если в ячейке реально есть файл — начинаем перетаскивание
                         if (!string.IsNullOrEmpty(filePath) && File.Exists(filePath))
@@ -504,8 +727,8 @@ namespace MyManager
                         $"   └ {item.ClientFileLabel}",
                         GetFileName(item.SourcePath),
                         GetFileName(item.PreparedPath),
-                        "—",
-                        "—",
+                        string.IsNullOrWhiteSpace(item.PitStopAction) ? "-" : item.PitStopAction,
+                        string.IsNullOrWhiteSpace(item.ImposingAction) ? "-" : item.ImposingAction,
                         GetFileName(item.PrintPath));
                     gridOrders.Rows[itemRowIndex].Tag = $"item|{o.InternalId}|{item.ItemId}";
                 }
@@ -672,13 +895,17 @@ namespace MyManager
         {
             if (e.RowIndex >= 0)
             {
-                if (IsItemRow(e.RowIndex))
+                if (IsDraftRow(e.RowIndex))
                 {
-                    gridOrders.Cursor = Cursors.Default;
+                    gridOrders.Cursor = gridOrders.Columns[e.ColumnIndex].Name == "colState" ? Cursors.Hand : Cursors.Default;
                     return;
                 }
 
-                gridOrders.Cursor = (e.ColumnIndex == 2 || e.ColumnIndex == 3 || e.ColumnIndex == 6) ? Cursors.Hand : Cursors.Default;
+                bool fileColumn = e.ColumnIndex == 2 || e.ColumnIndex == 3 || e.ColumnIndex == 6;
+                if (IsGroupOrderRow(e.RowIndex) && fileColumn)
+                    gridOrders.Cursor = Cursors.No;
+                else
+                    gridOrders.Cursor = fileColumn ? Cursors.Hand : Cursors.Default;
                 if (e.RowIndex != _hoveredRowIndex) { int old = _hoveredRowIndex; _hoveredRowIndex = e.RowIndex; if (old >= 0) gridOrders.InvalidateRow(old); gridOrders.InvalidateRow(_hoveredRowIndex); }
             }
         }
@@ -688,9 +915,6 @@ namespace MyManager
         {
             if (e.Button == MouseButtons.Right && e.RowIndex >= 0)
             {
-                if (IsItemRow(e.RowIndex))
-                    return;
-
                 _ctxRow = e.RowIndex; _ctxCol = e.ColumnIndex;
                 gridOrders.CurrentCell = gridOrders.Rows[e.RowIndex].Cells[e.ColumnIndex];
                 var order = GetOrderByRow(e.RowIndex);
@@ -757,6 +981,28 @@ namespace MyManager
             }
 
             return result;
+        }
+
+        private void CreateEmptyItemRow(OrderData order)
+        {
+            if (order == null)
+                return;
+
+            order.Items ??= new List<OrderFileItem>();
+            var item = new OrderFileItem
+            {
+                ClientFileLabel = $"item_{order.Items.Count + 1}",
+                SequenceNo = order.Items.Count == 0 ? 0 : order.Items.Max(x => x.SequenceNo) + 1,
+                FileStatus = "⚪ Ожидание",
+                PitStopAction = string.IsNullOrWhiteSpace(order.PitStopAction) ? "-" : order.PitStopAction,
+                ImposingAction = string.IsNullOrWhiteSpace(order.ImposingAction) ? "-" : order.ImposingAction,
+                UpdatedAt = DateTime.Now
+            };
+            order.Items.Add(item);
+            order.RefreshAggregatedStatus();
+            SaveHistory();
+            FillGrid();
+            SetBottomStatus("Добавлена новая строка item");
         }
 
         private async Task AddItemFromPickerAsync(OrderData order, int stage)
@@ -993,6 +1239,63 @@ namespace MyManager
             return _orderHistory.FirstOrDefault(x => x.InternalId == orderInternalId);
         }
 
+        private bool TryGetItemByRow(int rowIndex, out OrderData? order, out OrderFileItem? item)
+        {
+            order = GetOrderByRow(rowIndex);
+            item = null;
+            if (order == null || rowIndex < 0 || rowIndex >= gridOrders.Rows.Count)
+                return false;
+
+            string tag = gridOrders.Rows[rowIndex].Tag?.ToString() ?? string.Empty;
+            if (!tag.StartsWith("item|", StringComparison.Ordinal))
+                return false;
+
+            string itemId = ExtractItemIdFromTag(tag);
+            if (string.IsNullOrWhiteSpace(itemId))
+                return false;
+
+            item = order.Items?.FirstOrDefault(x => x.ItemId == itemId);
+            return item != null;
+        }
+
+        private bool IsGroupOrderRow(int rowIndex)
+        {
+            if (rowIndex < 0 || rowIndex >= gridOrders.Rows.Count)
+                return false;
+
+            if (IsItemRow(rowIndex) || IsDraftRow(rowIndex))
+                return false;
+
+            var order = GetOrderByRow(rowIndex);
+            return order?.Items != null && order.Items.Count > 0;
+        }
+
+        private string GetItemStagePath(OrderFileItem item, int stage)
+            => stage switch
+            {
+                1 => item.SourcePath,
+                2 => item.PreparedPath,
+                3 => item.PrintPath,
+                _ => string.Empty
+            };
+
+        private void UpdateItemFilePath(OrderData order, OrderFileItem item, int stage, string path)
+        {
+            if (stage == 1) item.SourcePath = path;
+            else if (stage == 2) item.PreparedPath = path;
+            else if (stage == 3) item.PrintPath = path;
+
+            if (!string.IsNullOrEmpty(item.PrintPath) && File.Exists(item.PrintPath))
+                item.FileStatus = "✅ Готово";
+            else if (!string.IsNullOrEmpty(item.PreparedPath) && File.Exists(item.PreparedPath))
+                item.FileStatus = "🟡 В работе";
+            else if (string.IsNullOrEmpty(item.SourcePath))
+                item.FileStatus = "⚪ Ожидание";
+
+            item.UpdatedAt = DateTime.Now;
+            order.RefreshAggregatedStatus();
+        }
+
         private bool IsItemRow(int rowIndex)
         {
             if (rowIndex < 0 || rowIndex >= gridOrders.Rows.Count)
@@ -1123,6 +1426,22 @@ namespace MyManager
             SetBottomStatus($"✅ Секвенция Imposing удалена из {GetOrderDisplayId(o)}");
         }
 
+        private void RemovePitStopAction(OrderData order, OrderFileItem item)
+        {
+            item.PitStopAction = "-";
+            SaveHistory();
+            FillGrid();
+            SetBottomStatus($"✅ PitStop очищен для item {item.ClientFileLabel}");
+        }
+
+        private void RemoveImposingAction(OrderData order, OrderFileItem item)
+        {
+            item.ImposingAction = "-";
+            SaveHistory();
+            FillGrid();
+            SetBottomStatus($"✅ Imposing очищен для item {item.ClientFileLabel}");
+        }
+
         private async void GridOrders_CellClick(object sender, DataGridViewCellEventArgs e)
         {
             if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
@@ -1130,15 +1449,26 @@ namespace MyManager
             var o = GetOrderByRow(e.RowIndex);
             if (o == null) return;
 
-            if (IsItemRow(e.RowIndex))
-                return;
-
             if (IsDraftRow(e.RowIndex))
             {
-                string draftCol = gridOrders.Columns[e.ColumnIndex].Name;
-                if (draftCol == "colSource") await AddItemFromPickerAsync(o, 1);
-                else if (draftCol == "colReady") await AddItemFromPickerAsync(o, 2);
-                else if (draftCol == "colPrint") await AddItemFromPickerAsync(o, 3);
+                if (gridOrders.Columns[e.ColumnIndex].Name == "colState")
+                    CreateEmptyItemRow(o);
+                return;
+            }
+
+            if (IsItemRow(e.RowIndex))
+            {
+                if (!TryGetItemByRow(e.RowIndex, out var itemOrder, out var item) || itemOrder == null || item == null)
+                    return;
+
+                var itemCellValue = gridOrders.Rows[e.RowIndex].Cells[e.ColumnIndex].Value?.ToString();
+                if (itemCellValue == "...")
+                {
+                    string itemCol = gridOrders.Columns[e.ColumnIndex].Name;
+                    if (itemCol == "colSource") await PickAndCopyFileForItemAsync(itemOrder, item, 1);
+                    else if (itemCol == "colReady") await PickAndCopyFileForItemAsync(itemOrder, item, 2);
+                    else if (itemCol == "colPrint") await PickAndCopyFileForItemAsync(itemOrder, item, 3);
+                }
                 return;
             }
 
@@ -1147,6 +1477,11 @@ namespace MyManager
                 ToggleGroupExpanded(o);
                 return;
             }
+
+            bool isGroup = o.Items != null && o.Items.Count > 0;
+            string colName = gridOrders.Columns[e.ColumnIndex].Name;
+            if (isGroup && (colName == "colSource" || colName == "colReady" || colName == "colPrint"))
+                return;
 
             // Проверяем, что нажали именно на "..."
             var cellValue = gridOrders.Rows[e.RowIndex].Cells[e.ColumnIndex].Value?.ToString();
@@ -1181,13 +1516,29 @@ namespace MyManager
 
             if (hit.RowIndex >= 0 && hit.ColumnIndex >= 0)
             {
-                if (IsItemRow(hit.RowIndex)) return;
                 var targetOrder = GetOrderByRow(hit.RowIndex);
                 if (targetOrder == null) return;
 
                 string colName = gridOrders.Columns[hit.ColumnIndex].Name;
                 int targetStage = colName switch { "colSource" => 1, "colReady" => 2, "colPrint" => 3, _ => 0 };
                 if (targetStage == 0) return;
+
+                if (IsDraftRow(hit.RowIndex))
+                {
+                    await AddItemFromFileAsync(targetOrder, sourceFile, targetStage);
+                    return;
+                }
+
+                if (IsItemRow(hit.RowIndex))
+                {
+                    if (!TryGetItemByRow(hit.RowIndex, out var itemOrder, out var item) || itemOrder == null || item == null)
+                        return;
+                    await AddFileToItemAsync(itemOrder, item, sourceFile, targetStage);
+                    return;
+                }
+
+                if (targetOrder.Items != null && targetOrder.Items.Count > 0)
+                    return;
 
                 if (targetStage == 3 && !await EnsureSimpleOrderInfoForPrintAsync(targetOrder))
                 {
@@ -1207,7 +1558,6 @@ namespace MyManager
                 {
                     string newPath = SmartCopy(sourceFile, targetOrder, targetStage, targetName, isInternal);
 
-                    // Если путь обновился — сохраняем
                     if (!string.Equals(Path.GetFullPath(sourceFile), Path.GetFullPath(newPath), StringComparison.OrdinalIgnoreCase))
                     {
                         if (targetStage == 2)
@@ -1222,6 +1572,49 @@ namespace MyManager
                 {
                     MessageBox.Show(ex.Message, "Ошибка");
                 }
+            }
+        }
+
+        private async Task AddItemFromFileAsync(OrderData order, string sourceFile, int stage)
+        {
+            order.Items ??= new List<OrderFileItem>();
+            string label = Path.GetFileNameWithoutExtension(sourceFile);
+            var item = new OrderFileItem
+            {
+                ClientFileLabel = label,
+                SequenceNo = order.Items.Count == 0 ? 0 : order.Items.Max(x => x.SequenceNo) + 1,
+                PitStopAction = string.IsNullOrWhiteSpace(order.PitStopAction) ? "-" : order.PitStopAction,
+                ImposingAction = string.IsNullOrWhiteSpace(order.ImposingAction) ? "-" : order.ImposingAction
+            };
+            order.Items.Add(item);
+            await AddFileToItemAsync(order, item, sourceFile, stage);
+        }
+
+        private async Task AddFileToItemAsync(OrderData order, OrderFileItem item, string sourceFile, int stage)
+        {
+            try
+            {
+                if (stage == 3 && !await EnsureSimpleOrderInfoForPrintAsync(order))
+                    return;
+
+                string label = string.IsNullOrWhiteSpace(item.ClientFileLabel)
+                    ? Path.GetFileNameWithoutExtension(sourceFile)
+                    : item.ClientFileLabel;
+                string ext = Path.GetExtension(sourceFile);
+                string targetName = EnsureUniqueStageFileName(order, stage, label + ext);
+
+                string newPath = stage == 3
+                    ? CopyPrintFile(order, sourceFile, targetName)
+                    : CopyIntoStage(order, stage, sourceFile, targetName);
+
+                UpdateItemFilePath(order, item, stage, newPath);
+                SaveHistory();
+                FillGrid();
+                SetBottomStatus("Файл добавлен в item");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Ошибка");
             }
         }
 
@@ -1241,18 +1634,25 @@ namespace MyManager
 
                 if (hit.RowIndex >= 0 && hit.ColumnIndex >= 0)
                 {
-                    if (IsItemRow(hit.RowIndex)) { e.Effect = DragDropEffects.None; return; }
                     var targetOrder = GetOrderByRow(hit.RowIndex);
+                    if (targetOrder == null) { e.Effect = DragDropEffects.None; return; }
                     string colName = gridOrders.Columns[hit.ColumnIndex].Name;
+                    int stage = colName switch { "colSource" => 1, "colReady" => 2, "colPrint" => 3, _ => 0 };
+                    if (stage == 0) { e.Effect = DragDropEffects.None; return; }
 
-                    // Проверяем, в какую стадию целимся
-                    string existingPath = colName switch
-                    {
-                        "colSource" => targetOrder.SourcePath,
-                        "colReady" => targetOrder.PreparedPath,
-                        "colPrint" => targetOrder.PrintPath,
-                        _ => ""
-                    };
+                    if (IsGroupOrderRow(hit.RowIndex)) { e.Effect = DragDropEffects.None; return; }
+
+                    string existingPath = string.Empty;
+                    if (IsItemRow(hit.RowIndex) && TryGetItemByRow(hit.RowIndex, out var itemOrder, out var item) && item != null)
+                        existingPath = GetItemStagePath(item, stage);
+                    else if (!IsDraftRow(hit.RowIndex))
+                        existingPath = colName switch
+                        {
+                            "colSource" => targetOrder.SourcePath,
+                            "colReady" => targetOrder.PreparedPath,
+                            "colPrint" => targetOrder.PrintPath,
+                            _ => ""
+                        };
 
                     string[] draggedFiles = (string[])e.Data.GetData(DataFormats.FileDrop);
                     string draggingFile = (draggedFiles != null && draggedFiles.Length > 0) ? draggedFiles[0] : "";
@@ -1270,6 +1670,51 @@ namespace MyManager
                     }
                 }
                 else { e.Effect = DragDropEffects.None; }
+            }
+        }
+
+        private async Task PickAndCopyFileForItemAsync(OrderData order, OrderFileItem item, int stage)
+        {
+            string targetFolder = GetStageFolder(order, stage);
+            if (!Directory.Exists(targetFolder))
+                Directory.CreateDirectory(targetFolder);
+
+            using var ofd = new OpenFileDialog
+            {
+                Filter = "PDF|*.pdf|Все файлы|*.*",
+                InitialDirectory = targetFolder,
+                RestoreDirectory = false
+            };
+
+            if (ofd.ShowDialog() != DialogResult.OK)
+                return;
+
+            try
+            {
+                if (stage == 3 && !await EnsureSimpleOrderInfoForPrintAsync(order))
+                    return;
+
+                string label = string.IsNullOrWhiteSpace(item.ClientFileLabel)
+                    ? Path.GetFileNameWithoutExtension(ofd.FileName)
+                    : item.ClientFileLabel;
+                string ext = Path.GetExtension(ofd.FileName);
+                string targetName = EnsureUniqueStageFileName(order, stage, label + ext);
+
+                string newPath = stage == 3
+                    ? CopyPrintFile(order, ofd.FileName, targetName)
+                    : CopyIntoStage(order, stage, ofd.FileName, targetName);
+
+                if (stage == 2 && string.IsNullOrWhiteSpace(item.SourcePath))
+                    item.SourcePath = newPath;
+
+                UpdateItemFilePath(order, item, stage, newPath);
+                SaveHistory();
+                FillGrid();
+                SetBottomStatus("Файл успешно добавлен в item");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Ошибка: " + ex.Message);
             }
         }
 
@@ -1767,9 +2212,37 @@ namespace MyManager
         private async void GridOrders_CellDoubleClick(object? sender, DataGridViewCellEventArgs e)
         {
             if (e.RowIndex < 0) return;
-            if (IsItemRow(e.RowIndex)) return;
             var o = GetOrderByRow(e.RowIndex); if (o == null) return;
             string col = gridOrders.Columns[e.ColumnIndex].Name;
+
+            if (IsItemRow(e.RowIndex))
+            {
+                if (!TryGetItemByRow(e.RowIndex, out var itemOrder, out var item) || itemOrder == null || item == null)
+                    return;
+
+                if (col == "colPitStop")
+                {
+                    using var ps = new PitStopSelectForm(item.PitStopAction);
+                    if (ps.ShowDialog() == DialogResult.OK)
+                    {
+                        item.PitStopAction = ps.SelectedName;
+                        SaveHistory();
+                        FillGrid();
+                    }
+                }
+                else if (col == "colImposing")
+                {
+                    using var imp = new ImposingSelectForm(item.ImposingAction);
+                    if (imp.ShowDialog() == DialogResult.OK)
+                    {
+                        item.ImposingAction = imp.SelectedName;
+                        SaveHistory();
+                        FillGrid();
+                    }
+                }
+                return;
+            }
+
             if (col == "colId")
             {
                 if (GetOrderStartMode(o) == OrderStartMode.Extended)
