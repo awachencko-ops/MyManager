@@ -735,7 +735,7 @@ namespace MyManager
             {
                 Name = "splitMain",
                 Dock = DockStyle.Fill,
-                SplitterDistance = 220,
+                SplitterDistance = 180,
                 FixedPanel = FixedPanel.Panel1,
                 Panel1MinSize = 170,
                 Panel2MinSize = 700,
@@ -747,7 +747,7 @@ namespace MyManager
             {
                 Name = "splitCenterRight",
                 Dock = DockStyle.Fill,
-                SplitterDistance = 900,
+                SplitterDistance = 700,
                 FixedPanel = FixedPanel.Panel2,
                 Panel1MinSize = 650,
                 Panel2MinSize = 340,
@@ -796,19 +796,33 @@ namespace MyManager
                 lblBottomStatus.Location = new Point(24, Math.Max(90, centerPanel.Height - 30));
             };
 
-            contentHost.Resize += (s, e) =>
+            void ApplySafeSplitLayout()
             {
-                if (_splitMain != null)
-                    _splitMain.SplitterDistance = Math.Max(_splitMain.Panel1MinSize, Math.Min(240, _splitMain.Width - _splitMain.Panel2MinSize - _splitMain.SplitterWidth));
-
-                if (_splitCenterRight != null)
+                if (_splitMain != null && _splitMain.Width > 0)
                 {
-                    int desiredRightWidth = 420;
-                    int maxDistance = _splitCenterRight.Width - _splitCenterRight.Panel2MinSize - _splitCenterRight.SplitterWidth;
-                    int distance = Math.Max(_splitCenterRight.Panel1MinSize, Math.Min(maxDistance, _splitCenterRight.Width - desiredRightWidth));
-                    _splitCenterRight.SplitterDistance = distance;
+                    int maxDistance = _splitMain.Width - _splitMain.Panel2MinSize - _splitMain.SplitterWidth;
+                    if (maxDistance >= _splitMain.Panel1MinSize)
+                    {
+                        int desiredLeftWidth = 220;
+                        _splitMain.SplitterDistance = Math.Max(_splitMain.Panel1MinSize, Math.Min(desiredLeftWidth, maxDistance));
+                    }
                 }
-            };
+
+                if (_splitCenterRight != null && _splitCenterRight.Width > 0)
+                {
+                    int maxDistance = _splitCenterRight.Width - _splitCenterRight.Panel2MinSize - _splitCenterRight.SplitterWidth;
+                    if (maxDistance >= _splitCenterRight.Panel1MinSize)
+                    {
+                        int desiredRightWidth = 420;
+                        int desiredCenterWidth = _splitCenterRight.Width - desiredRightWidth;
+                        int distance = Math.Max(_splitCenterRight.Panel1MinSize, Math.Min(maxDistance, desiredCenterWidth));
+                        _splitCenterRight.SplitterDistance = distance;
+                    }
+                }
+            }
+
+            contentHost.Resize += (s, e) => ApplySafeSplitLayout();
+            Shown += (s, e) => ApplySafeSplitLayout();
         }
 
         private Control BuildLeftQueuePanel()
