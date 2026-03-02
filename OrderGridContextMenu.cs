@@ -29,6 +29,7 @@ namespace MyManager
         public Action RemovePitStopAction { get; set; }
         public Action RemoveImposingAction { get; set; }
         public Action OpenOrderLog { get; set; }
+        public Action ConvertToGroup { get; set; }
 
         public ContextMenuStrip Build(string colName, bool allowCopyToGrandpa = true)
         {
@@ -45,6 +46,7 @@ namespace MyManager
 
             // 1. ГЛАВНЫЕ КНОПКИ (Всегда сверху)
             AddItem("🚀 Запустить обработку", Run);
+            AddItem("🧩 Преобразовать в группу", ConvertToGroup);
             AddItem("❌ Удалить заказ из списка", Delete);
 
             // Откроет либо корень, либо конкретную подпапку (1. исходные и т.д.)

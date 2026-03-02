@@ -36,6 +36,7 @@ namespace MyManager
         private int _hoveredRowIndex = -1;
         private int _ctxRow = -1;
         private int _ctxCol = -1; // Добавлено
+        private readonly Dictionary<string, bool> _expandedGroups = new Dictionary<string, bool>();
         public Form1()
         {
             InitializeComponent();
@@ -186,6 +187,11 @@ namespace MyManager
                 var o = GetOrderByRow(_ctxRow);
                 if (o != null) OpenOrderLog(o);
             };
+            _gridMenu.ConvertToGroup = () =>
+            {
+                var o = GetOrderByRow(_ctxRow);
+                if (o != null) ConvertOrderToGroup(o);
+            };
         }
 
         private string SmartCopy(string sourceFile, OrderData o, int stage, string targetName, bool isInternal)
@@ -252,6 +258,9 @@ namespace MyManager
             var hit = gridOrders.HitTest(e.X, e.Y);
             if (hit.RowIndex >= 0 && hit.ColumnIndex >= 0)
             {
+                if (IsItemRow(hit.RowIndex))
+                    return;
+
                 sourceRowIndex = hit.RowIndex;
                 sourceColumnIndex = hit.ColumnIndex;
                 sourceColumnName = gridOrders.Columns[hit.ColumnIndex].Name; // Запоминаем имя
@@ -461,34 +470,58 @@ namespace MyManager
         {
             if (gridOrders.Columns.Count == 0) return;
             RefreshArchivedStatuses();
-            string? selInternalId = gridOrders.CurrentRow?.Tag?.ToString();
+            string? selTag = gridOrders.CurrentRow?.Tag?.ToString();
             var sorted = _sortArrivalDescending
                 ? _orderHistory.OrderByDescending(x => x.ArrivalDate).ToList()
                 : _orderHistory.OrderBy(x => x.ArrivalDate).ToList();
 
-            if (gridOrders.Rows.Count != sorted.Count)
+            gridOrders.Rows.Clear();
+
+            foreach (var o in sorted)
             {
-                gridOrders.Rows.Clear();
-                foreach (var o in sorted)
+                bool isGroup = o.Items != null && o.Items.Count > 0;
+                bool expanded = isGroup && IsGroupExpanded(o.InternalId);
+                string statePrefix = isGroup ? (expanded ? "☑ " : "☐ ") : string.Empty;
+
+                int orderRowIndex = gridOrders.Rows.Add(
+                    statePrefix + o.Status,
+                    GetOrderDisplayId(o),
+                    GetFileName(o.SourcePath),
+                    GetFileName(o.PreparedPath),
+                    o.PitStopAction,
+                    o.ImposingAction,
+                    GetFileName(o.PrintPath));
+                gridOrders.Rows[orderRowIndex].Tag = $"order|{o.InternalId}";
+
+                if (!expanded)
+                    continue;
+
+                var orderedItems = o.Items.OrderBy(x => x.SequenceNo).ToList();
+                foreach (var item in orderedItems)
                 {
-                    int index = gridOrders.Rows.Add(o.Status, GetOrderDisplayId(o), GetFileName(o.SourcePath), GetFileName(o.PreparedPath), o.PitStopAction, o.ImposingAction, GetFileName(o.PrintPath));
-                    gridOrders.Rows[index].Tag = o.InternalId;
+                    int itemRowIndex = gridOrders.Rows.Add(
+                        $"   • {item.FileStatus}",
+                        $"   └ {item.ClientFileLabel}",
+                        GetFileName(item.SourcePath),
+                        GetFileName(item.PreparedPath),
+                        "—",
+                        "—",
+                        GetFileName(item.PrintPath));
+                    gridOrders.Rows[itemRowIndex].Tag = $"item|{o.InternalId}|{item.ItemId}";
                 }
             }
-            else
+
+            if (!string.IsNullOrEmpty(selTag))
             {
-                for (int i = 0; i < sorted.Count; i++)
+                foreach (DataGridViewRow row in gridOrders.Rows)
                 {
-                    var o = sorted[i]; var r = gridOrders.Rows[i];
-                    UpdateCell(r, "colState", o.Status); UpdateCell(r, "colId", GetOrderDisplayId(o));
-                    UpdateCell(r, "colSource", GetFileName(o.SourcePath)); UpdateCell(r, "colReady", GetFileName(o.PreparedPath));
-                    UpdateCell(r, "colPitStop", o.PitStopAction); UpdateCell(r, "colImposing", o.ImposingAction);
-                    UpdateCell(r, "colPrint", GetFileName(o.PrintPath));
-                    r.Tag = o.InternalId;
+                    if (row.Tag?.ToString() == selTag)
+                    {
+                        gridOrders.CurrentCell = row.Cells[0];
+                        break;
+                    }
                 }
             }
-            if (!string.IsNullOrEmpty(selInternalId))
-                foreach (DataGridViewRow row in gridOrders.Rows) if (row.Tag?.ToString() == selInternalId) { gridOrders.CurrentCell = row.Cells[0]; break; }
         }
 
         private void OpenOrderStageFolder(OrderData o, int stage)
@@ -567,6 +600,15 @@ namespace MyManager
         private void GridOrders_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
         {
             if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
+            if (IsItemRow(e.RowIndex))
+            {
+                e.CellStyle.BackColor = Color.FromArgb(248, 248, 248);
+                e.CellStyle.SelectionBackColor = Color.FromArgb(235, 240, 250);
+                e.CellStyle.ForeColor = Color.DimGray;
+                e.CellStyle.SelectionForeColor = Color.Black;
+                return;
+            }
+
             var o = GetOrderByRow(e.RowIndex); if (o == null) return;
             string col = gridOrders.Columns[e.ColumnIndex].Name;
 
@@ -601,6 +643,7 @@ namespace MyManager
         private void GridOrders_CellToolTipTextNeeded(object? sender, DataGridViewCellToolTipTextNeededEventArgs e)
         {
             if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
+            if (IsItemRow(e.RowIndex)) return;
             var o = GetOrderByRow(e.RowIndex);
             if (o == null) return;
 
@@ -619,6 +662,12 @@ namespace MyManager
         {
             if (e.RowIndex >= 0)
             {
+                if (IsItemRow(e.RowIndex))
+                {
+                    gridOrders.Cursor = Cursors.Default;
+                    return;
+                }
+
                 gridOrders.Cursor = (e.ColumnIndex == 2 || e.ColumnIndex == 3 || e.ColumnIndex == 6) ? Cursors.Hand : Cursors.Default;
                 if (e.RowIndex != _hoveredRowIndex) { int old = _hoveredRowIndex; _hoveredRowIndex = e.RowIndex; if (old >= 0) gridOrders.InvalidateRow(old); gridOrders.InvalidateRow(_hoveredRowIndex); }
             }
@@ -629,6 +678,9 @@ namespace MyManager
         {
             if (e.Button == MouseButtons.Right && e.RowIndex >= 0)
             {
+                if (IsItemRow(e.RowIndex))
+                    return;
+
                 _ctxRow = e.RowIndex; _ctxCol = e.ColumnIndex;
                 gridOrders.CurrentCell = gridOrders.Rows[e.RowIndex].Cells[e.ColumnIndex];
                 var order = GetOrderByRow(e.RowIndex);
@@ -821,9 +873,99 @@ namespace MyManager
 
         private OrderData? GetOrderByRow(int idx)
         {
-            if (idx < 0 || idx >= gridOrders.Rows.Count) return null;
-            string internalId = gridOrders.Rows[idx].Tag?.ToString() ?? "";
-            return _orderHistory.FirstOrDefault(x => x.InternalId == internalId);
+            if (idx < 0 || idx >= gridOrders.Rows.Count)
+                return null;
+
+            string tag = gridOrders.Rows[idx].Tag?.ToString() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(tag))
+                return null;
+
+            string orderInternalId = ExtractOrderInternalIdFromTag(tag);
+            if (string.IsNullOrWhiteSpace(orderInternalId))
+                return null;
+
+            return _orderHistory.FirstOrDefault(x => x.InternalId == orderInternalId);
+        }
+
+        private bool IsItemRow(int rowIndex)
+        {
+            if (rowIndex < 0 || rowIndex >= gridOrders.Rows.Count)
+                return false;
+
+            string tag = gridOrders.Rows[rowIndex].Tag?.ToString() ?? string.Empty;
+            return tag.StartsWith("item|", StringComparison.Ordinal);
+        }
+
+        private string ExtractOrderInternalIdFromTag(string tag)
+        {
+            if (tag.StartsWith("order|", StringComparison.Ordinal) || tag.StartsWith("item|", StringComparison.Ordinal))
+            {
+                var parts = tag.Split('|');
+                if (parts.Length >= 2)
+                    return parts[1];
+            }
+
+            return tag;
+        }
+
+        private bool IsGroupExpanded(string internalId)
+        {
+            if (string.IsNullOrWhiteSpace(internalId))
+                return false;
+
+            return _expandedGroups.TryGetValue(internalId, out var expanded) && expanded;
+        }
+
+        private void ToggleGroupExpanded(OrderData order)
+        {
+            if (order?.Items == null || order.Items.Count == 0)
+                return;
+
+            string key = order.InternalId ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(key))
+                return;
+
+            _expandedGroups[key] = !IsGroupExpanded(key);
+            FillGrid();
+        }
+
+        private void ConvertOrderToGroup(OrderData order)
+        {
+            if (order == null)
+                return;
+
+            order.Items ??= new List<OrderFileItem>();
+            if (order.Items.Count == 0)
+            {
+                if (string.IsNullOrWhiteSpace(order.SourcePath)
+                    && string.IsNullOrWhiteSpace(order.PreparedPath)
+                    && string.IsNullOrWhiteSpace(order.PrintPath))
+                {
+                    order.Items.Add(new OrderFileItem
+                    {
+                        ClientFileLabel = $"{GetOrderDisplayId(order)}_item",
+                        SequenceNo = 0
+                    });
+                }
+                else
+                {
+                    order.Items.Add(new OrderFileItem
+                    {
+                        ClientFileLabel = Path.GetFileNameWithoutExtension(order.SourcePath),
+                        SourcePath = order.SourcePath ?? string.Empty,
+                        PreparedPath = order.PreparedPath ?? string.Empty,
+                        PrintPath = order.PrintPath ?? string.Empty,
+                        FileStatus = order.Status ?? "⚪ Ожидание",
+                        SequenceNo = 0
+                    });
+                }
+            }
+
+            _expandedGroups[order.InternalId] = true;
+            order.RefreshAggregatedStatus();
+            SaveHistory();
+            FillGrid();
+            SetBottomStatus($"Заказ {GetOrderDisplayId(order)} преобразован в группу");
         }
 
         private void OpenOrderFolder(OrderData o) { try { Process.Start("explorer.exe", GetOrderRootFolder(o)); } catch { } }
@@ -850,8 +992,17 @@ namespace MyManager
         {
             if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
 
+            if (IsItemRow(e.RowIndex))
+                return;
+
             var o = GetOrderByRow(e.RowIndex);
             if (o == null) return;
+
+            if (gridOrders.Columns[e.ColumnIndex].Name == "colState")
+            {
+                ToggleGroupExpanded(o);
+                return;
+            }
 
             // Проверяем, что нажали именно на "..."
             var cellValue = gridOrders.Rows[e.RowIndex].Cells[e.ColumnIndex].Value?.ToString();
@@ -886,6 +1037,7 @@ namespace MyManager
 
             if (hit.RowIndex >= 0 && hit.ColumnIndex >= 0)
             {
+                if (IsItemRow(hit.RowIndex)) return;
                 var targetOrder = GetOrderByRow(hit.RowIndex);
                 if (targetOrder == null) return;
 
@@ -945,6 +1097,7 @@ namespace MyManager
 
                 if (hit.RowIndex >= 0 && hit.ColumnIndex >= 0)
                 {
+                    if (IsItemRow(hit.RowIndex)) { e.Effect = DragDropEffects.None; return; }
                     var targetOrder = GetOrderByRow(hit.RowIndex);
                     string colName = gridOrders.Columns[hit.ColumnIndex].Name;
 
@@ -1128,6 +1281,7 @@ namespace MyManager
         private void GridOrders_CellContentClick(object? s, DataGridViewCellEventArgs e)
         {
             if (e.RowIndex < 0) return;
+            if (IsItemRow(e.RowIndex)) return;
             var o = GetOrderByRow(e.RowIndex); if (o == null) return;
             string col = gridOrders.Columns[e.ColumnIndex].Name;
             string? p = col == "colSource" ? o.SourcePath : col == "colReady" ? o.PreparedPath : col == "colPrint" ? o.PrintPath : null;
@@ -1193,6 +1347,7 @@ namespace MyManager
                 }
             }
 
+            bool migrationApplied = false;
             foreach (var order in _orderHistory)
             {
                 if (string.IsNullOrWhiteSpace(order.InternalId))
@@ -1201,6 +1356,60 @@ namespace MyManager
                     order.StartMode = InferOrderStartMode(order);
                 if (order.ArrivalDate == default)
                     order.ArrivalDate = order.OrderDate != default ? order.OrderDate : DateTime.Now;
+
+                if (MigrateLegacyOrderToItems(order))
+                    migrationApplied = true;
+            }
+
+            if (migrationApplied)
+            {
+                TryCreateHistoryBackup();
+                SaveHistory();
+            }
+        }
+
+        private bool MigrateLegacyOrderToItems(OrderData order)
+        {
+            order.Items ??= new List<OrderFileItem>();
+            if (order.Items.Count > 0)
+                return false;
+
+            if (string.IsNullOrWhiteSpace(order.SourcePath)
+                && string.IsNullOrWhiteSpace(order.PreparedPath)
+                && string.IsNullOrWhiteSpace(order.PrintPath))
+            {
+                return false;
+            }
+
+            order.Items.Add(new OrderFileItem
+            {
+                ClientFileLabel = Path.GetFileNameWithoutExtension(order.SourcePath),
+                SourcePath = order.SourcePath ?? string.Empty,
+                PreparedPath = order.PreparedPath ?? string.Empty,
+                PrintPath = order.PrintPath ?? string.Empty,
+                FileStatus = order.Status ?? "⚪ Ожидание",
+                SequenceNo = 0,
+                UpdatedAt = DateTime.Now
+            });
+
+            order.RefreshAggregatedStatus();
+            return true;
+        }
+
+        private void TryCreateHistoryBackup()
+        {
+            try
+            {
+                if (!File.Exists(_jsonHistoryFile))
+                    return;
+
+                string backupPath = _jsonHistoryFile + ".bak";
+                if (!File.Exists(backupPath))
+                    File.Copy(_jsonHistoryFile, backupPath, overwrite: false);
+            }
+            catch
+            {
+                // backup best-effort
             }
         }
         private void SaveHistory()
@@ -1410,6 +1619,7 @@ namespace MyManager
         private async void GridOrders_CellDoubleClick(object? sender, DataGridViewCellEventArgs e)
         {
             if (e.RowIndex < 0) return;
+            if (IsItemRow(e.RowIndex)) return;
             var o = GetOrderByRow(e.RowIndex); if (o == null) return;
             string col = gridOrders.Columns[e.ColumnIndex].Name;
             if (col == "colId")
@@ -1433,8 +1643,30 @@ namespace MyManager
                     }
                 }
             }
-            else if (col == "colPitStop") { using var f = new PitStopSelectForm(o.PitStopAction); if (f.ShowDialog() == DialogResult.OK) { o.PitStopAction = f.SelectedName; SaveHistory(); FillGrid(); } }
-            else if (col == "colImposing") { using var f = new ImposingSelectForm(o.ImposingAction); if (f.ShowDialog() == DialogResult.OK) { o.ImposingAction = f.SelectedName; SaveHistory(); FillGrid(); } }
+            else if (col == "colPitStop")
+            {
+                using var f = new PitStopSelectForm(o.PitStopAction);
+                if (f.ShowDialog() == DialogResult.OK)
+                {
+                    o.PitStopAction = f.SelectedName;
+                    SaveHistory();
+                    FillGrid();
+                    if (o.Items != null && o.Items.Count > 0)
+                        SetBottomStatus($"PitStop обновлен для группы {GetOrderDisplayId(o)} (применяется ко всем item)");
+                }
+            }
+            else if (col == "colImposing")
+            {
+                using var f = new ImposingSelectForm(o.ImposingAction);
+                if (f.ShowDialog() == DialogResult.OK)
+                {
+                    o.ImposingAction = f.SelectedName;
+                    SaveHistory();
+                    FillGrid();
+                    if (o.Items != null && o.Items.Count > 0)
+                        SetBottomStatus($"Imposing обновлен для группы {GetOrderDisplayId(o)} (применяется ко всем item)");
+                }
+            }
         }
     }
 }

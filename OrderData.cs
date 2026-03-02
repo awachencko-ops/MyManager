@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace MyManager
 {
@@ -21,7 +23,10 @@ namespace MyManager
         public string FolderName { get; set; } = ""; // Например: "23_10_25 №123"
         public string Status { get; set; } = "⚪ Ожидание";
 
-        // Храним ПОЛНЫЕ пути к файлам
+        // Новый контейнер файлов заказа
+        public List<OrderFileItem> Items { get; set; } = new();
+
+        // Храним ПОЛНЫЕ пути к файлам (legacy, для обратной совместимости)
         public string SourcePath { get; set; } = "";
         public string PreparedPath { get; set; } = "";
         public string PrintPath { get; set; } = "";
@@ -34,5 +39,32 @@ namespace MyManager
         public string LastStatusReason { get; set; } = "";
         public string LastStatusSource { get; set; } = "";
         public DateTime LastStatusAt { get; set; } = DateTime.Now;
+
+        public void RefreshAggregatedStatus()
+        {
+            if (Items == null || Items.Count == 0)
+                return;
+
+            var normalizedItems = Items.Where(x => x != null).ToList();
+            if (normalizedItems.Count == 0)
+                return;
+
+            int total = normalizedItems.Count;
+            int successCount = normalizedItems.Count(x => x.FileStatus == "✅ Готово");
+            int errorCount = normalizedItems.Count(x => x.FileStatus == "🔴 Ошибка");
+            int inProgressCount = normalizedItems.Count(x => x.FileStatus == "🟡 В работе");
+            int waitingCount = normalizedItems.Count(x => x.FileStatus == "⚪ Ожидание");
+
+            if (errorCount == total)
+                Status = "🔴 Ошибка";
+            else if (successCount == total)
+                Status = "✅ Готово";
+            else if (waitingCount == total)
+                Status = "⚪ Ожидание";
+            else if (inProgressCount > 0)
+                Status = $"🟡 В работе ({successCount + inProgressCount}/{total})";
+            else
+                Status = $"⚠ Частично готово ({successCount}/{total})";
+        }
     }
 }
