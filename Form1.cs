@@ -27,6 +27,11 @@ namespace MyManager
         private string _orderLogsFolderPath = "";
         private bool _useExtendedMode = true;
         private bool _sortArrivalDescending = true;
+        private readonly Dictionary<string, bool> _fileExistsCache = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _archivedFileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, bool> _orderArchiveStateCache = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        private DateTime _archiveIndexLoadedAt = DateTime.MinValue;
+        private static readonly TimeSpan ArchiveIndexLifetime = TimeSpan.FromSeconds(5);
 
         private Rectangle dragBoxFromMouseDown;
         private object itemFromMouseDown;
@@ -712,6 +717,7 @@ namespace MyManager
         private void FillGrid()
         {
             if (gridOrders.Columns.Count == 0) return;
+            PrepareGridCaches();
             RefreshArchivedStatuses();
             string? selTag = gridOrders.CurrentRow?.Tag?.ToString();
             var sorted = _sortArrivalDescending
@@ -923,7 +929,7 @@ namespace MyManager
                     string p = colName == "colSource" ? item.SourcePath : (colName == "colReady" ? item.PreparedPath : item.PrintPath);
                     Color txt = (string.IsNullOrEmpty(p) || p == "...")
                         ? Color.Gray
-                        : (File.Exists(p) ? Color.DodgerBlue : Color.Red);
+                        : (FileExistsCached(p) ? Color.DodgerBlue : Color.Red);
                     e.CellStyle.ForeColor = e.CellStyle.SelectionForeColor = txt;
                 }
                 else
@@ -946,8 +952,8 @@ namespace MyManager
                 string s = (o.Status ?? "").ToLower(); Color b, f;
                 if (s.Contains("ошибка")) { b = Color.FromArgb(255, 210, 210); f = Color.FromArgb(150, 0, 0); }
                 else if (s.Contains("готов")) { b = Color.FromArgb(210, 255, 210); f = Color.FromArgb(0, 100, 0); }
-                else if (IsOrderInArchive(o)) { b = Color.FromArgb(220, 235, 255); f = Color.FromArgb(0, 70, 140); }
-                else if (!string.IsNullOrEmpty(o.PrintPath) && File.Exists(o.PrintPath)) { b = Color.FromArgb(210, 255, 210); f = Color.FromArgb(0, 100, 0); }
+                else if (IsOrderArchivedCached(o)) { b = Color.FromArgb(220, 235, 255); f = Color.FromArgb(0, 70, 140); }
+                else if (!string.IsNullOrEmpty(o.PrintPath) && FileExistsCached(o.PrintPath)) { b = Color.FromArgb(210, 255, 210); f = Color.FromArgb(0, 100, 0); }
                 else { b = Color.FromArgb(255, 235, 200); f = Color.FromArgb(150, 80, 0); }
                 e.CellStyle.BackColor = e.CellStyle.SelectionBackColor = b;
                 e.CellStyle.ForeColor = e.CellStyle.SelectionForeColor = f;
@@ -955,10 +961,10 @@ namespace MyManager
             else if (col == "colSource" || col == "colReady" || col == "colPrint")
             {
                 string p = col == "colSource" ? o.SourcePath : (col == "colReady" ? o.PreparedPath : o.PrintPath);
-                bool isArchivedPrint = col == "colPrint" && IsOrderInArchive(o);
+                bool isArchivedPrint = col == "colPrint" && IsOrderArchivedCached(o);
                 Color txt = (string.IsNullOrEmpty(p) || p == "...")
                     ? Color.Gray
-                    : (File.Exists(p) || isArchivedPrint ? Color.DodgerBlue : Color.Red);
+                    : (FileExistsCached(p) || isArchivedPrint ? Color.DodgerBlue : Color.Red);
                 e.CellStyle.ForeColor = e.CellStyle.SelectionForeColor = txt;
                 e.CellStyle.BackColor = e.CellStyle.SelectionBackColor = bg;
             }
@@ -2121,12 +2127,17 @@ namespace MyManager
 
             File.WriteAllText(_jsonHistoryFile, JsonSerializer.Serialize(_orderHistory, new JsonSerializerOptions { WriteIndented = true }));
         }
-        private void SetOrderStatus(OrderData o, string s, string source = "manual", string reason = "", bool refreshGrid = true)
+        private bool SetOrderStatus(OrderData o, string s, string source = "manual", string reason = "", bool refreshGrid = true, bool persistHistory = true)
         {
             if (o == null)
-                return;
+                return false;
 
             string old = o.Status ?? string.Empty;
+            if (string.Equals(old, s, StringComparison.Ordinal)
+                && string.Equals(o.LastStatusSource ?? string.Empty, source ?? string.Empty, StringComparison.Ordinal)
+                && string.Equals(o.LastStatusReason ?? string.Empty, reason ?? string.Empty, StringComparison.Ordinal))
+                return false;
+
             o.Status = s;
             o.LastStatusSource = source;
             o.LastStatusReason = reason;
@@ -2134,38 +2145,45 @@ namespace MyManager
 
             AppendOrderStatusLog(o, old, s, source, reason);
 
-            SaveHistory();
+            if (persistHistory)
+                SaveHistory();
             if (!refreshGrid)
-                return;
+                return true;
 
             if (InvokeRequired) Invoke(new Action(FillGrid)); else FillGrid();
+            return true;
         }
         private void SetBottomStatus(string t) { if (InvokeRequired) Invoke(new Action(() => lblBottomStatus.Text = t)); else lblBottomStatus.Text = t; }
 
         private void RefreshArchivedStatuses()
         {
+            RefreshArchiveIndexIfNeeded();
+            _orderArchiveStateCache.Clear();
+
+            bool changed = false;
             foreach (var order in _orderHistory)
             {
+                bool archived = IsOrderInArchive(order);
+                _orderArchiveStateCache[GetOrderCacheKey(order)] = archived;
+
                 if ((order.Status ?? string.Empty).Contains("Ошибка", StringComparison.OrdinalIgnoreCase))
                     continue;
 
-                bool archived = IsOrderInArchive(order);
                 if (archived)
                 {
-                    if (!string.Equals(order.Status, "📦 В архиве", StringComparison.Ordinal))
-                    {
-                        SetOrderStatus(order, "📦 В архиве", "archive-sync", "Файл найден в архиве", refreshGrid: false);
-                    }
+                    changed |= SetOrderStatus(order, "📦 В архиве", "archive-sync", "Файл найден в архиве", refreshGrid: false, persistHistory: false);
                 }
                 else if (string.Equals(order.Status, "📦 В архиве", StringComparison.Ordinal))
                 {
-                    string nextStatus = (!string.IsNullOrWhiteSpace(order.PrintPath) && File.Exists(order.PrintPath))
+                    string nextStatus = (!string.IsNullOrWhiteSpace(order.PrintPath) && FileExistsCached(order.PrintPath))
                         ? "✅ Готово"
                         : "⚪ Ожидание";
-                    SetOrderStatus(order, nextStatus, "archive-sync", "Заказ больше не считается архивным", refreshGrid: false);
+                    changed |= SetOrderStatus(order, nextStatus, "archive-sync", "Заказ больше не считается архивным", refreshGrid: false, persistHistory: false);
                 }
             }
 
+            if (changed)
+                SaveHistory();
         }
 
 
@@ -2227,12 +2245,75 @@ namespace MyManager
             if (string.IsNullOrWhiteSpace(fileName) || string.IsNullOrWhiteSpace(_grandpaFolder))
                 return false;
 
-            // Бизнес-правило:
-            // - файл в корне архивной папки => статус "Готово"
-            // - файл в подпапке архивации => статус "В архиве"
+            RefreshArchiveIndexIfNeeded();
+            return _archivedFileNames.Contains(fileName);
+        }
+
+        private bool IsOrderArchivedCached(OrderData order)
+        {
+            string key = GetOrderCacheKey(order);
+            if (_orderArchiveStateCache.TryGetValue(key, out bool archived))
+                return archived;
+
+            archived = IsOrderInArchive(order);
+            _orderArchiveStateCache[key] = archived;
+            return archived;
+        }
+
+        private string GetOrderCacheKey(OrderData order)
+        {
+            return !string.IsNullOrWhiteSpace(order.InternalId)
+                ? order.InternalId
+                : (!string.IsNullOrWhiteSpace(order.Id) ? order.Id : string.Empty);
+        }
+
+        private void PrepareGridCaches()
+        {
+            _fileExistsCache.Clear();
+            _orderArchiveStateCache.Clear();
+        }
+
+        private bool FileExistsCached(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path) || path == "...")
+                return false;
+
+            if (_fileExistsCache.TryGetValue(path, out bool exists))
+                return exists;
+
+            exists = File.Exists(path);
+            _fileExistsCache[path] = exists;
+            return exists;
+        }
+
+        private void RefreshArchiveIndexIfNeeded(bool force = false)
+        {
+            if (!force && DateTime.UtcNow - _archiveIndexLoadedAt < ArchiveIndexLifetime)
+                return;
+
+            _archivedFileNames.Clear();
+            _archiveIndexLoadedAt = DateTime.UtcNow;
+
+            if (string.IsNullOrWhiteSpace(_grandpaFolder))
+                return;
+
             string archivedFolder = Path.Combine(_grandpaFolder, _archiveDoneSubfolder);
-            string archivedPath = Path.Combine(archivedFolder, fileName);
-            return File.Exists(archivedPath);
+            if (!Directory.Exists(archivedFolder))
+                return;
+
+            try
+            {
+                foreach (string filePath in Directory.EnumerateFiles(archivedFolder, "*", SearchOption.TopDirectoryOnly))
+                {
+                    string fileName = Path.GetFileName(filePath);
+                    if (!string.IsNullOrWhiteSpace(fileName))
+                        _archivedFileNames.Add(fileName);
+                }
+            }
+            catch
+            {
+                // Игнорируем ошибки чтения архива, чтобы не блокировать отрисовку таблицы.
+            }
         }
 
         private string GetSortArrivalMenuText()
