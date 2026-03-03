@@ -2126,12 +2126,17 @@ namespace MyManager
 
             File.WriteAllText(_jsonHistoryFile, JsonSerializer.Serialize(_orderHistory, new JsonSerializerOptions { WriteIndented = true }));
         }
-        private void SetOrderStatus(OrderData o, string s, string source = "manual", string reason = "", bool refreshGrid = true)
+        private bool SetOrderStatus(OrderData o, string s, string source = "manual", string reason = "", bool refreshGrid = true, bool persistHistory = true)
         {
             if (o == null)
-                return;
+                return false;
 
             string old = o.Status ?? string.Empty;
+            if (string.Equals(old, s, StringComparison.Ordinal)
+                && string.Equals(o.LastStatusSource ?? string.Empty, source ?? string.Empty, StringComparison.Ordinal)
+                && string.Equals(o.LastStatusReason ?? string.Empty, reason ?? string.Empty, StringComparison.Ordinal))
+                return false;
+
             o.Status = s;
             o.LastStatusSource = source;
             o.LastStatusReason = reason;
@@ -2139,16 +2144,19 @@ namespace MyManager
 
             AppendOrderStatusLog(o, old, s, source, reason);
 
-            SaveHistory();
+            if (persistHistory)
+                SaveHistory();
             if (!refreshGrid)
-                return;
+                return true;
 
             if (InvokeRequired) Invoke(new Action(FillGrid)); else FillGrid();
+            return true;
         }
         private void SetBottomStatus(string t) { if (InvokeRequired) Invoke(new Action(() => lblBottomStatus.Text = t)); else lblBottomStatus.Text = t; }
 
         private void RefreshArchivedStatuses()
         {
+            bool changed = false;
             foreach (var order in _orderHistory)
             {
                 if ((order.Status ?? string.Empty).Contains("Ошибка", StringComparison.OrdinalIgnoreCase))
@@ -2157,20 +2165,19 @@ namespace MyManager
                 bool archived = IsOrderInArchive(order);
                 if (archived)
                 {
-                    if (!string.Equals(order.Status, "📦 В архиве", StringComparison.Ordinal))
-                    {
-                        SetOrderStatus(order, "📦 В архиве", "archive-sync", "Файл найден в архиве", refreshGrid: false);
-                    }
+                    changed |= SetOrderStatus(order, "📦 В архиве", "archive-sync", "Файл найден в архиве", refreshGrid: false, persistHistory: false);
                 }
                 else if (string.Equals(order.Status, "📦 В архиве", StringComparison.Ordinal))
                 {
                     string nextStatus = (!string.IsNullOrWhiteSpace(order.PrintPath) && FileExistsCached(order.PrintPath))
                         ? "✅ Готово"
                         : "⚪ Ожидание";
-                    SetOrderStatus(order, nextStatus, "archive-sync", "Заказ больше не считается архивным", refreshGrid: false);
+                    changed |= SetOrderStatus(order, nextStatus, "archive-sync", "Заказ больше не считается архивным", refreshGrid: false, persistHistory: false);
                 }
             }
 
+            if (changed)
+                SaveHistory();
         }
 
 
@@ -2239,7 +2246,6 @@ namespace MyManager
         private void PrepareGridCaches()
         {
             _fileExistsCache.Clear();
-            RefreshArchiveIndexIfNeeded(force: true);
         }
 
         private bool FileExistsCached(string? path)
