@@ -29,6 +29,7 @@ namespace MyManager
         private bool _sortArrivalDescending = true;
         private readonly Dictionary<string, bool> _fileExistsCache = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _archivedFileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, bool> _orderArchiveStateCache = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         private DateTime _archiveIndexLoadedAt = DateTime.MinValue;
         private static readonly TimeSpan ArchiveIndexLifetime = TimeSpan.FromSeconds(5);
 
@@ -951,7 +952,7 @@ namespace MyManager
                 string s = (o.Status ?? "").ToLower(); Color b, f;
                 if (s.Contains("ошибка")) { b = Color.FromArgb(255, 210, 210); f = Color.FromArgb(150, 0, 0); }
                 else if (s.Contains("готов")) { b = Color.FromArgb(210, 255, 210); f = Color.FromArgb(0, 100, 0); }
-                else if (IsOrderInArchive(o)) { b = Color.FromArgb(220, 235, 255); f = Color.FromArgb(0, 70, 140); }
+                else if (IsOrderArchivedCached(o)) { b = Color.FromArgb(220, 235, 255); f = Color.FromArgb(0, 70, 140); }
                 else if (!string.IsNullOrEmpty(o.PrintPath) && FileExistsCached(o.PrintPath)) { b = Color.FromArgb(210, 255, 210); f = Color.FromArgb(0, 100, 0); }
                 else { b = Color.FromArgb(255, 235, 200); f = Color.FromArgb(150, 80, 0); }
                 e.CellStyle.BackColor = e.CellStyle.SelectionBackColor = b;
@@ -960,7 +961,7 @@ namespace MyManager
             else if (col == "colSource" || col == "colReady" || col == "colPrint")
             {
                 string p = col == "colSource" ? o.SourcePath : (col == "colReady" ? o.PreparedPath : o.PrintPath);
-                bool isArchivedPrint = col == "colPrint" && IsOrderInArchive(o);
+                bool isArchivedPrint = col == "colPrint" && IsOrderArchivedCached(o);
                 Color txt = (string.IsNullOrEmpty(p) || p == "...")
                     ? Color.Gray
                     : (FileExistsCached(p) || isArchivedPrint ? Color.DodgerBlue : Color.Red);
@@ -2156,13 +2157,18 @@ namespace MyManager
 
         private void RefreshArchivedStatuses()
         {
+            RefreshArchiveIndexIfNeeded();
+            _orderArchiveStateCache.Clear();
+
             bool changed = false;
             foreach (var order in _orderHistory)
             {
+                bool archived = IsOrderInArchive(order);
+                _orderArchiveStateCache[GetOrderCacheKey(order)] = archived;
+
                 if ((order.Status ?? string.Empty).Contains("Ошибка", StringComparison.OrdinalIgnoreCase))
                     continue;
 
-                bool archived = IsOrderInArchive(order);
                 if (archived)
                 {
                     changed |= SetOrderStatus(order, "📦 В архиве", "archive-sync", "Файл найден в архиве", refreshGrid: false, persistHistory: false);
@@ -2243,9 +2249,28 @@ namespace MyManager
             return _archivedFileNames.Contains(fileName);
         }
 
+        private bool IsOrderArchivedCached(OrderData order)
+        {
+            string key = GetOrderCacheKey(order);
+            if (_orderArchiveStateCache.TryGetValue(key, out bool archived))
+                return archived;
+
+            archived = IsOrderInArchive(order);
+            _orderArchiveStateCache[key] = archived;
+            return archived;
+        }
+
+        private string GetOrderCacheKey(OrderData order)
+        {
+            return !string.IsNullOrWhiteSpace(order.InternalId)
+                ? order.InternalId
+                : (!string.IsNullOrWhiteSpace(order.Id) ? order.Id : string.Empty);
+        }
+
         private void PrepareGridCaches()
         {
             _fileExistsCache.Clear();
+            _orderArchiveStateCache.Clear();
         }
 
         private bool FileExistsCached(string? path)
