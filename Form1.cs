@@ -27,6 +27,10 @@ namespace MyManager
         private string _orderLogsFolderPath = "";
         private bool _useExtendedMode = true;
         private bool _sortArrivalDescending = true;
+        private readonly Dictionary<string, bool> _fileExistsCache = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _archivedFileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private DateTime _archiveIndexLoadedAt = DateTime.MinValue;
+        private static readonly TimeSpan ArchiveIndexLifetime = TimeSpan.FromSeconds(5);
 
         private Rectangle dragBoxFromMouseDown;
         private object itemFromMouseDown;
@@ -712,6 +716,7 @@ namespace MyManager
         private void FillGrid()
         {
             if (gridOrders.Columns.Count == 0) return;
+            PrepareGridCaches();
             RefreshArchivedStatuses();
             string? selTag = gridOrders.CurrentRow?.Tag?.ToString();
             var sorted = _sortArrivalDescending
@@ -923,7 +928,7 @@ namespace MyManager
                     string p = colName == "colSource" ? item.SourcePath : (colName == "colReady" ? item.PreparedPath : item.PrintPath);
                     Color txt = (string.IsNullOrEmpty(p) || p == "...")
                         ? Color.Gray
-                        : (File.Exists(p) ? Color.DodgerBlue : Color.Red);
+                        : (FileExistsCached(p) ? Color.DodgerBlue : Color.Red);
                     e.CellStyle.ForeColor = e.CellStyle.SelectionForeColor = txt;
                 }
                 else
@@ -947,7 +952,7 @@ namespace MyManager
                 if (s.Contains("ошибка")) { b = Color.FromArgb(255, 210, 210); f = Color.FromArgb(150, 0, 0); }
                 else if (s.Contains("готов")) { b = Color.FromArgb(210, 255, 210); f = Color.FromArgb(0, 100, 0); }
                 else if (IsOrderInArchive(o)) { b = Color.FromArgb(220, 235, 255); f = Color.FromArgb(0, 70, 140); }
-                else if (!string.IsNullOrEmpty(o.PrintPath) && File.Exists(o.PrintPath)) { b = Color.FromArgb(210, 255, 210); f = Color.FromArgb(0, 100, 0); }
+                else if (!string.IsNullOrEmpty(o.PrintPath) && FileExistsCached(o.PrintPath)) { b = Color.FromArgb(210, 255, 210); f = Color.FromArgb(0, 100, 0); }
                 else { b = Color.FromArgb(255, 235, 200); f = Color.FromArgb(150, 80, 0); }
                 e.CellStyle.BackColor = e.CellStyle.SelectionBackColor = b;
                 e.CellStyle.ForeColor = e.CellStyle.SelectionForeColor = f;
@@ -958,7 +963,7 @@ namespace MyManager
                 bool isArchivedPrint = col == "colPrint" && IsOrderInArchive(o);
                 Color txt = (string.IsNullOrEmpty(p) || p == "...")
                     ? Color.Gray
-                    : (File.Exists(p) || isArchivedPrint ? Color.DodgerBlue : Color.Red);
+                    : (FileExistsCached(p) || isArchivedPrint ? Color.DodgerBlue : Color.Red);
                 e.CellStyle.ForeColor = e.CellStyle.SelectionForeColor = txt;
                 e.CellStyle.BackColor = e.CellStyle.SelectionBackColor = bg;
             }
@@ -2159,7 +2164,7 @@ namespace MyManager
                 }
                 else if (string.Equals(order.Status, "📦 В архиве", StringComparison.Ordinal))
                 {
-                    string nextStatus = (!string.IsNullOrWhiteSpace(order.PrintPath) && File.Exists(order.PrintPath))
+                    string nextStatus = (!string.IsNullOrWhiteSpace(order.PrintPath) && FileExistsCached(order.PrintPath))
                         ? "✅ Готово"
                         : "⚪ Ожидание";
                     SetOrderStatus(order, nextStatus, "archive-sync", "Заказ больше не считается архивным", refreshGrid: false);
@@ -2227,12 +2232,57 @@ namespace MyManager
             if (string.IsNullOrWhiteSpace(fileName) || string.IsNullOrWhiteSpace(_grandpaFolder))
                 return false;
 
-            // Бизнес-правило:
-            // - файл в корне архивной папки => статус "Готово"
-            // - файл в подпапке архивации => статус "В архиве"
+            RefreshArchiveIndexIfNeeded();
+            return _archivedFileNames.Contains(fileName);
+        }
+
+        private void PrepareGridCaches()
+        {
+            _fileExistsCache.Clear();
+            RefreshArchiveIndexIfNeeded(force: true);
+        }
+
+        private bool FileExistsCached(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path) || path == "...")
+                return false;
+
+            if (_fileExistsCache.TryGetValue(path, out bool exists))
+                return exists;
+
+            exists = File.Exists(path);
+            _fileExistsCache[path] = exists;
+            return exists;
+        }
+
+        private void RefreshArchiveIndexIfNeeded(bool force = false)
+        {
+            if (!force && DateTime.UtcNow - _archiveIndexLoadedAt < ArchiveIndexLifetime)
+                return;
+
+            _archivedFileNames.Clear();
+            _archiveIndexLoadedAt = DateTime.UtcNow;
+
+            if (string.IsNullOrWhiteSpace(_grandpaFolder))
+                return;
+
             string archivedFolder = Path.Combine(_grandpaFolder, _archiveDoneSubfolder);
-            string archivedPath = Path.Combine(archivedFolder, fileName);
-            return File.Exists(archivedPath);
+            if (!Directory.Exists(archivedFolder))
+                return;
+
+            try
+            {
+                foreach (string filePath in Directory.EnumerateFiles(archivedFolder, "*", SearchOption.TopDirectoryOnly))
+                {
+                    string fileName = Path.GetFileName(filePath);
+                    if (!string.IsNullOrWhiteSpace(fileName))
+                        _archivedFileNames.Add(fileName);
+                }
+            }
+            catch
+            {
+                // Игнорируем ошибки чтения архива, чтобы не блокировать отрисовку таблицы.
+            }
         }
 
         private string GetSortArrivalMenuText()
