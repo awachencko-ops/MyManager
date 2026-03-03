@@ -27,6 +27,8 @@ namespace MyManager
         private string _orderLogsFolderPath = "";
         private bool _useExtendedMode = true;
         private bool _sortArrivalDescending = true;
+        private DateTime _lastArchiveSyncAt = DateTime.MinValue;
+        private bool _archiveSyncInProgress;
 
         private Rectangle dragBoxFromMouseDown;
         private object itemFromMouseDown;
@@ -75,6 +77,7 @@ namespace MyManager
             ApplyModernDesign();
             EnsureGridStyle();
             FillGrid();
+            ScheduleArchiveStatusRefresh(force: true);
 
             btnCreateOrder.Click += (s, e) =>
             {
@@ -351,7 +354,7 @@ namespace MyManager
                 return destPath;
 
             // 4. Само копирование
-            File.Copy(sourceFile, destPath, true);
+            CopyFileWithProgress(sourceFile, destPath, "Копирование файла");
             return destPath;
         }
 
@@ -940,7 +943,6 @@ namespace MyManager
         private void FillGrid()
         {
             if (gridOrders.Columns.Count == 0) return;
-            RefreshArchivedStatuses();
             string? selTag = gridOrders.CurrentRow?.Tag?.ToString();
             var sorted = _sortArrivalDescending
                 ? _orderHistory.OrderByDescending(x => x.ArrivalDate).ToList()
@@ -952,62 +954,88 @@ namespace MyManager
 
             sorted = sorted.Where(OrderMatchesQueueFilter).ToList();
 
-            gridOrders.Rows.Clear();
-
-            foreach (var o in sorted)
+            gridOrders.SuspendLayout();
+            try
             {
-                bool isGroup = IsVisualGroupOrder(o);
-                bool expanded = isGroup && IsGroupExpanded(o.InternalId);
-                string statePrefix = isGroup ? (expanded ? "∧ " : "∨ ") : string.Empty;
+                gridOrders.Rows.Clear();
 
-                string groupSource = isGroup ? "..." : GetFileName(o.SourcePath);
-                string groupPrepared = isGroup ? "..." : GetFileName(o.PreparedPath);
-                string groupPrint = isGroup ? "..." : GetFileName(o.PrintPath);
-                string groupPit = isGroup ? GetCommonGroupAction(o.Items, x => x.PitStopAction) : o.PitStopAction;
-                string groupImp = isGroup ? GetCommonGroupAction(o.Items, x => x.ImposingAction) : o.ImposingAction;
+                int totalOrders = sorted.Count;
+                int processedOrders = 0;
+                int lastProgressPercent = -1;
 
-                int orderRowIndex = gridOrders.Rows.Add(
-                    statePrefix + o.Status,
-                    GetOrderDisplayId(o),
-                    groupSource,
-                    groupPrepared,
-                    groupPit,
-                    groupImp,
-                    groupPrint);
-                gridOrders.Rows[orderRowIndex].Tag = $"order|{o.InternalId}";
-
-                if (!expanded)
-                    continue;
-
-                var orderedItems = o.Items.OrderBy(x => x.SequenceNo).ToList();
-                foreach (var item in orderedItems)
+                foreach (var o in sorted)
                 {
-                    int itemRowIndex = gridOrders.Rows.Add(
-                        $"   • {item.FileStatus}",
-                        $"   └ {GetOrderDisplayId(o)}",
-                        GetFileName(item.SourcePath),
-                        GetFileName(item.PreparedPath),
-                        string.IsNullOrWhiteSpace(item.PitStopAction) ? "-" : item.PitStopAction,
-                        string.IsNullOrWhiteSpace(item.ImposingAction) ? "-" : item.ImposingAction,
-                        GetFileName(item.PrintPath));
-                    gridOrders.Rows[itemRowIndex].Tag = $"item|{o.InternalId}|{item.ItemId}";
-                }
+                    bool isGroup = IsVisualGroupOrder(o);
+                    bool expanded = isGroup && IsGroupExpanded(o.InternalId);
+                    string statePrefix = isGroup ? (expanded ? "∧ " : "∨ ") : string.Empty;
 
-            }
+                    string groupSource = isGroup ? "..." : GetFileName(o.SourcePath);
+                    string groupPrepared = isGroup ? "..." : GetFileName(o.PreparedPath);
+                    string groupPrint = isGroup ? "..." : GetFileName(o.PrintPath);
+                    string groupPit = isGroup ? GetCommonGroupAction(o.Items, x => x.PitStopAction) : o.PitStopAction;
+                    string groupImp = isGroup ? GetCommonGroupAction(o.Items, x => x.ImposingAction) : o.ImposingAction;
 
-            if (!string.IsNullOrEmpty(selTag))
-            {
-                foreach (DataGridViewRow row in gridOrders.Rows)
-                {
-                    if (row.Tag?.ToString() == selTag)
+                    int orderRowIndex = gridOrders.Rows.Add(
+                        statePrefix + o.Status,
+                        GetOrderDisplayId(o),
+                        groupSource,
+                        groupPrepared,
+                        groupPit,
+                        groupImp,
+                        groupPrint);
+                    gridOrders.Rows[orderRowIndex].Tag = $"order|{o.InternalId}";
+
+                    if (expanded)
                     {
-                        gridOrders.CurrentCell = row.Cells[0];
-                        break;
+                        var orderedItems = o.Items.OrderBy(x => x.SequenceNo).ToList();
+                        foreach (var item in orderedItems)
+                        {
+                            int itemRowIndex = gridOrders.Rows.Add(
+                                $"   • {item.FileStatus}",
+                                $"   └ {GetOrderDisplayId(o)}",
+                                GetFileName(item.SourcePath),
+                                GetFileName(item.PreparedPath),
+                                string.IsNullOrWhiteSpace(item.PitStopAction) ? "-" : item.PitStopAction,
+                                string.IsNullOrWhiteSpace(item.ImposingAction) ? "-" : item.ImposingAction,
+                                GetFileName(item.PrintPath));
+                            gridOrders.Rows[itemRowIndex].Tag = $"item|{o.InternalId}|{item.ItemId}";
+                        }
+                    }
+
+                    processedOrders++;
+                    if (totalOrders > 0)
+                    {
+                        int percent = (int)Math.Round((processedOrders / (double)totalOrders) * 100, MidpointRounding.AwayFromZero);
+                        if (percent != lastProgressPercent && percent % 10 == 0)
+                        {
+                            lastProgressPercent = percent;
+                            SetBottomStatus($"Обновление таблицы: {percent}%");
+                        }
                     }
                 }
+
+                if (!string.IsNullOrEmpty(selTag))
+                {
+                    foreach (DataGridViewRow row in gridOrders.Rows)
+                    {
+                        if (row.Tag?.ToString() == selTag)
+                        {
+                            gridOrders.CurrentCell = row.Cells[0];
+                            break;
+                        }
+                    }
+                }
+
+                UpdateInspectorFromSelection();
+                if (totalOrders > 0)
+                    SetBottomStatus($"Готово. Заказов в таблице: {totalOrders}");
+            }
+            finally
+            {
+                gridOrders.ResumeLayout();
             }
 
-            UpdateInspectorFromSelection();
+            ScheduleArchiveStatusRefresh();
         }
 
         private void OpenOrderStageFolder(OrderData o, int stage)
@@ -2317,7 +2345,7 @@ namespace MyManager
             {
                 if (File.Exists(dest))
                     return dest;
-                File.Copy(src, dest, true);
+                CopyFileWithProgress(src, dest, "Копирование файла");
                 return dest;
             }
             catch (IOException)
@@ -2364,9 +2392,39 @@ namespace MyManager
                 return destPath;
             }
 
-            File.Copy(sourceFile, destPath, true);
+            CopyFileWithProgress(sourceFile, destPath, "Копирование в Дедушку");
             Clipboard.SetText(destPath);
             return destPath;
+        }
+
+
+        private void CopyFileWithProgress(string sourceFile, string destPath, string operationName)
+        {
+            const int bufferSize = 1024 * 1024;
+            using var source = new FileStream(sourceFile, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize, useAsync: false);
+            using var destination = new FileStream(destPath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize, useAsync: false);
+
+            long totalBytes = source.Length;
+            long copiedBytes = 0;
+            int lastPercent = -1;
+            byte[] buffer = new byte[bufferSize];
+
+            int read;
+            while ((read = source.Read(buffer, 0, buffer.Length)) > 0)
+            {
+                destination.Write(buffer, 0, read);
+                copiedBytes += read;
+
+                if (totalBytes <= 0)
+                    continue;
+
+                int percent = (int)Math.Round((copiedBytes / (double)totalBytes) * 100, MidpointRounding.AwayFromZero);
+                if (percent != lastPercent)
+                {
+                    lastPercent = percent;
+                    SetBottomStatus($"{operationName}: {percent}%");
+                }
+            }
         }
 
         private void GridOrders_CellContentClick(object? s, DataGridViewCellEventArgs e)
@@ -2458,6 +2516,8 @@ namespace MyManager
                 if (order.ArrivalDate == default)
                     order.ArrivalDate = order.OrderDate != default ? order.OrderDate : DateTime.Now;
             }
+
+            SetBottomStatus($"Загрузка заказов: 100% ({_orderHistory.Count})");
         }
 
         private void SaveHistory()
@@ -2488,6 +2548,76 @@ namespace MyManager
             if (InvokeRequired) Invoke(new Action(FillGrid)); else FillGrid();
         }
         private void SetBottomStatus(string t) { if (InvokeRequired) Invoke(new Action(() => lblBottomStatus.Text = t)); else lblBottomStatus.Text = t; }
+
+        private void ScheduleArchiveStatusRefresh(bool force = false)
+        {
+            if (_archiveSyncInProgress)
+                return;
+
+            if (!force && DateTime.Now - _lastArchiveSyncAt < TimeSpan.FromSeconds(30))
+                return;
+
+            _archiveSyncInProgress = true;
+            Task.Run(() =>
+            {
+                List<(OrderData Order, string NewStatus, string Reason)> updates = new();
+
+                foreach (var order in _orderHistory)
+                {
+                    if ((order.Status ?? string.Empty).Contains("Ошибка", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    bool archived = IsOrderInArchive(order);
+                    if (archived)
+                    {
+                        if (!string.Equals(order.Status, "📦 В архиве", StringComparison.Ordinal))
+                            updates.Add((order, "📦 В архиве", "Файл найден в архиве"));
+                    }
+                    else if (string.Equals(order.Status, "📦 В архиве", StringComparison.Ordinal))
+                    {
+                        string nextStatus = (!string.IsNullOrWhiteSpace(order.PrintPath) && File.Exists(order.PrintPath))
+                            ? "✅ Готово"
+                            : "⚪ Ожидание";
+                        updates.Add((order, nextStatus, "Заказ больше не считается архивным"));
+                    }
+                }
+
+                if (IsDisposed)
+                {
+                    _lastArchiveSyncAt = DateTime.Now;
+                    _archiveSyncInProgress = false;
+                    return;
+                }
+
+                BeginInvoke(new Action(() =>
+                {
+                    try
+                    {
+                        if (updates.Count == 0)
+                            return;
+
+                        foreach (var update in updates)
+                        {
+                            string old = update.Order.Status ?? string.Empty;
+                            update.Order.Status = update.NewStatus;
+                            update.Order.LastStatusSource = "archive-sync";
+                            update.Order.LastStatusReason = update.Reason;
+                            update.Order.LastStatusAt = DateTime.Now;
+                            AppendOrderStatusLog(update.Order, old, update.NewStatus, "archive-sync", update.Reason);
+                        }
+
+                        SaveHistory();
+                        FillGrid();
+                        SetBottomStatus($"Синхронизация архива: обновлено {updates.Count}");
+                    }
+                    finally
+                    {
+                        _lastArchiveSyncAt = DateTime.Now;
+                        _archiveSyncInProgress = false;
+                    }
+                }));
+            });
+        }
 
         private void RefreshArchivedStatuses()
         {
