@@ -28,16 +28,17 @@ namespace MyManager
         public List<string> VariantDictionary { get; set; } = new() { "A4", "A3", "Цветной", "Ч/Б", "draft", "final" };
         public bool AutoRenameOnDuplicate { get; set; } = true;
 
-        public static string FileName => "settings.json";
+        public static string FileName => StoragePaths.ResolveFilePath("settings.json", "settings.json");
 
         public static AppSettings Load()
         {
             try
             {
-                if (!File.Exists(FileName))
+                var settingsPath = StoragePaths.ResolveExistingFilePath("settings.json", "settings.json");
+                if (!File.Exists(settingsPath))
                     return new AppSettings();
 
-                var json = File.ReadAllText(FileName);
+                var json = File.ReadAllText(settingsPath);
                 return JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
             }
             catch

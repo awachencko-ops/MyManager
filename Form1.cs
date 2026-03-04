@@ -50,9 +50,11 @@ namespace MyManager
             _ordersRootPath = settings.OrdersRootPath;
             _grandpaFolder = settings.GrandpaPath;
             _archiveDoneSubfolder = string.IsNullOrWhiteSpace(settings.ArchiveDoneSubfolder) ? "Готово" : settings.ArchiveDoneSubfolder;
-            _jsonHistoryFile = string.IsNullOrWhiteSpace(settings.HistoryFilePath) ? "history.json" : settings.HistoryFilePath;
-            _managerLogFilePath = string.IsNullOrWhiteSpace(settings.ManagerLogFilePath) ? "manager.log" : settings.ManagerLogFilePath;
-            _orderLogsFolderPath = settings.OrderLogsFolderPath ?? string.Empty;
+            _jsonHistoryFile = StoragePaths.ResolveExistingFilePath(settings.HistoryFilePath, "history.json");
+            _managerLogFilePath = StoragePaths.ResolveFilePath(settings.ManagerLogFilePath, "manager.log");
+            _orderLogsFolderPath = string.IsNullOrWhiteSpace(settings.OrderLogsFolderPath)
+                ? StoragePaths.ResolveFolderPath(string.Empty, "order-logs")
+                : StoragePaths.ResolveFolderPath(settings.OrderLogsFolderPath, "order-logs");
             _useExtendedMode = settings.UseExtendedMode;
             _sortArrivalDescending = settings.SortArrivalDescending;
             _tempRootPath = string.IsNullOrWhiteSpace(settings.TempFolderPath)
@@ -2196,9 +2198,7 @@ namespace MyManager
             foreach (char c in Path.GetInvalidFileNameChars())
                 safeId = safeId.Replace(c, '_');
 
-            string logFolder = string.IsNullOrWhiteSpace(_orderLogsFolderPath)
-                ? Path.Combine(AppContext.BaseDirectory, "order-logs")
-                : _orderLogsFolderPath;
+            string logFolder = StoragePaths.ResolveFolderPath(_orderLogsFolderPath, "order-logs");
             Directory.CreateDirectory(logFolder);
             return Path.Combine(logFolder, $"{safeId}.log");
         }
@@ -2224,9 +2224,7 @@ namespace MyManager
                 foreach (char c in Path.GetInvalidFileNameChars())
                     safeItemId = safeItemId.Replace(c, '_');
 
-                string logFolder = string.IsNullOrWhiteSpace(_orderLogsFolderPath)
-                    ? Path.Combine(AppContext.BaseDirectory, "order-logs")
-                    : _orderLogsFolderPath;
+                string logFolder = StoragePaths.ResolveFolderPath(_orderLogsFolderPath, "order-logs");
                 Directory.CreateDirectory(logFolder);
 
                 string line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} | item={item.ClientFileLabel} | op={operation} | {details}";
