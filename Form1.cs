@@ -82,6 +82,7 @@ namespace MyManager
             btnSortArrival.Click += (s, e) => ToggleArrivalSort();
             btnOpenLog.Click += (s, e) => OpenLogFile();
             txtSearch.TextChanged += (s, e) => FillGrid();
+            AddPrototypeSwitchButton();
             UpdateTopButtons();
 
             gridOrders.CellDoubleClick += GridOrders_CellDoubleClick;
@@ -105,6 +106,35 @@ namespace MyManager
             gridOrders.CellClick += GridOrders_CellClick;
 
             SetBottomStatus("Готово");
+        }
+
+
+        private void AddPrototypeSwitchButton()
+        {
+            var btnPrototype = new Button
+            {
+                Anchor = AnchorStyles.Top | AnchorStyles.Right,
+                FlatStyle = FlatStyle.Flat,
+                ForeColor = Color.White,
+                Location = new Point(1560, 17),
+                Name = "btnPrototype",
+                Size = new Size(181, 33),
+                TabIndex = 6,
+                Text = "Открыть новый UI",
+                UseVisualStyleBackColor = true
+            };
+
+            btnPrototype.FlatAppearance.BorderSize = 0;
+            btnPrototype.Click += (s, e) => OpenFieryPrototypeForm();
+            panel1.Controls.Add(btnPrototype);
+        }
+
+        private void OpenFieryPrototypeForm()
+        {
+            var prototypeForm = new FieryPrototypeForm();
+            prototypeForm.FormClosed += (s, e) => Show();
+            prototypeForm.Show();
+            Hide();
         }
 
         private void InitializeProcessor()
