@@ -16,7 +16,8 @@ namespace MyManager
             // see https://aka.ms/applicationconfiguration.
             ApplicationConfiguration.Initialize();
 
-            Application.Run(new Form1());
+            // New startup: MainForm is the primary shell; Form1 stays archived in Forms/Archive as legacy fallback during migration.
+            Application.Run(new MainForm());
         }
     }
 }

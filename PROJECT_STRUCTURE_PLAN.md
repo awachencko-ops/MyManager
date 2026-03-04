@@ -1,0 +1,96 @@
+# Предлагаемая система группировки классов MyManager
+
+Цель: перейти от плоской структуры файлов к предсказуемой архитектуре, где легко найти:
+- **Models** (данные),
+- **Services** (бизнес-логика, I/O, инфраструктура),
+- **UI** (переиспользуемые UI-компоненты),
+- **Forms** (окна WinForms),
+- и отдельно поддерживать новую главную форму **MainForm.cs**.
+
+## Ключевое правило по `Form1`
+
+`Form1` остаётся **рабочей программой**, но переводится в режим **архива (legacy)**:
+- форма физически хранится в `Forms/Archive/`;
+- её функциональность сохраняется до полного переноса в `MainForm`;
+- удаляем или окончательно консервируем `Form1` только после паритета функций.
+
+## 1) Целевая структура папок
+
+```text
+MyManager/
+  Models/
+  Services/
+  UI/
+  Forms/
+    MainForm.cs
+    MainForm.Designer.cs
+    MainForm.resx
+
+    Archive/
+      Form1.cs
+      Form1.Designer.cs
+      Form1.resx
+
+    ...другие формы
+
+  Program.cs
+  MyManager.csproj
+```
+
+## 2) Что уже сделано
+
+- Создана папка `Forms/`.
+- Созданы папки `Models/`, `Services/`, `UI/`.
+- В `Models/` перенесены: `AppSettings`, `ActionConfig`, `ImposingConfig`, `OrderData`, `OrderFileItem`.
+- В `Services/` перенесены: `ConfigService`, `OrderProcessor`, `PdfWatermark`, `Logger`, `StoragePaths`.
+- В `UI/` перенесены: `OrderGridContextMenu`, `SimpleFontResolver`.
+- `MainForm.*` перемещены в `Forms/`.
+- `Form1.*` перемещены в `Forms/Archive/` как legacy-экран.
+- Остальные окна (`ActionManagerForm`, `ImposingManagerForm`, `ImposingSelectForm`, `PitStopSelectForm`, `OrderForm`, `CopyForm`, `SimpleOrderForm`, `SettingsDialogForm`, `OrderLogViewerForm`) перенесены в `Forms/`.
+- Точка входа переключена на `MainForm`, а `Form1` остаётся в архиве как legacy fallback на период миграции.
+
+## 3) Правила по слоям
+
+### Models
+- Только структуры данных и простые валидации.
+- Без WinForms и без работы с файлами/сетью.
+
+### Services
+- Сценарии обработки заказов, конфиги, логирование, файлы и PDF.
+- Могут зависеть от `Models`.
+- Не должны зависеть от конкретных `Form`.
+
+### UI
+- Переиспользуемые визуальные/околoвизуальные элементы.
+- Допустима зависимость от WinForms.
+
+### Forms
+- Только код окон и оркестрация пользовательских действий.
+- Сложная логика выносится в `Services`.
+
+## 4) План перехода на MainForm
+
+### Этап A. Coexistence (текущий)
+1. Startup уже идёт через `MainForm`.
+2. `Form1` живёт в `Forms/Archive/` как рабочий legacy fallback.
+3. Новые функции делаем через `MainForm` + `Services`.
+4. Изменения в `Form1` — только критические исправления.
+
+### Этап B. Функциональный перенос
+1. Вытаскиваем из `Form1` блоки логики в `Services`.
+2. Подключаем эти блоки в `MainForm`.
+3. Проверяем сценарии: открытие заказов, операции, настройки, отчёты.
+
+### Этап C. Стабилизация после переключения
+1. Держим `Form1` как fallback до подтверждённого паритета.
+2. Закрываем оставшиеся расхождения между `Form1` и `MainForm`.
+
+### Этап D. Финальная консервация
+1. Если паритет подтверждён — удаляем `Form1` или переводим в окончательный read-only архив.
+
+## 5) Минимальные соглашения по именованию
+
+- Модели: существительные (`OrderData`, `AppSettings`).
+- Сервисы: суффикс `Service`/`Processor` (`ConfigService`, `OrderProcessor`).
+- Формы: суффикс `Form`.
+- UI-компоненты: говорящие имена.
