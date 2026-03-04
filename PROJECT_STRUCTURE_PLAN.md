@@ -40,6 +40,10 @@ MyManager/
 ## 2) Что уже сделано
 
 - Создана папка `Forms/`.
+- Созданы папки `Models/`, `Services/`, `UI/`.
+- В `Models/` перенесены: `AppSettings`, `ActionConfig`, `ImposingConfig`, `OrderData`, `OrderFileItem`.
+- В `Services/` перенесены: `ConfigService`, `OrderProcessor`, `PdfWatermark`, `Logger`, `StoragePaths`.
+- В `UI/` перенесены: `OrderGridContextMenu`, `SimpleFontResolver`.
 - `MainForm.*` перемещены в `Forms/`.
 - `Form1.*` перемещены в `Forms/Archive/` как legacy-экран.
 - Точка входа переключена на `MainForm`, а `Form1` остаётся в архиве как legacy fallback на период миграции.
