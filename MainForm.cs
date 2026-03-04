@@ -29,5 +29,20 @@ namespace MyManager
             // можно раскидать switch по кнопкам при необходимости
             // MessageBox.Show($"Нажато: {e.ClickedItem.Text}");
         }
+
+        private void scMain_Panel2_Paint(object sender, PaintEventArgs e)
+        {
+
+        }
+
+        private void tableLayoutPanel1_Paint(object sender, PaintEventArgs e)
+        {
+
+        }
+
+        private void pnlHeader_Paint(object sender, PaintEventArgs e)
+        {
+
+        }
     }
 }

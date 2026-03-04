@@ -1,4 +1,4 @@
-namespace MyManager
+﻿namespace MyManager
 {
     partial class MainForm
     {
@@ -32,6 +32,20 @@ namespace MyManager
             scMain = new SplitContainer();
             treeView1 = new TreeView();
             pnlServersHeader = new Panel();
+            tableLayoutPanel1 = new TableLayoutPanel();
+            pnlHeader = new Panel();
+            btnViewTiles = new Button();
+            btnViewList = new Button();
+            tbSearch = new TextBox();
+            cbQueue = new ComboBox();
+            pnlFilters = new Panel();
+            flpFilters = new FlowLayoutPanel();
+            cbFStatus = new ComboBox();
+            cbFOrderNo = new ComboBox();
+            cbFTitle = new ComboBox();
+            cbFCreated = new ComboBox();
+            cbFReceived = new ComboBox();
+            dgvJobs = new DataGridView();
             tsMainActions = new ToolStrip();
             tsbNewJob = new ToolStripButton();
             tsbRun = new ToolStripButton();
@@ -40,14 +54,25 @@ namespace MyManager
             tsbBrowse = new ToolStripButton();
             tsbConsole = new ToolStripButton();
             tsbConfig = new ToolStripButton();
-            splitContainer1 = new SplitContainer();
+            colStatus = new DataGridViewTextBoxColumn();
+            colOrderNumber = new DataGridViewTextBoxColumn();
+            colSource = new DataGridViewTextBoxColumn();
+            colPrep = new DataGridViewTextBoxColumn();
+            colPitstop = new DataGridViewTextBoxColumn();
+            colHotimposing = new DataGridViewTextBoxColumn();
+            colPrint = new DataGridViewTextBoxColumn();
+            colReceived = new DataGridViewTextBoxColumn();
+            colCreated = new DataGridViewTextBoxColumn();
             ((System.ComponentModel.ISupportInitialize)scMain).BeginInit();
             scMain.Panel1.SuspendLayout();
             scMain.Panel2.SuspendLayout();
             scMain.SuspendLayout();
+            tableLayoutPanel1.SuspendLayout();
+            pnlHeader.SuspendLayout();
+            pnlFilters.SuspendLayout();
+            flpFilters.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)dgvJobs).BeginInit();
             tsMainActions.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
-            splitContainer1.SuspendLayout();
             SuspendLayout();
             // 
             // pnlSidebar
@@ -71,8 +96,9 @@ namespace MyManager
             // 
             // scMain.Panel2
             // 
-            scMain.Panel2.Controls.Add(splitContainer1);
+            scMain.Panel2.Controls.Add(tableLayoutPanel1);
             scMain.Panel2.Controls.Add(tsMainActions);
+            scMain.Panel2.Paint += scMain_Panel2_Paint;
             scMain.Size = new Size(2213, 1244);
             scMain.SplitterDistance = 460;
             scMain.TabIndex = 1;
@@ -93,13 +119,176 @@ namespace MyManager
             pnlServersHeader.Size = new Size(460, 150);
             pnlServersHeader.TabIndex = 0;
             // 
+            // tableLayoutPanel1
+            // 
+            tableLayoutPanel1.ColumnCount = 1;
+            tableLayoutPanel1.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            tableLayoutPanel1.Controls.Add(pnlHeader, 0, 0);
+            tableLayoutPanel1.Controls.Add(pnlFilters, 0, 1);
+            tableLayoutPanel1.Controls.Add(dgvJobs, 0, 2);
+            tableLayoutPanel1.Dock = DockStyle.Fill;
+            tableLayoutPanel1.Location = new Point(0, 46);
+            tableLayoutPanel1.Margin = new Padding(0);
+            tableLayoutPanel1.Name = "tableLayoutPanel1";
+            tableLayoutPanel1.RowCount = 3;
+            tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));
+            tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));
+            tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
+            tableLayoutPanel1.Size = new Size(1749, 1198);
+            tableLayoutPanel1.TabIndex = 1;
+            tableLayoutPanel1.Paint += tableLayoutPanel1_Paint;
+            // 
+            // pnlHeader
+            // 
+            pnlHeader.Controls.Add(btnViewTiles);
+            pnlHeader.Controls.Add(btnViewList);
+            pnlHeader.Controls.Add(tbSearch);
+            pnlHeader.Controls.Add(cbQueue);
+            pnlHeader.Dock = DockStyle.Fill;
+            pnlHeader.Location = new Point(3, 3);
+            pnlHeader.Name = "pnlHeader";
+            pnlHeader.Size = new Size(1743, 36);
+            pnlHeader.TabIndex = 0;
+            pnlHeader.Paint += pnlHeader_Paint;
+            // 
+            // btnViewTiles
+            // 
+            btnViewTiles.Location = new Point(1700, 3);
+            btnViewTiles.Name = "btnViewTiles";
+            btnViewTiles.Size = new Size(34, 33);
+            btnViewTiles.TabIndex = 3;
+            btnViewTiles.Text = "▦";
+            btnViewTiles.UseVisualStyleBackColor = true;
+            // 
+            // btnViewList
+            // 
+            btnViewList.Location = new Point(1665, 3);
+            btnViewList.Name = "btnViewList";
+            btnViewList.Size = new Size(34, 33);
+            btnViewList.TabIndex = 2;
+            btnViewList.Text = "≡";
+            btnViewList.UseVisualStyleBackColor = true;
+            // 
+            // tbSearch
+            // 
+            tbSearch.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            tbSearch.Location = new Point(1357, 2);
+            tbSearch.Name = "tbSearch";
+            tbSearch.Size = new Size(240, 31);
+            tbSearch.TabIndex = 1;
+            // 
+            // cbQueue
+            // 
+            cbQueue.DropDownStyle = ComboBoxStyle.DropDownList;
+            cbQueue.FormattingEnabled = true;
+            cbQueue.Location = new Point(3, 3);
+            cbQueue.Name = "cbQueue";
+            cbQueue.Size = new Size(241, 33);
+            cbQueue.TabIndex = 0;
+            // 
+            // pnlFilters
+            // 
+            pnlFilters.Controls.Add(flpFilters);
+            pnlFilters.Dock = DockStyle.Fill;
+            pnlFilters.Location = new Point(3, 45);
+            pnlFilters.Name = "pnlFilters";
+            pnlFilters.Size = new Size(1743, 36);
+            pnlFilters.TabIndex = 1;
+            // 
+            // flpFilters
+            // 
+            flpFilters.AutoScroll = true;
+            flpFilters.Controls.Add(cbFStatus);
+            flpFilters.Controls.Add(cbFOrderNo);
+            flpFilters.Controls.Add(cbFTitle);
+            flpFilters.Controls.Add(cbFCreated);
+            flpFilters.Controls.Add(cbFReceived);
+            flpFilters.Dock = DockStyle.Fill;
+            flpFilters.Location = new Point(0, 0);
+            flpFilters.Name = "flpFilters";
+            flpFilters.Size = new Size(1743, 36);
+            flpFilters.TabIndex = 0;
+            flpFilters.WrapContents = false;
+            // 
+            // cbFStatus
+            // 
+            cbFStatus.DropDownStyle = ComboBoxStyle.DropDownList;
+            cbFStatus.FormattingEnabled = true;
+            cbFStatus.IntegralHeight = false;
+            cbFStatus.Location = new Point(3, 3);
+            cbFStatus.Name = "cbFStatus";
+            cbFStatus.Size = new Size(170, 33);
+            cbFStatus.TabIndex = 0;
+            // 
+            // cbFOrderNo
+            // 
+            cbFOrderNo.DropDownStyle = ComboBoxStyle.DropDownList;
+            cbFOrderNo.FormattingEnabled = true;
+            cbFOrderNo.IntegralHeight = false;
+            cbFOrderNo.Location = new Point(179, 3);
+            cbFOrderNo.Name = "cbFOrderNo";
+            cbFOrderNo.Size = new Size(170, 33);
+            cbFOrderNo.TabIndex = 1;
+            // 
+            // cbFTitle
+            // 
+            cbFTitle.DropDownStyle = ComboBoxStyle.DropDownList;
+            cbFTitle.FormattingEnabled = true;
+            cbFTitle.IntegralHeight = false;
+            cbFTitle.Location = new Point(355, 3);
+            cbFTitle.Name = "cbFTitle";
+            cbFTitle.Size = new Size(170, 33);
+            cbFTitle.TabIndex = 2;
+            // 
+            // cbFCreated
+            // 
+            cbFCreated.DropDownStyle = ComboBoxStyle.DropDownList;
+            cbFCreated.FormattingEnabled = true;
+            cbFCreated.IntegralHeight = false;
+            cbFCreated.Location = new Point(531, 3);
+            cbFCreated.Name = "cbFCreated";
+            cbFCreated.Size = new Size(170, 33);
+            cbFCreated.TabIndex = 3;
+            // 
+            // cbFReceived
+            // 
+            cbFReceived.DropDownStyle = ComboBoxStyle.DropDownList;
+            cbFReceived.FormattingEnabled = true;
+            cbFReceived.IntegralHeight = false;
+            cbFReceived.Location = new Point(707, 3);
+            cbFReceived.Name = "cbFReceived";
+            cbFReceived.Size = new Size(170, 33);
+            cbFReceived.TabIndex = 4;
+            // 
+            // dgvJobs
+            // 
+            dgvJobs.AllowUserToAddRows = false;
+            dgvJobs.AllowUserToDeleteRows = false;
+            dgvJobs.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            dgvJobs.BackgroundColor = Color.White;
+            dgvJobs.BorderStyle = BorderStyle.None;
+            dgvJobs.CellBorderStyle = DataGridViewCellBorderStyle.None;
+            dgvJobs.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            dgvJobs.Columns.AddRange(new DataGridViewColumn[] { colStatus, colOrderNumber, colSource, colPrep, colPitstop, colHotimposing, colPrint, colReceived, colCreated });
+            dgvJobs.Dock = DockStyle.Fill;
+            dgvJobs.Location = new Point(3, 87);
+            dgvJobs.Name = "dgvJobs";
+            dgvJobs.ReadOnly = true;
+            dgvJobs.RowHeadersVisible = false;
+            dgvJobs.RowHeadersWidth = 62;
+            dgvJobs.RowTemplate.Height = 33;
+            dgvJobs.Size = new Size(1743, 1108);
+            dgvJobs.TabIndex = 2;
+            // 
             // tsMainActions
             // 
             tsMainActions.ImageScalingSize = new Size(24, 24);
             tsMainActions.Items.AddRange(new ToolStripItem[] { tsbNewJob, tsbRun, tsbStop, tsbRemove, tsbBrowse, tsbConsole, tsbConfig });
             tsMainActions.Location = new Point(0, 0);
             tsMainActions.Name = "tsMainActions";
-            tsMainActions.Size = new Size(1749, 34);
+            tsMainActions.Padding = new Padding(6);
+            tsMainActions.Size = new Size(1749, 46);
             tsMainActions.TabIndex = 0;
             tsMainActions.Text = "tsMainActions";
             tsMainActions.ItemClicked += TsMainActions_ItemClicked;
@@ -108,37 +297,37 @@ namespace MyManager
             // 
             tsbNewJob.Name = "tsbNewJob";
             tsbNewJob.Size = new Size(81, 29);
-            tsbNewJob.Text = "�������";
+            tsbNewJob.Text = "Создать";
             // 
             // tsbRun
             // 
             tsbRun.Name = "tsbRun";
             tsbRun.Size = new Size(95, 29);
-            tsbRun.Text = "���������";
+            tsbRun.Text = "Запустить";
             // 
             // tsbStop
             // 
             tsbStop.Name = "tsbStop";
             tsbStop.Size = new Size(111, 29);
-            tsbStop.Text = "����������";
+            tsbStop.Text = "Остановить";
             // 
             // tsbRemove
             // 
             tsbRemove.Name = "tsbRemove";
             tsbRemove.Size = new Size(80, 29);
-            tsbRemove.Text = "�������";
+            tsbRemove.Text = "Удалить";
             // 
             // tsbBrowse
             // 
             tsbBrowse.Name = "tsbBrowse";
             tsbBrowse.Size = new Size(66, 29);
-            tsbBrowse.Text = "�����";
+            tsbBrowse.Text = "Папка";
             // 
             // tsbConsole
             // 
             tsbConsole.Name = "tsbConsole";
             tsbConsole.Size = new Size(46, 29);
-            tsbConsole.Text = "���";
+            tsbConsole.Text = "Лог";
             // 
             // tsbConfig
             // 
@@ -148,14 +337,69 @@ namespace MyManager
             tsbConfig.Size = new Size(34, 29);
             tsbConfig.Text = "?";
             // 
-            // splitContainer1
+            // colStatus
             // 
-            splitContainer1.Dock = DockStyle.Fill;
-            splitContainer1.Location = new Point(0, 34);
-            splitContainer1.Name = "splitContainer1";
-            splitContainer1.Size = new Size(1749, 1210);
-            splitContainer1.SplitterDistance = 583;
-            splitContainer1.TabIndex = 1;
+            colStatus.HeaderText = "Состояние";
+            colStatus.MinimumWidth = 8;
+            colStatus.Name = "colStatus";
+            colStatus.ReadOnly = true;
+            // 
+            // colOrderNumber
+            // 
+            colOrderNumber.HeaderText = "№ заказа";
+            colOrderNumber.MinimumWidth = 8;
+            colOrderNumber.Name = "colOrderNumber";
+            colOrderNumber.ReadOnly = true;
+            // 
+            // colSource
+            // 
+            colSource.HeaderText = "Исходные";
+            colSource.MinimumWidth = 8;
+            colSource.Name = "colSource";
+            colSource.ReadOnly = true;
+            colSource.Visible = false;
+            // 
+            // colPrep
+            // 
+            colPrep.HeaderText = "Заголовок задания";
+            colPrep.MinimumWidth = 8;
+            colPrep.Name = "colPrep";
+            colPrep.ReadOnly = true;
+            // 
+            // colPitstop
+            // 
+            colPitstop.HeaderText = "Pitstop";
+            colPitstop.MinimumWidth = 8;
+            colPitstop.Name = "colPitstop";
+            colPitstop.ReadOnly = true;
+            // 
+            // colHotimposing
+            // 
+            colHotimposing.HeaderText = "HotImposing";
+            colHotimposing.MinimumWidth = 8;
+            colHotimposing.Name = "colHotimposing";
+            colHotimposing.ReadOnly = true;
+            // 
+            // colPrint
+            // 
+            colPrint.HeaderText = "Печать";
+            colPrint.MinimumWidth = 8;
+            colPrint.Name = "colPrint";
+            colPrint.ReadOnly = true;
+            // 
+            // colReceived
+            // 
+            colReceived.HeaderText = "Начало обработки";
+            colReceived.MinimumWidth = 8;
+            colReceived.Name = "colReceived";
+            colReceived.ReadOnly = true;
+            // 
+            // colCreated
+            // 
+            colCreated.HeaderText = "Дата поступления";
+            colCreated.MinimumWidth = 8;
+            colCreated.Name = "colCreated";
+            colCreated.ReadOnly = true;
             // 
             // MainForm
             // 
@@ -171,10 +415,14 @@ namespace MyManager
             scMain.Panel2.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)scMain).EndInit();
             scMain.ResumeLayout(false);
+            tableLayoutPanel1.ResumeLayout(false);
+            pnlHeader.ResumeLayout(false);
+            pnlHeader.PerformLayout();
+            pnlFilters.ResumeLayout(false);
+            flpFilters.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)dgvJobs).EndInit();
             tsMainActions.ResumeLayout(false);
             tsMainActions.PerformLayout();
-            ((System.ComponentModel.ISupportInitialize)splitContainer1).EndInit();
-            splitContainer1.ResumeLayout(false);
             ResumeLayout(false);
         }
 
@@ -192,6 +440,28 @@ namespace MyManager
         private ToolStripButton tsbBrowse;
         private ToolStripButton tsbConsole;
         private ToolStripButton tsbConfig;
-        private SplitContainer splitContainer1;
+        private TableLayoutPanel tableLayoutPanel1;
+        private Panel pnlHeader;
+        private Panel pnlFilters;
+        private DataGridView dgvJobs;
+        private ComboBox cbQueue;
+        private TextBox tbSearch;
+        private Button btnViewTiles;
+        private Button btnViewList;
+        private FlowLayoutPanel flpFilters;
+        private ComboBox cbFStatus;
+        private ComboBox cbFOrderNo;
+        private ComboBox cbFTitle;
+        private ComboBox cbFCreated;
+        private ComboBox cbFReceived;
+        private DataGridViewTextBoxColumn colStatus;
+        private DataGridViewTextBoxColumn colOrderNumber;
+        private DataGridViewTextBoxColumn colSource;
+        private DataGridViewTextBoxColumn colPrep;
+        private DataGridViewTextBoxColumn colPitstop;
+        private DataGridViewTextBoxColumn colHotimposing;
+        private DataGridViewTextBoxColumn colPrint;
+        private DataGridViewTextBoxColumn colReceived;
+        private DataGridViewTextBoxColumn colCreated;
     }
 }
