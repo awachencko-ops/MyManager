@@ -82,7 +82,6 @@ namespace MyManager
             btnSortArrival.Click += (s, e) => ToggleArrivalSort();
             btnOpenLog.Click += (s, e) => OpenLogFile();
             txtSearch.TextChanged += (s, e) => FillGrid();
-            AddPrototypeSwitchButton();
             UpdateTopButtons();
 
             gridOrders.CellDoubleClick += GridOrders_CellDoubleClick;
@@ -108,34 +107,6 @@ namespace MyManager
             SetBottomStatus("Готово");
         }
 
-
-        private void AddPrototypeSwitchButton()
-        {
-            var btnPrototype = new Button
-            {
-                Anchor = AnchorStyles.Top | AnchorStyles.Right,
-                FlatStyle = FlatStyle.Flat,
-                ForeColor = Color.White,
-                Location = new Point(1560, 17),
-                Name = "btnPrototype",
-                Size = new Size(181, 33),
-                TabIndex = 6,
-                Text = "Открыть новый UI",
-                UseVisualStyleBackColor = true
-            };
-
-            btnPrototype.FlatAppearance.BorderSize = 0;
-            btnPrototype.Click += (s, e) => OpenFieryPrototypeForm();
-            panel1.Controls.Add(btnPrototype);
-        }
-
-        private void OpenFieryPrototypeForm()
-        {
-            var prototypeForm = new FieryPrototypeForm();
-            prototypeForm.FormClosed += (s, e) => Show();
-            prototypeForm.Show();
-            Hide();
-        }
 
         private void InitializeProcessor()
         {
@@ -612,7 +583,7 @@ namespace MyManager
             string oldName = Path.GetFileNameWithoutExtension(currentPath);
             string extension = Path.GetExtension(currentPath);
 
-            // Вызов диалогового окна (метод ShowInputDialog мы создавали ранее)
+            // Вызов диалогового окна (метод ShowInputDialog мы создали ранее)
             string newName = ShowInputDialog("Переименование", "Введите новое имя:", oldName);
 
             if (string.IsNullOrWhiteSpace(newName) || newName == oldName) return;
@@ -1841,12 +1812,11 @@ namespace MyManager
                             _ => ""
                         };
 
-                    string[] draggedFiles = (string[])e.Data.GetData(DataFormats.FileDrop);
-                    string draggingFile = (draggedFiles != null && draggedFiles.Length > 0) ? draggedFiles[0] : "";
+                    string draggingFile = (e.Data.GetData(DataFormats.FileDrop) as string[])?.FirstOrDefault() ?? "";
+                    draggingFile = draggingFile.Trim().Replace("\"", "");
 
-                    // Если файл в ячейке уже ТОТ ЖЕ САМЫЙ — показываем КРЕСТИК
-                    if (!string.IsNullOrEmpty(draggingFile) && !string.IsNullOrEmpty(existingPath) &&
-                        string.Equals(Path.GetFullPath(draggingFile), Path.GetFullPath(existingPath), StringComparison.OrdinalIgnoreCase))
+                    // Если перетаскиваемый файл уже существует в ячейке — показываем курсор "запрещено"
+                    if (!string.IsNullOrEmpty(existingPath) && string.Equals(Path.GetFullPath(existingPath), Path.GetFullPath(draggingFile), StringComparison.OrdinalIgnoreCase))
                     {
                         e.Effect = DragDropEffects.None;
                     }

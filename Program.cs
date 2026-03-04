@@ -16,10 +16,7 @@ namespace MyManager
             // see https://aka.ms/applicationconfiguration.
             ApplicationConfiguration.Initialize();
 
-            bool useFieryPrototype = args.Any(a =>
-                string.Equals(a, "--fiery-prototype", StringComparison.OrdinalIgnoreCase));
-
-            Application.Run(useFieryPrototype ? new FieryPrototypeForm() : new Form1());
+            Application.Run(new Form1());
         }
     }
 }
