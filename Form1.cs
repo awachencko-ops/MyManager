@@ -2389,9 +2389,9 @@ namespace MyManager
             _tempRootPath = settingsForm.TempRootPath;
             _grandpaFolder = settingsForm.GrandpaPath;
             _archiveDoneSubfolder = settingsForm.ArchiveDoneSubfolder;
-            _jsonHistoryFile = settingsForm.HistoryFilePath;
-            _managerLogFilePath = settingsForm.ManagerLogFilePath;
-            _orderLogsFolderPath = settingsForm.OrderLogsFolderPath;
+            _jsonHistoryFile = StoragePaths.ResolveFilePath(settingsForm.HistoryFilePath, "history.json");
+            _managerLogFilePath = StoragePaths.ResolveFilePath(settingsForm.ManagerLogFilePath, "manager.log");
+            _orderLogsFolderPath = StoragePaths.ResolveFolderPath(settingsForm.OrderLogsFolderPath, "order-logs");
 
             var settings = AppSettings.Load();
             settings.OrdersRootPath = _ordersRootPath;
