@@ -46,6 +46,7 @@ MyManager/
 - В `UI/` перенесены: `OrderGridContextMenu`, `SimpleFontResolver`.
 - `MainForm.*` перемещены в `Forms/`.
 - `Form1.*` перемещены в `Forms/Archive/` как legacy-экран.
+- Остальные окна (`ActionManagerForm`, `ImposingManagerForm`, `ImposingSelectForm`, `PitStopSelectForm`, `OrderForm`, `CopyForm`, `SimpleOrderForm`, `SettingsDialogForm`, `OrderLogViewerForm`) перенесены в `Forms/`.
 - Точка входа переключена на `MainForm`, а `Form1` остаётся в архиве как legacy fallback на период миграции.
 
 ## 3) Правила по слоям
