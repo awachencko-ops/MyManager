@@ -27,17 +27,16 @@ namespace MyManager
                 root.Nodes.Add("Напечатано");
                 root.Nodes.Add("В архиве");
                 root.Nodes.Add("Выполняется печать");
-        // обработчик нажатия кнопок в ToolStrip
-            // можно раскидать switch по кнопкам при необходимости
-            // MessageBox.Show($"Нажато: {e.ClickedItem.Text}");
-            MessageBox.Show(this, "Настройки сохранены", "MainForm", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                treeView1.Nodes.Add(root);
+                root.Expand();
+            };
         }
 
-        // Ð¾Ð±ÑÐ°Ð±Ð¾ÑÑÐ¸Ðº Ð½Ð°Ð¶Ð°ÑÐ¸Ñ ÐºÐ½Ð¾Ð¿Ð¾Ðº Ð² ToolStrip
+        // обработчик нажатия кнопок в ToolStrip
         private void TsMainActions_ItemClicked(object sender, ToolStripItemClickedEventArgs e)
         {
-            // Ð¼Ð¾Ð¶Ð½Ð¾ ÑÐ°ÑÐºÐ¸Ð´Ð°ÑÑ switch Ð¿Ð¾ ÐºÐ½Ð¾Ð¿ÐºÐ°Ð¼ Ð¿ÑÐ¸ Ð½ÐµÐ¾Ð±ÑÐ¾Ð´Ð¸Ð¼Ð¾ÑÑÐ¸
-            // MessageBox.Show($"ÐÐ°Ð¶Ð°ÑÐ¾: {e.ClickedItem.Text}");
+            // можно раскидать switch по кнопкам при необходимости
+            // MessageBox.Show($"Нажато: {e.ClickedItem.Text}");
         }
 
         private void LoadSettings()
@@ -88,7 +87,7 @@ namespace MyManager
             settings.Save();
 
             Logger.LogFilePath = _managerLogFilePath;
-            MessageBox.Show(this, "ÐÐ°ÑÑÑÐ¾Ð¹ÐºÐ¸ ÑÐ¾ÑÑÐ°Ð½ÐµÐ½Ñ", "MainForm", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(this, "Настройки сохранены", "MainForm", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private void scMain_Panel2_Paint(object sender, PaintEventArgs e)

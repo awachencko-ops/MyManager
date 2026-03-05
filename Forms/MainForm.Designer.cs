@@ -345,15 +345,13 @@
             // colSource
             // 
             colSource.HeaderText = "Исходные";
-            colPrep.HeaderText = "Заголовок задания";
-            colPrint.HeaderText = "Печать";
-            colReceived.HeaderText = "Начало обработки";
-            colCreated.HeaderText = "Дата поступления";
-            colSource.Visible = false;
+            colSource.MinimumWidth = 8;
+            colSource.Name = "colSource";
+            colSource.ReadOnly = true;            colSource.Visible = false;
             // 
             // colPrep
             // 
-            colPrep.HeaderText = "ÐÐ°Ð³Ð¾Ð»Ð¾Ð²Ð¾Ðº Ð·Ð°Ð´Ð°Ð½Ð¸Ñ";
+            colPrep.HeaderText = "Заголовок задания";
             colPrep.MinimumWidth = 8;
             colPrep.Name = "colPrep";
             colPrep.ReadOnly = true;
@@ -374,21 +372,21 @@
             // 
             // colPrint
             // 
-            colPrint.HeaderText = "ÐÐµÑÐ°ÑÑ";
+            colPrint.HeaderText = "Печать";
             colPrint.MinimumWidth = 8;
             colPrint.Name = "colPrint";
             colPrint.ReadOnly = true;
             // 
             // colReceived
             // 
-            colReceived.HeaderText = "ÐÐ°ÑÐ°Ð»Ð¾ Ð¾Ð±ÑÐ°Ð±Ð¾ÑÐºÐ¸";
+            colReceived.HeaderText = "Начало обработки";
             colReceived.MinimumWidth = 8;
             colReceived.Name = "colReceived";
             colReceived.ReadOnly = true;
             // 
             // colCreated
             // 
-            colCreated.HeaderText = "ÐÐ°ÑÐ° Ð¿Ð¾ÑÑÑÐ¿Ð»ÐµÐ½Ð¸Ñ";
+            colCreated.HeaderText = "Дата поступления";
             colCreated.MinimumWidth = 8;
             colCreated.Name = "colCreated";
             colCreated.ReadOnly = true;
