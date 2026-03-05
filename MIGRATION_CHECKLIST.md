@@ -20,6 +20,7 @@
 | Actions | Запуск обработки заказа | Legacy only | `Forms/Archive/Form1.cs` + `Services/OrderProcessor.cs` | - | Вынести orchestration в сервисный слой |
 | Actions | Операции copy/move/open folder | Legacy only | `Forms/Archive/Form1.cs` | - | Нужен слой command/service |
 | Logs | Просмотр лога заказа | Legacy only | `Forms/OrderLogViewerForm.cs` + `Forms/Archive/Form1.cs` | - | Подвязать из MainForm |
+| Logs | Открытие лога менеджера из верхнего меню | MainForm ready | `Forms/Archive/Form1.cs` (OpenLogFile) | `Forms/MainForm.cs` | Добавлен пункт `Параметры -> Лог менеджера` |
 | Settings | Открытие/сохранение настроек | MainForm ready | `Forms/SettingsDialogForm.cs` + `Models/AppSettings.cs` | `Forms/MainForm.cs` | Открытие по кнопке `tsbConfig`, сохранение в `AppSettings` подключено |
 | Configs | Управление PitStop/Imposing | Legacy only | `Forms/ActionManagerForm.cs`, `Forms/ImposingManagerForm.cs` | - | Доступ из MainForm через меню |
 | Stability | Возможность fallback на legacy | MainForm ready | `Forms/Archive/Form1.cs` | `MainForm` как startup | Legacy сохранён как архив |
