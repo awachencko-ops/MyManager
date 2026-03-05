@@ -53,7 +53,6 @@
             tsbRemove = new ToolStripButton();
             tsbBrowse = new ToolStripButton();
             tsbConsole = new ToolStripButton();
-            tsbConfig = new ToolStripButton();
             colStatus = new DataGridViewTextBoxColumn();
             colOrderNumber = new DataGridViewTextBoxColumn();
             colSource = new DataGridViewTextBoxColumn();
@@ -284,7 +283,7 @@
             // tsMainActions
             // 
             tsMainActions.ImageScalingSize = new Size(24, 24);
-            tsMainActions.Items.AddRange(new ToolStripItem[] { tsbNewJob, tsbRun, tsbStop, tsbRemove, tsbBrowse, tsbConsole, tsbConfig });
+            tsMainActions.Items.AddRange(new ToolStripItem[] { tsbNewJob, tsbRun, tsbStop, tsbRemove, tsbBrowse, tsbConsole });
             tsMainActions.Location = new Point(0, 0);
             tsMainActions.Name = "tsMainActions";
             tsMainActions.Padding = new Padding(6);
@@ -328,14 +327,6 @@
             tsbConsole.Name = "tsbConsole";
             tsbConsole.Size = new Size(46, 29);
             tsbConsole.Text = "Лог";
-            // 
-            // tsbConfig
-            // 
-            tsbConfig.Alignment = ToolStripItemAlignment.Right;
-            tsbConfig.DisplayStyle = ToolStripItemDisplayStyle.Text;
-            tsbConfig.Name = "tsbConfig";
-            tsbConfig.Size = new Size(34, 29);
-            tsbConfig.Text = "?";
             // 
             // colStatus
             // 
@@ -439,7 +430,6 @@
         private ToolStripButton tsbRemove;
         private ToolStripButton tsbBrowse;
         private ToolStripButton tsbConsole;
-        private ToolStripButton tsbConfig;
         private TableLayoutPanel tableLayoutPanel1;
         private Panel pnlHeader;
         private Panel pnlFilters;
