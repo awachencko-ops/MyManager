@@ -1,4 +1,4 @@
-﻿namespace MyManager
+ï»¿namespace MyManager
 {
     partial class MainForm
     {
@@ -157,7 +157,7 @@
             btnViewTiles.Name = "btnViewTiles";
             btnViewTiles.Size = new Size(34, 33);
             btnViewTiles.TabIndex = 3;
-            btnViewTiles.Text = "▦";
+            btnViewTiles.Text = "â¦";
             btnViewTiles.UseVisualStyleBackColor = true;
             // 
             // btnViewList
@@ -166,7 +166,7 @@
             btnViewList.Name = "btnViewList";
             btnViewList.Size = new Size(34, 33);
             btnViewList.TabIndex = 2;
-            btnViewList.Text = "≡";
+            btnViewList.Text = "â¡";
             btnViewList.UseVisualStyleBackColor = true;
             // 
             // tbSearch
@@ -296,55 +296,55 @@
             // 
             tsbNewJob.Name = "tsbNewJob";
             tsbNewJob.Size = new Size(81, 29);
-            tsbNewJob.Text = "Создать";
+            tsbNewJob.Text = "Ð¡Ð¾Ð·Ð´Ð°ÑÑ";
             // 
             // tsbRun
             // 
             tsbRun.Name = "tsbRun";
             tsbRun.Size = new Size(95, 29);
-            tsbRun.Text = "Запустить";
+            tsbRun.Text = "ÐÐ°Ð¿ÑÑÑÐ¸ÑÑ";
             // 
             // tsbStop
             // 
             tsbStop.Name = "tsbStop";
             tsbStop.Size = new Size(111, 29);
-            tsbStop.Text = "Остановить";
+            tsbStop.Text = "ÐÑÑÐ°Ð½Ð¾Ð²Ð¸ÑÑ";
             // 
             // tsbRemove
             // 
             tsbRemove.Name = "tsbRemove";
             tsbRemove.Size = new Size(80, 29);
-            tsbRemove.Text = "Удалить";
+            tsbRemove.Text = "Ð£Ð´Ð°Ð»Ð¸ÑÑ";
             // 
             // tsbBrowse
             // 
             tsbBrowse.Name = "tsbBrowse";
             tsbBrowse.Size = new Size(66, 29);
-            tsbBrowse.Text = "Папка";
+            tsbBrowse.Text = "ÐÐ°Ð¿ÐºÐ°";
             // 
             // tsbConsole
             // 
             tsbConsole.Name = "tsbConsole";
             tsbConsole.Size = new Size(46, 29);
-            tsbConsole.Text = "Лог";
+            tsbConsole.Text = "ÐÐ¾Ð³";
             // 
             // colStatus
             // 
-            colStatus.HeaderText = "Состояние";
+            colStatus.HeaderText = "Ð¡Ð¾ÑÑÐ¾ÑÐ½Ð¸Ðµ";
             colStatus.MinimumWidth = 8;
             colStatus.Name = "colStatus";
             colStatus.ReadOnly = true;
             // 
             // colOrderNumber
             // 
-            colOrderNumber.HeaderText = "№ заказа";
+            colOrderNumber.HeaderText = "â Ð·Ð°ÐºÐ°Ð·Ð°";
             colOrderNumber.MinimumWidth = 8;
             colOrderNumber.Name = "colOrderNumber";
             colOrderNumber.ReadOnly = true;
             // 
             // colSource
             // 
-            colSource.HeaderText = "Исходные";
+            colSource.HeaderText = "ÐÑÑÐ¾Ð´Ð½ÑÐµ";
             colSource.MinimumWidth = 8;
             colSource.Name = "colSource";
             colSource.ReadOnly = true;
@@ -352,7 +352,7 @@
             // 
             // colPrep
             // 
-            colPrep.HeaderText = "Заголовок задания";
+            colPrep.HeaderText = "ÐÐ°Ð³Ð¾Ð»Ð¾Ð²Ð¾Ðº Ð·Ð°Ð´Ð°Ð½Ð¸Ñ";
             colPrep.MinimumWidth = 8;
             colPrep.Name = "colPrep";
             colPrep.ReadOnly = true;
@@ -373,21 +373,21 @@
             // 
             // colPrint
             // 
-            colPrint.HeaderText = "Печать";
+            colPrint.HeaderText = "ÐÐµÑÐ°ÑÑ";
             colPrint.MinimumWidth = 8;
             colPrint.Name = "colPrint";
             colPrint.ReadOnly = true;
             // 
             // colReceived
             // 
-            colReceived.HeaderText = "Начало обработки";
+            colReceived.HeaderText = "ÐÐ°ÑÐ°Ð»Ð¾ Ð¾Ð±ÑÐ°Ð±Ð¾ÑÐºÐ¸";
             colReceived.MinimumWidth = 8;
             colReceived.Name = "colReceived";
             colReceived.ReadOnly = true;
             // 
             // colCreated
             // 
-            colCreated.HeaderText = "Дата поступления";
+            colCreated.HeaderText = "ÐÐ°ÑÐ° Ð¿Ð¾ÑÑÑÐ¿Ð»ÐµÐ½Ð¸Ñ";
             colCreated.MinimumWidth = 8;
             colCreated.Name = "colCreated";
             colCreated.ReadOnly = true;

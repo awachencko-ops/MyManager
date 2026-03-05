@@ -1,4 +1,4 @@
-﻿using System;
+ï»¿using System;
 using System.Windows.Forms;
 
 namespace MyManager
@@ -8,7 +8,7 @@ namespace MyManager
         private string _ordersRootPath = @"C:\MyManager\Orders";
         private string _tempRootPath = string.Empty;
         private string _grandpaFolder = @"C:\MyManager\Archive";
-        private string _archiveDoneSubfolder = "Готово";
+        private string _archiveDoneSubfolder = "ÐÐ¾ÑÐ¾Ð²Ð¾";
         private string _jsonHistoryFile = "history.json";
         private string _managerLogFilePath = "manager.log";
         private string _orderLogsFolderPath = string.Empty;
@@ -18,25 +18,25 @@ namespace MyManager
             InitializeComponent();
             LoadSettings();
 
-            // просто чтобы было видно, что всё живое
+            // Ð¿ÑÐ¾ÑÑÐ¾ ÑÑÐ¾Ð±Ñ Ð±ÑÐ»Ð¾ Ð²Ð¸Ð´Ð½Ð¾, ÑÑÐ¾ Ð²ÑÑ Ð¶Ð¸Ð²Ð¾Ðµ
             Load += (_, __) =>
             {
                 var root = new TreeNode("C60-C70-713D");
-                root.Nodes.Add("Все задания");
-                root.Nodes.Add("Удержанные");
-                root.Nodes.Add("Напечатано");
-                root.Nodes.Add("В архиве");
-                root.Nodes.Add("Выполняется печать");
+                root.Nodes.Add("ÐÑÐµ Ð·Ð°Ð´Ð°Ð½Ð¸Ñ");
+                root.Nodes.Add("Ð£Ð´ÐµÑÐ¶Ð°Ð½Ð½ÑÐµ");
+                root.Nodes.Add("ÐÐ°Ð¿ÐµÑÐ°ÑÐ°Ð½Ð¾");
+                root.Nodes.Add("Ð Ð°ÑÑÐ¸Ð²Ðµ");
+                root.Nodes.Add("ÐÑÐ¿Ð¾Ð»Ð½ÑÐµÑÑÑ Ð¿ÐµÑÐ°ÑÑ");
                 treeView1.Nodes.Add(root);
                 root.Expand();
             };
         }
 
-        // обработчик нажатия кнопок в ToolStrip
+        // Ð¾Ð±ÑÐ°Ð±Ð¾ÑÑÐ¸Ðº Ð½Ð°Ð¶Ð°ÑÐ¸Ñ ÐºÐ½Ð¾Ð¿Ð¾Ðº Ð² ToolStrip
         private void TsMainActions_ItemClicked(object sender, ToolStripItemClickedEventArgs e)
         {
-            // можно раскидать switch по кнопкам при необходимости
-            // MessageBox.Show($"Нажато: {e.ClickedItem.Text}");
+            // Ð¼Ð¾Ð¶Ð½Ð¾ ÑÐ°ÑÐºÐ¸Ð´Ð°ÑÑ switch Ð¿Ð¾ ÐºÐ½Ð¾Ð¿ÐºÐ°Ð¼ Ð¿ÑÐ¸ Ð½ÐµÐ¾Ð±ÑÐ¾Ð´Ð¸Ð¼Ð¾ÑÑÐ¸
+            // MessageBox.Show($"ÐÐ°Ð¶Ð°ÑÐ¾: {e.ClickedItem.Text}");
         }
 
         private void LoadSettings()
@@ -87,7 +87,7 @@ namespace MyManager
             settings.Save();
 
             Logger.LogFilePath = _managerLogFilePath;
-            MessageBox.Show(this, "Настройки сохранены", "MainForm", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(this, "ÐÐ°ÑÑÑÐ¾Ð¹ÐºÐ¸ ÑÐ¾ÑÑÐ°Ð½ÐµÐ½Ñ", "MainForm", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private void scMain_Panel2_Paint(object sender, PaintEventArgs e)
