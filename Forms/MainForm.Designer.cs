@@ -46,13 +46,6 @@
             cbFCreated = new ComboBox();
             cbFReceived = new ComboBox();
             dgvJobs = new DataGridView();
-            tsMainActions = new ToolStrip();
-            tsbNewJob = new ToolStripButton();
-            tsbRun = new ToolStripButton();
-            tsbStop = new ToolStripButton();
-            tsbRemove = new ToolStripButton();
-            tsbBrowse = new ToolStripButton();
-            tsbConsole = new ToolStripButton();
             colStatus = new DataGridViewTextBoxColumn();
             colOrderNumber = new DataGridViewTextBoxColumn();
             colSource = new DataGridViewTextBoxColumn();
@@ -62,6 +55,14 @@
             colPrint = new DataGridViewTextBoxColumn();
             colReceived = new DataGridViewTextBoxColumn();
             colCreated = new DataGridViewTextBoxColumn();
+            tsMainActions = new ToolStrip();
+            tsbNewJob = new ToolStripButton();
+            tsbRun = new ToolStripButton();
+            tsbStop = new ToolStripButton();
+            tsbRemove = new ToolStripButton();
+            tsbBrowse = new ToolStripButton();
+            tsbConsole = new ToolStripButton();
+            tsbParameters = new ToolStripButton();
             ((System.ComponentModel.ISupportInitialize)scMain).BeginInit();
             scMain.Panel1.SuspendLayout();
             scMain.Panel2.SuspendLayout();
@@ -276,14 +277,77 @@
             dgvJobs.ReadOnly = true;
             dgvJobs.RowHeadersVisible = false;
             dgvJobs.RowHeadersWidth = 62;
-            dgvJobs.RowTemplate.Height = 33;
             dgvJobs.Size = new Size(1743, 1108);
             dgvJobs.TabIndex = 2;
+            // 
+            // colStatus
+            // 
+            colStatus.HeaderText = "Состояние";
+            colStatus.MinimumWidth = 8;
+            colStatus.Name = "colStatus";
+            colStatus.ReadOnly = true;
+            // 
+            // colOrderNumber
+            // 
+            colOrderNumber.HeaderText = "№ заказа";
+            colOrderNumber.MinimumWidth = 8;
+            colOrderNumber.Name = "colOrderNumber";
+            colOrderNumber.ReadOnly = true;
+            // 
+            // colSource
+            // 
+            colSource.HeaderText = "Исходные";
+            colSource.MinimumWidth = 8;
+            colSource.Name = "colSource";
+            colSource.ReadOnly = true;
+            colSource.Visible = false;
+            // 
+            // colPrep
+            // 
+            colPrep.HeaderText = "Заголовок задания";
+            colPrep.MinimumWidth = 8;
+            colPrep.Name = "colPrep";
+            colPrep.ReadOnly = true;
+            // 
+            // colPitstop
+            // 
+            colPitstop.HeaderText = "Pitstop";
+            colPitstop.MinimumWidth = 8;
+            colPitstop.Name = "colPitstop";
+            colPitstop.ReadOnly = true;
+            // 
+            // colHotimposing
+            // 
+            colHotimposing.HeaderText = "HotImposing";
+            colHotimposing.MinimumWidth = 8;
+            colHotimposing.Name = "colHotimposing";
+            colHotimposing.ReadOnly = true;
+            // 
+            // colPrint
+            // 
+            colPrint.HeaderText = "Печать";
+            colPrint.MinimumWidth = 8;
+            colPrint.Name = "colPrint";
+            colPrint.ReadOnly = true;
+            // 
+            // colReceived
+            // 
+            colReceived.HeaderText = "Начало обработки";
+            colReceived.MinimumWidth = 8;
+            colReceived.Name = "colReceived";
+            colReceived.ReadOnly = true;
+            // 
+            // colCreated
+            // 
+            colCreated.HeaderText = "Дата поступления";
+            colCreated.MinimumWidth = 8;
+            colCreated.Name = "colCreated";
+            colCreated.ReadOnly = true;
             // 
             // tsMainActions
             // 
             tsMainActions.ImageScalingSize = new Size(24, 24);
-            tsMainActions.Items.AddRange(new ToolStripItem[] { tsbNewJob, tsbRun, tsbStop, tsbRemove, tsbBrowse, tsbConsole });
+            tsMainActions.Items.AddRange(new ToolStripItem[] { tsbNewJob, tsbRun, tsbStop, tsbRemove, tsbBrowse, tsbConsole, tsbParameters });
             tsMainActions.Location = new Point(0, 0);
             tsMainActions.Name = "tsMainActions";
             tsMainActions.Padding = new Padding(6);
@@ -328,68 +392,11 @@
             tsbConsole.Size = new Size(46, 29);
             tsbConsole.Text = "Лог";
             // 
-            // colStatus
+            // tsbParameters
             // 
-            colStatus.HeaderText = "Состояние";
-            colStatus.MinimumWidth = 8;
-            colStatus.Name = "colStatus";
-            colStatus.ReadOnly = true;
-            // 
-            // colOrderNumber
-            // 
-            colOrderNumber.HeaderText = "№ заказа";
-            colOrderNumber.MinimumWidth = 8;
-            colOrderNumber.Name = "colOrderNumber";
-            colOrderNumber.ReadOnly = true;
-            // 
-            // colSource
-            // 
-            colSource.HeaderText = "Исходные";
-            colSource.MinimumWidth = 8;
-            colSource.Name = "colSource";
-            colSource.ReadOnly = true;            colSource.Visible = false;
-            // 
-            // colPrep
-            // 
-            colPrep.HeaderText = "Заголовок задания";
-            colPrep.MinimumWidth = 8;
-            colPrep.Name = "colPrep";
-            colPrep.ReadOnly = true;
-            // 
-            // colPitstop
-            // 
-            colPitstop.HeaderText = "Pitstop";
-            colPitstop.MinimumWidth = 8;
-            colPitstop.Name = "colPitstop";
-            colPitstop.ReadOnly = true;
-            // 
-            // colHotimposing
-            // 
-            colHotimposing.HeaderText = "HotImposing";
-            colHotimposing.MinimumWidth = 8;
-            colHotimposing.Name = "colHotimposing";
-            colHotimposing.ReadOnly = true;
-            // 
-            // colPrint
-            // 
-            colPrint.HeaderText = "Печать";
-            colPrint.MinimumWidth = 8;
-            colPrint.Name = "colPrint";
-            colPrint.ReadOnly = true;
-            // 
-            // colReceived
-            // 
-            colReceived.HeaderText = "Начало обработки";
-            colReceived.MinimumWidth = 8;
-            colReceived.Name = "colReceived";
-            colReceived.ReadOnly = true;
-            // 
-            // colCreated
-            // 
-            colCreated.HeaderText = "Дата поступления";
-            colCreated.MinimumWidth = 8;
-            colCreated.Name = "colCreated";
-            colCreated.ReadOnly = true;
+            tsbParameters.Name = "tsbParameters";
+            tsbParameters.Size = new Size(111, 29);
+            tsbParameters.Text = "Параметры";
             // 
             // MainForm
             // 
@@ -452,5 +459,6 @@
         private DataGridViewTextBoxColumn colPrint;
         private DataGridViewTextBoxColumn colReceived;
         private DataGridViewTextBoxColumn colCreated;
+        private ToolStripButton tsbParameters;
     }
 }
