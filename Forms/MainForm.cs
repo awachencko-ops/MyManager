@@ -35,8 +35,10 @@ namespace MyManager
         // обработчик нажатия кнопок в ToolStrip
         private void TsMainActions_ItemClicked(object sender, ToolStripItemClickedEventArgs e)
         {
-            // можно раскидать switch по кнопкам при необходимости
-            // MessageBox.Show($"Нажато: {e.ClickedItem.Text}");
+            if (e.ClickedItem == tsbParameters)
+            {
+                ShowSettingsDialog();
+            }
         }
 
         private void LoadSettings()
