@@ -41,8 +41,12 @@ namespace MyManager
         {
             Text = "Настройки";
             StartPosition = FormStartPosition.CenterParent;
-            MinimumSize = new Size(980, 760);
-            Size = new Size(1160, 860);
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            MaximizeBox = false;
+            MinimizeBox = false;
+            ClientSize = new Size(1460, 980);
+            MinimumSize = Size;
+            MaximumSize = Size;
 
             _pitStopForm = new ActionManagerForm();
             _pitStopForm.SetEmbeddedMode(true);
