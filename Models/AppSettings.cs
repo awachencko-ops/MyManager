@@ -1,0 +1,62 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Text.Json;
+
+namespace MyManager
+{
+    public class AppSettings
+    {
+        public string OrdersRootPath { get; set; } = @"C:\MyManager\Orders";
+        public string GrandpaPath { get; set; } = @"C:\MyManager\Archive";
+        public string ArchiveDoneSubfolder { get; set; } = "Готово";
+
+        public int RunTimeoutMinutes { get; set; } = 10;
+        public bool UseExtendedMode { get; set; } = true;
+        public string TempFolderName { get; set; } = "TempMyManager";
+        public string TempFolderPath { get; set; } = "";
+        public bool SortArrivalDescending { get; set; } = true;
+
+        public string HistoryFilePath { get; set; } = "history.json";
+        public string ManagerLogFilePath { get; set; } = "manager.log";
+        public string OrderLogsFolderPath { get; set; } = "";
+
+        // Настройки многофайловых заказов
+        public bool AllowManualSequenceReordering { get; set; } = true;
+        public int MaxParallelism { get; set; } = 4;
+        public string DefaultOrderSortBy { get; set; } = "SequenceNo";
+        public List<string> VariantDictionary { get; set; } = new() { "A4", "A3", "Цветной", "Ч/Б", "draft", "final" };
+        public bool AutoRenameOnDuplicate { get; set; } = true;
+
+        public static string FileName => StoragePaths.ResolveFilePath("settings.json", "settings.json");
+
+        public static AppSettings Load()
+        {
+            try
+            {
+                var settingsPath = StoragePaths.ResolveExistingFilePath("settings.json", "settings.json");
+                if (!File.Exists(settingsPath))
+                    return new AppSettings();
+
+                var json = File.ReadAllText(settingsPath);
+                return JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
+            }
+            catch
+            {
+                return new AppSettings();
+            }
+        }
+
+        public void Save()
+        {
+            try
+            {
+                File.WriteAllText(FileName, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
+            }
+            catch
+            {
+                // молча
+            }
+        }
+    }
+}
