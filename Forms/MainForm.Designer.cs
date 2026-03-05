@@ -1,4 +1,4 @@
-ï»¿namespace MyManager
+namespace MyManager
 {
     partial class MainForm
     {
@@ -157,7 +157,7 @@
             btnViewTiles.Name = "btnViewTiles";
             btnViewTiles.Size = new Size(34, 33);
             btnViewTiles.TabIndex = 3;
-            btnViewTiles.Text = "â¦";
+            btnViewTiles.Text = "▦";
             btnViewTiles.UseVisualStyleBackColor = true;
             // 
             // btnViewList
@@ -166,7 +166,7 @@
             btnViewList.Name = "btnViewList";
             btnViewList.Size = new Size(34, 33);
             btnViewList.TabIndex = 2;
-            btnViewList.Text = "â¡";
+            btnViewList.Text = "≡";
             btnViewList.UseVisualStyleBackColor = true;
             // 
             // tbSearch
@@ -296,58 +296,59 @@
             // 
             tsbNewJob.Name = "tsbNewJob";
             tsbNewJob.Size = new Size(81, 29);
-            tsbNewJob.Text = "Ð¡Ð¾Ð·Ð´Ð°ÑÑ";
+            tsbNewJob.Text = "Создать";
             // 
             // tsbRun
             // 
             tsbRun.Name = "tsbRun";
             tsbRun.Size = new Size(95, 29);
-            tsbRun.Text = "ÐÐ°Ð¿ÑÑÑÐ¸ÑÑ";
+            tsbRun.Text = "Запустить";
             // 
             // tsbStop
             // 
             tsbStop.Name = "tsbStop";
             tsbStop.Size = new Size(111, 29);
-            tsbStop.Text = "ÐÑÑÐ°Ð½Ð¾Ð²Ð¸ÑÑ";
+            tsbStop.Text = "Остановить";
             // 
             // tsbRemove
             // 
             tsbRemove.Name = "tsbRemove";
             tsbRemove.Size = new Size(80, 29);
-            tsbRemove.Text = "Ð£Ð´Ð°Ð»Ð¸ÑÑ";
+            tsbRemove.Text = "Удалить";
             // 
             // tsbBrowse
             // 
             tsbBrowse.Name = "tsbBrowse";
             tsbBrowse.Size = new Size(66, 29);
-            tsbBrowse.Text = "ÐÐ°Ð¿ÐºÐ°";
+            tsbBrowse.Text = "Папка";
             // 
             // tsbConsole
             // 
             tsbConsole.Name = "tsbConsole";
             tsbConsole.Size = new Size(46, 29);
-            tsbConsole.Text = "ÐÐ¾Ð³";
+            tsbConsole.Text = "Лог";
             // 
             // colStatus
             // 
-            colStatus.HeaderText = "Ð¡Ð¾ÑÑÐ¾ÑÐ½Ð¸Ðµ";
+            colStatus.HeaderText = "Состояние";
             colStatus.MinimumWidth = 8;
             colStatus.Name = "colStatus";
             colStatus.ReadOnly = true;
             // 
             // colOrderNumber
             // 
-            colOrderNumber.HeaderText = "â Ð·Ð°ÐºÐ°Ð·Ð°";
+            colOrderNumber.HeaderText = "№ заказа";
             colOrderNumber.MinimumWidth = 8;
             colOrderNumber.Name = "colOrderNumber";
             colOrderNumber.ReadOnly = true;
             // 
             // colSource
             // 
-            colSource.HeaderText = "ÐÑÑÐ¾Ð´Ð½ÑÐµ";
-            colSource.MinimumWidth = 8;
-            colSource.Name = "colSource";
-            colSource.ReadOnly = true;
+            colSource.HeaderText = "Исходные";
+            colPrep.HeaderText = "Заголовок задания";
+            colPrint.HeaderText = "Печать";
+            colReceived.HeaderText = "Начало обработки";
+            colCreated.HeaderText = "Дата поступления";
             colSource.Visible = false;
             // 
             // colPrep
