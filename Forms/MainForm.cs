@@ -1,4 +1,6 @@
-п»їusing System;
+using System;
+using System.Diagnostics;
+using System.IO;
 using System.Windows.Forms;
 
 namespace MyManager
@@ -8,31 +10,38 @@ namespace MyManager
         private string _ordersRootPath = @"C:\MyManager\Orders";
         private string _tempRootPath = string.Empty;
         private string _grandpaFolder = @"C:\MyManager\Archive";
-        private string _archiveDoneSubfolder = "Р“РѕС‚РѕРІРѕ";
+        private string _archiveDoneSubfolder = "Готово";
         private string _jsonHistoryFile = "history.json";
         private string _managerLogFilePath = "manager.log";
         private string _orderLogsFolderPath = string.Empty;
+
+        private MenuStrip? _mainMenu;
+        private ToolStripMenuItem? _menuParameters;
+        private ToolStripMenuItem? _menuSettings;
+        private ToolStripMenuItem? _menuManagerLog;
+        private Panel? _contentHost;
 
         public MainForm()
         {
             InitializeComponent();
             LoadSettings();
+            SetupTopMenu();
 
-            // РїСЂРѕСЃС‚Рѕ С‡С‚РѕР±С‹ Р±С‹Р»Рѕ РІРёРґРЅРѕ, С‡С‚Рѕ РІСЃС‘ Р¶РёРІРѕРµ
+            // просто чтобы было видно, что всё живое
             Load += (_, __) =>
             {
                 var root = new TreeNode("C60-C70-713D");
-                root.Nodes.Add("Р’СЃРµ Р·Р°РґР°РЅРёСЏ");
-                root.Nodes.Add("РЈРґРµСЂР¶Р°РЅРЅС‹Рµ");
-                root.Nodes.Add("РќР°РїРµС‡Р°С‚Р°РЅРѕ");
-                root.Nodes.Add("Р’ Р°СЂС…РёРІРµ");
-                root.Nodes.Add("Р’С‹РїРѕР»РЅСЏРµС‚СЃСЏ РїРµС‡Р°С‚СЊ");
+                root.Nodes.Add("Все задания");
+                root.Nodes.Add("Удержанные");
+                root.Nodes.Add("Напечатано");
+                root.Nodes.Add("В архиве");
+                root.Nodes.Add("Выполняется печать");
                 treeView1.Nodes.Add(root);
                 root.Expand();
             };
         }
 
-        // РѕР±СЂР°Р±РѕС‚С‡РёРє РЅР°Р¶Р°С‚РёСЏ РєРЅРѕРїРѕРє РІ ToolStrip
+        // обработчик нажатия кнопок в ToolStrip
         private void TsMainActions_ItemClicked(object sender, ToolStripItemClickedEventArgs e)
         {
             if (e.ClickedItem == tsbConfig)
@@ -41,8 +50,8 @@ namespace MyManager
                 return;
             }
 
-            // РјРѕР¶РЅРѕ СЂР°СЃРєРёРґР°С‚СЊ switch РїРѕ РєРЅРѕРїРєР°Рј РїСЂРё РЅРµРѕР±С…РѕРґРёРјРѕСЃС‚Рё
-            // MessageBox.Show($"РќР°Р¶Р°С‚Рѕ: {e.ClickedItem.Text}");
+            // можно раскидать switch по кнопкам при необходимости
+            // MessageBox.Show($"Нажато: {e.ClickedItem.Text}");
         }
 
         private void LoadSettings()
@@ -93,7 +102,71 @@ namespace MyManager
             settings.Save();
 
             Logger.LogFilePath = _managerLogFilePath;
-            MessageBox.Show(this, "РќР°СЃС‚СЂРѕР№РєРё СЃРѕС…СЂР°РЅРµРЅС‹", "MainForm", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(this, "Настройки сохранены", "MainForm", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+
+        private void SetupTopMenu()
+        {
+            _mainMenu = new MenuStrip();
+            _menuParameters = new ToolStripMenuItem("Параметры");
+            _menuSettings = new ToolStripMenuItem("Настройки");
+            _menuManagerLog = new ToolStripMenuItem("Лог менеджера");
+
+            _menuSettings.Click += (_, __) => ShowSettingsDialog();
+            _menuManagerLog.Click += (_, __) => OpenManagerLogFile();
+
+            _menuParameters.DropDownItems.Add(_menuSettings);
+            _menuParameters.DropDownItems.Add(new ToolStripSeparator());
+            _menuParameters.DropDownItems.Add(_menuManagerLog);
+
+            _mainMenu.Items.Add(_menuParameters);
+            _mainMenu.Dock = DockStyle.Top;
+
+            MainMenuStrip = _mainMenu;
+            Controls.Add(_mainMenu);
+
+            EnsureTopLevelLayout();
+            _mainMenu.BringToFront();
+        }
+
+        private void EnsureTopLevelLayout()
+        {
+            if (_contentHost != null)
+                return;
+
+            _contentHost = new Panel
+            {
+                Dock = DockStyle.Fill,
+                Name = "contentHost"
+            };
+
+            Controls.Add(_contentHost);
+            _contentHost.BringToFront();
+
+            _contentHost.Controls.Add(scMain);
+            _contentHost.Controls.Add(pnlSidebar);
+        }
+
+        private void OpenManagerLogFile()
+        {
+            if (string.IsNullOrWhiteSpace(_managerLogFilePath))
+            {
+                MessageBox.Show(this, "Путь к логу не задан", "Лог", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (!File.Exists(_managerLogFilePath))
+            {
+                MessageBox.Show(this, "Файл лога пока не создан", "Лог", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = _managerLogFilePath,
+                UseShellExecute = true
+            });
         }
 
         private void scMain_Panel2_Paint(object sender, PaintEventArgs e)

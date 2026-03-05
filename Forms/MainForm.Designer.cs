@@ -1,4 +1,4 @@
-Ôªønamespace MyManager
+namespace MyManager
 {
     partial class MainForm
     {
@@ -46,14 +46,6 @@
             cbFCreated = new ComboBox();
             cbFReceived = new ComboBox();
             dgvJobs = new DataGridView();
-            tsMainActions = new ToolStrip();
-            tsbNewJob = new ToolStripButton();
-            tsbRun = new ToolStripButton();
-            tsbStop = new ToolStripButton();
-            tsbRemove = new ToolStripButton();
-            tsbBrowse = new ToolStripButton();
-            tsbConsole = new ToolStripButton();
-            tsbConfig = new ToolStripButton();
             colStatus = new DataGridViewTextBoxColumn();
             colOrderNumber = new DataGridViewTextBoxColumn();
             colSource = new DataGridViewTextBoxColumn();
@@ -63,6 +55,16 @@
             colPrint = new DataGridViewTextBoxColumn();
             colReceived = new DataGridViewTextBoxColumn();
             colCreated = new DataGridViewTextBoxColumn();
+            tsMainActions = new ToolStrip();
+            tsbNewJob = new ToolStripButton();
+            tsbRun = new ToolStripButton();
+            tsbStop = new ToolStripButton();
+            tsbRemove = new ToolStripButton();
+            tsbBrowse = new ToolStripButton();
+            tsbConsole = new ToolStripButton();
+            tsbConfig = new ToolStripButton();
+            pnlTop = new Panel();
+            pnlBody = new Panel();
             ((System.ComponentModel.ISupportInitialize)scMain).BeginInit();
             scMain.Panel1.SuspendLayout();
             scMain.Panel2.SuspendLayout();
@@ -73,6 +75,7 @@
             flpFilters.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)dgvJobs).BeginInit();
             tsMainActions.SuspendLayout();
+            pnlBody.SuspendLayout();
             SuspendLayout();
             // 
             // pnlSidebar
@@ -80,7 +83,7 @@
             pnlSidebar.Dock = DockStyle.Left;
             pnlSidebar.Location = new Point(0, 0);
             pnlSidebar.Name = "pnlSidebar";
-            pnlSidebar.Size = new Size(65, 1244);
+            pnlSidebar.Size = new Size(65, 1204);
             pnlSidebar.TabIndex = 0;
             // 
             // scMain
@@ -99,7 +102,7 @@
             scMain.Panel2.Controls.Add(tableLayoutPanel1);
             scMain.Panel2.Controls.Add(tsMainActions);
             scMain.Panel2.Paint += scMain_Panel2_Paint;
-            scMain.Size = new Size(2213, 1244);
+            scMain.Size = new Size(2213, 1204);
             scMain.SplitterDistance = 460;
             scMain.TabIndex = 1;
             // 
@@ -108,7 +111,7 @@
             treeView1.Dock = DockStyle.Fill;
             treeView1.Location = new Point(0, 150);
             treeView1.Name = "treeView1";
-            treeView1.Size = new Size(460, 1094);
+            treeView1.Size = new Size(460, 1054);
             treeView1.TabIndex = 1;
             // 
             // pnlServersHeader
@@ -135,7 +138,7 @@
             tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));
             tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
             tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
-            tableLayoutPanel1.Size = new Size(1749, 1198);
+            tableLayoutPanel1.Size = new Size(1749, 1158);
             tableLayoutPanel1.TabIndex = 1;
             tableLayoutPanel1.Paint += tableLayoutPanel1_Paint;
             // 
@@ -158,7 +161,7 @@
             btnViewTiles.Name = "btnViewTiles";
             btnViewTiles.Size = new Size(34, 33);
             btnViewTiles.TabIndex = 3;
-            btnViewTiles.Text = "‚ñ¶";
+            btnViewTiles.Text = "?";
             btnViewTiles.UseVisualStyleBackColor = true;
             // 
             // btnViewList
@@ -167,7 +170,7 @@
             btnViewList.Name = "btnViewList";
             btnViewList.Size = new Size(34, 33);
             btnViewList.TabIndex = 2;
-            btnViewList.Text = "‚â°";
+            btnViewList.Text = "?";
             btnViewList.UseVisualStyleBackColor = true;
             // 
             // tbSearch
@@ -278,82 +281,26 @@
             dgvJobs.RowHeadersVisible = false;
             dgvJobs.RowHeadersWidth = 62;
             dgvJobs.RowTemplate.Height = 33;
-            dgvJobs.Size = new Size(1743, 1108);
+            dgvJobs.Size = new Size(1743, 1068);
             dgvJobs.TabIndex = 2;
-            // 
-            // tsMainActions
-            // 
-            tsMainActions.ImageScalingSize = new Size(24, 24);
-            tsMainActions.Items.AddRange(new ToolStripItem[] { tsbNewJob, tsbRun, tsbStop, tsbRemove, tsbBrowse, tsbConsole, tsbConfig });
-            tsMainActions.Location = new Point(0, 0);
-            tsMainActions.Name = "tsMainActions";
-            tsMainActions.Padding = new Padding(6);
-            tsMainActions.Size = new Size(1749, 46);
-            tsMainActions.TabIndex = 0;
-            tsMainActions.Text = "tsMainActions";
-            tsMainActions.ItemClicked += TsMainActions_ItemClicked;
-            // 
-            // tsbNewJob
-            // 
-            tsbNewJob.Name = "tsbNewJob";
-            tsbNewJob.Size = new Size(81, 29);
-            tsbNewJob.Text = "–°–æ–∑–¥–∞—Ç—å";
-            // 
-            // tsbRun
-            // 
-            tsbRun.Name = "tsbRun";
-            tsbRun.Size = new Size(95, 29);
-            tsbRun.Text = "–ó–∞–ø—É—Å—Ç–∏—Ç—å";
-            // 
-            // tsbStop
-            // 
-            tsbStop.Name = "tsbStop";
-            tsbStop.Size = new Size(111, 29);
-            tsbStop.Text = "–û—Å—Ç–∞–Ω–æ–≤–∏—Ç—å";
-            // 
-            // tsbRemove
-            // 
-            tsbRemove.Name = "tsbRemove";
-            tsbRemove.Size = new Size(80, 29);
-            tsbRemove.Text = "–£–¥–∞–ª–∏—Ç—å";
-            // 
-            // tsbBrowse
-            // 
-            tsbBrowse.Name = "tsbBrowse";
-            tsbBrowse.Size = new Size(66, 29);
-            tsbBrowse.Text = "–ü–∞–ø–∫–∞";
-            // 
-            // tsbConsole
-            // 
-            tsbConsole.Name = "tsbConsole";
-            tsbConsole.Size = new Size(46, 29);
-            tsbConsole.Text = "–õ–æ–≥";
-            // 
-            // tsbConfig
-            // 
-            tsbConfig.Alignment = ToolStripItemAlignment.Right;
-            tsbConfig.DisplayStyle = ToolStripItemDisplayStyle.Text;
-            tsbConfig.Name = "tsbConfig";
-            tsbConfig.Size = new Size(34, 29);
-            tsbConfig.Text = "?";
             // 
             // colStatus
             // 
-            colStatus.HeaderText = "–°–æ—Å—Ç–æ—è–Ω–∏–µ";
+            colStatus.HeaderText = "—ÓÒÚÓˇÌËÂ";
             colStatus.MinimumWidth = 8;
             colStatus.Name = "colStatus";
             colStatus.ReadOnly = true;
             // 
             // colOrderNumber
             // 
-            colOrderNumber.HeaderText = "‚Ññ –∑–∞–∫–∞–∑–∞";
+            colOrderNumber.HeaderText = "π Á‡Í‡Á‡";
             colOrderNumber.MinimumWidth = 8;
             colOrderNumber.Name = "colOrderNumber";
             colOrderNumber.ReadOnly = true;
             // 
             // colSource
             // 
-            colSource.HeaderText = "–ò—Å—Ö–æ–¥–Ω—ã–µ";
+            colSource.HeaderText = "»ÒıÓ‰Ì˚Â";
             colSource.MinimumWidth = 8;
             colSource.Name = "colSource";
             colSource.ReadOnly = true;
@@ -361,7 +308,7 @@
             // 
             // colPrep
             // 
-            colPrep.HeaderText = "–ó–∞–≥–æ–ª–æ–≤–æ–∫ –∑–∞–¥–∞–Ω–∏—è";
+            colPrep.HeaderText = "«‡„ÓÎÓ‚ÓÍ Á‡‰‡ÌËˇ";
             colPrep.MinimumWidth = 8;
             colPrep.Name = "colPrep";
             colPrep.ReadOnly = true;
@@ -382,32 +329,107 @@
             // 
             // colPrint
             // 
-            colPrint.HeaderText = "–ü–µ—á–∞—Ç—å";
+            colPrint.HeaderText = "œÂ˜‡Ú¸";
             colPrint.MinimumWidth = 8;
             colPrint.Name = "colPrint";
             colPrint.ReadOnly = true;
             // 
             // colReceived
             // 
-            colReceived.HeaderText = "–ù–∞—á–∞–ª–æ –æ–±—Ä–∞–±–æ—Ç–∫–∏";
+            colReceived.HeaderText = "Õ‡˜‡ÎÓ Ó·‡·ÓÚÍË";
             colReceived.MinimumWidth = 8;
             colReceived.Name = "colReceived";
             colReceived.ReadOnly = true;
             // 
             // colCreated
             // 
-            colCreated.HeaderText = "–î–∞—Ç–∞ –ø–æ—Å—Ç—É–ø–ª–µ–Ω–∏—è";
+            colCreated.HeaderText = "ƒ‡Ú‡ ÔÓÒÚÛÔÎÂÌËˇ";
             colCreated.MinimumWidth = 8;
             colCreated.Name = "colCreated";
             colCreated.ReadOnly = true;
+            // 
+            // tsMainActions
+            // 
+            tsMainActions.ImageScalingSize = new Size(24, 24);
+            tsMainActions.Items.AddRange(new ToolStripItem[] { tsbNewJob, tsbRun, tsbStop, tsbRemove, tsbBrowse, tsbConsole, tsbConfig });
+            tsMainActions.Location = new Point(0, 0);
+            tsMainActions.Name = "tsMainActions";
+            tsMainActions.Padding = new Padding(6);
+            tsMainActions.Size = new Size(1749, 46);
+            tsMainActions.TabIndex = 0;
+            tsMainActions.Text = "tsMainActions";
+            tsMainActions.ItemClicked += TsMainActions_ItemClicked;
+            // 
+            // tsbNewJob
+            // 
+            tsbNewJob.Name = "tsbNewJob";
+            tsbNewJob.Size = new Size(81, 29);
+            tsbNewJob.Text = "—ÓÁ‰‡Ú¸";
+            // 
+            // tsbRun
+            // 
+            tsbRun.Name = "tsbRun";
+            tsbRun.Size = new Size(95, 29);
+            tsbRun.Text = "«‡ÔÛÒÚËÚ¸";
+            // 
+            // tsbStop
+            // 
+            tsbStop.Name = "tsbStop";
+            tsbStop.Size = new Size(111, 29);
+            tsbStop.Text = "ŒÒÚ‡ÌÓ‚ËÚ¸";
+            // 
+            // tsbRemove
+            // 
+            tsbRemove.Name = "tsbRemove";
+            tsbRemove.Size = new Size(80, 29);
+            tsbRemove.Text = "”‰‡ÎËÚ¸";
+            // 
+            // tsbBrowse
+            // 
+            tsbBrowse.Name = "tsbBrowse";
+            tsbBrowse.Size = new Size(66, 29);
+            tsbBrowse.Text = "œ‡ÔÍ‡";
+            // 
+            // tsbConsole
+            // 
+            tsbConsole.Name = "tsbConsole";
+            tsbConsole.Size = new Size(46, 29);
+            tsbConsole.Text = "ÀÓ„";
+            // 
+            // tsbConfig
+            // 
+            tsbConfig.Alignment = ToolStripItemAlignment.Right;
+            tsbConfig.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            tsbConfig.Name = "tsbConfig";
+            tsbConfig.Size = new Size(34, 29);
+            tsbConfig.Text = "?";
+            // 
+            // pnlTop
+            // 
+            pnlTop.Dock = DockStyle.Top;
+            pnlTop.Location = new Point(0, 0);
+            pnlTop.Name = "pnlTop";
+            pnlTop.Size = new Size(2278, 40);
+            pnlTop.TabIndex = 0;
+            // 
+            // pnlBody
+            // 
+            pnlBody.Controls.Add(scMain);
+            pnlBody.Controls.Add(pnlSidebar);
+            pnlBody.Dock = DockStyle.Fill;
+            pnlBody.Location = new Point(0, 40);
+            pnlBody.Name = "pnlBody";
+            pnlBody.Size = new Size(2278, 1204);
+            pnlBody.TabIndex = 2;
             // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(10F, 25F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(2278, 1244);
-            Controls.Add(scMain);
-            Controls.Add(pnlSidebar);
+            Controls.Add(pnlBody);
+            Controls.Add(pnlTop);
+            FormBorderStyle = FormBorderStyle.FixedSingle;
             Name = "MainForm";
             Text = "MainForm";
             scMain.Panel1.ResumeLayout(false);
@@ -423,6 +445,7 @@
             ((System.ComponentModel.ISupportInitialize)dgvJobs).EndInit();
             tsMainActions.ResumeLayout(false);
             tsMainActions.PerformLayout();
+            pnlBody.ResumeLayout(false);
             ResumeLayout(false);
         }
 
@@ -463,5 +486,7 @@
         private DataGridViewTextBoxColumn colPrint;
         private DataGridViewTextBoxColumn colReceived;
         private DataGridViewTextBoxColumn colCreated;
+        private Panel pnlTop;
+        private Panel pnlBody;
     }
 }
