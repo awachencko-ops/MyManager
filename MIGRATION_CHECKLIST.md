@@ -20,7 +20,7 @@
 | Actions | Запуск обработки заказа | Legacy only | `Forms/Archive/Form1.cs` + `Services/OrderProcessor.cs` | - | Вынести orchestration в сервисный слой |
 | Actions | Операции copy/move/open folder | Legacy only | `Forms/Archive/Form1.cs` | - | Нужен слой command/service |
 | Logs | Просмотр лога заказа | Legacy only | `Forms/OrderLogViewerForm.cs` + `Forms/Archive/Form1.cs` | - | Подвязать из MainForm |
-| Settings | Открытие/сохранение настроек | Legacy only | `Forms/SettingsDialogForm.cs` + `Models/AppSettings.cs` | - | Подвязать через MainForm |
+| Settings | Открытие/сохранение настроек | MainForm ready | `Forms/SettingsDialogForm.cs` + `Models/AppSettings.cs` | `Forms/MainForm.cs` | Открытие по кнопке `tsbConfig`, сохранение в `AppSettings` подключено |
 | Configs | Управление PitStop/Imposing | Legacy only | `Forms/ActionManagerForm.cs`, `Forms/ImposingManagerForm.cs` | - | Доступ из MainForm через меню |
 | Stability | Возможность fallback на legacy | MainForm ready | `Forms/Archive/Form1.cs` | `MainForm` как startup | Legacy сохранён как архив |
 
@@ -32,6 +32,6 @@
 5. Обновить статус в таблице.
 
 ## Ближайшие 3 шага (предложение)
-1. Подключить из `MainForm` открытие `SettingsDialogForm`.
+1. ✅ Подключено: открытие `SettingsDialogForm` из `MainForm` (`tsbConfig`).
 2. Подключить из `MainForm` просмотр `OrderLogViewerForm` для выбранного заказа.
 3. Подключить из `MainForm` запуск `OrderProcessor` для тестового сценария.
