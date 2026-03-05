@@ -1,4 +1,4 @@
-namespace MyManager
+﻿namespace MyManager
 {
     partial class MainForm
     {
