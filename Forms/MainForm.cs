@@ -19,6 +19,7 @@ namespace MyManager
         private ToolStripMenuItem? _menuParameters;
         private ToolStripMenuItem? _menuSettings;
         private ToolStripMenuItem? _menuManagerLog;
+        private Panel? _contentHost;
 
         public MainForm()
         {
@@ -124,7 +125,27 @@ namespace MyManager
 
             MainMenuStrip = _mainMenu;
             Controls.Add(_mainMenu);
+
+            EnsureTopLevelLayout();
             _mainMenu.BringToFront();
+        }
+
+        private void EnsureTopLevelLayout()
+        {
+            if (_contentHost != null)
+                return;
+
+            _contentHost = new Panel
+            {
+                Dock = DockStyle.Fill,
+                Name = "contentHost"
+            };
+
+            Controls.Add(_contentHost);
+            _contentHost.BringToFront();
+
+            _contentHost.Controls.Add(scMain);
+            _contentHost.Controls.Add(pnlSidebar);
         }
 
         private void OpenManagerLogFile()
