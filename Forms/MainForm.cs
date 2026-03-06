@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Windows.Forms;
 
 namespace MyManager
@@ -29,10 +30,16 @@ namespace MyManager
         private bool _isSyncingQueueSelection;
         private string _currentUserName = string.Empty;
 
+        private static readonly Color QueuePanelBackColor = Color.FromArgb(68, 74, 94);
+        private static readonly Color QueueHeaderBackColor = Color.FromArgb(103, 163, 216);
+        private static readonly Color QueueStatusSelectedBackColor = Color.FromArgb(57, 63, 81);
+        private static readonly Color QueueTextColor = Color.FromArgb(244, 247, 252);
+
         public MainForm()
         {
             InitializeComponent();
             LoadSettings();
+            ApplyQueueVisualStyle();
             InitializeQueueNavigation();
         }
 
@@ -56,6 +63,35 @@ namespace MyManager
             _managerLogFilePath = settings.ManagerLogFilePath;
             _orderLogsFolderPath = settings.OrderLogsFolderPath;
             Logger.LogFilePath = _managerLogFilePath;
+        }
+
+        private void ApplyQueueVisualStyle()
+        {
+            scMain.Panel1.BackColor = QueuePanelBackColor;
+            pnlServersHeader.BackColor = QueuePanelBackColor;
+            pnlServersHeader.Height = 10;
+
+            treeView1.HideSelection = false;
+            treeView1.DrawMode = TreeViewDrawMode.OwnerDrawText;
+            treeView1.FullRowSelect = true;
+            treeView1.BorderStyle = BorderStyle.None;
+            treeView1.ShowLines = false;
+            treeView1.ShowRootLines = false;
+            treeView1.BackColor = QueuePanelBackColor;
+            treeView1.ForeColor = QueueTextColor;
+            treeView1.ItemHeight = 44;
+            treeView1.Indent = 18;
+            treeView1.LineColor = Color.FromArgb(134, 142, 166);
+            treeView1.DrawNode += TreeView1_DrawNode;
+
+            cbQueue.DrawMode = DrawMode.OwnerDrawFixed;
+            cbQueue.ItemHeight = 38;
+            cbQueue.FlatStyle = FlatStyle.Flat;
+            cbQueue.IntegralHeight = false;
+            cbQueue.DropDownHeight = (QueueStatuses.Length * cbQueue.ItemHeight) + 2;
+            cbQueue.BackColor = QueuePanelBackColor;
+            cbQueue.ForeColor = QueueTextColor;
+            cbQueue.DrawItem += CbQueue_DrawItem;
         }
 
         private void InitializeQueueNavigation()
@@ -177,6 +213,92 @@ namespace MyManager
             return null;
         }
 
+        private void TreeView1_DrawNode(object? sender, DrawTreeNodeEventArgs e)
+        {
+            if (e.Node == null)
+                return;
+
+            var isRoot = e.Node.Level == 0;
+            var isSelected = (e.State & TreeNodeStates.Selected) == TreeNodeStates.Selected;
+            var rowRect = new Rectangle(0, e.Bounds.Top, treeView1.ClientSize.Width, e.Bounds.Height);
+
+            var backColor = QueuePanelBackColor;
+            if (isRoot)
+                backColor = QueueHeaderBackColor;
+            if (isSelected && !isRoot)
+                backColor = QueueStatusSelectedBackColor;
+
+            using var backBrush = new SolidBrush(backColor);
+            e.Graphics.FillRectangle(backBrush, rowRect);
+
+            var textValue = isRoot ? e.Node.Text : e.Node.Text.ToUpperInvariant();
+            using var textFont = new Font(
+                "Segoe UI",
+                isRoot ? 22f : 18f,
+                isRoot || isSelected ? FontStyle.Bold : FontStyle.Regular,
+                GraphicsUnit.Pixel);
+
+            var textRect = new Rectangle(e.Bounds.X + 8, e.Bounds.Y, treeView1.ClientSize.Width - e.Bounds.X - 16, e.Bounds.Height);
+            TextRenderer.DrawText(
+                e.Graphics,
+                textValue,
+                textFont,
+                textRect,
+                QueueTextColor,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+
+            if (!isRoot)
+            {
+                var countText = GetQueueStatusCountText(e.Node.Text);
+                using var countFont = new Font("Segoe UI", 18f, isSelected ? FontStyle.Bold : FontStyle.Regular, GraphicsUnit.Pixel);
+                var countRect = new Rectangle(0, e.Bounds.Y, treeView1.ClientSize.Width - 16, e.Bounds.Height);
+                TextRenderer.DrawText(
+                    e.Graphics,
+                    countText,
+                    countFont,
+                    countRect,
+                    QueueTextColor,
+                    TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            }
+
+            if ((e.State & TreeNodeStates.Focused) == TreeNodeStates.Focused)
+                ControlPaint.DrawFocusRectangle(e.Graphics, rowRect, QueueTextColor, backColor);
+        }
+
+        private void CbQueue_DrawItem(object? sender, DrawItemEventArgs e)
+        {
+            if (e.Index < 0)
+                return;
+
+            var text = cbQueue.Items[e.Index]?.ToString() ?? string.Empty;
+            var isSelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+            var backColor = isSelected ? QueueStatusSelectedBackColor : QueuePanelBackColor;
+
+            using var backBrush = new SolidBrush(backColor);
+            e.Graphics.FillRectangle(backBrush, e.Bounds);
+
+            using var textFont = new Font("Segoe UI", 18f, isSelected ? FontStyle.Bold : FontStyle.Regular, GraphicsUnit.Pixel);
+            var textRect = new Rectangle(e.Bounds.X + 12, e.Bounds.Y, e.Bounds.Width - 24, e.Bounds.Height);
+            TextRenderer.DrawText(
+                e.Graphics,
+                text.ToUpperInvariant(),
+                textFont,
+                textRect,
+                QueueTextColor,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+
+            if ((e.State & DrawItemState.Focus) == DrawItemState.Focus)
+                e.DrawFocusRectangle();
+        }
+
+        private string GetQueueStatusCountText(string statusName)
+        {
+            if (string.Equals(statusName, "Все задания", StringComparison.Ordinal))
+                return dgvJobs.Rows.Count.ToString();
+
+            return "0";
+        }
+
         private void ShowSettingsDialog()
         {
             using var settingsForm = new SettingsDialogForm(
@@ -231,3 +353,4 @@ namespace MyManager
         }
     }
 }
+
