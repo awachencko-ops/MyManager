@@ -23,10 +23,10 @@ namespace MyManager
             {
                 var root = new TreeNode("C60-C70-713D");
                 root.Nodes.Add("Все задания");
-                root.Nodes.Add("Удержанные");
-                root.Nodes.Add("Напечатано");
+                root.Nodes.Add("Обработанные");
                 root.Nodes.Add("В архиве");
-                root.Nodes.Add("Выполняется печать");
+                root.Nodes.Add("Обрабатывается");
+                root.Nodes.Add("Завершено");
                 treeView1.Nodes.Add(root);
                 root.Expand();
             };
