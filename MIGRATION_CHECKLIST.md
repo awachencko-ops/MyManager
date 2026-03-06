@@ -56,6 +56,25 @@
 | Логика, смешанная в форме | Разделение по слоям: `Models/`, `Services/`, `UI/`, `Forms/` |
 | Точечные сценарии из `Form1` | Поэтапный перенос в `MainForm` с фиксацией статуса в этом чеклисте |
 
+## UI-события и маршрутизация (что нажимают -> куда идет)
+
+| Действие пользователя | Контрол / событие в MainForm | Обработчик и маршрут в новой форме | Эквивалент/источник в legacy | Статус |
+|---|---|---|---|---|
+| Открыть настройки | `tsMainActions.ItemClicked` (`tsbParameters`) | `TsMainActions_ItemClicked` -> `ShowSettingsDialog()` -> `AppSettings`/`StoragePaths`/`Logger` | `Form1` -> `SettingsDialogForm` + сохранение путей | MainForm ready |
+| Выбрать пользователя/статус в левой очереди | `treeView1.AfterSelect` | `TreeView1_AfterSelect` -> `SelectUser` -> `FillQueueCombo` | Логика выбора очереди в `Form1` | MainForm ready |
+| Выбрать статус через верхний `cbQueue` | `cbQueue.SelectedIndexChanged` | `CbQueue_SelectedIndexChanged` -> поиск узла -> синхронизация `treeView1.SelectedNode` | Логика синхронизации статуса в `Form1` | MainForm ready |
+| Изменения в таблице заказов | `dgvJobs.RowsAdded/RowsRemoved/DataBindingComplete/CellValueChanged` | `HandleOrdersGridChanged` -> `ApplyStatusFilterToGrid` + обновление фильтров/счетчиков/очереди | Частичная логика обновления grid в `Form1` | In progress |
+| Открыть фильтр статусов | `lblFStatus.Click` / `picFStatusGlyph.Click` | `LblFStatus_Click` -> `ShowStatusFilterDropDown` | Статусный фильтр из legacy UI | MainForm ready |
+| Поставить/снять статус в фильтре | checklist `ItemCheck` | `StatusFilterCheckedList_ItemCheck` -> `UpdateSelectedStatusesFromChecklist` -> `ApplyStatusFilterToGrid` | Статусный фильтр в `Form1` | MainForm ready |
+| Поиск по номеру заказа | `lblFOrderNo.Click` / `picFOrderNoGlyph.Click`, ввод в popup | `LblFOrderNo_Click` -> `ShowOrderNoFilterDropDown`; затем `ApplyOrderNoFilterFromPopup` (`Enter`/`Применить`/`Очистить`) | Поиск по ID в legacy grid | MainForm ready |
+| Фильтр по пользователю | `lblFUser.Click` / `picFUserGlyph.Click`, checklist popup | `LblFUser_Click` -> `ShowUserFilterDropDown` -> `ApplyUserFilterFromPopup` | Пользовательский фильтр из legacy | In progress |
+| Фильтр `Дата поступления` | `lblFCreated.Click` / `picFCreatedGlyph.Click`, popup + календарь | `LblFCreated_Click` -> `ShowCreatedDateFilterDropDown`; применение через `ApplyCreatedDateFilterFromPopup` | Датовый фильтр legacy | In progress |
+| Фильтр `Начало обработки` | `lblFReceived.Click` / `picFReceivedGlyph.Click`, popup + календарь | `LblFReceived_Click` -> `ShowReceivedDateFilterDropDown`; применение через `ApplyReceivedDateFilterFromPopup` | Датовый фильтр legacy | In progress |
+| Запустить менеджер PitStop | (пока не подключено в MainForm) | План: обработчик в MainForm -> `ActionManagerForm` | В `Form1`: `OpenPitStopManager()` | Legacy only / planned |
+| Запустить менеджер Imposing | (пока не подключено в MainForm) | План: обработчик в MainForm -> `ImposingManagerForm` | В `Form1`: `OpenImposingManager()` | Legacy only / planned |
+| Просмотр лога выбранного заказа | (пока не подключено в MainForm) | План: открыть `OrderLogViewerForm` из MainForm | В `Form1`: открытие `OrderLogViewerForm` | Legacy only / planned |
+| Операции запуска/остановки/удаления заказа | `tsbRun/tsbStop/tsbRemove` (кнопки есть, маршрутизация не подключена) | План: маршрутизация в `OrderProcessor` и сервисный слой | В `Form1`: `_processor = new OrderProcessor(...)` + команды | Legacy only / planned |
+
 ## Правило выполнения итерации
 1. Выбрать **1 сценарий** из таблицы.
 2. Перенести логику в `Services` (если необходимо).
