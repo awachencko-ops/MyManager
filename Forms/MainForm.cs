@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Globalization;
 using System.Windows.Forms;
 
 namespace MyManager
@@ -82,14 +83,13 @@ namespace MyManager
             treeView1.LineColor = Color.FromArgb(134, 142, 166);
             treeView1.DrawNode += TreeView1_DrawNode;
 
-            cbQueue.DrawMode = DrawMode.OwnerDrawFixed;
-            cbQueue.ItemHeight = 38;
-            cbQueue.FlatStyle = FlatStyle.Flat;
+            cbQueue.DrawMode = DrawMode.Normal;
+            cbQueue.Font = new Font("Segoe UI", 15f, FontStyle.Regular, GraphicsUnit.Pixel);
+            cbQueue.FlatStyle = FlatStyle.Standard;
             cbQueue.IntegralHeight = false;
-            cbQueue.DropDownHeight = (QueueStatuses.Length * cbQueue.ItemHeight) + 2;
-            cbQueue.BackColor = QueuePanelBackColor;
-            cbQueue.ForeColor = QueueTextColor;
-            cbQueue.DrawItem += CbQueue_DrawItem;
+            cbQueue.DropDownHeight = 240;
+            cbQueue.BackColor = Color.White;
+            cbQueue.ForeColor = Color.FromArgb(47, 53, 72);
         }
 
         private void InitializeQueueNavigation()
@@ -229,7 +229,7 @@ namespace MyManager
             using var backBrush = new SolidBrush(backColor);
             e.Graphics.FillRectangle(backBrush, rowRect);
 
-            var textValue = isRoot ? e.Node.Text : e.Node.Text.ToUpperInvariant();
+            var textValue = isRoot ? e.Node.Text : FormatQueueLabel(e.Node.Text);
             using var textFont = new Font(
                 "Segoe UI",
                 isRoot ? 22f : 18f,
@@ -263,30 +263,17 @@ namespace MyManager
                 ControlPaint.DrawFocusRectangle(e.Graphics, rowRect, QueueTextColor, backColor);
         }
 
-        private void CbQueue_DrawItem(object? sender, DrawItemEventArgs e)
+        private static string FormatQueueLabel(string value)
         {
-            if (e.Index < 0)
-                return;
+            if (string.IsNullOrWhiteSpace(value))
+                return string.Empty;
 
-            var text = cbQueue.Items[e.Index]?.ToString() ?? string.Empty;
-            var isSelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
-            var backColor = isSelected ? QueueStatusSelectedBackColor : QueuePanelBackColor;
+            var culture = CultureInfo.CurrentCulture;
+            var normalized = value.Trim().ToLower(culture);
+            if (normalized.Length == 1)
+                return normalized.ToUpper(culture);
 
-            using var backBrush = new SolidBrush(backColor);
-            e.Graphics.FillRectangle(backBrush, e.Bounds);
-
-            using var textFont = new Font("Segoe UI", 18f, isSelected ? FontStyle.Bold : FontStyle.Regular, GraphicsUnit.Pixel);
-            var textRect = new Rectangle(e.Bounds.X + 12, e.Bounds.Y, e.Bounds.Width - 24, e.Bounds.Height);
-            TextRenderer.DrawText(
-                e.Graphics,
-                text.ToUpperInvariant(),
-                textFont,
-                textRect,
-                QueueTextColor,
-                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
-
-            if ((e.State & DrawItemState.Focus) == DrawItemState.Focus)
-                e.DrawFocusRectangle();
+            return char.ToUpper(normalized[0], culture) + normalized[1..];
         }
 
         private string GetQueueStatusCountText(string statusName)
