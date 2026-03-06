@@ -110,6 +110,10 @@ namespace MyManager
         private bool _isSyncingCreatedFilterControls;
         private bool _suppressNextCreatedFilterLabelClick;
         private bool _isCreatedDateCalendarOpen;
+        private ToolStripDropDown? _createdCalendarDropDown;
+        private MonthCalendar? _createdCalendar;
+        private Button? _createdCalendarOkButton;
+        private DateTimePicker? _createdCalendarTargetPicker;
 
         private static readonly Color QueuePanelBackColor = Color.FromArgb(68, 74, 94);
         private static readonly Color QueueHeaderBackColor = Color.FromArgb(103, 163, 216);
@@ -1113,7 +1117,8 @@ namespace MyManager
             var rangeFromX = 88;
             var rangeDateWidth = 146;
             var toLabelX = rangeFromX + rangeDateWidth + 10;
-            var rangeToX = toLabelX + 30;
+            var toLabelWidth = 38;
+            var rangeToX = toLabelX + toLabelWidth;
             var rangeToWidth = popupWidth - rangeToX - 16;
             var buttonsY = 158;
 
@@ -1138,7 +1143,7 @@ namespace MyManager
             _createdFilterSingleRadio = new RadioButton
             {
                 Location = new Point(bulletX, row2Y),
-                Size = new Size(18, 30),
+                Size = new Size(24, 30),
                 Font = font,
                 AutoCheck = true
             };
@@ -1177,7 +1182,7 @@ namespace MyManager
             var toLabel = new Label
             {
                 Location = new Point(toLabelX, row3Y),
-                Size = new Size(30, 28),
+                Size = new Size(toLabelWidth, 28),
                 Text = "До",
                 TextAlign = ContentAlignment.MiddleLeft,
                 Font = font
@@ -1255,17 +1260,126 @@ namespace MyManager
         private void AttachCreatedDatePickerCalendarEvents(DateTimePicker picker)
         {
             picker.DropDown += CreatedDatePicker_DropDown;
-            picker.CloseUp += CreatedDatePicker_CloseUp;
         }
 
         private void CreatedDatePicker_DropDown(object? sender, EventArgs e)
         {
-            _isCreatedDateCalendarOpen = true;
+            if (sender is not DateTimePicker picker)
+                return;
+
+            BeginInvoke(new Action(() =>
+            {
+                try
+                {
+                    SendKeys.Send("{ESC}");
+                }
+                catch
+                {
+                    // Игнорируем сбои нативного сворачивания, ниже откроем свой календарь.
+                }
+
+                ShowCreatedCalendarDropDown(picker);
+            }));
         }
 
-        private void CreatedDatePicker_CloseUp(object? sender, EventArgs e)
+        private void EnsureCreatedCalendarDropDown()
         {
-            BeginInvoke(new Action(() => _isCreatedDateCalendarOpen = false));
+            if (_createdCalendarDropDown != null && _createdCalendar != null && _createdCalendarOkButton != null)
+                return;
+
+            _createdCalendar = new MonthCalendar
+            {
+                MaxSelectionCount = 1,
+                ShowToday = false,
+                ShowTodayCircle = false
+            };
+
+            _createdCalendarOkButton = new Button
+            {
+                Text = "OK",
+                FlatStyle = FlatStyle.Standard
+            };
+            _createdCalendarOkButton.Click += CreatedCalendarOkButton_Click;
+
+            var calendarWidth = _createdCalendar.Width;
+            var buttonHeight = 32;
+            var buttonTop = _createdCalendar.Height + 6;
+            _createdCalendarOkButton.Location = new Point(0, buttonTop);
+            _createdCalendarOkButton.Size = new Size(calendarWidth, buttonHeight);
+
+            var panel = new Panel
+            {
+                BackColor = Color.White,
+                Size = new Size(calendarWidth, buttonTop + buttonHeight),
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
+            };
+            panel.Controls.Add(_createdCalendar);
+            panel.Controls.Add(_createdCalendarOkButton);
+
+            var host = new ToolStripControlHost(panel)
+            {
+                AutoSize = false,
+                Size = panel.Size,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
+            };
+
+            _createdCalendarDropDown = new ToolStripDropDown
+            {
+                AutoClose = true,
+                Padding = new Padding(2)
+            };
+            _createdCalendarDropDown.Closed += CreatedCalendarDropDown_Closed;
+            _createdCalendarDropDown.Items.Add(host);
+        }
+
+        private void ShowCreatedCalendarDropDown(DateTimePicker picker)
+        {
+            EnsureCreatedCalendarDropDown();
+            if (_createdCalendarDropDown == null || _createdCalendar == null)
+                return;
+
+            _createdCalendarTargetPicker = picker;
+            var selectedDate = picker.Value.Date;
+            _createdCalendar.SetDate(selectedDate);
+            _createdCalendar.SelectionStart = selectedDate;
+            _createdCalendar.SelectionEnd = selectedDate;
+
+            if (_createdCalendarDropDown.Visible)
+                _createdCalendarDropDown.Close(ToolStripDropDownCloseReason.CloseCalled);
+
+            _isCreatedDateCalendarOpen = true;
+            _createdCalendarDropDown.Show(picker, new Point(0, picker.Height));
+        }
+
+        private void CreatedCalendarOkButton_Click(object? sender, EventArgs e)
+        {
+            if (_createdCalendarTargetPicker != null && _createdCalendar != null)
+            {
+                var selectedDate = _createdCalendar.SelectionStart.Date;
+                if (_createdCalendarTargetPicker.Value.Date != selectedDate)
+                    _createdCalendarTargetPicker.Value = selectedDate;
+            }
+
+            CloseCreatedCalendarDropDown();
+        }
+
+        private void CloseCreatedCalendarDropDown()
+        {
+            if (_createdCalendarDropDown?.Visible == true)
+                _createdCalendarDropDown.Close(ToolStripDropDownCloseReason.ItemClicked);
+            else
+            {
+                _isCreatedDateCalendarOpen = false;
+                _createdCalendarTargetPicker = null;
+            }
+        }
+
+        private void CreatedCalendarDropDown_Closed(object? sender, ToolStripDropDownClosedEventArgs e)
+        {
+            _isCreatedDateCalendarOpen = false;
+            _createdCalendarTargetPicker = null;
         }
 
         private void SyncCreatedDateFilterPopupState()
@@ -1446,6 +1560,7 @@ namespace MyManager
             if (changed)
                 HandleOrdersGridChanged();
 
+            CloseCreatedCalendarDropDown();
             _createdFilterDropDown?.Close(ToolStripDropDownCloseReason.ItemClicked);
         }
 
@@ -1468,7 +1583,10 @@ namespace MyManager
                 _suppressNextCreatedFilterLabelClick = true;
 
             if (!e.Cancel)
+            {
+                CloseCreatedCalendarDropDown();
                 _isCreatedDateCalendarOpen = false;
+            }
         }
 
         private void ShowStatusFilterDropDown()
