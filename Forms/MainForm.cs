@@ -57,6 +57,7 @@ namespace MyManager
         private const string StatusFilterLabelText = "Состояние задания";
         private const string OrderNoSearchLabelText = "Номер заказа";
         private const string UserFilterLabelText = "Пользователь";
+        private const string CreatedDateFilterLabelText = "Дата поступления";
 
         private static readonly Dictionary<string, string[]> QueueStatusMappings = new(StringComparer.Ordinal)
         {
@@ -72,6 +73,11 @@ namespace MyManager
         private readonly HashSet<string> _selectedFilterStatuses = new(StringComparer.Ordinal);
         private readonly HashSet<string> _selectedFilterUsers = new(StringComparer.Ordinal);
         private string _orderNumberFilterText = string.Empty;
+        private CreatedDateFilterKind _createdDateFilterKind;
+        private CreatedDateSingleMode _createdDateSingleMode = CreatedDateSingleMode.ExactDate;
+        private DateTime _createdDateSingleValue = DateTime.Today;
+        private DateTime _createdDateRangeFrom = DateTime.Today;
+        private DateTime _createdDateRangeTo = DateTime.Today;
         private ToolStripDropDown? _statusFilterDropDown;
         private CheckedListBox? _statusFilterCheckedList;
         private bool _isUpdatingStatusFilterList;
@@ -89,6 +95,20 @@ namespace MyManager
         private Button? _userFilterApplyButton;
         private bool _isUpdatingUserFilterList;
         private bool _suppressNextUserFilterLabelClick;
+        private PictureBox? _createdFilterGlyph;
+        private Label? _createdFilterLabel;
+        private ToolStripDropDown? _createdFilterDropDown;
+        private RadioButton? _createdFilterTodayRadio;
+        private RadioButton? _createdFilterSingleRadio;
+        private ComboBox? _createdFilterSingleModeCombo;
+        private DateTimePicker? _createdFilterSingleDatePicker;
+        private RadioButton? _createdFilterRangeRadio;
+        private DateTimePicker? _createdFilterRangeFromDatePicker;
+        private DateTimePicker? _createdFilterRangeToDatePicker;
+        private Button? _createdFilterClearButton;
+        private Button? _createdFilterApplyButton;
+        private bool _isSyncingCreatedFilterControls;
+        private bool _suppressNextCreatedFilterLabelClick;
 
         private static readonly Color QueuePanelBackColor = Color.FromArgb(68, 74, 94);
         private static readonly Color QueueHeaderBackColor = Color.FromArgb(103, 163, 216);
@@ -146,6 +166,21 @@ namespace MyManager
             }
         }
 
+        private enum CreatedDateFilterKind
+        {
+            None,
+            Today,
+            Single,
+            Range
+        }
+
+        private enum CreatedDateSingleMode
+        {
+            ExactDate,
+            Before,
+            After
+        }
+
         public MainForm()
         {
             InitializeComponent();
@@ -154,6 +189,7 @@ namespace MyManager
             InitializeStatusFilter();
             InitializeOrderNoSearch();
             InitializeUserFilter();
+            InitializeCreatedDateFilter();
             InitializeQueueNavigation();
         }
 
@@ -296,6 +332,47 @@ namespace MyManager
             UpdateUserFilterCaption();
         }
 
+        private void InitializeCreatedDateFilter()
+        {
+            var insertIndex = flpFilters.Controls.IndexOf(cbFCreated);
+            if (insertIndex >= 0)
+                flpFilters.Controls.Remove(cbFCreated);
+
+            cbFCreated.Visible = false;
+
+            _createdFilterGlyph = new PictureBox
+            {
+                Cursor = Cursors.Hand,
+                Margin = new Padding(3, 0, 0, 0),
+                Name = "picFCreatedGlyph",
+                Size = new Size(24, 33),
+                SizeMode = PictureBoxSizeMode.CenterImage
+            };
+
+            _createdFilterLabel = new Label
+            {
+                Cursor = Cursors.Hand,
+                Margin = new Padding(0, 0, 3, 0),
+                Name = "lblFCreated",
+                Size = new Size(170, 33),
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+
+            _createdFilterGlyph.Click += LblFCreated_Click;
+            _createdFilterLabel.Click += LblFCreated_Click;
+
+            flpFilters.Controls.Add(_createdFilterGlyph);
+            flpFilters.Controls.Add(_createdFilterLabel);
+            if (insertIndex >= 0)
+            {
+                flpFilters.Controls.SetChildIndex(_createdFilterGlyph, insertIndex);
+                flpFilters.Controls.SetChildIndex(_createdFilterLabel, insertIndex + 1);
+            }
+
+            ApplyCreatedDateFilterChevronIcon();
+            UpdateCreatedDateFilterCaption();
+        }
+
         private void ApplyOrderNoSearchIcon()
         {
             using var icon = CreateDropDownGlyphIcon(24);
@@ -315,6 +392,18 @@ namespace MyManager
             _userFilterGlyph.Image = (Image)icon.Clone();
             _userFilterLabel.TextAlign = ContentAlignment.MiddleLeft;
             _userFilterLabel.Padding = new Padding(0, 3, 0, 0);
+        }
+
+        private void ApplyCreatedDateFilterChevronIcon()
+        {
+            if (_createdFilterGlyph == null || _createdFilterLabel == null)
+                return;
+
+            using var icon = CreateDropDownGlyphIcon(24);
+            _createdFilterGlyph.Image?.Dispose();
+            _createdFilterGlyph.Image = (Image)icon.Clone();
+            _createdFilterLabel.TextAlign = ContentAlignment.MiddleLeft;
+            _createdFilterLabel.Padding = new Padding(0, 3, 0, 0);
         }
 
         private static Bitmap CreateDropDownGlyphIcon(int iconSize)
@@ -535,7 +624,7 @@ namespace MyManager
 
         private void DgvJobs_CellValueChanged(object? sender, DataGridViewCellEventArgs e)
         {
-            if (e.ColumnIndex == colStatus.Index || e.ColumnIndex < 0)
+            if (e.ColumnIndex == colStatus.Index || e.ColumnIndex == colCreated.Index || e.ColumnIndex < 0)
                 HandleOrdersGridChanged();
         }
 
@@ -557,6 +646,7 @@ namespace MyManager
             UpdateStatusFilterCaption();
             UpdateOrderNoSearchCaption();
             UpdateUserFilterCaption();
+            UpdateCreatedDateFilterCaption();
             RefreshStatusFilterChecklist();
             RefreshUserFilterChecklist();
             RefreshQueuePresentation();
@@ -611,6 +701,23 @@ namespace MyManager
             }
 
             ShowUserFilterDropDown();
+        }
+
+        private void LblFCreated_Click(object? sender, EventArgs e)
+        {
+            if (_suppressNextCreatedFilterLabelClick)
+            {
+                _suppressNextCreatedFilterLabelClick = false;
+                return;
+            }
+
+            if (_createdFilterDropDown?.Visible == true)
+            {
+                _createdFilterDropDown.Close(ToolStripDropDownCloseReason.AppClicked);
+                return;
+            }
+
+            ShowCreatedDateFilterDropDown();
         }
 
         private void ShowOrderNoFilterDropDown()
@@ -966,6 +1073,362 @@ namespace MyManager
             _userFilterDropDown?.Close(ToolStripDropDownCloseReason.ItemClicked);
         }
 
+        private void ShowCreatedDateFilterDropDown()
+        {
+            EnsureCreatedDateFilterDropDown();
+            SyncCreatedDateFilterPopupState();
+
+            if (_createdFilterDropDown == null || _createdFilterGlyph == null)
+                return;
+
+            _createdFilterDropDown.Show(_createdFilterGlyph, new Point(0, _createdFilterGlyph.Height));
+        }
+
+        private void EnsureCreatedDateFilterDropDown()
+        {
+            if (_createdFilterDropDown != null &&
+                _createdFilterTodayRadio != null &&
+                _createdFilterSingleRadio != null &&
+                _createdFilterSingleModeCombo != null &&
+                _createdFilterSingleDatePicker != null &&
+                _createdFilterRangeRadio != null &&
+                _createdFilterRangeFromDatePicker != null &&
+                _createdFilterRangeToDatePicker != null &&
+                _createdFilterClearButton != null &&
+                _createdFilterApplyButton != null)
+                return;
+
+            var popupWidth = Math.Max((_createdFilterLabel?.Width ?? 170) + 260, 440);
+            var popupHeight = 178;
+            var font = _createdFilterLabel?.Font ?? Font;
+
+            var panel = new Panel
+            {
+                BackColor = Color.White,
+                Size = new Size(popupWidth, popupHeight),
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
+            };
+
+            _createdFilterTodayRadio = new RadioButton
+            {
+                Location = new Point(16, 16),
+                Size = new Size(110, 28),
+                Text = "Сегодня",
+                Font = font,
+                AutoCheck = true
+            };
+            _createdFilterTodayRadio.CheckedChanged += CreatedFilterModeControlChanged;
+
+            _createdFilterSingleRadio = new RadioButton
+            {
+                Location = new Point(16, 50),
+                Size = new Size(18, 28),
+                Font = font,
+                AutoCheck = true
+            };
+            _createdFilterSingleRadio.CheckedChanged += CreatedFilterModeControlChanged;
+
+            _createdFilterSingleModeCombo = new ComboBox
+            {
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                FormattingEnabled = true,
+                IntegralHeight = false,
+                Location = new Point(42, 48),
+                Size = new Size(170, 32),
+                Font = font
+            };
+            _createdFilterSingleModeCombo.Items.AddRange(new object[] { "Точная дата", "До", "После" });
+            _createdFilterSingleModeCombo.SelectedIndexChanged += CreatedFilterModeControlChanged;
+
+            _createdFilterSingleDatePicker = CreateCreatedFilterDatePicker(new Point(218, 48), new Size(popupWidth - 236, 32), font);
+            _createdFilterSingleDatePicker.ValueChanged += CreatedFilterModeControlChanged;
+
+            _createdFilterRangeRadio = new RadioButton
+            {
+                Location = new Point(16, 84),
+                Size = new Size(58, 28),
+                Text = "От",
+                Font = font,
+                AutoCheck = true
+            };
+            _createdFilterRangeRadio.CheckedChanged += CreatedFilterModeControlChanged;
+
+            _createdFilterRangeFromDatePicker = CreateCreatedFilterDatePicker(new Point(78, 82), new Size(154, 32), font);
+            _createdFilterRangeFromDatePicker.ValueChanged += CreatedFilterModeControlChanged;
+
+            var toLabel = new Label
+            {
+                Location = new Point(236, 84),
+                Size = new Size(30, 28),
+                Text = "До",
+                TextAlign = ContentAlignment.MiddleLeft,
+                Font = font
+            };
+
+            _createdFilterRangeToDatePicker = CreateCreatedFilterDatePicker(new Point(262, 82), new Size(popupWidth - 280, 32), font);
+            _createdFilterRangeToDatePicker.ValueChanged += CreatedFilterModeControlChanged;
+
+            _createdFilterClearButton = new Button
+            {
+                FlatStyle = FlatStyle.Flat,
+                Location = new Point(popupWidth - 232, 126),
+                Size = new Size(104, 32),
+                Text = "Очистить",
+                BackColor = Color.White,
+                ForeColor = Color.FromArgb(168, 197, 225)
+            };
+            _createdFilterClearButton.FlatAppearance.BorderSize = 0;
+            _createdFilterClearButton.Click += (_, _) => ApplyCreatedDateFilterFromPopup(clearFilter: true);
+
+            _createdFilterApplyButton = new Button
+            {
+                FlatStyle = FlatStyle.Flat,
+                Location = new Point(popupWidth - 122, 126),
+                Size = new Size(120, 32),
+                Text = "Применить",
+                BackColor = Color.FromArgb(176, 212, 242),
+                ForeColor = Color.White
+            };
+            _createdFilterApplyButton.FlatAppearance.BorderSize = 0;
+            _createdFilterApplyButton.Click += (_, _) => ApplyCreatedDateFilterFromPopup(clearFilter: false);
+
+            panel.Controls.Add(_createdFilterTodayRadio);
+            panel.Controls.Add(_createdFilterSingleRadio);
+            panel.Controls.Add(_createdFilterSingleModeCombo);
+            panel.Controls.Add(_createdFilterSingleDatePicker);
+            panel.Controls.Add(_createdFilterRangeRadio);
+            panel.Controls.Add(_createdFilterRangeFromDatePicker);
+            panel.Controls.Add(toLabel);
+            panel.Controls.Add(_createdFilterRangeToDatePicker);
+            panel.Controls.Add(_createdFilterClearButton);
+            panel.Controls.Add(_createdFilterApplyButton);
+
+            var host = new ToolStripControlHost(panel)
+            {
+                AutoSize = false,
+                Size = panel.Size,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
+            };
+
+            _createdFilterDropDown = new ToolStripDropDown
+            {
+                AutoClose = true,
+                Padding = new Padding(4)
+            };
+            _createdFilterDropDown.Closing += CreatedDateFilterDropDown_Closing;
+            _createdFilterDropDown.Items.Add(host);
+            UpdateCreatedDateFilterControlsState();
+        }
+
+        private static DateTimePicker CreateCreatedFilterDatePicker(Point location, Size size, Font font)
+        {
+            return new DateTimePicker
+            {
+                Format = DateTimePickerFormat.Custom,
+                CustomFormat = "dd.MM.yyyy",
+                Location = location,
+                Size = size,
+                Font = font
+            };
+        }
+
+        private void SyncCreatedDateFilterPopupState()
+        {
+            if (_createdFilterTodayRadio == null ||
+                _createdFilterSingleRadio == null ||
+                _createdFilterSingleModeCombo == null ||
+                _createdFilterSingleDatePicker == null ||
+                _createdFilterRangeRadio == null ||
+                _createdFilterRangeFromDatePicker == null ||
+                _createdFilterRangeToDatePicker == null)
+                return;
+
+            _isSyncingCreatedFilterControls = true;
+            try
+            {
+                _createdFilterSingleModeCombo.SelectedIndex = _createdDateSingleMode switch
+                {
+                    CreatedDateSingleMode.Before => 1,
+                    CreatedDateSingleMode.After => 2,
+                    _ => 0
+                };
+                _createdFilterSingleDatePicker.Value = _createdDateSingleValue.Date;
+                _createdFilterRangeFromDatePicker.Value = _createdDateRangeFrom.Date;
+                _createdFilterRangeToDatePicker.Value = _createdDateRangeTo.Date;
+
+                _createdFilterTodayRadio.Checked = _createdDateFilterKind == CreatedDateFilterKind.Today;
+                _createdFilterSingleRadio.Checked = _createdDateFilterKind == CreatedDateFilterKind.Single;
+                _createdFilterRangeRadio.Checked = _createdDateFilterKind == CreatedDateFilterKind.Range;
+
+                if (_createdDateFilterKind == CreatedDateFilterKind.None)
+                {
+                    _createdFilterTodayRadio.Checked = false;
+                    _createdFilterSingleRadio.Checked = false;
+                    _createdFilterRangeRadio.Checked = false;
+                }
+            }
+            finally
+            {
+                _isSyncingCreatedFilterControls = false;
+            }
+
+            UpdateCreatedDateFilterControlsState();
+        }
+
+        private void CreatedFilterModeControlChanged(object? sender, EventArgs e)
+        {
+            if (_isSyncingCreatedFilterControls)
+                return;
+
+            if (_createdFilterSingleModeCombo != null &&
+                _createdFilterSingleRadio != null &&
+                ReferenceEquals(sender, _createdFilterSingleModeCombo) &&
+                !_createdFilterSingleRadio.Checked)
+                _createdFilterSingleRadio.Checked = true;
+
+            if (_createdFilterSingleDatePicker != null &&
+                _createdFilterSingleRadio != null &&
+                ReferenceEquals(sender, _createdFilterSingleDatePicker) &&
+                !_createdFilterSingleRadio.Checked)
+                _createdFilterSingleRadio.Checked = true;
+
+            if (_createdFilterRangeFromDatePicker != null &&
+                _createdFilterRangeRadio != null &&
+                ReferenceEquals(sender, _createdFilterRangeFromDatePicker) &&
+                !_createdFilterRangeRadio.Checked)
+                _createdFilterRangeRadio.Checked = true;
+
+            if (_createdFilterRangeToDatePicker != null &&
+                _createdFilterRangeRadio != null &&
+                ReferenceEquals(sender, _createdFilterRangeToDatePicker) &&
+                !_createdFilterRangeRadio.Checked)
+                _createdFilterRangeRadio.Checked = true;
+
+            UpdateCreatedDateFilterControlsState();
+        }
+
+        private void UpdateCreatedDateFilterControlsState()
+        {
+            if (_createdFilterTodayRadio == null ||
+                _createdFilterSingleRadio == null ||
+                _createdFilterSingleModeCombo == null ||
+                _createdFilterSingleDatePicker == null ||
+                _createdFilterRangeRadio == null ||
+                _createdFilterRangeFromDatePicker == null ||
+                _createdFilterRangeToDatePicker == null ||
+                _createdFilterClearButton == null ||
+                _createdFilterApplyButton == null)
+                return;
+
+            var isSingle = _createdFilterSingleRadio.Checked;
+            var isRange = _createdFilterRangeRadio.Checked;
+
+            _createdFilterSingleModeCombo.Enabled = isSingle;
+            _createdFilterSingleDatePicker.Enabled = isSingle;
+            _createdFilterRangeFromDatePicker.Enabled = isRange;
+            _createdFilterRangeToDatePicker.Enabled = isRange;
+
+            var hasSelection = _createdFilterTodayRadio.Checked || isSingle || isRange;
+            var isRangeValid = !isRange || _createdFilterRangeFromDatePicker.Value.Date <= _createdFilterRangeToDatePicker.Value.Date;
+            var canApply = hasSelection && isRangeValid;
+            var canClear = _createdDateFilterKind != CreatedDateFilterKind.None || hasSelection;
+
+            _createdFilterClearButton.Enabled = canClear;
+            _createdFilterApplyButton.Enabled = canApply;
+            _createdFilterClearButton.ForeColor = canClear
+                ? Color.FromArgb(77, 147, 222)
+                : Color.FromArgb(168, 197, 225);
+            _createdFilterApplyButton.BackColor = canApply
+                ? Color.FromArgb(33, 127, 203)
+                : Color.FromArgb(176, 212, 242);
+            _createdFilterApplyButton.ForeColor = Color.White;
+        }
+
+        private void ApplyCreatedDateFilterFromPopup(bool clearFilter)
+        {
+            if (_createdFilterTodayRadio == null ||
+                _createdFilterSingleRadio == null ||
+                _createdFilterSingleModeCombo == null ||
+                _createdFilterSingleDatePicker == null ||
+                _createdFilterRangeRadio == null ||
+                _createdFilterRangeFromDatePicker == null ||
+                _createdFilterRangeToDatePicker == null)
+                return;
+
+            var nextKind = CreatedDateFilterKind.None;
+            var nextSingleMode = _createdDateSingleMode;
+            var nextSingleDate = _createdDateSingleValue.Date;
+            var nextRangeFrom = _createdDateRangeFrom.Date;
+            var nextRangeTo = _createdDateRangeTo.Date;
+
+            if (!clearFilter)
+            {
+                if (_createdFilterTodayRadio.Checked)
+                {
+                    nextKind = CreatedDateFilterKind.Today;
+                }
+                else if (_createdFilterSingleRadio.Checked)
+                {
+                    nextKind = CreatedDateFilterKind.Single;
+                    nextSingleMode = _createdFilterSingleModeCombo.SelectedIndex switch
+                    {
+                        1 => CreatedDateSingleMode.Before,
+                        2 => CreatedDateSingleMode.After,
+                        _ => CreatedDateSingleMode.ExactDate
+                    };
+                    nextSingleDate = _createdFilterSingleDatePicker.Value.Date;
+                }
+                else if (_createdFilterRangeRadio.Checked)
+                {
+                    var fromDate = _createdFilterRangeFromDatePicker.Value.Date;
+                    var toDate = _createdFilterRangeToDatePicker.Value.Date;
+                    if (fromDate > toDate)
+                        return;
+
+                    nextKind = CreatedDateFilterKind.Range;
+                    nextRangeFrom = fromDate;
+                    nextRangeTo = toDate;
+                }
+                else
+                {
+                    return;
+                }
+            }
+
+            var changed = _createdDateFilterKind != nextKind ||
+                          _createdDateSingleMode != nextSingleMode ||
+                          _createdDateSingleValue.Date != nextSingleDate ||
+                          _createdDateRangeFrom.Date != nextRangeFrom ||
+                          _createdDateRangeTo.Date != nextRangeTo;
+
+            _createdDateFilterKind = nextKind;
+            _createdDateSingleMode = nextSingleMode;
+            _createdDateSingleValue = nextSingleDate;
+            _createdDateRangeFrom = nextRangeFrom;
+            _createdDateRangeTo = nextRangeTo;
+
+            if (changed)
+                HandleOrdersGridChanged();
+
+            _createdFilterDropDown?.Close(ToolStripDropDownCloseReason.ItemClicked);
+        }
+
+        private void CreatedDateFilterDropDown_Closing(object? sender, ToolStripDropDownClosingEventArgs e)
+        {
+            if (e.CloseReason != ToolStripDropDownCloseReason.AppClicked)
+                return;
+
+            if (_createdFilterLabel == null || _createdFilterGlyph == null)
+                return;
+
+            var labelRect = _createdFilterLabel.RectangleToScreen(_createdFilterLabel.ClientRectangle);
+            var glyphRect = _createdFilterGlyph.RectangleToScreen(_createdFilterGlyph.ClientRectangle);
+            if (labelRect.Contains(Cursor.Position) || glyphRect.Contains(Cursor.Position))
+                _suppressNextCreatedFilterLabelClick = true;
+        }
+
         private void ShowStatusFilterDropDown()
         {
             EnsureStatusFilterDropDown();
@@ -1090,6 +1553,14 @@ namespace MyManager
             _userFilterLabel.Text = UserFilterLabelText;
         }
 
+        private void UpdateCreatedDateFilterCaption()
+        {
+            if (_createdFilterLabel == null)
+                return;
+
+            _createdFilterLabel.Text = CreatedDateFilterLabelText;
+        }
+
         private void ApplyStatusFilterToGrid()
         {
             var hasSelectedStatuses = _selectedFilterStatuses.Count > 0;
@@ -1107,7 +1578,9 @@ namespace MyManager
                 var orderNoMatches = !hasOrderNoFilter ||
                                      (!string.IsNullOrWhiteSpace(orderNoValue) &&
                                       orderNoValue.IndexOf(_orderNumberFilterText, StringComparison.OrdinalIgnoreCase) >= 0);
-                var shouldShow = statusMatches && orderNoMatches;
+                var createdDateValue = row.Cells[colCreated.Index].Value?.ToString();
+                var createdDateMatches = MatchesCreatedDateFilter(createdDateValue);
+                var shouldShow = statusMatches && orderNoMatches && createdDateMatches;
 
                 try
                 {
@@ -1215,6 +1688,55 @@ namespace MyManager
             }
 
             return total;
+        }
+
+        private bool MatchesCreatedDateFilter(string? rawCreatedDate)
+        {
+            if (_createdDateFilterKind == CreatedDateFilterKind.None)
+                return true;
+
+            if (!TryParseCreatedDate(rawCreatedDate, out var createdDate))
+                return false;
+
+            var date = createdDate.Date;
+            return _createdDateFilterKind switch
+            {
+                CreatedDateFilterKind.Today => date == DateTime.Today,
+                CreatedDateFilterKind.Single => _createdDateSingleMode switch
+                {
+                    CreatedDateSingleMode.Before => date <= _createdDateSingleValue.Date,
+                    CreatedDateSingleMode.After => date >= _createdDateSingleValue.Date,
+                    _ => date == _createdDateSingleValue.Date
+                },
+                CreatedDateFilterKind.Range => date >= _createdDateRangeFrom.Date && date <= _createdDateRangeTo.Date,
+                _ => true
+            };
+        }
+
+        private static bool TryParseCreatedDate(string? rawCreatedDate, out DateTime parsedDate)
+        {
+            parsedDate = default;
+            if (string.IsNullOrWhiteSpace(rawCreatedDate))
+                return false;
+
+            var value = rawCreatedDate.Trim();
+            var formats = new[]
+            {
+                "dd.MM.yyyy",
+                "d.M.yyyy",
+                "dd.MM.yy",
+                "d.M.yy",
+                "yyyy-MM-dd",
+                "yyyy/MM/dd",
+                "dd/MM/yyyy",
+                "d/M/yyyy",
+                "MM/dd/yyyy",
+                "M/d/yyyy"
+            };
+
+            return DateTime.TryParseExact(value, formats, CultureInfo.CurrentCulture, DateTimeStyles.AllowWhiteSpaces, out parsedDate) ||
+                   DateTime.TryParse(value, CultureInfo.CurrentCulture, DateTimeStyles.AllowWhiteSpaces, out parsedDate) ||
+                   DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces, out parsedDate);
         }
 
         private static Dictionary<string, int> GetCountsByFilterUsers()
