@@ -198,7 +198,7 @@ namespace MyManager
 
         private void ApplyStatusFilterChevronIcon()
         {
-            using var icon = CreateDropDownGlyphIcon(14);
+            using var icon = CreateDropDownGlyphIcon(24);
             picFStatusGlyph.Image?.Dispose();
             picFStatusGlyph.Image = (Image)icon.Clone();
             lblFStatus.TextAlign = ContentAlignment.MiddleLeft;

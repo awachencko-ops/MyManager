@@ -209,7 +209,7 @@
             picFStatusGlyph.Location = new Point(3, 0);
             picFStatusGlyph.Margin = new Padding(3, 0, 0, 0);
             picFStatusGlyph.Name = "picFStatusGlyph";
-            picFStatusGlyph.Size = new Size(14, 33);
+            picFStatusGlyph.Size = new Size(24, 33);
             picFStatusGlyph.SizeMode = PictureBoxSizeMode.CenterImage;
             picFStatusGlyph.TabIndex = 0;
             picFStatusGlyph.TabStop = false;
@@ -217,10 +217,10 @@
             // lblFStatus
             // 
             lblFStatus.Cursor = Cursors.Hand;
-            lblFStatus.Location = new Point(17, 0);
+            lblFStatus.Location = new Point(27, 0);
             lblFStatus.Margin = new Padding(0, 0, 3, 0);
             lblFStatus.Name = "lblFStatus";
-            lblFStatus.Size = new Size(156, 33);
+            lblFStatus.Size = new Size(146, 33);
             lblFStatus.TabIndex = 1;
             lblFStatus.Text = "Состояние задания";
             lblFStatus.TextAlign = ContentAlignment.MiddleLeft;
