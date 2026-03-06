@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Globalization;
-using System.IO;
 using System.Windows.Forms;
 
 namespace MyManager
@@ -48,7 +47,6 @@ namespace MyManager
             "Завершено"
         };
         private const string StatusFilterLabelText = "Состояние задания";
-        private const string ChevronDownIconRelativePath = @"Icons\arrow_drop_down.png";
 
         private static readonly Dictionary<string, string[]> QueueStatusMappings = new(StringComparer.Ordinal)
         {
@@ -197,58 +195,41 @@ namespace MyManager
 
         private void ApplyStatusFilterChevronIcon()
         {
-            var iconPath = ResolveChevronIconPath();
-            if (iconPath == null)
-                return;
-
-            var icon = TryLoadChevronIcon(iconPath, 12);
-            if (icon == null)
-                return;
-
-            lblFStatus.Image = icon;
+            using var icon = CreateDropDownGlyphIcon(14);
+            lblFStatus.Image?.Dispose();
+            lblFStatus.Image = (Image)icon.Clone();
             lblFStatus.ImageAlign = ContentAlignment.MiddleLeft;
             lblFStatus.TextAlign = ContentAlignment.MiddleLeft;
             lblFStatus.Padding = new Padding(icon.Width + 2, 0, 0, 0);
         }
 
-        private static string? ResolveChevronIconPath()
+        private static Bitmap CreateDropDownGlyphIcon(int iconSize)
         {
-            var outputPath = Path.Combine(AppContext.BaseDirectory, ChevronDownIconRelativePath);
-            if (File.Exists(outputPath))
-                return outputPath;
+            var bitmap = new Bitmap(iconSize, iconSize);
+            using var graphics = Graphics.FromImage(bitmap);
+            graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            graphics.Clear(Color.Transparent);
 
-            var projectPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ChevronDownIconRelativePath));
-            if (File.Exists(projectPath))
-                return projectPath;
+            var centerX = iconSize / 2f;
+            var centerY = iconSize / 2f;
+            var halfWidth = iconSize * 0.25f;
+            var vertical = iconSize * 0.18f;
 
-            return null;
-        }
-
-        private static Image? TryLoadChevronIcon(string iconPath, int iconSize)
-        {
-            try
+            using var pen = new Pen(Color.FromArgb(31, 31, 31), 1.8f)
             {
-                using var source = Image.FromFile(iconPath);
-                var bitmap = new Bitmap(iconSize, iconSize);
-                using var graphics = Graphics.FromImage(bitmap);
-                graphics.SmoothingMode = SmoothingMode.HighQuality;
-                graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
-                graphics.Clear(Color.Transparent);
+                StartCap = LineCap.Round,
+                EndCap = LineCap.Round,
+                LineJoin = LineJoin.Round
+            };
+            graphics.DrawLines(
+                pen,
+                [
+                    new PointF(centerX - halfWidth, centerY - vertical),
+                    new PointF(centerX, centerY + vertical),
+                    new PointF(centerX + halfWidth, centerY - vertical)
+                ]);
 
-                var scale = Math.Min((float)iconSize / source.Width, (float)iconSize / source.Height);
-                var drawWidth = source.Width * scale;
-                var drawHeight = source.Height * scale;
-                var drawX = (iconSize - drawWidth) / 2f;
-                var drawY = (iconSize - drawHeight) / 2f;
-                graphics.DrawImage(source, drawX, drawY, drawWidth, drawHeight);
-
-                return bitmap;
-            }
-            catch
-            {
-                return null;
-            }
+            return bitmap;
         }
 
         private void PopulateQueueTree()
