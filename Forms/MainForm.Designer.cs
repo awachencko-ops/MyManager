@@ -172,7 +172,7 @@
             cbQueue.FormattingEnabled = true;
             cbQueue.Location = new Point(3, 3);
             cbQueue.Name = "cbQueue";
-            cbQueue.Size = new Size(241, 33);
+            cbQueue.Size = new Size(170, 33);
             cbQueue.TabIndex = 0;
             // 
             // pnlFilters
