@@ -49,7 +49,7 @@ namespace MyManager
             "Завершено"
         };
         private const string StatusFilterLabelText = "Состояние задания";
-        private const string ChevronDownIconRelativePath = @"Icons\chevron-down.svg";
+        private const string ChevronDownIconRelativePath = @"Icons\arrow_drop_down.svg";
 
         private static readonly Dictionary<string, string[]> QueueStatusMappings = new(StringComparer.Ordinal)
         {
@@ -202,13 +202,13 @@ namespace MyManager
             if (iconPath == null)
                 return;
 
-            var icon = TryRenderChevronIconFromSvg(iconPath, 16);
+            var icon = TryRenderChevronIconFromSvg(iconPath, 14);
             if (icon == null)
                 return;
 
             lblFStatus.Image = icon;
             lblFStatus.ImageAlign = ContentAlignment.MiddleLeft;
-            lblFStatus.Padding = new Padding(icon.Width + 10, 0, 0, 0);
+            lblFStatus.Padding = new Padding(icon.Width + 4, 0, 0, 0);
         }
 
         private static string? ResolveChevronSvgPath()
@@ -229,27 +229,20 @@ namespace MyManager
             try
             {
                 var svgText = File.ReadAllText(svgPath);
-                var colorMatch = Regex.Match(svgText, @"stroke=""(#?[0-9a-fA-F]{6})""");
-                var strokeColorHex = colorMatch.Success ? colorMatch.Groups[1].Value : "#001A72";
-                var strokeColor = ColorTranslator.FromHtml(strokeColorHex);
+                var colorMatch = Regex.Match(svgText, @"fill=""(#?[0-9a-fA-F]{6})""");
+                var fillColorHex = colorMatch.Success ? colorMatch.Groups[1].Value : "#1f1f1f";
+                var fillColor = ColorTranslator.FromHtml(fillColorHex);
 
                 var bitmap = new Bitmap(iconSize, iconSize);
                 using var graphics = Graphics.FromImage(bitmap);
                 graphics.SmoothingMode = SmoothingMode.AntiAlias;
                 graphics.Clear(Color.Transparent);
 
-                var penWidth = Math.Max(1.8f, iconSize * 0.16f);
-                using var pen = new Pen(strokeColor, penWidth)
-                {
-                    StartCap = LineCap.Round,
-                    EndCap = LineCap.Round,
-                    LineJoin = LineJoin.Round
-                };
-
-                var left = new PointF(iconSize * 0.22f, iconSize * 0.35f);
-                var middle = new PointF(iconSize * 0.5f, iconSize * 0.68f);
-                var right = new PointF(iconSize * 0.78f, iconSize * 0.35f);
-                graphics.DrawLines(pen, [left, middle, right]);
+                var p1 = new PointF(iconSize * 0.22f, iconSize * 0.34f);
+                var p2 = new PointF(iconSize * 0.78f, iconSize * 0.34f);
+                var p3 = new PointF(iconSize * 0.5f, iconSize * 0.72f);
+                using var brush = new SolidBrush(fillColor);
+                graphics.FillPolygon(brush, [p1, p2, p3]);
 
                 return bitmap;
             }
