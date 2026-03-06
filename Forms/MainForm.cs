@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Globalization;
+using System.IO;
 using System.Windows.Forms;
+using Svg;
 
 namespace MyManager
 {
@@ -204,6 +206,46 @@ namespace MyManager
         }
 
         private static Bitmap CreateDropDownGlyphIcon(int iconSize)
+        {
+            var svgPath = ResolveDropDownGlyphSvgPath();
+            if (!string.IsNullOrWhiteSpace(svgPath))
+            {
+                try
+                {
+                    var svg = SvgDocument.Open<SvgDocument>(svgPath);
+                    svg.Width = iconSize;
+                    svg.Height = iconSize;
+                    var rendered = svg.Draw(iconSize, iconSize);
+                    if (rendered != null)
+                        return rendered;
+                }
+                catch
+                {
+                    // Если SVG недоступен/поврежден, используем внутреннюю отрисовку.
+                }
+            }
+
+            return CreateFallbackDropDownGlyphIcon(iconSize);
+        }
+
+        private static string? ResolveDropDownGlyphSvgPath()
+        {
+            var candidates = new[]
+            {
+                Path.Combine(AppContext.BaseDirectory, "Icons", "arrow_drop_down.svg"),
+                Path.Combine(AppContext.BaseDirectory, "arrow_drop_down.svg")
+            };
+
+            foreach (var candidate in candidates)
+            {
+                if (File.Exists(candidate))
+                    return candidate;
+            }
+
+            return null;
+        }
+
+        private static Bitmap CreateFallbackDropDownGlyphIcon(int iconSize)
         {
             var bitmap = new Bitmap(iconSize, iconSize);
             using var graphics = Graphics.FromImage(bitmap);
