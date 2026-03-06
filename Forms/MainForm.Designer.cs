@@ -170,6 +170,7 @@
             // 
             cbQueue.DropDownStyle = ComboBoxStyle.DropDownList;
             cbQueue.FormattingEnabled = true;
+            cbQueue.IntegralHeight = false;
             cbQueue.Location = new Point(3, 3);
             cbQueue.Name = "cbQueue";
             cbQueue.Size = new Size(170, 33);

@@ -17,7 +17,7 @@ namespace MyManager
         private string _orderLogsFolderPath = string.Empty;
 
         // На будущее: список пользователей можно наполнять из настроек/БД.
-        private readonly List<string> _users = ["Пользователь"];
+        private readonly List<string> _users = ["Сервер \"Таудеми\""];
 
         private static readonly string[] QueueStatuses =
         {
@@ -25,15 +25,22 @@ namespace MyManager
             "Обработанные",
             "В архиве",
             "Обрабатывается",
+            "Задержанные",
             "Завершено"
         };
 
+        // Сопоставление рабочих статусов с группами очереди (treeView1/cbQueue):
+        // Обработанные: Обработано
+        // В архиве: В архиве
+        // Обрабатывается: Выполняется сборка, Обрабатывается
+        // Задержанные: Отменено, Ошибка
+        // Завершено: Завершено
         private static readonly string[] FilterStatuses =
         {
+            "Обработано",
             "В архиве",
             "Выполняется сборка",
             "Обрабатывается",
-            "Обработано",
             "Отменено",
             "Ошибка",
             "Завершено"
@@ -96,12 +103,6 @@ namespace MyManager
             treeView1.DrawNode += TreeView1_DrawNode;
 
             cbQueue.DrawMode = DrawMode.Normal;
-            cbQueue.Font = new Font("Segoe UI", 15f, FontStyle.Regular, GraphicsUnit.Pixel);
-            cbQueue.FlatStyle = FlatStyle.Standard;
-            cbQueue.IntegralHeight = false;
-            cbQueue.DropDownHeight = 240;
-            cbQueue.BackColor = Color.White;
-            cbQueue.ForeColor = Color.FromArgb(47, 53, 72);
         }
 
         private void InitializeQueueNavigation()

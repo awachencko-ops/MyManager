@@ -35,3 +35,6 @@
 1. Подключить из `MainForm` просмотр `OrderLogViewerForm` для выбранного заказа.
 2. Подключить из `MainForm` запуск `OrderProcessor` для тестового сценария.
 3. Добавить открытие `ActionManagerForm` и `ImposingManagerForm` из `MainForm` через кнопку `Параметры`/меню.
+
+## Зафиксированные договоренности по статусам
+- Актуальное сопоставление рабочих статусов и групп `treeView1`/`cbQueue` фиксируется в `ORDER_TREE_STATUSES.md`.
