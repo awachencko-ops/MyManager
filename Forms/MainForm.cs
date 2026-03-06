@@ -90,6 +90,8 @@ namespace MyManager
             cbQueue.DropDownHeight = 240;
             cbQueue.BackColor = Color.White;
             cbQueue.ForeColor = Color.FromArgb(47, 53, 72);
+            cbQueue.Size = cbFStatus.Size;
+            cbQueue.DropDownWidth = cbFStatus.Width;
         }
 
         private void InitializeQueueNavigation()
