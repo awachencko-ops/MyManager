@@ -220,7 +220,7 @@
             lblFStatus.Location = new Point(27, 0);
             lblFStatus.Margin = new Padding(0, 0, 3, 0);
             lblFStatus.Name = "lblFStatus";
-            lblFStatus.Size = new Size(146, 33);
+            lblFStatus.Size = new Size(196, 33);
             lblFStatus.TabIndex = 1;
             lblFStatus.Text = "Состояние задания";
             lblFStatus.TextAlign = ContentAlignment.MiddleLeft;
