@@ -64,14 +64,12 @@ namespace MyManager
         private string _currentUserName = string.Empty;
         private readonly HashSet<string> _selectedFilterStatuses = new(StringComparer.Ordinal);
         private string _orderNumberFilterText = string.Empty;
-        private bool _orderNumberMatchWholeWord;
         private ToolStripDropDown? _statusFilterDropDown;
         private CheckedListBox? _statusFilterCheckedList;
         private bool _isUpdatingStatusFilterList;
         private bool _suppressNextStatusFilterLabelClick;
         private ToolStripDropDown? _orderNoFilterDropDown;
         private TextBox? _orderNoFilterTextBox;
-        private CheckBox? _orderNoFilterWholeWordCheckBox;
         private Button? _orderNoFilterClearButton;
         private Button? _orderNoFilterApplyButton;
         private bool _suppressNextOrderNoLabelClick;
@@ -525,8 +523,7 @@ namespace MyManager
         private void EnsureOrderNoFilterDropDown()
         {
             if (_orderNoFilterDropDown != null &&
-                _orderNoFilterTextBox != null &&
-                _orderNoFilterWholeWordCheckBox != null)
+                _orderNoFilterTextBox != null)
                 return;
 
             var popupWidth = Math.Max(lblFOrderNo.Width + 100, 280);
@@ -572,19 +569,10 @@ namespace MyManager
                 Size = new Size(popupWidth - 32, 2)
             };
 
-            _orderNoFilterWholeWordCheckBox = new CheckBox
-            {
-                AutoSize = true,
-                Location = new Point(16, 56),
-                Text = "Слово целиком",
-                ForeColor = Color.FromArgb(47, 53, 72),
-                BackColor = Color.White
-            };
-
             _orderNoFilterClearButton = new Button
             {
                 FlatStyle = FlatStyle.Flat,
-                Location = new Point(16, 92),
+                Location = new Point(16, 56),
                 Size = new Size(104, 32),
                 Text = "Очистить",
                 BackColor = Color.White,
@@ -596,7 +584,7 @@ namespace MyManager
             _orderNoFilterApplyButton = new Button
             {
                 FlatStyle = FlatStyle.Flat,
-                Location = new Point(126, 92),
+                Location = new Point(126, 56),
                 Size = new Size(120, 32),
                 Text = "Применить",
                 BackColor = Color.FromArgb(176, 212, 242),
@@ -607,7 +595,6 @@ namespace MyManager
 
             panel.Controls.Add(_orderNoFilterTextBox);
             panel.Controls.Add(underline);
-            panel.Controls.Add(_orderNoFilterWholeWordCheckBox);
             panel.Controls.Add(_orderNoFilterClearButton);
             panel.Controls.Add(_orderNoFilterApplyButton);
 
@@ -631,11 +618,10 @@ namespace MyManager
 
         private void SyncOrderNoFilterPopupState()
         {
-            if (_orderNoFilterTextBox == null || _orderNoFilterWholeWordCheckBox == null)
+            if (_orderNoFilterTextBox == null)
                 return;
 
             _orderNoFilterTextBox.Text = _orderNumberFilterText;
-            _orderNoFilterWholeWordCheckBox.Checked = _orderNumberMatchWholeWord;
             UpdateOrderNoFilterActionButtonsState();
         }
 
@@ -663,19 +649,16 @@ namespace MyManager
 
         private void ApplyOrderNoFilterFromPopup(bool clearFilter)
         {
-            if (_orderNoFilterTextBox == null || _orderNoFilterWholeWordCheckBox == null)
+            if (_orderNoFilterTextBox == null)
                 return;
 
             if (!clearFilter && !HasOrderNoFilterInputText())
                 return;
 
             var nextText = clearFilter ? string.Empty : (_orderNoFilterTextBox.Text ?? string.Empty).Trim();
-            var nextWholeWord = !clearFilter && _orderNoFilterWholeWordCheckBox.Checked;
-            var changed = !string.Equals(_orderNumberFilterText, nextText, StringComparison.Ordinal) ||
-                          _orderNumberMatchWholeWord != nextWholeWord;
+            var changed = !string.Equals(_orderNumberFilterText, nextText, StringComparison.Ordinal);
 
             _orderNumberFilterText = nextText;
-            _orderNumberMatchWholeWord = nextWholeWord;
 
             if (changed)
                 HandleOrdersGridChanged();
@@ -826,9 +809,7 @@ namespace MyManager
                 var orderNoValue = row.Cells[colOrderNumber.Index].Value?.ToString();
                 var orderNoMatches = !hasOrderNoFilter ||
                                      (!string.IsNullOrWhiteSpace(orderNoValue) &&
-                                      (_orderNumberMatchWholeWord
-                                          ? string.Equals(orderNoValue.Trim(), _orderNumberFilterText, StringComparison.OrdinalIgnoreCase)
-                                          : orderNoValue.IndexOf(_orderNumberFilterText, StringComparison.OrdinalIgnoreCase) >= 0));
+                                      orderNoValue.IndexOf(_orderNumberFilterText, StringComparison.OrdinalIgnoreCase) >= 0);
                 var shouldShow = statusMatches && orderNoMatches;
 
                 try
