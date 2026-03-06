@@ -21,7 +21,7 @@ namespace MyManager
             // просто чтобы было видно, что всё живое
             Load += (_, __) =>
             {
-                var root = new TreeNode("C60-C70-713D");
+                var root = new TreeNode("Пользователь");
                 root.Nodes.Add("Все задания");
                 root.Nodes.Add("Обработанные");
                 root.Nodes.Add("В архиве");
