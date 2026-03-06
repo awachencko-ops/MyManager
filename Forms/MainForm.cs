@@ -14,7 +14,9 @@ namespace MyManager
         private string _managerLogFilePath = "manager.log";
         private string _orderLogsFolderPath = string.Empty;
 
+        // На будущее: список пользователей можно наполнять из настроек/БД.
         private readonly List<string> _users = new List<string> { "Пользователь" };
+
         private static readonly string[] QueueStatuses =
         {
             "Все задания",
@@ -25,6 +27,7 @@ namespace MyManager
         };
 
         private bool _isSyncingQueueSelection;
+        private string _currentUserName = string.Empty;
 
         public MainForm()
         {
@@ -58,13 +61,19 @@ namespace MyManager
         private void InitializeQueueNavigation()
         {
             PopulateQueueTree();
-            PopulateQueueDropDown();
 
             treeView1.AfterSelect += TreeView1_AfterSelect;
             cbQueue.SelectedIndexChanged += CbQueue_SelectedIndexChanged;
 
-            if (cbQueue.Items.Count > 0)
-                cbQueue.SelectedIndex = 0;
+            if (treeView1.Nodes.Count == 0)
+                return;
+
+            var firstUserNode = treeView1.Nodes[0];
+            _isSyncingQueueSelection = true;
+            SelectUser(firstUserNode, QueueStatuses[0]);
+            treeView1.SelectedNode = firstUserNode;
+            firstUserNode.EnsureVisible();
+            _isSyncingQueueSelection = false;
         }
 
         private void PopulateQueueTree()
@@ -85,30 +94,24 @@ namespace MyManager
             treeView1.EndUpdate();
         }
 
-        private void PopulateQueueDropDown()
+        // cbQueue всегда содержит статусы выбранного в дереве пользователя.
+        private void SelectUser(TreeNode userNode, string? preferredStatus = null)
         {
+            _currentUserName = userNode.Text;
+
             cbQueue.BeginUpdate();
             cbQueue.Items.Clear();
-
-            foreach (var userName in _users)
-                cbQueue.Items.Add(userName);
-
+            cbQueue.Items.AddRange(QueueStatuses);
             cbQueue.EndUpdate();
-        }
 
-        private void CbQueue_SelectedIndexChanged(object? sender, EventArgs e)
-        {
-            if (_isSyncingQueueSelection || cbQueue.SelectedItem is not string userName)
-                return;
+            var targetStatus = string.IsNullOrWhiteSpace(preferredStatus)
+                ? QueueStatuses[0]
+                : preferredStatus;
 
-            var userNode = FindUserNode(userName);
-            if (userNode == null)
-                return;
-
-            _isSyncingQueueSelection = true;
-            treeView1.SelectedNode = userNode;
-            userNode.EnsureVisible();
-            _isSyncingQueueSelection = false;
+            if (cbQueue.Items.Contains(targetStatus))
+                cbQueue.SelectedItem = targetStatus;
+            else if (cbQueue.Items.Count > 0)
+                cbQueue.SelectedIndex = 0;
         }
 
         private void TreeView1_AfterSelect(object? sender, TreeViewEventArgs e)
@@ -120,12 +123,34 @@ namespace MyManager
             if (userNode == null)
                 return;
 
-            var userName = userNode.Text;
-            if (string.Equals(cbQueue.SelectedItem as string, userName, StringComparison.Ordinal))
+            var preferredStatus = e.Node.Level == 0
+                ? cbQueue.SelectedItem as string
+                : e.Node.Text;
+
+            _isSyncingQueueSelection = true;
+            SelectUser(userNode, preferredStatus);
+            _isSyncingQueueSelection = false;
+        }
+
+        private void CbQueue_SelectedIndexChanged(object? sender, EventArgs e)
+        {
+            if (_isSyncingQueueSelection || cbQueue.SelectedItem is not string selectedStatus)
+                return;
+
+            var userNode = FindUserNode(_currentUserName);
+            if (userNode == null && treeView1.SelectedNode != null)
+                userNode = treeView1.SelectedNode.Level == 0 ? treeView1.SelectedNode : treeView1.SelectedNode.Parent;
+
+            if (userNode == null)
+                return;
+
+            var statusNode = FindStatusNode(userNode, selectedStatus);
+            if (statusNode == null)
                 return;
 
             _isSyncingQueueSelection = true;
-            cbQueue.SelectedItem = userName;
+            treeView1.SelectedNode = statusNode;
+            statusNode.EnsureVisible();
             _isSyncingQueueSelection = false;
         }
 
@@ -135,6 +160,17 @@ namespace MyManager
             {
                 if (string.Equals(node.Text, userName, StringComparison.Ordinal))
                     return node;
+            }
+
+            return null;
+        }
+
+        private static TreeNode? FindStatusNode(TreeNode userNode, string statusName)
+        {
+            foreach (TreeNode child in userNode.Nodes)
+            {
+                if (string.Equals(child.Text, statusName, StringComparison.Ordinal))
+                    return child;
             }
 
             return null;
