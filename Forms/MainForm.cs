@@ -46,6 +46,15 @@ namespace MyManager
             "Завершено"
         };
 
+        private static readonly Dictionary<string, string[]> QueueStatusMappings = new(StringComparer.Ordinal)
+        {
+            ["Обработанные"] = ["Обработано"],
+            ["В архиве"] = ["В архиве"],
+            ["Обрабатывается"] = ["Выполняется сборка", "Обрабатывается"],
+            ["Задержанные"] = ["Отменено", "Ошибка"],
+            ["Завершено"] = ["Завершено"]
+        };
+
         private bool _isSyncingQueueSelection;
         private string _currentUserName = string.Empty;
 
@@ -53,6 +62,23 @@ namespace MyManager
         private static readonly Color QueueHeaderBackColor = Color.FromArgb(103, 163, 216);
         private static readonly Color QueueStatusSelectedBackColor = Color.FromArgb(57, 63, 81);
         private static readonly Color QueueTextColor = Color.FromArgb(244, 247, 252);
+
+        private sealed class QueueStatusItem
+        {
+            public QueueStatusItem(string statusName, string text)
+            {
+                StatusName = statusName;
+                Text = text;
+            }
+
+            public string StatusName { get; }
+            public string Text { get; }
+
+            public override string ToString()
+            {
+                return Text;
+            }
+        }
 
         public MainForm()
         {
@@ -111,6 +137,10 @@ namespace MyManager
 
             treeView1.AfterSelect += TreeView1_AfterSelect;
             cbQueue.SelectedIndexChanged += CbQueue_SelectedIndexChanged;
+            dgvJobs.RowsAdded += (_, _) => RefreshQueuePresentation();
+            dgvJobs.RowsRemoved += (_, _) => RefreshQueuePresentation();
+            dgvJobs.DataBindingComplete += (_, _) => RefreshQueuePresentation();
+            dgvJobs.CellValueChanged += DgvJobs_CellValueChanged;
 
             if (treeView1.Nodes.Count == 0)
                 return;
@@ -155,19 +185,12 @@ namespace MyManager
         {
             _currentUserName = userNode.Text;
 
-            cbQueue.BeginUpdate();
-            cbQueue.Items.Clear();
-            cbQueue.Items.AddRange(QueueStatuses);
-            cbQueue.EndUpdate();
-
             var targetStatus = string.IsNullOrWhiteSpace(preferredStatus)
                 ? QueueStatuses[0]
                 : preferredStatus;
 
-            if (cbQueue.Items.Contains(targetStatus))
-                cbQueue.SelectedItem = targetStatus;
-            else if (cbQueue.Items.Count > 0)
-                cbQueue.SelectedIndex = 0;
+            FillQueueCombo(targetStatus);
+            treeView1.Invalidate();
         }
 
         private void TreeView1_AfterSelect(object? sender, TreeViewEventArgs e)
@@ -180,7 +203,7 @@ namespace MyManager
                 return;
 
             var preferredStatus = e.Node.Level == 0
-                ? cbQueue.SelectedItem as string
+                ? GetSelectedQueueStatusName()
                 : e.Node.Text;
 
             _isSyncingQueueSelection = true;
@@ -190,9 +213,10 @@ namespace MyManager
 
         private void CbQueue_SelectedIndexChanged(object? sender, EventArgs e)
         {
-            if (_isSyncingQueueSelection || cbQueue.SelectedItem is not string selectedStatus)
+            if (_isSyncingQueueSelection || cbQueue.SelectedItem is not QueueStatusItem selectedItem)
                 return;
 
+            var selectedStatus = selectedItem.StatusName;
             var userNode = FindUserNode(_currentUserName);
             if (userNode == null && treeView1.SelectedNode != null)
                 userNode = treeView1.SelectedNode.Level == 0 ? treeView1.SelectedNode : treeView1.SelectedNode.Parent;
@@ -285,6 +309,71 @@ namespace MyManager
                 ControlPaint.DrawFocusRectangle(e.Graphics, rowRect, QueueTextColor, backColor);
         }
 
+        private void DgvJobs_CellValueChanged(object? sender, DataGridViewCellEventArgs e)
+        {
+            if (e.ColumnIndex == colStatus.Index || e.ColumnIndex < 0)
+                RefreshQueuePresentation();
+        }
+
+        private void RefreshQueuePresentation()
+        {
+            treeView1.Invalidate();
+
+            var userNode = FindUserNode(_currentUserName);
+            if (userNode == null)
+                return;
+
+            var preferredStatus = GetSelectedQueueStatusName();
+            FillQueueCombo(preferredStatus);
+        }
+
+        private void FillQueueCombo(string? preferredStatus)
+        {
+            var targetStatus = string.IsNullOrWhiteSpace(preferredStatus)
+                ? QueueStatuses[0]
+                : preferredStatus;
+
+            var previousSync = _isSyncingQueueSelection;
+            _isSyncingQueueSelection = true;
+
+            cbQueue.BeginUpdate();
+            cbQueue.Items.Clear();
+            foreach (var statusName in QueueStatuses)
+            {
+                var count = GetQueueStatusCount(statusName);
+                cbQueue.Items.Add(new QueueStatusItem(statusName, $"• {statusName} ({count})"));
+            }
+            cbQueue.EndUpdate();
+
+            var targetItem = FindQueueItem(targetStatus);
+            if (targetItem != null)
+                cbQueue.SelectedItem = targetItem;
+            else if (cbQueue.Items.Count > 0)
+                cbQueue.SelectedIndex = 0;
+
+            _isSyncingQueueSelection = previousSync;
+        }
+
+        private QueueStatusItem? FindQueueItem(string statusName)
+        {
+            foreach (var item in cbQueue.Items)
+            {
+                if (item is QueueStatusItem queueItem &&
+                    string.Equals(queueItem.StatusName, statusName, StringComparison.Ordinal))
+                    return queueItem;
+            }
+
+            return null;
+        }
+
+        private string? GetSelectedQueueStatusName()
+        {
+            if (cbQueue.SelectedItem is QueueStatusItem selectedItem)
+                return selectedItem.StatusName;
+
+            return null;
+        }
+
         private static string FormatQueueLabel(string value)
         {
             if (string.IsNullOrWhiteSpace(value))
@@ -300,10 +389,83 @@ namespace MyManager
 
         private string GetQueueStatusCountText(string statusName)
         {
-            if (string.Equals(statusName, "Все задания", StringComparison.Ordinal))
-                return dgvJobs.Rows.Count.ToString();
+            return $"({GetQueueStatusCount(statusName)})";
+        }
 
-            return "0";
+        private int GetQueueStatusCount(string queueStatusName)
+        {
+            if (string.Equals(queueStatusName, "Все задания", StringComparison.Ordinal))
+                return GetOrdersTotalCount();
+
+            if (!QueueStatusMappings.TryGetValue(queueStatusName, out var mappedStatuses))
+                return 0;
+
+            var countsByFilterStatus = GetCountsByFilterStatus();
+            var total = 0;
+            foreach (var status in mappedStatuses)
+            {
+                if (countsByFilterStatus.TryGetValue(status, out var count))
+                    total += count;
+            }
+
+            return total;
+        }
+
+        private int GetOrdersTotalCount()
+        {
+            var total = 0;
+            foreach (DataGridViewRow row in dgvJobs.Rows)
+            {
+                if (row.IsNewRow)
+                    continue;
+
+                total++;
+            }
+
+            return total;
+        }
+
+        private Dictionary<string, int> GetCountsByFilterStatus()
+        {
+            var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var status in FilterStatuses)
+                counts[status] = 0;
+
+            foreach (DataGridViewRow row in dgvJobs.Rows)
+            {
+                if (row.IsNewRow)
+                    continue;
+
+                var statusValue = row.Cells[colStatus.Index].Value?.ToString();
+                var normalizedStatus = NormalizeStatus(statusValue);
+                if (normalizedStatus == null)
+                    continue;
+
+                counts[normalizedStatus]++;
+            }
+
+            return counts;
+        }
+
+        private static string? NormalizeStatus(string? rawStatus)
+        {
+            if (string.IsNullOrWhiteSpace(rawStatus))
+                return null;
+
+            var value = rawStatus.Trim();
+            foreach (var status in FilterStatuses)
+            {
+                if (string.Equals(value, status, StringComparison.OrdinalIgnoreCase))
+                    return status;
+
+                if (value.Contains(status, StringComparison.OrdinalIgnoreCase))
+                    return status;
+            }
+
+            if (value.Contains("Готово", StringComparison.OrdinalIgnoreCase))
+                return "Завершено";
+
+            return null;
         }
 
         private void ShowSettingsDialog()
