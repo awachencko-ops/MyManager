@@ -2294,11 +2294,13 @@ namespace MyManager
         private void UpdateStatusFilterCaption()
         {
             lblFStatus.Text = StatusFilterLabelText;
+            AdjustFilterLabelWidths();
         }
 
         private void UpdateOrderNoSearchCaption()
         {
             lblFOrderNo.Text = OrderNoSearchLabelText;
+            AdjustFilterLabelWidths();
         }
 
         private void UpdateUserFilterCaption()
@@ -2307,6 +2309,7 @@ namespace MyManager
                 return;
 
             _userFilterLabel.Text = UserFilterLabelText;
+            AdjustFilterLabelWidths();
         }
 
         private void UpdateCreatedDateFilterCaption()
@@ -2315,6 +2318,7 @@ namespace MyManager
                 return;
 
             _createdFilterLabel.Text = CreatedDateFilterLabelText;
+            AdjustFilterLabelWidths();
         }
 
         private void UpdateReceivedDateFilterCaption()
@@ -2323,6 +2327,30 @@ namespace MyManager
                 return;
 
             _receivedFilterLabel.Text = ReceivedDateFilterLabelText;
+            AdjustFilterLabelWidths();
+        }
+
+        private void AdjustFilterLabelWidths()
+        {
+            SetFilterLabelWidth(lblFStatus, StatusFilterLabelText, 200);
+            SetFilterLabelWidth(lblFOrderNo, OrderNoSearchLabelText, 180);
+            SetFilterLabelWidth(_userFilterLabel, UserFilterLabelText, 150);
+            SetFilterLabelWidth(_createdFilterLabel, CreatedDateFilterLabelText, 190);
+            SetFilterLabelWidth(_receivedFilterLabel, ReceivedDateFilterLabelText, 190);
+        }
+
+        private static void SetFilterLabelWidth(Label? label, string text, int minWidth)
+        {
+            if (label == null)
+                return;
+
+            var measuredWidth = TextRenderer.MeasureText(
+                text,
+                label.Font,
+                new Size(int.MaxValue, Math.Max(label.Height, 1)),
+                TextFormatFlags.NoPadding).Width;
+
+            label.Width = Math.Max(minWidth, measuredWidth + 16);
         }
 
         private void ApplyStatusFilterToGrid()
