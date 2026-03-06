@@ -19,6 +19,10 @@
 | Filters | Фильтр `Номер заказа` (popup-поиск) | MainForm ready | `Forms/Archive/Form1.cs` | `Forms/MainForm.cs` | Кнопки `Очистить`/`Применить`, реакция на ввод и `Enter` |
 | Filters | Фильтр `Пользователь` | In progress | `Forms/Archive/Form1.cs` | `Forms/MainForm.cs` | Временно используются болванки: `Андрей`, `Катя`, `Вероника` |
 | Filters | Фильтры дат `Дата поступления` и `Начало обработки` | In progress | `Forms/Archive/Form1.cs` | `Forms/MainForm.cs` | Popup и кастомный календарь подключены, нужна финальная стабилизация сценариев закрытия |
+| Grid | Каркас основной таблицы (`dgvJobs`, колонки, реакция на изменения строк) | In progress | `Forms/Archive/Form1.cs` | `Forms/MainForm.cs` | UI-скелет есть, фильтры применяются к текущим строкам |
+| Grid | Наполнение таблицы заказами (аналог `FillGrid`) | Legacy only | `Forms/Archive/Form1.cs` | - | В `MainForm` пока нет полного пайплайна загрузки/построения строк |
+| Grid | Контекстное меню таблицы и операции по строкам | Legacy only | `Forms/Archive/Form1.cs` + `UI/OrderGridContextMenu.cs` | - | Требуется подключение `OrderGridContextMenu` в `MainForm` |
+| Grid | Drag&Drop, tooltips, форматирование/подсветка ячеек, double-click действия | Legacy only | `Forms/Archive/Form1.cs` | - | UI-поведение таблицы пока не мигрировано в `MainForm` |
 | Orders | Загрузка списка заказов | Legacy only | `Forms/Archive/Form1.cs` | - | Перенос в очередь |
 | Orders | Выбор/открытие заказа | Legacy only | `Forms/Archive/Form1.cs` | - | Перенос в очередь |
 | Actions | Контекстное меню заказа | Legacy only | `UI/OrderGridContextMenu.cs` + `Forms/Archive/Form1.cs` | - | Переиспользовать текущий UI helper |
