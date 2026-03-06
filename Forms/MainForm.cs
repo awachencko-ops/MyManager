@@ -49,6 +49,7 @@ namespace MyManager
             "Завершено"
         };
         private const string StatusFilterLabelText = "Состояние задания";
+        private const string OrderNoSearchLabelText = "Номер заказа";
 
         private static readonly Dictionary<string, string[]> QueueStatusMappings = new(StringComparer.Ordinal)
         {
@@ -62,6 +63,7 @@ namespace MyManager
         private bool _isSyncingQueueSelection;
         private string _currentUserName = string.Empty;
         private readonly HashSet<string> _selectedFilterStatuses = new(StringComparer.Ordinal);
+        private string _orderNumberFilterText = string.Empty;
         private ToolStripDropDown? _statusFilterDropDown;
         private CheckedListBox? _statusFilterCheckedList;
         private bool _isUpdatingStatusFilterList;
@@ -112,6 +114,7 @@ namespace MyManager
             LoadSettings();
             ApplyQueueVisualStyle();
             InitializeStatusFilter();
+            InitializeOrderNoSearch();
             InitializeQueueNavigation();
         }
 
@@ -203,6 +206,23 @@ namespace MyManager
             picFStatusGlyph.Image = (Image)icon.Clone();
             lblFStatus.TextAlign = ContentAlignment.MiddleLeft;
             lblFStatus.Padding = new Padding(0, 3, 0, 0);
+        }
+
+        private void InitializeOrderNoSearch()
+        {
+            lblFOrderNo.Click += LblFOrderNo_Click;
+            picFOrderNoGlyph.Click += LblFOrderNo_Click;
+            ApplyOrderNoSearchIcon();
+            UpdateOrderNoSearchCaption();
+        }
+
+        private void ApplyOrderNoSearchIcon()
+        {
+            using var icon = CreateDropDownGlyphIcon(24);
+            picFOrderNoGlyph.Image?.Dispose();
+            picFOrderNoGlyph.Image = (Image)icon.Clone();
+            lblFOrderNo.TextAlign = ContentAlignment.MiddleLeft;
+            lblFOrderNo.Padding = new Padding(0, 3, 0, 0);
         }
 
         private static Bitmap CreateDropDownGlyphIcon(int iconSize)
@@ -443,6 +463,7 @@ namespace MyManager
         {
             ApplyStatusFilterToGrid();
             UpdateStatusFilterCaption();
+            UpdateOrderNoSearchCaption();
             RefreshStatusFilterChecklist();
             RefreshQueuePresentation();
         }
@@ -462,6 +483,20 @@ namespace MyManager
             }
 
             ShowStatusFilterDropDown();
+        }
+
+        private void LblFOrderNo_Click(object? sender, EventArgs e)
+        {
+            using var dialog = new OrderNumberSearchDialog(_orderNumberFilterText);
+            if (dialog.ShowDialog(this) != DialogResult.OK)
+                return;
+
+            var nextFilter = dialog.SearchText;
+            if (string.Equals(_orderNumberFilterText, nextFilter, StringComparison.Ordinal))
+                return;
+
+            _orderNumberFilterText = nextFilter;
+            HandleOrdersGridChanged();
         }
 
         private void ShowStatusFilterDropDown()
@@ -575,9 +610,15 @@ namespace MyManager
             lblFStatus.Text = StatusFilterLabelText;
         }
 
+        private void UpdateOrderNoSearchCaption()
+        {
+            lblFOrderNo.Text = OrderNoSearchLabelText;
+        }
+
         private void ApplyStatusFilterToGrid()
         {
             var hasSelectedStatuses = _selectedFilterStatuses.Count > 0;
+            var hasOrderNoFilter = !string.IsNullOrWhiteSpace(_orderNumberFilterText);
 
             foreach (DataGridViewRow row in dgvJobs.Rows)
             {
@@ -586,7 +627,12 @@ namespace MyManager
 
                 var statusValue = row.Cells[colStatus.Index].Value?.ToString();
                 var normalizedStatus = NormalizeStatus(statusValue);
-                var shouldShow = !hasSelectedStatuses || (normalizedStatus != null && _selectedFilterStatuses.Contains(normalizedStatus));
+                var statusMatches = !hasSelectedStatuses || (normalizedStatus != null && _selectedFilterStatuses.Contains(normalizedStatus));
+                var orderNoValue = row.Cells[colOrderNumber.Index].Value?.ToString();
+                var orderNoMatches = !hasOrderNoFilter ||
+                                     (!string.IsNullOrWhiteSpace(orderNoValue) &&
+                                      orderNoValue.IndexOf(_orderNumberFilterText, StringComparison.OrdinalIgnoreCase) >= 0);
+                var shouldShow = statusMatches && orderNoMatches;
 
                 try
                 {

@@ -41,7 +41,8 @@
             flpFilters = new FlowLayoutPanel();
             picFStatusGlyph = new PictureBox();
             lblFStatus = new Label();
-            cbFOrderNo = new ComboBox();
+            picFOrderNoGlyph = new PictureBox();
+            lblFOrderNo = new Label();
             cbUser = new ComboBox();
             cbFCreated = new ComboBox();
             cbFReceived = new ComboBox();
@@ -72,6 +73,7 @@
             pnlFilters.SuspendLayout();
             flpFilters.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)picFStatusGlyph).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)picFOrderNoGlyph).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgvJobs).BeginInit();
             tsMainActions.SuspendLayout();
             SuspendLayout();
@@ -192,7 +194,8 @@
             flpFilters.AutoScroll = true;
             flpFilters.Controls.Add(picFStatusGlyph);
             flpFilters.Controls.Add(lblFStatus);
-            flpFilters.Controls.Add(cbFOrderNo);
+            flpFilters.Controls.Add(picFOrderNoGlyph);
+            flpFilters.Controls.Add(lblFOrderNo);
             flpFilters.Controls.Add(cbUser);
             flpFilters.Controls.Add(cbFCreated);
             flpFilters.Controls.Add(cbFReceived);
@@ -225,45 +228,57 @@
             lblFStatus.Text = "Состояние задания";
             lblFStatus.TextAlign = ContentAlignment.MiddleLeft;
             // 
-            // cbFOrderNo
+            // picFOrderNoGlyph
             // 
-            cbFOrderNo.DropDownStyle = ComboBoxStyle.DropDownList;
-            cbFOrderNo.FormattingEnabled = true;
-            cbFOrderNo.IntegralHeight = false;
-            cbFOrderNo.Location = new Point(179, 3);
-            cbFOrderNo.Name = "cbFOrderNo";
-            cbFOrderNo.Size = new Size(170, 33);
-            cbFOrderNo.TabIndex = 2;
+            picFOrderNoGlyph.Cursor = Cursors.Hand;
+            picFOrderNoGlyph.Location = new Point(226, 0);
+            picFOrderNoGlyph.Margin = new Padding(3, 0, 0, 0);
+            picFOrderNoGlyph.Name = "picFOrderNoGlyph";
+            picFOrderNoGlyph.Size = new Size(24, 33);
+            picFOrderNoGlyph.SizeMode = PictureBoxSizeMode.CenterImage;
+            picFOrderNoGlyph.TabIndex = 2;
+            picFOrderNoGlyph.TabStop = false;
+            // 
+            // lblFOrderNo
+            // 
+            lblFOrderNo.Cursor = Cursors.Hand;
+            lblFOrderNo.Location = new Point(250, 0);
+            lblFOrderNo.Margin = new Padding(0, 0, 3, 0);
+            lblFOrderNo.Name = "lblFOrderNo";
+            lblFOrderNo.Size = new Size(196, 33);
+            lblFOrderNo.TabIndex = 3;
+            lblFOrderNo.Text = "Номер заказа";
+            lblFOrderNo.TextAlign = ContentAlignment.MiddleLeft;
             // 
             // cbUser
             // 
             cbUser.DropDownStyle = ComboBoxStyle.DropDownList;
             cbUser.FormattingEnabled = true;
             cbUser.IntegralHeight = false;
-            cbUser.Location = new Point(355, 3);
+            cbUser.Location = new Point(452, 3);
             cbUser.Name = "cbUser";
             cbUser.Size = new Size(170, 33);
-            cbUser.TabIndex = 3;
+            cbUser.TabIndex = 4;
             // 
             // cbFCreated
             // 
             cbFCreated.DropDownStyle = ComboBoxStyle.DropDownList;
             cbFCreated.FormattingEnabled = true;
             cbFCreated.IntegralHeight = false;
-            cbFCreated.Location = new Point(531, 3);
+            cbFCreated.Location = new Point(628, 3);
             cbFCreated.Name = "cbFCreated";
             cbFCreated.Size = new Size(170, 33);
-            cbFCreated.TabIndex = 4;
+            cbFCreated.TabIndex = 5;
             // 
             // cbFReceived
             // 
             cbFReceived.DropDownStyle = ComboBoxStyle.DropDownList;
             cbFReceived.FormattingEnabled = true;
             cbFReceived.IntegralHeight = false;
-            cbFReceived.Location = new Point(707, 3);
+            cbFReceived.Location = new Point(804, 3);
             cbFReceived.Name = "cbFReceived";
             cbFReceived.Size = new Size(170, 33);
-            cbFReceived.TabIndex = 5;
+            cbFReceived.TabIndex = 6;
             // 
             // dgvJobs
             // 
@@ -422,6 +437,7 @@
             pnlFilters.ResumeLayout(false);
             flpFilters.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)picFStatusGlyph).EndInit();
+            ((System.ComponentModel.ISupportInitialize)picFOrderNoGlyph).EndInit();
             ((System.ComponentModel.ISupportInitialize)dgvJobs).EndInit();
             tsMainActions.ResumeLayout(false);
             tsMainActions.PerformLayout();
@@ -444,7 +460,8 @@
         private FlowLayoutPanel flpFilters;
         private PictureBox picFStatusGlyph;
         private Label lblFStatus;
-        private ComboBox cbFOrderNo;
+        private PictureBox picFOrderNoGlyph;
+        private Label lblFOrderNo;
         private ComboBox cbUser;
         private ComboBox cbFReceived;
         private DataGridViewTextBoxColumn colStatus;
