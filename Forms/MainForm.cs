@@ -45,7 +45,7 @@ namespace MyManager
             "Ошибка",
             "Завершено"
         };
-        private const string StatusFilterLabelText = "✓ Состояние задания";
+        private const string StatusFilterLabelText = "Состояние задания";
 
         private static readonly Dictionary<string, string[]> QueueStatusMappings = new(StringComparer.Ordinal)
         {
