@@ -202,7 +202,7 @@ namespace MyManager
             picFStatusGlyph.Image?.Dispose();
             picFStatusGlyph.Image = (Image)icon.Clone();
             lblFStatus.TextAlign = ContentAlignment.MiddleLeft;
-            lblFStatus.Padding = Padding.Empty;
+            lblFStatus.Padding = new Padding(0, 3, 0, 0);
         }
 
         private static Bitmap CreateDropDownGlyphIcon(int iconSize)
