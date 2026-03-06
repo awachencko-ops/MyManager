@@ -171,8 +171,17 @@ namespace MyManager
             var firstUserNode = treeView1.Nodes[0];
             _isSyncingQueueSelection = true;
             SelectUser(firstUserNode, QueueStatuses[0]);
-            treeView1.SelectedNode = firstUserNode;
-            firstUserNode.EnsureVisible();
+            var defaultStatusNode = FindStatusNode(firstUserNode, QueueStatuses[0]);
+            if (defaultStatusNode != null)
+            {
+                treeView1.SelectedNode = defaultStatusNode;
+                defaultStatusNode.EnsureVisible();
+            }
+            else
+            {
+                treeView1.SelectedNode = firstUserNode;
+                firstUserNode.EnsureVisible();
+            }
             _isSyncingQueueSelection = false;
         }
 
