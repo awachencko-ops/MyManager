@@ -211,9 +211,9 @@ namespace MyManager
             graphics.Clear(Color.Transparent);
 
             var centerX = iconSize / 2f;
-            var centerY = iconSize / 2f;
-            var halfWidth = iconSize * 0.25f;
-            var vertical = iconSize * 0.18f;
+            var centerY = (iconSize / 2f) - 0.8f;
+            var halfWidth = iconSize * 0.24f;
+            var vertical = iconSize * 0.17f;
 
             using var pen = new Pen(Color.FromArgb(31, 31, 31), 1.8f)
             {
