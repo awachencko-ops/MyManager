@@ -4,7 +4,6 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Globalization;
 using System.IO;
-using System.Text.RegularExpressions;
 using System.Windows.Forms;
 
 namespace MyManager
@@ -49,7 +48,7 @@ namespace MyManager
             "Завершено"
         };
         private const string StatusFilterLabelText = "Состояние задания";
-        private const string ChevronDownIconRelativePath = @"Icons\arrow_drop_down.svg";
+        private const string ChevronDownIconRelativePath = @"Icons\arrow_drop_down.png";
 
         private static readonly Dictionary<string, string[]> QueueStatusMappings = new(StringComparer.Ordinal)
         {
@@ -198,20 +197,21 @@ namespace MyManager
 
         private void ApplyStatusFilterChevronIcon()
         {
-            var iconPath = ResolveChevronSvgPath();
+            var iconPath = ResolveChevronIconPath();
             if (iconPath == null)
                 return;
 
-            var icon = TryRenderChevronIconFromSvg(iconPath, 14);
+            var icon = TryLoadChevronIcon(iconPath, 12);
             if (icon == null)
                 return;
 
             lblFStatus.Image = icon;
             lblFStatus.ImageAlign = ContentAlignment.MiddleLeft;
-            lblFStatus.Padding = new Padding(icon.Width + 4, 0, 0, 0);
+            lblFStatus.TextAlign = ContentAlignment.MiddleLeft;
+            lblFStatus.Padding = new Padding(icon.Width + 2, 0, 0, 0);
         }
 
-        private static string? ResolveChevronSvgPath()
+        private static string? ResolveChevronIconPath()
         {
             var outputPath = Path.Combine(AppContext.BaseDirectory, ChevronDownIconRelativePath);
             if (File.Exists(outputPath))
@@ -224,25 +224,24 @@ namespace MyManager
             return null;
         }
 
-        private static Image? TryRenderChevronIconFromSvg(string svgPath, int iconSize)
+        private static Image? TryLoadChevronIcon(string iconPath, int iconSize)
         {
             try
             {
-                var svgText = File.ReadAllText(svgPath);
-                var colorMatch = Regex.Match(svgText, @"fill=""(#?[0-9a-fA-F]{6})""");
-                var fillColorHex = colorMatch.Success ? colorMatch.Groups[1].Value : "#1f1f1f";
-                var fillColor = ColorTranslator.FromHtml(fillColorHex);
-
+                using var source = Image.FromFile(iconPath);
                 var bitmap = new Bitmap(iconSize, iconSize);
                 using var graphics = Graphics.FromImage(bitmap);
-                graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                graphics.SmoothingMode = SmoothingMode.HighQuality;
+                graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
                 graphics.Clear(Color.Transparent);
 
-                var p1 = new PointF(iconSize * 0.22f, iconSize * 0.34f);
-                var p2 = new PointF(iconSize * 0.78f, iconSize * 0.34f);
-                var p3 = new PointF(iconSize * 0.5f, iconSize * 0.72f);
-                using var brush = new SolidBrush(fillColor);
-                graphics.FillPolygon(brush, [p1, p2, p3]);
+                var scale = Math.Min((float)iconSize / source.Width, (float)iconSize / source.Height);
+                var drawWidth = source.Width * scale;
+                var drawHeight = source.Height * scale;
+                var drawX = (iconSize - drawWidth) / 2f;
+                var drawY = (iconSize - drawHeight) / 2f;
+                graphics.DrawImage(source, drawX, drawY, drawWidth, drawHeight);
 
                 return bitmap;
             }
