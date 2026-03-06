@@ -45,6 +45,7 @@ namespace MyManager
             "Ошибка",
             "Завершено"
         };
+        private const string StatusFilterLabelText = "✓ Состояние задания";
 
         private static readonly Dictionary<string, string[]> QueueStatusMappings = new(StringComparer.Ordinal)
         {
@@ -355,6 +356,12 @@ namespace MyManager
 
         private void LblFStatus_Click(object? sender, EventArgs e)
         {
+            if (_statusFilterDropDown?.Visible == true)
+            {
+                _statusFilterDropDown.Close(ToolStripDropDownCloseReason.AppClicked);
+                return;
+            }
+
             ShowStatusFilterDropDown();
         }
 
@@ -398,7 +405,7 @@ namespace MyManager
 
             _statusFilterDropDown = new ToolStripDropDown
             {
-                AutoClose = true,
+                AutoClose = false,
                 Padding = new Padding(4)
             };
             _statusFilterDropDown.Items.Add(host);
@@ -455,7 +462,7 @@ namespace MyManager
 
         private void UpdateStatusFilterCaption()
         {
-            lblFStatus.Text = "состояние задания";
+            lblFStatus.Text = StatusFilterLabelText;
         }
 
         private void ApplyStatusFilterToGrid()

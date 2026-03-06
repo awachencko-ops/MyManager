@@ -202,13 +202,13 @@
             // 
             // lblFStatus
             // 
-            lblFStatus.BorderStyle = BorderStyle.FixedSingle;
+            lblFStatus.BorderStyle = BorderStyle.None;
             lblFStatus.Cursor = Cursors.Hand;
             lblFStatus.Location = new Point(3, 3);
             lblFStatus.Name = "lblFStatus";
             lblFStatus.Size = new Size(170, 33);
             lblFStatus.TabIndex = 0;
-            lblFStatus.Text = "состояние задания";
+            lblFStatus.Text = "✓ Состояние задания";
             lblFStatus.TextAlign = ContentAlignment.MiddleLeft;
             // 
             // cbFOrderNo
