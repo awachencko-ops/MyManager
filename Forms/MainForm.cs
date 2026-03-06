@@ -62,6 +62,7 @@ namespace MyManager
         private ToolStripDropDown? _statusFilterDropDown;
         private CheckedListBox? _statusFilterCheckedList;
         private bool _isUpdatingStatusFilterList;
+        private bool _suppressNextStatusFilterLabelClick;
 
         private static readonly Color QueuePanelBackColor = Color.FromArgb(68, 74, 94);
         private static readonly Color QueueHeaderBackColor = Color.FromArgb(103, 163, 216);
@@ -356,6 +357,12 @@ namespace MyManager
 
         private void LblFStatus_Click(object? sender, EventArgs e)
         {
+            if (_suppressNextStatusFilterLabelClick)
+            {
+                _suppressNextStatusFilterLabelClick = false;
+                return;
+            }
+
             if (_statusFilterDropDown?.Visible == true)
             {
                 _statusFilterDropDown.Close(ToolStripDropDownCloseReason.AppClicked);
@@ -373,8 +380,7 @@ namespace MyManager
             if (_statusFilterDropDown == null)
                 return;
 
-            var location = lblFStatus.PointToScreen(new Point(0, lblFStatus.Height));
-            _statusFilterDropDown.Show(location);
+            _statusFilterDropDown.Show(lblFStatus, new Point(0, lblFStatus.Height));
         }
 
         private void EnsureStatusFilterDropDown()
@@ -405,10 +411,21 @@ namespace MyManager
 
             _statusFilterDropDown = new ToolStripDropDown
             {
-                AutoClose = false,
+                AutoClose = true,
                 Padding = new Padding(4)
             };
+            _statusFilterDropDown.Closing += StatusFilterDropDown_Closing;
             _statusFilterDropDown.Items.Add(host);
+        }
+
+        private void StatusFilterDropDown_Closing(object? sender, ToolStripDropDownClosingEventArgs e)
+        {
+            if (e.CloseReason != ToolStripDropDownCloseReason.AppClicked)
+                return;
+
+            var labelRect = lblFStatus.RectangleToScreen(lblFStatus.ClientRectangle);
+            if (labelRect.Contains(Cursor.Position))
+                _suppressNextStatusFilterLabelClick = true;
         }
 
         private void RefreshStatusFilterChecklist()
