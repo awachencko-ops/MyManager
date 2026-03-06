@@ -64,10 +64,15 @@ namespace MyManager
         private string _currentUserName = string.Empty;
         private readonly HashSet<string> _selectedFilterStatuses = new(StringComparer.Ordinal);
         private string _orderNumberFilterText = string.Empty;
+        private bool _orderNumberMatchWholeWord;
         private ToolStripDropDown? _statusFilterDropDown;
         private CheckedListBox? _statusFilterCheckedList;
         private bool _isUpdatingStatusFilterList;
         private bool _suppressNextStatusFilterLabelClick;
+        private ToolStripDropDown? _orderNoFilterDropDown;
+        private TextBox? _orderNoFilterTextBox;
+        private CheckBox? _orderNoFilterWholeWordCheckBox;
+        private bool _suppressNextOrderNoLabelClick;
 
         private static readonly Color QueuePanelBackColor = Color.FromArgb(68, 74, 94);
         private static readonly Color QueueHeaderBackColor = Color.FromArgb(103, 163, 216);
@@ -487,16 +492,173 @@ namespace MyManager
 
         private void LblFOrderNo_Click(object? sender, EventArgs e)
         {
-            using var dialog = new OrderNumberSearchDialog(_orderNumberFilterText);
-            if (dialog.ShowDialog(this) != DialogResult.OK)
+            if (_suppressNextOrderNoLabelClick)
+            {
+                _suppressNextOrderNoLabelClick = false;
+                return;
+            }
+
+            if (_orderNoFilterDropDown?.Visible == true)
+            {
+                _orderNoFilterDropDown.Close(ToolStripDropDownCloseReason.AppClicked);
+                return;
+            }
+
+            ShowOrderNoFilterDropDown();
+        }
+
+        private void ShowOrderNoFilterDropDown()
+        {
+            EnsureOrderNoFilterDropDown();
+            SyncOrderNoFilterPopupState();
+
+            if (_orderNoFilterDropDown == null)
                 return;
 
-            var nextFilter = dialog.SearchText;
-            if (string.Equals(_orderNumberFilterText, nextFilter, StringComparison.Ordinal))
+            _orderNoFilterDropDown.Show(picFOrderNoGlyph, new Point(0, picFOrderNoGlyph.Height));
+            _orderNoFilterTextBox?.Focus();
+            _orderNoFilterTextBox?.SelectAll();
+        }
+
+        private void EnsureOrderNoFilterDropDown()
+        {
+            if (_orderNoFilterDropDown != null &&
+                _orderNoFilterTextBox != null &&
+                _orderNoFilterWholeWordCheckBox != null)
                 return;
 
-            _orderNumberFilterText = nextFilter;
-            HandleOrdersGridChanged();
+            var popupWidth = Math.Max(lblFOrderNo.Width + 100, 280);
+            var popupHeight = 138;
+
+            var panel = new Panel
+            {
+                BackColor = Color.White,
+                Size = new Size(popupWidth, popupHeight),
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
+            };
+
+            _orderNoFilterTextBox = new TextBox
+            {
+                BorderStyle = BorderStyle.None,
+                Location = new Point(16, 16),
+                Size = new Size(popupWidth - 32, 24),
+                Font = lblFOrderNo.Font
+            };
+            _orderNoFilterTextBox.KeyDown += (_, e) =>
+            {
+                if (e.KeyCode == Keys.Enter)
+                {
+                    e.SuppressKeyPress = true;
+                    ApplyOrderNoFilterFromPopup(clearFilter: false);
+                }
+                else if (e.KeyCode == Keys.Escape)
+                {
+                    e.SuppressKeyPress = true;
+                    _orderNoFilterDropDown?.Close(ToolStripDropDownCloseReason.AppClicked);
+                }
+            };
+
+            var underline = new Panel
+            {
+                BackColor = Color.FromArgb(33, 127, 203),
+                Location = new Point(16, 42),
+                Size = new Size(popupWidth - 32, 2)
+            };
+
+            _orderNoFilterWholeWordCheckBox = new CheckBox
+            {
+                AutoSize = true,
+                Location = new Point(16, 56),
+                Text = "Слово целиком",
+                ForeColor = Color.FromArgb(47, 53, 72),
+                BackColor = Color.White
+            };
+
+            var btnClear = new Button
+            {
+                FlatStyle = FlatStyle.Flat,
+                Location = new Point(16, 92),
+                Size = new Size(104, 32),
+                Text = "Очистить",
+                BackColor = Color.White,
+                ForeColor = Color.FromArgb(77, 147, 222)
+            };
+            btnClear.FlatAppearance.BorderSize = 0;
+            btnClear.Click += (_, _) => ApplyOrderNoFilterFromPopup(clearFilter: true);
+
+            var btnApply = new Button
+            {
+                FlatStyle = FlatStyle.Flat,
+                Location = new Point(126, 92),
+                Size = new Size(120, 32),
+                Text = "Применить",
+                BackColor = Color.FromArgb(153, 203, 240),
+                ForeColor = Color.White
+            };
+            btnApply.FlatAppearance.BorderSize = 0;
+            btnApply.Click += (_, _) => ApplyOrderNoFilterFromPopup(clearFilter: false);
+
+            panel.Controls.Add(_orderNoFilterTextBox);
+            panel.Controls.Add(underline);
+            panel.Controls.Add(_orderNoFilterWholeWordCheckBox);
+            panel.Controls.Add(btnClear);
+            panel.Controls.Add(btnApply);
+
+            var host = new ToolStripControlHost(panel)
+            {
+                AutoSize = false,
+                Size = panel.Size,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
+            };
+
+            _orderNoFilterDropDown = new ToolStripDropDown
+            {
+                AutoClose = true,
+                Padding = new Padding(4)
+            };
+            _orderNoFilterDropDown.Closing += OrderNoFilterDropDown_Closing;
+            _orderNoFilterDropDown.Items.Add(host);
+        }
+
+        private void SyncOrderNoFilterPopupState()
+        {
+            if (_orderNoFilterTextBox == null || _orderNoFilterWholeWordCheckBox == null)
+                return;
+
+            _orderNoFilterTextBox.Text = _orderNumberFilterText;
+            _orderNoFilterWholeWordCheckBox.Checked = _orderNumberMatchWholeWord;
+        }
+
+        private void ApplyOrderNoFilterFromPopup(bool clearFilter)
+        {
+            if (_orderNoFilterTextBox == null || _orderNoFilterWholeWordCheckBox == null)
+                return;
+
+            var nextText = clearFilter ? string.Empty : (_orderNoFilterTextBox.Text ?? string.Empty).Trim();
+            var nextWholeWord = !clearFilter && _orderNoFilterWholeWordCheckBox.Checked;
+            var changed = !string.Equals(_orderNumberFilterText, nextText, StringComparison.Ordinal) ||
+                          _orderNumberMatchWholeWord != nextWholeWord;
+
+            _orderNumberFilterText = nextText;
+            _orderNumberMatchWholeWord = nextWholeWord;
+
+            if (changed)
+                HandleOrdersGridChanged();
+
+            _orderNoFilterDropDown?.Close(ToolStripDropDownCloseReason.ItemClicked);
+        }
+
+        private void OrderNoFilterDropDown_Closing(object? sender, ToolStripDropDownClosingEventArgs e)
+        {
+            if (e.CloseReason != ToolStripDropDownCloseReason.AppClicked)
+                return;
+
+            var labelRect = lblFOrderNo.RectangleToScreen(lblFOrderNo.ClientRectangle);
+            var glyphRect = picFOrderNoGlyph.RectangleToScreen(picFOrderNoGlyph.ClientRectangle);
+            if (labelRect.Contains(Cursor.Position) || glyphRect.Contains(Cursor.Position))
+                _suppressNextOrderNoLabelClick = true;
         }
 
         private void ShowStatusFilterDropDown()
@@ -631,7 +793,9 @@ namespace MyManager
                 var orderNoValue = row.Cells[colOrderNumber.Index].Value?.ToString();
                 var orderNoMatches = !hasOrderNoFilter ||
                                      (!string.IsNullOrWhiteSpace(orderNoValue) &&
-                                      orderNoValue.IndexOf(_orderNumberFilterText, StringComparison.OrdinalIgnoreCase) >= 0);
+                                      (_orderNumberMatchWholeWord
+                                          ? string.Equals(orderNoValue.Trim(), _orderNumberFilterText, StringComparison.OrdinalIgnoreCase)
+                                          : orderNoValue.IndexOf(_orderNumberFilterText, StringComparison.OrdinalIgnoreCase) >= 0));
                 var shouldShow = statusMatches && orderNoMatches;
 
                 try
