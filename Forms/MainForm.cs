@@ -830,6 +830,7 @@ namespace MyManager
             if (_orderNoFilterDropDown == null)
                 return;
 
+            CloseOtherFilterPopups(_orderNoFilterDropDown);
             _orderNoFilterDropDown.Show(picFOrderNoGlyph, new Point(0, picFOrderNoGlyph.Height));
             _orderNoFilterTextBox?.Focus();
             _orderNoFilterTextBox?.SelectAll();
@@ -1000,6 +1001,7 @@ namespace MyManager
             if (_userFilterDropDown == null || _userFilterGlyph == null)
                 return;
 
+            CloseOtherFilterPopups(_userFilterDropDown);
             _userFilterDropDown.Show(_userFilterGlyph, new Point(0, _userFilterGlyph.Height));
         }
 
@@ -1183,6 +1185,7 @@ namespace MyManager
             if (_createdFilterDropDown == null || _createdFilterGlyph == null)
                 return;
 
+            CloseOtherFilterPopups(_createdFilterDropDown);
             _createdFilterDropDown.Show(_createdFilterGlyph, new Point(0, _createdFilterGlyph.Height));
         }
 
@@ -1437,6 +1440,7 @@ namespace MyManager
             if (_createdCalendarDropDown == null || _createdCalendar == null)
                 return;
 
+            CloseOtherFilterPopups(_createdFilterDropDown);
             _createdCalendarTargetPicker = picker;
             var selectedDate = picker.Value.Date;
             _createdCalendar.SetDate(selectedDate);
@@ -1670,7 +1674,9 @@ namespace MyManager
             var glyphRect = _createdFilterGlyph.RectangleToScreen(_createdFilterGlyph.ClientRectangle);
             var clickedTrigger = labelRect.Contains(Cursor.Position) || glyphRect.Contains(Cursor.Position);
 
-            if (_isCreatedDateCalendarOpen && !clickedTrigger)
+            if (e.CloseReason == ToolStripDropDownCloseReason.AppClicked &&
+                _isCreatedDateCalendarOpen &&
+                !clickedTrigger)
             {
                 e.Cancel = true;
                 return;
@@ -1694,6 +1700,7 @@ namespace MyManager
             if (_receivedFilterDropDown == null || _receivedFilterGlyph == null)
                 return;
 
+            CloseOtherFilterPopups(_receivedFilterDropDown);
             _receivedFilterDropDown.Show(_receivedFilterGlyph, new Point(0, _receivedFilterGlyph.Height));
         }
 
@@ -1936,6 +1943,7 @@ namespace MyManager
             if (_receivedCalendarDropDown == null || _receivedCalendar == null)
                 return;
 
+            CloseOtherFilterPopups(_receivedFilterDropDown);
             _receivedCalendarTargetPicker = picker;
             var selectedDate = picker.Value.Date;
             _receivedCalendar.SetDate(selectedDate);
@@ -2169,7 +2177,9 @@ namespace MyManager
             var glyphRect = _receivedFilterGlyph.RectangleToScreen(_receivedFilterGlyph.ClientRectangle);
             var clickedTrigger = labelRect.Contains(Cursor.Position) || glyphRect.Contains(Cursor.Position);
 
-            if (_isReceivedDateCalendarOpen && !clickedTrigger)
+            if (e.CloseReason == ToolStripDropDownCloseReason.AppClicked &&
+                _isReceivedDateCalendarOpen &&
+                !clickedTrigger)
             {
                 e.Cancel = true;
                 return;
@@ -2193,7 +2203,27 @@ namespace MyManager
             if (_statusFilterDropDown == null)
                 return;
 
+            CloseOtherFilterPopups(_statusFilterDropDown);
             _statusFilterDropDown.Show(picFStatusGlyph, new Point(0, picFStatusGlyph.Height));
+        }
+
+        private void CloseOtherFilterPopups(ToolStripDropDown? keepOpen)
+        {
+            ClosePopupIfVisible(_statusFilterDropDown, keepOpen);
+            ClosePopupIfVisible(_orderNoFilterDropDown, keepOpen);
+            ClosePopupIfVisible(_userFilterDropDown, keepOpen);
+            ClosePopupIfVisible(_createdFilterDropDown, keepOpen);
+            ClosePopupIfVisible(_createdCalendarDropDown, keepOpen);
+            ClosePopupIfVisible(_receivedFilterDropDown, keepOpen);
+            ClosePopupIfVisible(_receivedCalendarDropDown, keepOpen);
+        }
+
+        private static void ClosePopupIfVisible(ToolStripDropDown? popup, ToolStripDropDown? keepOpen)
+        {
+            if (popup == null || !popup.Visible || ReferenceEquals(popup, keepOpen))
+                return;
+
+            popup.Close(ToolStripDropDownCloseReason.CloseCalled);
         }
 
         private void EnsureStatusFilterDropDown()
