@@ -79,6 +79,51 @@
 | Просмотр лога выбранного заказа | (пока не подключено в MainForm) | План: открыть `OrderLogViewerForm` из MainForm | В `Form1`: открытие `OrderLogViewerForm` | Legacy only / planned |
 | Операции запуска/остановки/удаления заказа | `tsbRun/tsbStop/tsbRemove` (кнопки есть, маршрутизация не подключена) | План: маршрутизация в `OrderProcessor` и сервисный слой | В `Form1`: `_processor = new OrderProcessor(...)` + команды | Legacy only / planned |
 
+## Анализ двух форм (функции и действия)
+
+Срез по коду на 2026-03-06:
+- `Forms/MainForm.cs`: фокус на shell-навигации, очереди и фильтрах.
+- `Forms/Archive/Form1.cs`: фокус на полной бизнес-логике основной таблицы заказов.
+
+| Функциональный блок | Legacy `Form1` (что уже есть) | `MainForm` (текущее состояние) | Вывод для миграции |
+|---|---|---|---|
+| Shell / startup | Исторически основной экран | Текущий startup (`Program.cs` -> `MainForm`) | Перенос завершен |
+| Левая очередь + верхний `cbQueue` | Базовая навигация по заказам | Полная синхронизация `treeView1` <-> `cbQueue`, статусные счетчики | Перенос завершен |
+| Верхние фильтры | Часть реализована в legacy UI | `Состояние`, `Номер заказа`, `Пользователь`, `Дата поступления`, `Начало обработки` (popup-механика) | В целом перенесено; датовые popup — стабилизация |
+| Основная таблица: построение строк | `FillGrid`, теги строк `order|...`/`item|...`, группы и item-строки | Каркас `dgvJobs` + колонки; нет полноценного аналога `FillGrid` | Ключевой gap |
+| Таблица: форматирование и UX | `GridOrders_CellFormatting`, hover/tooltips, цветовая индикация, курсор | Нет аналогичных обработчиков | Ключевой gap |
+| Таблица: контекстное меню | Полная интеграция `OrderGridContextMenu` + операции | Не подключено | Ключевой gap |
+| Таблица: drag&drop файлов | `GridOrders_DragEnter/DragOver/DragDrop`, копирование по стадиям | Не подключено | Ключевой gap |
+| Таблица: double-click и выбор действий | `GridOrders_CellDoubleClick`, выбор PitStop/Imposing и др. | Не подключено | Ключевой gap |
+| Обработка заказов | `OrderProcessor`, `RunForOrderAsync`, смена статусов, логи | `OrderProcessor` еще не маршрутизирован из `MainForm` | Ключевой gap |
+| История/архив/кэш | `LoadHistory/SaveHistory`, архивные проверки, кэш существования файлов | Нет полного контура | Ключевой gap |
+| Логи заказа | `OpenOrderLog`, `OrderLogViewerForm`, операции логирования | Вызов из `MainForm` пока не подключен | Gap |
+| Настройки | `ShowSettingsDialog`, сохранение путей | `ShowSettingsDialog` перенесен и работает | Перенос завершен |
+| Менеджеры конфигов | `OpenPitStopManager`, `OpenImposingManager` | Пока не подключены | Gap |
+
+## Карта действий основной таблицы (legacy источник)
+
+| Действие пользователя в таблице | Где реализовано в `Form1` | Статус в `MainForm` |
+|---|---|---|
+| Поиск по тексту и перестроение строк | `txtSearch.TextChanged` -> `FillGrid()` | Legacy only |
+| Клик/дабл-клик по ячейке | `GridOrders_CellClick`, `GridOrders_CellDoubleClick` | Legacy only |
+| Правая кнопка и контекстные команды | `GridOrders_CellMouseDown` + `_gridMenu.Build(...).Show(...)` | Legacy only |
+| Перетаскивание файлов в колонку стадии | `GridOrders_DragEnter/DragOver/DragDrop` | Legacy only |
+| Подсветка/подсказки состояния и файлов | `GridOrders_CellFormatting`, `GridOrders_CellToolTipTextNeeded`, hover handlers | Legacy only |
+| Операции по файлам и стадиям | `Pick/Remove/Rename/Copy/Paste`, `CopySourceToPrepared`, `CopyPreparedToPrint`, `CopyToGrandpa` | Legacy only |
+| Группы и item-строки | `ConvertOrderToGroup`, `ConvertGroupToSingle`, `CreateEmptyItemRow`, `ToggleGroupExpanded` | Legacy only |
+| Запуск процессинга заказа | `RunForOrderAsync` -> `_processor.RunAsync(...)` | Legacy only |
+| Открытие логов заказа | `OpenOrderLog` -> `OrderLogViewerForm` | Legacy only |
+
+## Рекомендованная декомпозиция переноса таблицы
+
+1. Перенести модель представления строк (`FillGrid` + теги `order|...`/`item|...`) в `MainForm`.
+2. Подключить контекстное меню (`OrderGridContextMenu`) без тяжелых операций (open/log).
+3. Подключить `OrderProcessor` (run/stop/status callbacks) и базовое обновление статусов в grid.
+4. Перенести drag&drop и файловые операции по стадиям.
+5. Перенести форматирование/tooltip/hover-поведение.
+6. Перенести групповые сценарии (group/item, convert, add item) и финализировать parity.
+
 ## Правило выполнения итерации
 1. Выбрать **1 сценарий** из таблицы.
 2. Перенести логику в `Services` (если необходимо).
