@@ -472,7 +472,7 @@ namespace MyManager
             if (_statusFilterDropDown == null)
                 return;
 
-            _statusFilterDropDown.Show(lblFStatus, new Point(0, lblFStatus.Height));
+            _statusFilterDropDown.Show(picFStatusGlyph, new Point(0, picFStatusGlyph.Height));
         }
 
         private void EnsureStatusFilterDropDown()
