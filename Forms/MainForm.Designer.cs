@@ -39,7 +39,7 @@
             cbQueue = new ComboBox();
             pnlFilters = new Panel();
             flpFilters = new FlowLayoutPanel();
-            cbFStatus = new ComboBox();
+            lblFStatus = new Label();
             cbFOrderNo = new ComboBox();
             cbUser = new ComboBox();
             cbFCreated = new ComboBox();
@@ -188,7 +188,7 @@
             // flpFilters
             // 
             flpFilters.AutoScroll = true;
-            flpFilters.Controls.Add(cbFStatus);
+            flpFilters.Controls.Add(lblFStatus);
             flpFilters.Controls.Add(cbFOrderNo);
             flpFilters.Controls.Add(cbUser);
             flpFilters.Controls.Add(cbFCreated);
@@ -200,15 +200,16 @@
             flpFilters.TabIndex = 0;
             flpFilters.WrapContents = false;
             // 
-            // cbFStatus
+            // lblFStatus
             // 
-            cbFStatus.DropDownStyle = ComboBoxStyle.DropDownList;
-            cbFStatus.FormattingEnabled = true;
-            cbFStatus.IntegralHeight = false;
-            cbFStatus.Location = new Point(3, 3);
-            cbFStatus.Name = "cbFStatus";
-            cbFStatus.Size = new Size(170, 33);
-            cbFStatus.TabIndex = 0;
+            lblFStatus.BorderStyle = BorderStyle.FixedSingle;
+            lblFStatus.Cursor = Cursors.Hand;
+            lblFStatus.Location = new Point(3, 3);
+            lblFStatus.Name = "lblFStatus";
+            lblFStatus.Size = new Size(170, 33);
+            lblFStatus.TabIndex = 0;
+            lblFStatus.Text = "состояние задания";
+            lblFStatus.TextAlign = ContentAlignment.MiddleLeft;
             // 
             // cbFOrderNo
             // 
@@ -426,7 +427,7 @@
         private Button btnViewTiles;
         private Button btnViewList;
         private FlowLayoutPanel flpFilters;
-        private ComboBox cbFStatus;
+        private Label lblFStatus;
         private ComboBox cbFOrderNo;
         private ComboBox cbUser;
         private ComboBox cbFReceived;

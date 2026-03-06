@@ -176,7 +176,7 @@ namespace MyManager
 
         private void InitializeStatusFilter()
         {
-            cbFStatus.DropDown += CbFStatus_DropDown;
+            lblFStatus.Click += LblFStatus_Click;
             UpdateStatusFilterCaption();
         }
 
@@ -353,9 +353,8 @@ namespace MyManager
             RefreshQueuePresentation();
         }
 
-        private void CbFStatus_DropDown(object? sender, EventArgs e)
+        private void LblFStatus_Click(object? sender, EventArgs e)
         {
-            cbFStatus.DroppedDown = false;
             ShowStatusFilterDropDown();
         }
 
@@ -367,7 +366,7 @@ namespace MyManager
             if (_statusFilterDropDown == null)
                 return;
 
-            var location = cbFStatus.PointToScreen(new Point(0, cbFStatus.Height));
+            var location = lblFStatus.PointToScreen(new Point(0, lblFStatus.Height));
             _statusFilterDropDown.Show(location);
         }
 
@@ -381,10 +380,10 @@ namespace MyManager
                 CheckOnClick = true,
                 BorderStyle = BorderStyle.None,
                 IntegralHeight = false,
-                Font = cbFStatus.Font,
+                Font = lblFStatus.Font,
                 BackColor = Color.White,
                 ForeColor = Color.FromArgb(47, 53, 72),
-                Width = Math.Max(cbFStatus.Width + 140, 280),
+                Width = Math.Max(lblFStatus.Width + 140, 280),
                 Height = 240
             };
             _statusFilterCheckedList.ItemCheck += StatusFilterCheckedList_ItemCheck;
@@ -456,27 +455,7 @@ namespace MyManager
 
         private void UpdateStatusFilterCaption()
         {
-            var caption = BuildStatusFilterCaption();
-
-            cbFStatus.BeginUpdate();
-            cbFStatus.Items.Clear();
-            cbFStatus.Items.Add(caption);
-            cbFStatus.EndUpdate();
-            cbFStatus.SelectedIndex = cbFStatus.Items.Count > 0 ? 0 : -1;
-        }
-
-        private string BuildStatusFilterCaption()
-        {
-            if (_selectedFilterStatuses.Count == 0)
-                return "Все статусы";
-
-            if (_selectedFilterStatuses.Count == 1)
-            {
-                foreach (var statusName in _selectedFilterStatuses)
-                    return statusName;
-            }
-
-            return $"Выбрано: {_selectedFilterStatuses.Count}";
+            lblFStatus.Text = "состояние задания";
         }
 
         private void ApplyStatusFilterToGrid()
