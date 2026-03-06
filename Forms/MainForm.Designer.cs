@@ -41,8 +41,7 @@
             flpFilters = new FlowLayoutPanel();
             cbFStatus = new ComboBox();
             cbFOrderNo = new ComboBox();
-            cbFTitle = new ComboBox();
-            cbFCreated = new ComboBox();
+            cbUser = new ComboBox();
             cbFReceived = new ComboBox();
             dgvJobs = new DataGridView();
             colStatus = new DataGridViewTextBoxColumn();
@@ -62,6 +61,7 @@
             tsbBrowse = new ToolStripButton();
             tsbConsole = new ToolStripButton();
             tsbParameters = new ToolStripButton();
+            cbFCreated = new ComboBox();
             ((System.ComponentModel.ISupportInitialize)scMain).BeginInit();
             scMain.Panel1.SuspendLayout();
             scMain.Panel2.SuspendLayout();
@@ -189,7 +189,7 @@
             flpFilters.AutoScroll = true;
             flpFilters.Controls.Add(cbFStatus);
             flpFilters.Controls.Add(cbFOrderNo);
-            flpFilters.Controls.Add(cbFTitle);
+            flpFilters.Controls.Add(cbUser);
             flpFilters.Controls.Add(cbFCreated);
             flpFilters.Controls.Add(cbFReceived);
             flpFilters.Dock = DockStyle.Fill;
@@ -219,25 +219,15 @@
             cbFOrderNo.Size = new Size(170, 33);
             cbFOrderNo.TabIndex = 1;
             // 
-            // cbFTitle
+            // cbUser
             // 
-            cbFTitle.DropDownStyle = ComboBoxStyle.DropDownList;
-            cbFTitle.FormattingEnabled = true;
-            cbFTitle.IntegralHeight = false;
-            cbFTitle.Location = new Point(355, 3);
-            cbFTitle.Name = "cbFTitle";
-            cbFTitle.Size = new Size(170, 33);
-            cbFTitle.TabIndex = 2;
-            // 
-            // cbFCreated
-            // 
-            cbFCreated.DropDownStyle = ComboBoxStyle.DropDownList;
-            cbFCreated.FormattingEnabled = true;
-            cbFCreated.IntegralHeight = false;
-            cbFCreated.Location = new Point(531, 3);
-            cbFCreated.Name = "cbFCreated";
-            cbFCreated.Size = new Size(170, 33);
-            cbFCreated.TabIndex = 3;
+            cbUser.DropDownStyle = ComboBoxStyle.DropDownList;
+            cbUser.FormattingEnabled = true;
+            cbUser.IntegralHeight = false;
+            cbUser.Location = new Point(355, 3);
+            cbUser.Name = "cbUser";
+            cbUser.Size = new Size(170, 33);
+            cbUser.TabIndex = 2;
             // 
             // cbFReceived
             // 
@@ -386,6 +376,16 @@
             tsbParameters.Size = new Size(111, 29);
             tsbParameters.Text = "Параметры";
             // 
+            // cbFCreated
+            // 
+            cbFCreated.DropDownStyle = ComboBoxStyle.DropDownList;
+            cbFCreated.FormattingEnabled = true;
+            cbFCreated.IntegralHeight = false;
+            cbFCreated.Location = new Point(531, 3);
+            cbFCreated.Name = "cbFCreated";
+            cbFCreated.Size = new Size(170, 33);
+            cbFCreated.TabIndex = 3;
+            // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(10F, 25F);
@@ -427,8 +427,7 @@
         private FlowLayoutPanel flpFilters;
         private ComboBox cbFStatus;
         private ComboBox cbFOrderNo;
-        private ComboBox cbFTitle;
-        private ComboBox cbFCreated;
+        private ComboBox cbUser;
         private ComboBox cbFReceived;
         private DataGridViewTextBoxColumn colStatus;
         private DataGridViewTextBoxColumn colOrderNumber;
@@ -447,5 +446,6 @@
         private ToolStripButton tsbBrowse;
         private ToolStripButton tsbConsole;
         private ToolStripButton tsbParameters;
+        private ComboBox cbFCreated;
     }
 }

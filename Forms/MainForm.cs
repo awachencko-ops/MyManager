@@ -28,6 +28,17 @@ namespace MyManager
             "Завершено"
         };
 
+        private static readonly string[] FilterStatuses =
+        {
+            "В архиве",
+            "Выполняется сборка",
+            "Обрабатывается",
+            "Обработано",
+            "Отменено",
+            "Ошибка",
+            "Завершено"
+        };
+
         private bool _isSyncingQueueSelection;
         private string _currentUserName = string.Empty;
 
@@ -41,6 +52,7 @@ namespace MyManager
             InitializeComponent();
             LoadSettings();
             ApplyQueueVisualStyle();
+            InitializeStatusFilter();
             InitializeQueueNavigation();
         }
 
@@ -108,6 +120,15 @@ namespace MyManager
             treeView1.SelectedNode = firstUserNode;
             firstUserNode.EnsureVisible();
             _isSyncingQueueSelection = false;
+        }
+
+        private void InitializeStatusFilter()
+        {
+            cbFStatus.BeginUpdate();
+            cbFStatus.Items.Clear();
+            cbFStatus.Items.AddRange(FilterStatuses);
+            cbFStatus.EndUpdate();
+            cbFStatus.SelectedIndex = -1;
         }
 
         private void PopulateQueueTree()
