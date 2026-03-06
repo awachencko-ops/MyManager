@@ -31,7 +31,6 @@
             pnlSidebar = new Panel();
             scMain = new SplitContainer();
             treeView1 = new TreeView();
-            pnlServersHeader = new Panel();
             tableLayoutPanel1 = new TableLayoutPanel();
             pnlHeader = new Panel();
             btnViewTiles = new Button();
@@ -55,6 +54,7 @@
             colPrint = new DataGridViewTextBoxColumn();
             colReceived = new DataGridViewTextBoxColumn();
             colCreated = new DataGridViewTextBoxColumn();
+            tsMainActions = new ToolStrip();
             tsbNewJob = new ToolStripButton();
             tsbRun = new ToolStripButton();
             tsbStop = new ToolStripButton();
@@ -62,7 +62,6 @@
             tsbBrowse = new ToolStripButton();
             tsbConsole = new ToolStripButton();
             tsbParameters = new ToolStripButton();
-            tsMainActions = new ToolStrip();
             ((System.ComponentModel.ISupportInitialize)scMain).BeginInit();
             scMain.Panel1.SuspendLayout();
             scMain.Panel2.SuspendLayout();
@@ -92,7 +91,6 @@
             // scMain.Panel1
             // 
             scMain.Panel1.Controls.Add(treeView1);
-            scMain.Panel1.Controls.Add(pnlServersHeader);
             // 
             // scMain.Panel2
             // 
@@ -107,18 +105,10 @@
             // 
             treeView1.Dock = DockStyle.Fill;
             treeView1.HideSelection = false;
-            treeView1.Location = new Point(0, 150);
+            treeView1.Location = new Point(0, 0);
             treeView1.Name = "treeView1";
-            treeView1.Size = new Size(460, 1094);
+            treeView1.Size = new Size(460, 1244);
             treeView1.TabIndex = 1;
-            // 
-            // pnlServersHeader
-            // 
-            pnlServersHeader.Dock = DockStyle.Top;
-            pnlServersHeader.Location = new Point(0, 0);
-            pnlServersHeader.Name = "pnlServersHeader";
-            pnlServersHeader.Size = new Size(460, 150);
-            pnlServersHeader.TabIndex = 0;
             // 
             // tableLayoutPanel1
             // 
@@ -345,6 +335,18 @@
             colCreated.Name = "colCreated";
             colCreated.ReadOnly = true;
             // 
+            // tsMainActions
+            // 
+            tsMainActions.ImageScalingSize = new Size(24, 24);
+            tsMainActions.Items.AddRange(new ToolStripItem[] { tsbNewJob, tsbRun, tsbStop, tsbRemove, tsbBrowse, tsbConsole, tsbParameters });
+            tsMainActions.Location = new Point(0, 0);
+            tsMainActions.Name = "tsMainActions";
+            tsMainActions.Padding = new Padding(6);
+            tsMainActions.Size = new Size(1749, 46);
+            tsMainActions.TabIndex = 0;
+            tsMainActions.Text = "tsMainActions";
+            tsMainActions.ItemClicked += TsMainActions_ItemClicked;
+            // 
             // tsbNewJob
             // 
             tsbNewJob.Name = "tsbNewJob";
@@ -387,18 +389,6 @@
             tsbParameters.Size = new Size(111, 29);
             tsbParameters.Text = "Параметры";
             // 
-            // tsMainActions
-            // 
-            tsMainActions.ImageScalingSize = new Size(24, 24);
-            tsMainActions.Items.AddRange(new ToolStripItem[] { tsbNewJob, tsbRun, tsbStop, tsbRemove, tsbBrowse, tsbConsole, tsbParameters });
-            tsMainActions.Location = new Point(0, 0);
-            tsMainActions.Name = "tsMainActions";
-            tsMainActions.Padding = new Padding(6);
-            tsMainActions.Size = new Size(1749, 46);
-            tsMainActions.TabIndex = 0;
-            tsMainActions.Text = "tsMainActions";
-            tsMainActions.ItemClicked += TsMainActions_ItemClicked;
-            // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(10F, 25F);
@@ -428,7 +418,6 @@
 
         private System.Windows.Forms.Panel pnlSidebar;
         private System.Windows.Forms.SplitContainer scMain;
-        private System.Windows.Forms.Panel pnlServersHeader;
         private System.Windows.Forms.TreeView treeView1;
         private TableLayoutPanel tableLayoutPanel1;
         private Panel pnlHeader;
