@@ -149,6 +149,7 @@ namespace MyManager
                 return;
 
             _isSyncingQueueSelection = true;
+            userNode.Expand();
             treeView1.SelectedNode = statusNode;
             statusNode.EnsureVisible();
             _isSyncingQueueSelection = false;

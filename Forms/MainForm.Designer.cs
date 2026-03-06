@@ -106,6 +106,7 @@
             // treeView1
             // 
             treeView1.Dock = DockStyle.Fill;
+            treeView1.HideSelection = false;
             treeView1.Location = new Point(0, 150);
             treeView1.Name = "treeView1";
             treeView1.Size = new Size(460, 1094);
