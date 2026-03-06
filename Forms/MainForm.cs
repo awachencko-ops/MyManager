@@ -72,6 +72,8 @@ namespace MyManager
         private ToolStripDropDown? _orderNoFilterDropDown;
         private TextBox? _orderNoFilterTextBox;
         private CheckBox? _orderNoFilterWholeWordCheckBox;
+        private Button? _orderNoFilterClearButton;
+        private Button? _orderNoFilterApplyButton;
         private bool _suppressNextOrderNoLabelClick;
 
         private static readonly Color QueuePanelBackColor = Color.FromArgb(68, 74, 94);
@@ -545,11 +547,15 @@ namespace MyManager
                 Size = new Size(popupWidth - 32, 24),
                 Font = lblFOrderNo.Font
             };
+            _orderNoFilterTextBox.TextChanged += (_, _) => UpdateOrderNoFilterActionButtonsState();
             _orderNoFilterTextBox.KeyDown += (_, e) =>
             {
                 if (e.KeyCode == Keys.Enter)
                 {
                     e.SuppressKeyPress = true;
+                    if (!HasOrderNoFilterInputText())
+                        return;
+
                     ApplyOrderNoFilterFromPopup(clearFilter: false);
                 }
                 else if (e.KeyCode == Keys.Escape)
@@ -575,35 +581,35 @@ namespace MyManager
                 BackColor = Color.White
             };
 
-            var btnClear = new Button
+            _orderNoFilterClearButton = new Button
             {
                 FlatStyle = FlatStyle.Flat,
                 Location = new Point(16, 92),
                 Size = new Size(104, 32),
                 Text = "Очистить",
                 BackColor = Color.White,
-                ForeColor = Color.FromArgb(77, 147, 222)
+                ForeColor = Color.FromArgb(168, 197, 225)
             };
-            btnClear.FlatAppearance.BorderSize = 0;
-            btnClear.Click += (_, _) => ApplyOrderNoFilterFromPopup(clearFilter: true);
+            _orderNoFilterClearButton.FlatAppearance.BorderSize = 0;
+            _orderNoFilterClearButton.Click += (_, _) => ApplyOrderNoFilterFromPopup(clearFilter: true);
 
-            var btnApply = new Button
+            _orderNoFilterApplyButton = new Button
             {
                 FlatStyle = FlatStyle.Flat,
                 Location = new Point(126, 92),
                 Size = new Size(120, 32),
                 Text = "Применить",
-                BackColor = Color.FromArgb(153, 203, 240),
+                BackColor = Color.FromArgb(176, 212, 242),
                 ForeColor = Color.White
             };
-            btnApply.FlatAppearance.BorderSize = 0;
-            btnApply.Click += (_, _) => ApplyOrderNoFilterFromPopup(clearFilter: false);
+            _orderNoFilterApplyButton.FlatAppearance.BorderSize = 0;
+            _orderNoFilterApplyButton.Click += (_, _) => ApplyOrderNoFilterFromPopup(clearFilter: false);
 
             panel.Controls.Add(_orderNoFilterTextBox);
             panel.Controls.Add(underline);
             panel.Controls.Add(_orderNoFilterWholeWordCheckBox);
-            panel.Controls.Add(btnClear);
-            panel.Controls.Add(btnApply);
+            panel.Controls.Add(_orderNoFilterClearButton);
+            panel.Controls.Add(_orderNoFilterApplyButton);
 
             var host = new ToolStripControlHost(panel)
             {
@@ -620,6 +626,7 @@ namespace MyManager
             };
             _orderNoFilterDropDown.Closing += OrderNoFilterDropDown_Closing;
             _orderNoFilterDropDown.Items.Add(host);
+            UpdateOrderNoFilterActionButtonsState();
         }
 
         private void SyncOrderNoFilterPopupState()
@@ -629,11 +636,37 @@ namespace MyManager
 
             _orderNoFilterTextBox.Text = _orderNumberFilterText;
             _orderNoFilterWholeWordCheckBox.Checked = _orderNumberMatchWholeWord;
+            UpdateOrderNoFilterActionButtonsState();
+        }
+
+        private bool HasOrderNoFilterInputText()
+        {
+            return !string.IsNullOrWhiteSpace(_orderNoFilterTextBox?.Text);
+        }
+
+        private void UpdateOrderNoFilterActionButtonsState()
+        {
+            if (_orderNoFilterClearButton == null || _orderNoFilterApplyButton == null)
+                return;
+
+            var hasInput = HasOrderNoFilterInputText();
+            _orderNoFilterClearButton.Enabled = hasInput;
+            _orderNoFilterApplyButton.Enabled = hasInput;
+            _orderNoFilterClearButton.ForeColor = hasInput
+                ? Color.FromArgb(77, 147, 222)
+                : Color.FromArgb(168, 197, 225);
+            _orderNoFilterApplyButton.BackColor = hasInput
+                ? Color.FromArgb(33, 127, 203)
+                : Color.FromArgb(176, 212, 242);
+            _orderNoFilterApplyButton.ForeColor = Color.White;
         }
 
         private void ApplyOrderNoFilterFromPopup(bool clearFilter)
         {
             if (_orderNoFilterTextBox == null || _orderNoFilterWholeWordCheckBox == null)
+                return;
+
+            if (!clearFilter && !HasOrderNoFilterInputText())
                 return;
 
             var nextText = clearFilter ? string.Empty : (_orderNoFilterTextBox.Text ?? string.Empty).Trim();
