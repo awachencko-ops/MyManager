@@ -556,7 +556,9 @@ namespace MyManager
             ApplyStatusFilterToGrid();
             UpdateStatusFilterCaption();
             UpdateOrderNoSearchCaption();
+            UpdateUserFilterCaption();
             RefreshStatusFilterChecklist();
+            RefreshUserFilterChecklist();
             RefreshQueuePresentation();
         }
 
@@ -592,6 +594,23 @@ namespace MyManager
             }
 
             ShowOrderNoFilterDropDown();
+        }
+
+        private void LblFUser_Click(object? sender, EventArgs e)
+        {
+            if (_suppressNextUserFilterLabelClick)
+            {
+                _suppressNextUserFilterLabelClick = false;
+                return;
+            }
+
+            if (_userFilterDropDown?.Visible == true)
+            {
+                _userFilterDropDown.Close(ToolStripDropDownCloseReason.AppClicked);
+                return;
+            }
+
+            ShowUserFilterDropDown();
         }
 
         private void ShowOrderNoFilterDropDown()
@@ -764,6 +783,189 @@ namespace MyManager
                 _suppressNextOrderNoLabelClick = true;
         }
 
+        private void ShowUserFilterDropDown()
+        {
+            EnsureUserFilterDropDown();
+            RefreshUserFilterChecklist();
+
+            if (_userFilterDropDown == null || _userFilterGlyph == null)
+                return;
+
+            _userFilterDropDown.Show(_userFilterGlyph, new Point(0, _userFilterGlyph.Height));
+        }
+
+        private void EnsureUserFilterDropDown()
+        {
+            if (_userFilterDropDown != null &&
+                _userFilterCheckedList != null &&
+                _userFilterClearButton != null &&
+                _userFilterApplyButton != null)
+                return;
+
+            var labelWidth = _userFilterLabel?.Width ?? 150;
+            var popupWidth = Math.Max(labelWidth + 110, 280);
+            var listHeight = Math.Max(FilterUsers.Length * 33, 96);
+            var buttonTop = 16 + listHeight + 10;
+            var popupHeight = buttonTop + 32 + 10;
+
+            var panel = new Panel
+            {
+                BackColor = Color.White,
+                Size = new Size(popupWidth, popupHeight),
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
+            };
+
+            _userFilterCheckedList = new CheckedListBox
+            {
+                CheckOnClick = true,
+                BorderStyle = BorderStyle.None,
+                IntegralHeight = false,
+                Font = _userFilterLabel?.Font ?? Font,
+                BackColor = Color.White,
+                ForeColor = Color.FromArgb(47, 53, 72),
+                Location = new Point(16, 16),
+                Size = new Size(popupWidth - 32, listHeight)
+            };
+            _userFilterCheckedList.ItemCheck += UserFilterCheckedList_ItemCheck;
+
+            _userFilterClearButton = new Button
+            {
+                FlatStyle = FlatStyle.Flat,
+                Location = new Point(16, buttonTop),
+                Size = new Size(104, 32),
+                Text = "Очистить",
+                BackColor = Color.White,
+                ForeColor = Color.FromArgb(168, 197, 225)
+            };
+            _userFilterClearButton.FlatAppearance.BorderSize = 0;
+            _userFilterClearButton.Click += (_, _) => ApplyUserFilterFromPopup(clearFilter: true);
+
+            _userFilterApplyButton = new Button
+            {
+                FlatStyle = FlatStyle.Flat,
+                Location = new Point(126, buttonTop),
+                Size = new Size(120, 32),
+                Text = "Применить",
+                BackColor = Color.FromArgb(176, 212, 242),
+                ForeColor = Color.White
+            };
+            _userFilterApplyButton.FlatAppearance.BorderSize = 0;
+            _userFilterApplyButton.Click += (_, _) => ApplyUserFilterFromPopup(clearFilter: false);
+
+            panel.Controls.Add(_userFilterCheckedList);
+            panel.Controls.Add(_userFilterClearButton);
+            panel.Controls.Add(_userFilterApplyButton);
+
+            var host = new ToolStripControlHost(panel)
+            {
+                AutoSize = false,
+                Size = panel.Size,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
+            };
+
+            _userFilterDropDown = new ToolStripDropDown
+            {
+                AutoClose = true,
+                Padding = new Padding(4)
+            };
+            _userFilterDropDown.Closing += UserFilterDropDown_Closing;
+            _userFilterDropDown.Items.Add(host);
+            UpdateUserFilterActionButtonsState();
+        }
+
+        private void UserFilterDropDown_Closing(object? sender, ToolStripDropDownClosingEventArgs e)
+        {
+            if (e.CloseReason != ToolStripDropDownCloseReason.AppClicked)
+                return;
+
+            if (_userFilterLabel == null || _userFilterGlyph == null)
+                return;
+
+            var labelRect = _userFilterLabel.RectangleToScreen(_userFilterLabel.ClientRectangle);
+            var glyphRect = _userFilterGlyph.RectangleToScreen(_userFilterGlyph.ClientRectangle);
+            if (labelRect.Contains(Cursor.Position) || glyphRect.Contains(Cursor.Position))
+                _suppressNextUserFilterLabelClick = true;
+        }
+
+        private void RefreshUserFilterChecklist()
+        {
+            if (_userFilterCheckedList == null)
+                return;
+
+            var countsByFilterUser = GetCountsByFilterUsers();
+
+            _isUpdatingUserFilterList = true;
+            _userFilterCheckedList.BeginUpdate();
+            _userFilterCheckedList.Items.Clear();
+
+            foreach (var userName in FilterUsers)
+            {
+                countsByFilterUser.TryGetValue(userName, out var count);
+                var item = new UserFilterOption(userName, count);
+                _userFilterCheckedList.Items.Add(item, _selectedFilterUsers.Contains(userName));
+            }
+
+            _userFilterCheckedList.EndUpdate();
+            _isUpdatingUserFilterList = false;
+            UpdateUserFilterActionButtonsState();
+        }
+
+        private void UserFilterCheckedList_ItemCheck(object? sender, ItemCheckEventArgs e)
+        {
+            if (_isUpdatingUserFilterList)
+                return;
+
+            BeginInvoke(new Action(UpdateUserFilterActionButtonsState));
+        }
+
+        private void UpdateUserFilterActionButtonsState()
+        {
+            if (_userFilterClearButton == null || _userFilterApplyButton == null || _userFilterCheckedList == null)
+                return;
+
+            var hasSelection = _userFilterCheckedList.CheckedItems.Count > 0;
+            _userFilterClearButton.Enabled = hasSelection;
+            _userFilterApplyButton.Enabled = hasSelection;
+            _userFilterClearButton.ForeColor = hasSelection
+                ? Color.FromArgb(77, 147, 222)
+                : Color.FromArgb(168, 197, 225);
+            _userFilterApplyButton.BackColor = hasSelection
+                ? Color.FromArgb(33, 127, 203)
+                : Color.FromArgb(176, 212, 242);
+            _userFilterApplyButton.ForeColor = Color.White;
+        }
+
+        private void ApplyUserFilterFromPopup(bool clearFilter)
+        {
+            if (_userFilterCheckedList == null)
+                return;
+
+            var nextSelectedUsers = new HashSet<string>(StringComparer.Ordinal);
+            if (!clearFilter)
+            {
+                foreach (var item in _userFilterCheckedList.CheckedItems)
+                {
+                    if (item is UserFilterOption userItem)
+                        nextSelectedUsers.Add(userItem.UserName);
+                }
+
+                if (nextSelectedUsers.Count == 0)
+                    return;
+            }
+
+            var changed = !nextSelectedUsers.SetEquals(_selectedFilterUsers);
+            _selectedFilterUsers.Clear();
+            foreach (var userName in nextSelectedUsers)
+                _selectedFilterUsers.Add(userName);
+
+            if (changed)
+                HandleOrdersGridChanged();
+
+            _userFilterDropDown?.Close(ToolStripDropDownCloseReason.ItemClicked);
+        }
+
         private void ShowStatusFilterDropDown()
         {
             EnsureStatusFilterDropDown();
@@ -878,6 +1080,14 @@ namespace MyManager
         private void UpdateOrderNoSearchCaption()
         {
             lblFOrderNo.Text = OrderNoSearchLabelText;
+        }
+
+        private void UpdateUserFilterCaption()
+        {
+            if (_userFilterLabel == null)
+                return;
+
+            _userFilterLabel.Text = UserFilterLabelText;
         }
 
         private void ApplyStatusFilterToGrid()
@@ -1005,6 +1215,15 @@ namespace MyManager
             }
 
             return total;
+        }
+
+        private static Dictionary<string, int> GetCountsByFilterUsers()
+        {
+            var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var userName in FilterUsers)
+                counts[userName] = 0;
+
+            return counts;
         }
 
         private Dictionary<string, int> GetCountsByFilterStatus()
