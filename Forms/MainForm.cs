@@ -202,13 +202,13 @@ namespace MyManager
             if (iconPath == null)
                 return;
 
-            var icon = TryRenderChevronIconFromSvg(iconPath, 14);
+            var icon = TryRenderChevronIconFromSvg(iconPath, 16);
             if (icon == null)
                 return;
 
             lblFStatus.Image = icon;
             lblFStatus.ImageAlign = ContentAlignment.MiddleLeft;
-            lblFStatus.Padding = new Padding(icon.Width + 6, 0, 0, 0);
+            lblFStatus.Padding = new Padding(icon.Width + 10, 0, 0, 0);
         }
 
         private static string? ResolveChevronSvgPath()
@@ -238,7 +238,7 @@ namespace MyManager
                 graphics.SmoothingMode = SmoothingMode.AntiAlias;
                 graphics.Clear(Color.Transparent);
 
-                var penWidth = Math.Max(1.5f, iconSize * 0.14f);
+                var penWidth = Math.Max(1.8f, iconSize * 0.16f);
                 using var pen = new Pen(strokeColor, penWidth)
                 {
                     StartCap = LineCap.Round,
@@ -246,9 +246,9 @@ namespace MyManager
                     LineJoin = LineJoin.Round
                 };
 
-                var left = new PointF(iconSize * 0.17f, iconSize * 0.38f);
-                var middle = new PointF(iconSize * 0.5f, iconSize * 0.72f);
-                var right = new PointF(iconSize * 0.83f, iconSize * 0.38f);
+                var left = new PointF(iconSize * 0.22f, iconSize * 0.35f);
+                var middle = new PointF(iconSize * 0.5f, iconSize * 0.68f);
+                var right = new PointF(iconSize * 0.78f, iconSize * 0.35f);
                 graphics.DrawLines(pen, [left, middle, right]);
 
                 return bitmap;
