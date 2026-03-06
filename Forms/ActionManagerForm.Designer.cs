@@ -374,7 +374,6 @@
         private Button btnOk;
         private Label inputLabel;
         private Label OnSuccessLabel1;
-        private Label label8;
         private Label NonPDFLabel1;
         private Label Reports;
         private Label OnSuccessLabel2;

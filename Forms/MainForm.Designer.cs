@@ -96,7 +96,6 @@
             // 
             scMain.Panel2.Controls.Add(tableLayoutPanel1);
             scMain.Panel2.Controls.Add(tsMainActions);
-            scMain.Panel2.Paint += scMain_Panel2_Paint;
             scMain.Size = new Size(2213, 1244);
             scMain.SplitterDistance = 460;
             scMain.TabIndex = 1;
@@ -128,7 +127,6 @@
             tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
             tableLayoutPanel1.Size = new Size(1749, 1198);
             tableLayoutPanel1.TabIndex = 1;
-            tableLayoutPanel1.Paint += tableLayoutPanel1_Paint;
             // 
             // pnlHeader
             // 
@@ -141,7 +139,6 @@
             pnlHeader.Name = "pnlHeader";
             pnlHeader.Size = new Size(1743, 36);
             pnlHeader.TabIndex = 0;
-            pnlHeader.Paint += pnlHeader_Paint;
             // 
             // btnViewTiles
             // 

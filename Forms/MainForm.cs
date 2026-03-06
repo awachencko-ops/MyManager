@@ -16,7 +16,7 @@ namespace MyManager
         private string _orderLogsFolderPath = string.Empty;
 
         // На будущее: список пользователей можно наполнять из настроек/БД.
-        private readonly List<string> _users = new List<string> { "Пользователь" };
+        private readonly List<string> _users = ["Пользователь"];
 
         private static readonly string[] QueueStatuses =
         {
@@ -68,8 +68,6 @@ namespace MyManager
         private void ApplyQueueVisualStyle()
         {
             scMain.Panel1.BackColor = QueuePanelBackColor;
-            pnlServersHeader.BackColor = QueuePanelBackColor;
-            pnlServersHeader.Height = 10;
 
             treeView1.HideSelection = false;
             treeView1.DrawMode = TreeViewDrawMode.OwnerDrawText;
@@ -337,20 +335,5 @@ namespace MyManager
             MessageBox.Show(this, "Настройки сохранены", "MainForm", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
-        private void scMain_Panel2_Paint(object sender, PaintEventArgs e)
-        {
-
-        }
-
-        private void tableLayoutPanel1_Paint(object sender, PaintEventArgs e)
-        {
-
-        }
-
-        private void pnlHeader_Paint(object sender, PaintEventArgs e)
-        {
-
-        }
     }
 }
-

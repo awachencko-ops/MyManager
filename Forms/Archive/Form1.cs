@@ -34,7 +34,6 @@ namespace MyManager
         private static readonly TimeSpan ArchiveIndexLifetime = TimeSpan.FromSeconds(5);
 
         private Rectangle dragBoxFromMouseDown;
-        private object itemFromMouseDown;
         private int sourceColumnIndex = -1;
         private int sourceRowIndex = -1;
 

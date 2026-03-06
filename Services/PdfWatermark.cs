@@ -31,7 +31,7 @@ namespace MyManager
                     // --- ВЕРТИКАЛЬНЫЙ (СЛЕВА) ---
                     // 1. Переносим начало координат в точку рисования (7мм слева, центр по высоте)
                     double x = MmToPt(7);
-                    double y = page.Height / 2;
+                    double y = page.Height.Point / 2;
 
                     gfx.TranslateTransform(x, y);
 
@@ -46,7 +46,7 @@ namespace MyManager
                 else
                 {
                     // --- ГОРИЗОНТАЛЬНЫЙ (СВЕРХУ) ---
-                    double x = page.Width / 2;
+                    double x = page.Width.Point / 2;
                     double y = MmToPt(5);
 
                     gfx.DrawString(watermarkText, font, XBrushes.Black,
