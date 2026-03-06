@@ -1,7 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Globalization;
+using System.IO;
+using System.Text.RegularExpressions;
 using System.Windows.Forms;
 
 namespace MyManager
@@ -46,6 +49,7 @@ namespace MyManager
             "Завершено"
         };
         private const string StatusFilterLabelText = "Состояние задания";
+        private const string ChevronDownIconRelativePath = @"Icons\chevron-down.svg";
 
         private static readonly Dictionary<string, string[]> QueueStatusMappings = new(StringComparer.Ordinal)
         {
@@ -188,7 +192,71 @@ namespace MyManager
         private void InitializeStatusFilter()
         {
             lblFStatus.Click += LblFStatus_Click;
+            ApplyStatusFilterChevronIcon();
             UpdateStatusFilterCaption();
+        }
+
+        private void ApplyStatusFilterChevronIcon()
+        {
+            var iconPath = ResolveChevronSvgPath();
+            if (iconPath == null)
+                return;
+
+            var icon = TryRenderChevronIconFromSvg(iconPath, 14);
+            if (icon == null)
+                return;
+
+            lblFStatus.Image = icon;
+            lblFStatus.ImageAlign = ContentAlignment.MiddleLeft;
+            lblFStatus.Padding = new Padding(icon.Width + 6, 0, 0, 0);
+        }
+
+        private static string? ResolveChevronSvgPath()
+        {
+            var outputPath = Path.Combine(AppContext.BaseDirectory, ChevronDownIconRelativePath);
+            if (File.Exists(outputPath))
+                return outputPath;
+
+            var projectPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ChevronDownIconRelativePath));
+            if (File.Exists(projectPath))
+                return projectPath;
+
+            return null;
+        }
+
+        private static Image? TryRenderChevronIconFromSvg(string svgPath, int iconSize)
+        {
+            try
+            {
+                var svgText = File.ReadAllText(svgPath);
+                var colorMatch = Regex.Match(svgText, @"stroke=""(#?[0-9a-fA-F]{6})""");
+                var strokeColorHex = colorMatch.Success ? colorMatch.Groups[1].Value : "#001A72";
+                var strokeColor = ColorTranslator.FromHtml(strokeColorHex);
+
+                var bitmap = new Bitmap(iconSize, iconSize);
+                using var graphics = Graphics.FromImage(bitmap);
+                graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                graphics.Clear(Color.Transparent);
+
+                var penWidth = Math.Max(1.5f, iconSize * 0.14f);
+                using var pen = new Pen(strokeColor, penWidth)
+                {
+                    StartCap = LineCap.Round,
+                    EndCap = LineCap.Round,
+                    LineJoin = LineJoin.Round
+                };
+
+                var left = new PointF(iconSize * 0.17f, iconSize * 0.38f);
+                var middle = new PointF(iconSize * 0.5f, iconSize * 0.72f);
+                var right = new PointF(iconSize * 0.83f, iconSize * 0.38f);
+                graphics.DrawLines(pen, [left, middle, right]);
+
+                return bitmap;
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         private void PopulateQueueTree()
