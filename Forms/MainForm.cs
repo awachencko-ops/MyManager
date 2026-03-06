@@ -527,7 +527,7 @@ namespace MyManager
                 return;
 
             var popupWidth = Math.Max(lblFOrderNo.Width + 100, 280);
-            var popupHeight = 138;
+            var popupHeight = 96;
 
             var panel = new Panel
             {
