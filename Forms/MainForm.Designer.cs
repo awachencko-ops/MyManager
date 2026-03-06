@@ -55,7 +55,6 @@
             colPrint = new DataGridViewTextBoxColumn();
             colReceived = new DataGridViewTextBoxColumn();
             colCreated = new DataGridViewTextBoxColumn();
-            tsMainActions = new ToolStrip();
             tsbNewJob = new ToolStripButton();
             tsbRun = new ToolStripButton();
             tsbStop = new ToolStripButton();
@@ -63,6 +62,7 @@
             tsbBrowse = new ToolStripButton();
             tsbConsole = new ToolStripButton();
             tsbParameters = new ToolStripButton();
+            tsMainActions = new ToolStrip();
             ((System.ComponentModel.ISupportInitialize)scMain).BeginInit();
             scMain.Panel1.SuspendLayout();
             scMain.Panel2.SuspendLayout();
@@ -344,18 +344,6 @@
             colCreated.Name = "colCreated";
             colCreated.ReadOnly = true;
             // 
-            // tsMainActions
-            // 
-            tsMainActions.ImageScalingSize = new Size(24, 24);
-            tsMainActions.Items.AddRange(new ToolStripItem[] { tsbNewJob, tsbRun, tsbStop, tsbRemove, tsbBrowse, tsbConsole, tsbParameters });
-            tsMainActions.Location = new Point(0, 0);
-            tsMainActions.Name = "tsMainActions";
-            tsMainActions.Padding = new Padding(6);
-            tsMainActions.Size = new Size(1749, 46);
-            tsMainActions.TabIndex = 0;
-            tsMainActions.Text = "tsMainActions";
-            tsMainActions.ItemClicked += TsMainActions_ItemClicked;
-            // 
             // tsbNewJob
             // 
             tsbNewJob.Name = "tsbNewJob";
@@ -398,6 +386,18 @@
             tsbParameters.Size = new Size(111, 29);
             tsbParameters.Text = "Параметры";
             // 
+            // tsMainActions
+            // 
+            tsMainActions.ImageScalingSize = new Size(24, 24);
+            tsMainActions.Items.AddRange(new ToolStripItem[] { tsbNewJob, tsbRun, tsbStop, tsbRemove, tsbBrowse, tsbConsole, tsbParameters });
+            tsMainActions.Location = new Point(0, 0);
+            tsMainActions.Name = "tsMainActions";
+            tsMainActions.Padding = new Padding(6);
+            tsMainActions.Size = new Size(1749, 46);
+            tsMainActions.TabIndex = 0;
+            tsMainActions.Text = "tsMainActions";
+            tsMainActions.ItemClicked += TsMainActions_ItemClicked;
+            // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(10F, 25F);
@@ -429,13 +429,6 @@
         private System.Windows.Forms.SplitContainer scMain;
         private System.Windows.Forms.Panel pnlServersHeader;
         private System.Windows.Forms.TreeView treeView1;
-        private ToolStrip tsMainActions;
-        private ToolStripButton tsbNewJob;
-        private ToolStripButton tsbRun;
-        private ToolStripButton tsbStop;
-        private ToolStripButton tsbRemove;
-        private ToolStripButton tsbBrowse;
-        private ToolStripButton tsbConsole;
         private TableLayoutPanel tableLayoutPanel1;
         private Panel pnlHeader;
         private Panel pnlFilters;
@@ -459,6 +452,13 @@
         private DataGridViewTextBoxColumn colPrint;
         private DataGridViewTextBoxColumn colReceived;
         private DataGridViewTextBoxColumn colCreated;
+        private ToolStrip tsMainActions;
+        private ToolStripButton tsbNewJob;
+        private ToolStripButton tsbRun;
+        private ToolStripButton tsbStop;
+        private ToolStripButton tsbRemove;
+        private ToolStripButton tsbBrowse;
+        private ToolStripButton tsbConsole;
         private ToolStripButton tsbParameters;
     }
 }
