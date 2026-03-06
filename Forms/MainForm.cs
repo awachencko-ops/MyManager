@@ -4,7 +4,6 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Globalization;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using Svg;
 
@@ -117,7 +116,6 @@ namespace MyManager
         private bool _isSyncingCreatedFilterControls;
         private bool _suppressNextCreatedFilterLabelClick;
         private bool _isCreatedDateCalendarOpen;
-        private bool _isLaunchingCreatedDateCalendar;
         private ToolStripDropDown? _createdCalendarDropDown;
         private MonthCalendar? _createdCalendar;
         private Button? _createdCalendarOkButton;
@@ -137,7 +135,6 @@ namespace MyManager
         private bool _isSyncingReceivedFilterControls;
         private bool _suppressNextReceivedFilterLabelClick;
         private bool _isReceivedDateCalendarOpen;
-        private bool _isLaunchingReceivedDateCalendar;
         private ToolStripDropDown? _receivedCalendarDropDown;
         private MonthCalendar? _receivedCalendar;
         private Button? _receivedCalendarOkButton;
@@ -147,12 +144,6 @@ namespace MyManager
         private static readonly Color QueueHeaderBackColor = Color.FromArgb(103, 163, 216);
         private static readonly Color QueueStatusSelectedBackColor = Color.FromArgb(57, 63, 81);
         private static readonly Color QueueTextColor = Color.FromArgb(244, 247, 252);
-        private const int WmKeyDown = 0x0100;
-        private const int WmKeyUp = 0x0101;
-        private const int VkEscape = 0x1B;
-
-        [DllImport("user32.dll", CharSet = CharSet.Auto)]
-        private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
 
         private sealed class QueueStatusItem
         {
@@ -839,7 +830,6 @@ namespace MyManager
             if (_orderNoFilterDropDown == null)
                 return;
 
-            CloseOtherFilterPopups(_orderNoFilterDropDown);
             _orderNoFilterDropDown.Show(picFOrderNoGlyph, new Point(0, picFOrderNoGlyph.Height));
             _orderNoFilterTextBox?.Focus();
             _orderNoFilterTextBox?.SelectAll();
@@ -1010,7 +1000,6 @@ namespace MyManager
             if (_userFilterDropDown == null || _userFilterGlyph == null)
                 return;
 
-            CloseOtherFilterPopups(_userFilterDropDown);
             _userFilterDropDown.Show(_userFilterGlyph, new Point(0, _userFilterGlyph.Height));
         }
 
@@ -1194,7 +1183,6 @@ namespace MyManager
             if (_createdFilterDropDown == null || _createdFilterGlyph == null)
                 return;
 
-            CloseOtherFilterPopups(_createdFilterDropDown);
             _createdFilterDropDown.Show(_createdFilterGlyph, new Point(0, _createdFilterGlyph.Height));
         }
 
@@ -1371,31 +1359,20 @@ namespace MyManager
             picker.DropDown += CreatedDatePicker_DropDown;
         }
 
-        private static void CloseNativeDatePickerDropDown(DateTimePicker picker)
-        {
-            if (!picker.IsHandleCreated)
-                return;
-
-            SendMessage(picker.Handle, WmKeyDown, (IntPtr)VkEscape, IntPtr.Zero);
-            SendMessage(picker.Handle, WmKeyUp, (IntPtr)VkEscape, IntPtr.Zero);
-        }
-
         private void CreatedDatePicker_DropDown(object? sender, EventArgs e)
         {
             if (sender is not DateTimePicker picker)
                 return;
 
-            _isLaunchingCreatedDateCalendar = true;
             BeginInvoke(new Action(() =>
             {
                 try
                 {
-                    if (!picker.IsDisposed)
-                        CloseNativeDatePickerDropDown(picker);
+                    SendKeys.Send("{ESC}");
                 }
                 catch
                 {
-                    // Если не получилось скрыть нативный календарь, все равно откроем кастомный.
+                    // Игнорируем сбои нативного сворачивания, ниже откроем свой календарь.
                 }
 
                 ShowCreatedCalendarDropDown(picker);
@@ -1456,29 +1433,21 @@ namespace MyManager
 
         private void ShowCreatedCalendarDropDown(DateTimePicker picker)
         {
-            try
-            {
-                EnsureCreatedCalendarDropDown();
-                if (_createdCalendarDropDown == null || _createdCalendar == null)
-                    return;
+            EnsureCreatedCalendarDropDown();
+            if (_createdCalendarDropDown == null || _createdCalendar == null)
+                return;
 
-                CloseOtherFilterPopups(_createdFilterDropDown);
-                _createdCalendarTargetPicker = picker;
-                var selectedDate = picker.Value.Date;
-                _createdCalendar.SetDate(selectedDate);
-                _createdCalendar.SelectionStart = selectedDate;
-                _createdCalendar.SelectionEnd = selectedDate;
+            _createdCalendarTargetPicker = picker;
+            var selectedDate = picker.Value.Date;
+            _createdCalendar.SetDate(selectedDate);
+            _createdCalendar.SelectionStart = selectedDate;
+            _createdCalendar.SelectionEnd = selectedDate;
 
-                if (_createdCalendarDropDown.Visible)
-                    _createdCalendarDropDown.Close(ToolStripDropDownCloseReason.CloseCalled);
+            if (_createdCalendarDropDown.Visible)
+                _createdCalendarDropDown.Close(ToolStripDropDownCloseReason.CloseCalled);
 
-                _isCreatedDateCalendarOpen = true;
-                _createdCalendarDropDown.Show(picker, new Point(0, picker.Height));
-            }
-            finally
-            {
-                _isLaunchingCreatedDateCalendar = false;
-            }
+            _isCreatedDateCalendarOpen = true;
+            _createdCalendarDropDown.Show(picker, new Point(0, picker.Height));
         }
 
         private void CreatedCalendarOkButton_Click(object? sender, EventArgs e)
@@ -1500,7 +1469,6 @@ namespace MyManager
             else
             {
                 _isCreatedDateCalendarOpen = false;
-                _isLaunchingCreatedDateCalendar = false;
                 _createdCalendarTargetPicker = null;
             }
         }
@@ -1508,7 +1476,6 @@ namespace MyManager
         private void CreatedCalendarDropDown_Closed(object? sender, ToolStripDropDownClosedEventArgs e)
         {
             _isCreatedDateCalendarOpen = false;
-            _isLaunchingCreatedDateCalendar = false;
             _createdCalendarTargetPicker = null;
         }
 
@@ -1703,9 +1670,7 @@ namespace MyManager
             var glyphRect = _createdFilterGlyph.RectangleToScreen(_createdFilterGlyph.ClientRectangle);
             var clickedTrigger = labelRect.Contains(Cursor.Position) || glyphRect.Contains(Cursor.Position);
 
-            if (e.CloseReason == ToolStripDropDownCloseReason.AppClicked &&
-                (_isCreatedDateCalendarOpen || _isLaunchingCreatedDateCalendar) &&
-                !clickedTrigger)
+            if (_isCreatedDateCalendarOpen && !clickedTrigger)
             {
                 e.Cancel = true;
                 return;
@@ -1729,7 +1694,6 @@ namespace MyManager
             if (_receivedFilterDropDown == null || _receivedFilterGlyph == null)
                 return;
 
-            CloseOtherFilterPopups(_receivedFilterDropDown);
             _receivedFilterDropDown.Show(_receivedFilterGlyph, new Point(0, _receivedFilterGlyph.Height));
         }
 
@@ -1899,17 +1863,15 @@ namespace MyManager
             if (sender is not DateTimePicker picker)
                 return;
 
-            _isLaunchingReceivedDateCalendar = true;
             BeginInvoke(new Action(() =>
             {
                 try
                 {
-                    if (!picker.IsDisposed)
-                        CloseNativeDatePickerDropDown(picker);
+                    SendKeys.Send("{ESC}");
                 }
                 catch
                 {
-                    // Если не получилось скрыть нативный календарь, все равно откроем кастомный.
+                    // Игнорируем сбои нативного сворачивания, ниже откроем свой календарь.
                 }
 
                 ShowReceivedCalendarDropDown(picker);
@@ -1970,29 +1932,21 @@ namespace MyManager
 
         private void ShowReceivedCalendarDropDown(DateTimePicker picker)
         {
-            try
-            {
-                EnsureReceivedCalendarDropDown();
-                if (_receivedCalendarDropDown == null || _receivedCalendar == null)
-                    return;
+            EnsureReceivedCalendarDropDown();
+            if (_receivedCalendarDropDown == null || _receivedCalendar == null)
+                return;
 
-                CloseOtherFilterPopups(_receivedFilterDropDown);
-                _receivedCalendarTargetPicker = picker;
-                var selectedDate = picker.Value.Date;
-                _receivedCalendar.SetDate(selectedDate);
-                _receivedCalendar.SelectionStart = selectedDate;
-                _receivedCalendar.SelectionEnd = selectedDate;
+            _receivedCalendarTargetPicker = picker;
+            var selectedDate = picker.Value.Date;
+            _receivedCalendar.SetDate(selectedDate);
+            _receivedCalendar.SelectionStart = selectedDate;
+            _receivedCalendar.SelectionEnd = selectedDate;
 
-                if (_receivedCalendarDropDown.Visible)
-                    _receivedCalendarDropDown.Close(ToolStripDropDownCloseReason.CloseCalled);
+            if (_receivedCalendarDropDown.Visible)
+                _receivedCalendarDropDown.Close(ToolStripDropDownCloseReason.CloseCalled);
 
-                _isReceivedDateCalendarOpen = true;
-                _receivedCalendarDropDown.Show(picker, new Point(0, picker.Height));
-            }
-            finally
-            {
-                _isLaunchingReceivedDateCalendar = false;
-            }
+            _isReceivedDateCalendarOpen = true;
+            _receivedCalendarDropDown.Show(picker, new Point(0, picker.Height));
         }
 
         private void ReceivedCalendarOkButton_Click(object? sender, EventArgs e)
@@ -2014,7 +1968,6 @@ namespace MyManager
             else
             {
                 _isReceivedDateCalendarOpen = false;
-                _isLaunchingReceivedDateCalendar = false;
                 _receivedCalendarTargetPicker = null;
             }
         }
@@ -2022,7 +1975,6 @@ namespace MyManager
         private void ReceivedCalendarDropDown_Closed(object? sender, ToolStripDropDownClosedEventArgs e)
         {
             _isReceivedDateCalendarOpen = false;
-            _isLaunchingReceivedDateCalendar = false;
             _receivedCalendarTargetPicker = null;
         }
 
@@ -2217,9 +2169,7 @@ namespace MyManager
             var glyphRect = _receivedFilterGlyph.RectangleToScreen(_receivedFilterGlyph.ClientRectangle);
             var clickedTrigger = labelRect.Contains(Cursor.Position) || glyphRect.Contains(Cursor.Position);
 
-            if (e.CloseReason == ToolStripDropDownCloseReason.AppClicked &&
-                (_isReceivedDateCalendarOpen || _isLaunchingReceivedDateCalendar) &&
-                !clickedTrigger)
+            if (_isReceivedDateCalendarOpen && !clickedTrigger)
             {
                 e.Cancel = true;
                 return;
@@ -2243,27 +2193,7 @@ namespace MyManager
             if (_statusFilterDropDown == null)
                 return;
 
-            CloseOtherFilterPopups(_statusFilterDropDown);
             _statusFilterDropDown.Show(picFStatusGlyph, new Point(0, picFStatusGlyph.Height));
-        }
-
-        private void CloseOtherFilterPopups(ToolStripDropDown? keepOpen)
-        {
-            ClosePopupIfVisible(_statusFilterDropDown, keepOpen);
-            ClosePopupIfVisible(_orderNoFilterDropDown, keepOpen);
-            ClosePopupIfVisible(_userFilterDropDown, keepOpen);
-            ClosePopupIfVisible(_createdFilterDropDown, keepOpen);
-            ClosePopupIfVisible(_createdCalendarDropDown, keepOpen);
-            ClosePopupIfVisible(_receivedFilterDropDown, keepOpen);
-            ClosePopupIfVisible(_receivedCalendarDropDown, keepOpen);
-        }
-
-        private static void ClosePopupIfVisible(ToolStripDropDown? popup, ToolStripDropDown? keepOpen)
-        {
-            if (popup == null || !popup.Visible || ReferenceEquals(popup, keepOpen))
-                return;
-
-            popup.Close(ToolStripDropDownCloseReason.CloseCalled);
         }
 
         private void EnsureStatusFilterDropDown()
