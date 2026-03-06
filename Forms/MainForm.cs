@@ -109,6 +109,7 @@ namespace MyManager
         private Button? _createdFilterApplyButton;
         private bool _isSyncingCreatedFilterControls;
         private bool _suppressNextCreatedFilterLabelClick;
+        private bool _isCreatedDateCalendarOpen;
 
         private static readonly Color QueuePanelBackColor = Color.FromArgb(68, 74, 94);
         private static readonly Color QueueHeaderBackColor = Color.FromArgb(103, 163, 216);
@@ -1099,8 +1100,22 @@ namespace MyManager
                 return;
 
             var popupWidth = Math.Max((_createdFilterLabel?.Width ?? 170) + 260, 440);
-            var popupHeight = 178;
+            var popupHeight = 206;
             var font = _createdFilterLabel?.Font ?? Font;
+            var row1Y = 16;
+            var row2Y = 60;
+            var row3Y = 104;
+            var bulletX = 16;
+            var contentX = 48;
+            var singleModeWidth = 172;
+            var singleDateX = contentX + singleModeWidth + 10;
+            var singleDateWidth = popupWidth - singleDateX - 16;
+            var rangeFromX = 88;
+            var rangeDateWidth = 146;
+            var toLabelX = rangeFromX + rangeDateWidth + 10;
+            var rangeToX = toLabelX + 30;
+            var rangeToWidth = popupWidth - rangeToX - 16;
+            var buttonsY = 158;
 
             var panel = new Panel
             {
@@ -1112,8 +1127,8 @@ namespace MyManager
 
             _createdFilterTodayRadio = new RadioButton
             {
-                Location = new Point(16, 16),
-                Size = new Size(110, 28),
+                Location = new Point(bulletX, row1Y),
+                Size = new Size(130, 30),
                 Text = "Сегодня",
                 Font = font,
                 AutoCheck = true
@@ -1122,8 +1137,8 @@ namespace MyManager
 
             _createdFilterSingleRadio = new RadioButton
             {
-                Location = new Point(16, 50),
-                Size = new Size(18, 28),
+                Location = new Point(bulletX, row2Y),
+                Size = new Size(18, 30),
                 Font = font,
                 AutoCheck = true
             };
@@ -1134,45 +1149,48 @@ namespace MyManager
                 DropDownStyle = ComboBoxStyle.DropDownList,
                 FormattingEnabled = true,
                 IntegralHeight = false,
-                Location = new Point(42, 48),
-                Size = new Size(170, 32),
+                Location = new Point(contentX, row2Y - 1),
+                Size = new Size(singleModeWidth, 32),
                 Font = font
             };
             _createdFilterSingleModeCombo.Items.AddRange(new object[] { "Точная дата", "До", "После" });
             _createdFilterSingleModeCombo.SelectedIndexChanged += CreatedFilterModeControlChanged;
 
-            _createdFilterSingleDatePicker = CreateCreatedFilterDatePicker(new Point(218, 48), new Size(popupWidth - 236, 32), font);
+            _createdFilterSingleDatePicker = CreateCreatedFilterDatePicker(new Point(singleDateX, row2Y - 1), new Size(singleDateWidth, 32), font);
             _createdFilterSingleDatePicker.ValueChanged += CreatedFilterModeControlChanged;
+            AttachCreatedDatePickerCalendarEvents(_createdFilterSingleDatePicker);
 
             _createdFilterRangeRadio = new RadioButton
             {
-                Location = new Point(16, 84),
-                Size = new Size(58, 28),
+                Location = new Point(bulletX, row3Y),
+                Size = new Size(58, 30),
                 Text = "От",
                 Font = font,
                 AutoCheck = true
             };
             _createdFilterRangeRadio.CheckedChanged += CreatedFilterModeControlChanged;
 
-            _createdFilterRangeFromDatePicker = CreateCreatedFilterDatePicker(new Point(78, 82), new Size(154, 32), font);
+            _createdFilterRangeFromDatePicker = CreateCreatedFilterDatePicker(new Point(rangeFromX, row3Y - 1), new Size(rangeDateWidth, 32), font);
             _createdFilterRangeFromDatePicker.ValueChanged += CreatedFilterModeControlChanged;
+            AttachCreatedDatePickerCalendarEvents(_createdFilterRangeFromDatePicker);
 
             var toLabel = new Label
             {
-                Location = new Point(236, 84),
+                Location = new Point(toLabelX, row3Y),
                 Size = new Size(30, 28),
                 Text = "До",
                 TextAlign = ContentAlignment.MiddleLeft,
                 Font = font
             };
 
-            _createdFilterRangeToDatePicker = CreateCreatedFilterDatePicker(new Point(262, 82), new Size(popupWidth - 280, 32), font);
+            _createdFilterRangeToDatePicker = CreateCreatedFilterDatePicker(new Point(rangeToX, row3Y - 1), new Size(rangeToWidth, 32), font);
             _createdFilterRangeToDatePicker.ValueChanged += CreatedFilterModeControlChanged;
+            AttachCreatedDatePickerCalendarEvents(_createdFilterRangeToDatePicker);
 
             _createdFilterClearButton = new Button
             {
                 FlatStyle = FlatStyle.Flat,
-                Location = new Point(popupWidth - 232, 126),
+                Location = new Point(popupWidth - 232, buttonsY),
                 Size = new Size(104, 32),
                 Text = "Очистить",
                 BackColor = Color.White,
@@ -1184,7 +1202,7 @@ namespace MyManager
             _createdFilterApplyButton = new Button
             {
                 FlatStyle = FlatStyle.Flat,
-                Location = new Point(popupWidth - 122, 126),
+                Location = new Point(popupWidth - 122, buttonsY),
                 Size = new Size(120, 32),
                 Text = "Применить",
                 BackColor = Color.FromArgb(176, 212, 242),
@@ -1232,6 +1250,22 @@ namespace MyManager
                 Size = size,
                 Font = font
             };
+        }
+
+        private void AttachCreatedDatePickerCalendarEvents(DateTimePicker picker)
+        {
+            picker.DropDown += CreatedDatePicker_DropDown;
+            picker.CloseUp += CreatedDatePicker_CloseUp;
+        }
+
+        private void CreatedDatePicker_DropDown(object? sender, EventArgs e)
+        {
+            _isCreatedDateCalendarOpen = true;
+        }
+
+        private void CreatedDatePicker_CloseUp(object? sender, EventArgs e)
+        {
+            BeginInvoke(new Action(() => _isCreatedDateCalendarOpen = false));
         }
 
         private void SyncCreatedDateFilterPopupState()
@@ -1417,16 +1451,24 @@ namespace MyManager
 
         private void CreatedDateFilterDropDown_Closing(object? sender, ToolStripDropDownClosingEventArgs e)
         {
-            if (e.CloseReason != ToolStripDropDownCloseReason.AppClicked)
-                return;
-
             if (_createdFilterLabel == null || _createdFilterGlyph == null)
                 return;
 
             var labelRect = _createdFilterLabel.RectangleToScreen(_createdFilterLabel.ClientRectangle);
             var glyphRect = _createdFilterGlyph.RectangleToScreen(_createdFilterGlyph.ClientRectangle);
-            if (labelRect.Contains(Cursor.Position) || glyphRect.Contains(Cursor.Position))
+            var clickedTrigger = labelRect.Contains(Cursor.Position) || glyphRect.Contains(Cursor.Position);
+
+            if (_isCreatedDateCalendarOpen && !clickedTrigger)
+            {
+                e.Cancel = true;
+                return;
+            }
+
+            if (e.CloseReason == ToolStripDropDownCloseReason.AppClicked && clickedTrigger)
                 _suppressNextCreatedFilterLabelClick = true;
+
+            if (!e.Cancel)
+                _isCreatedDateCalendarOpen = false;
         }
 
         private void ShowStatusFilterDropDown()
