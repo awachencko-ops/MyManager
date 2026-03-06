@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Windows.Forms;
 
 namespace MyManager
@@ -13,23 +14,23 @@ namespace MyManager
         private string _managerLogFilePath = "manager.log";
         private string _orderLogsFolderPath = string.Empty;
 
+        private readonly List<string> _users = new List<string> { "Пользователь" };
+        private static readonly string[] QueueStatuses =
+        {
+            "Все задания",
+            "Обработанные",
+            "В архиве",
+            "Обрабатывается",
+            "Завершено"
+        };
+
+        private bool _isSyncingQueueSelection;
+
         public MainForm()
         {
             InitializeComponent();
             LoadSettings();
-
-            // просто чтобы было видно, что всё живое
-            Load += (_, __) =>
-            {
-                var root = new TreeNode("Пользователь");
-                root.Nodes.Add("Все задания");
-                root.Nodes.Add("Обработанные");
-                root.Nodes.Add("В архиве");
-                root.Nodes.Add("Обрабатывается");
-                root.Nodes.Add("Завершено");
-                treeView1.Nodes.Add(root);
-                root.Expand();
-            };
+            InitializeQueueNavigation();
         }
 
         // обработчик нажатия кнопок в ToolStrip
@@ -52,6 +53,91 @@ namespace MyManager
             _managerLogFilePath = settings.ManagerLogFilePath;
             _orderLogsFolderPath = settings.OrderLogsFolderPath;
             Logger.LogFilePath = _managerLogFilePath;
+        }
+
+        private void InitializeQueueNavigation()
+        {
+            PopulateQueueTree();
+            PopulateQueueDropDown();
+
+            treeView1.AfterSelect += TreeView1_AfterSelect;
+            cbQueue.SelectedIndexChanged += CbQueue_SelectedIndexChanged;
+
+            if (cbQueue.Items.Count > 0)
+                cbQueue.SelectedIndex = 0;
+        }
+
+        private void PopulateQueueTree()
+        {
+            treeView1.BeginUpdate();
+            treeView1.Nodes.Clear();
+
+            foreach (var userName in _users)
+            {
+                var userNode = new TreeNode(userName);
+                foreach (var statusName in QueueStatuses)
+                    userNode.Nodes.Add(statusName);
+
+                userNode.Expand();
+                treeView1.Nodes.Add(userNode);
+            }
+
+            treeView1.EndUpdate();
+        }
+
+        private void PopulateQueueDropDown()
+        {
+            cbQueue.BeginUpdate();
+            cbQueue.Items.Clear();
+
+            foreach (var userName in _users)
+                cbQueue.Items.Add(userName);
+
+            cbQueue.EndUpdate();
+        }
+
+        private void CbQueue_SelectedIndexChanged(object? sender, EventArgs e)
+        {
+            if (_isSyncingQueueSelection || cbQueue.SelectedItem is not string userName)
+                return;
+
+            var userNode = FindUserNode(userName);
+            if (userNode == null)
+                return;
+
+            _isSyncingQueueSelection = true;
+            treeView1.SelectedNode = userNode;
+            userNode.EnsureVisible();
+            _isSyncingQueueSelection = false;
+        }
+
+        private void TreeView1_AfterSelect(object? sender, TreeViewEventArgs e)
+        {
+            if (_isSyncingQueueSelection || e.Node == null)
+                return;
+
+            var userNode = e.Node.Level == 0 ? e.Node : e.Node.Parent;
+            if (userNode == null)
+                return;
+
+            var userName = userNode.Text;
+            if (string.Equals(cbQueue.SelectedItem as string, userName, StringComparison.Ordinal))
+                return;
+
+            _isSyncingQueueSelection = true;
+            cbQueue.SelectedItem = userName;
+            _isSyncingQueueSelection = false;
+        }
+
+        private TreeNode? FindUserNode(string userName)
+        {
+            foreach (TreeNode node in treeView1.Nodes)
+            {
+                if (string.Equals(node.Text, userName, StringComparison.Ordinal))
+                    return node;
+            }
+
+            return null;
         }
 
         private void ShowSettingsDialog()
