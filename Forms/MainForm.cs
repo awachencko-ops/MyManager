@@ -86,12 +86,12 @@ namespace MyManager
             cbQueue.DrawMode = DrawMode.Normal;
             cbQueue.Font = new Font("Segoe UI", 15f, FontStyle.Regular, GraphicsUnit.Pixel);
             cbQueue.FlatStyle = FlatStyle.Standard;
+            cbQueue.AutoSize = false;
             cbQueue.IntegralHeight = false;
             cbQueue.DropDownHeight = 240;
             cbQueue.BackColor = Color.White;
             cbQueue.ForeColor = Color.FromArgb(47, 53, 72);
-            cbQueue.Size = cbFStatus.Size;
-            cbQueue.DropDownWidth = cbFStatus.Width;
+            cbQueue.Height = cbFStatus.Height;
         }
 
         private void InitializeQueueNavigation()
