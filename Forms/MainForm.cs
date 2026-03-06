@@ -189,6 +189,7 @@ namespace MyManager
         private void InitializeStatusFilter()
         {
             lblFStatus.Click += LblFStatus_Click;
+            picFStatusGlyph.Click += LblFStatus_Click;
             ApplyStatusFilterChevronIcon();
             UpdateStatusFilterCaption();
         }
@@ -196,11 +197,10 @@ namespace MyManager
         private void ApplyStatusFilterChevronIcon()
         {
             using var icon = CreateDropDownGlyphIcon(14);
-            lblFStatus.Image?.Dispose();
-            lblFStatus.Image = (Image)icon.Clone();
-            lblFStatus.ImageAlign = ContentAlignment.MiddleLeft;
+            picFStatusGlyph.Image?.Dispose();
+            picFStatusGlyph.Image = (Image)icon.Clone();
             lblFStatus.TextAlign = ContentAlignment.MiddleLeft;
-            lblFStatus.Padding = new Padding(icon.Width + 2, 0, 0, 0);
+            lblFStatus.Padding = Padding.Empty;
         }
 
         private static Bitmap CreateDropDownGlyphIcon(int iconSize)
@@ -474,7 +474,8 @@ namespace MyManager
                 return;
 
             var labelRect = lblFStatus.RectangleToScreen(lblFStatus.ClientRectangle);
-            if (labelRect.Contains(Cursor.Position))
+            var glyphRect = picFStatusGlyph.RectangleToScreen(picFStatusGlyph.ClientRectangle);
+            if (labelRect.Contains(Cursor.Position) || glyphRect.Contains(Cursor.Position))
                 _suppressNextStatusFilterLabelClick = true;
         }
 

@@ -39,6 +39,7 @@
             cbQueue = new ComboBox();
             pnlFilters = new Panel();
             flpFilters = new FlowLayoutPanel();
+            picFStatusGlyph = new PictureBox();
             lblFStatus = new Label();
             cbFOrderNo = new ComboBox();
             cbUser = new ComboBox();
@@ -70,6 +71,7 @@
             pnlHeader.SuspendLayout();
             pnlFilters.SuspendLayout();
             flpFilters.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)picFStatusGlyph).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgvJobs).BeginInit();
             tsMainActions.SuspendLayout();
             SuspendLayout();
@@ -188,6 +190,7 @@
             // flpFilters
             // 
             flpFilters.AutoScroll = true;
+            flpFilters.Controls.Add(picFStatusGlyph);
             flpFilters.Controls.Add(lblFStatus);
             flpFilters.Controls.Add(cbFOrderNo);
             flpFilters.Controls.Add(cbUser);
@@ -200,13 +203,25 @@
             flpFilters.TabIndex = 0;
             flpFilters.WrapContents = false;
             // 
+            // picFStatusGlyph
+            // 
+            picFStatusGlyph.Cursor = Cursors.Hand;
+            picFStatusGlyph.Location = new Point(3, 0);
+            picFStatusGlyph.Margin = new Padding(3, 0, 0, 0);
+            picFStatusGlyph.Name = "picFStatusGlyph";
+            picFStatusGlyph.Size = new Size(14, 33);
+            picFStatusGlyph.SizeMode = PictureBoxSizeMode.CenterImage;
+            picFStatusGlyph.TabIndex = 0;
+            picFStatusGlyph.TabStop = false;
+            // 
             // lblFStatus
             // 
             lblFStatus.Cursor = Cursors.Hand;
-            lblFStatus.Location = new Point(3, 0);
+            lblFStatus.Location = new Point(17, 0);
+            lblFStatus.Margin = new Padding(0, 0, 3, 0);
             lblFStatus.Name = "lblFStatus";
-            lblFStatus.Size = new Size(170, 33);
-            lblFStatus.TabIndex = 0;
+            lblFStatus.Size = new Size(156, 33);
+            lblFStatus.TabIndex = 1;
             lblFStatus.Text = "Состояние задания";
             lblFStatus.TextAlign = ContentAlignment.MiddleLeft;
             // 
@@ -218,7 +233,7 @@
             cbFOrderNo.Location = new Point(179, 3);
             cbFOrderNo.Name = "cbFOrderNo";
             cbFOrderNo.Size = new Size(170, 33);
-            cbFOrderNo.TabIndex = 1;
+            cbFOrderNo.TabIndex = 2;
             // 
             // cbUser
             // 
@@ -228,7 +243,7 @@
             cbUser.Location = new Point(355, 3);
             cbUser.Name = "cbUser";
             cbUser.Size = new Size(170, 33);
-            cbUser.TabIndex = 2;
+            cbUser.TabIndex = 3;
             // 
             // cbFCreated
             // 
@@ -238,7 +253,7 @@
             cbFCreated.Location = new Point(531, 3);
             cbFCreated.Name = "cbFCreated";
             cbFCreated.Size = new Size(170, 33);
-            cbFCreated.TabIndex = 3;
+            cbFCreated.TabIndex = 4;
             // 
             // cbFReceived
             // 
@@ -248,7 +263,7 @@
             cbFReceived.Location = new Point(707, 3);
             cbFReceived.Name = "cbFReceived";
             cbFReceived.Size = new Size(170, 33);
-            cbFReceived.TabIndex = 4;
+            cbFReceived.TabIndex = 5;
             // 
             // dgvJobs
             // 
@@ -406,6 +421,7 @@
             pnlHeader.PerformLayout();
             pnlFilters.ResumeLayout(false);
             flpFilters.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)picFStatusGlyph).EndInit();
             ((System.ComponentModel.ISupportInitialize)dgvJobs).EndInit();
             tsMainActions.ResumeLayout(false);
             tsMainActions.PerformLayout();
@@ -426,6 +442,7 @@
         private Button btnViewTiles;
         private Button btnViewList;
         private FlowLayoutPanel flpFilters;
+        private PictureBox picFStatusGlyph;
         private Label lblFStatus;
         private ComboBox cbFOrderNo;
         private ComboBox cbUser;
