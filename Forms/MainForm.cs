@@ -48,8 +48,15 @@ namespace MyManager
             "Ошибка",
             "Завершено"
         };
+        private static readonly string[] FilterUsers =
+        {
+            "Андрей",
+            "Катя",
+            "Вероника"
+        };
         private const string StatusFilterLabelText = "Состояние задания";
         private const string OrderNoSearchLabelText = "Номер заказа";
+        private const string UserFilterLabelText = "Пользователь";
 
         private static readonly Dictionary<string, string[]> QueueStatusMappings = new(StringComparer.Ordinal)
         {
@@ -63,6 +70,7 @@ namespace MyManager
         private bool _isSyncingQueueSelection;
         private string _currentUserName = string.Empty;
         private readonly HashSet<string> _selectedFilterStatuses = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _selectedFilterUsers = new(StringComparer.Ordinal);
         private string _orderNumberFilterText = string.Empty;
         private ToolStripDropDown? _statusFilterDropDown;
         private CheckedListBox? _statusFilterCheckedList;
@@ -73,6 +81,14 @@ namespace MyManager
         private Button? _orderNoFilterClearButton;
         private Button? _orderNoFilterApplyButton;
         private bool _suppressNextOrderNoLabelClick;
+        private PictureBox? _userFilterGlyph;
+        private Label? _userFilterLabel;
+        private ToolStripDropDown? _userFilterDropDown;
+        private CheckedListBox? _userFilterCheckedList;
+        private Button? _userFilterClearButton;
+        private Button? _userFilterApplyButton;
+        private bool _isUpdatingUserFilterList;
+        private bool _suppressNextUserFilterLabelClick;
 
         private static readonly Color QueuePanelBackColor = Color.FromArgb(68, 74, 94);
         private static readonly Color QueueHeaderBackColor = Color.FromArgb(103, 163, 216);
@@ -113,6 +129,23 @@ namespace MyManager
             }
         }
 
+        private sealed class UserFilterOption
+        {
+            public UserFilterOption(string userName, int count)
+            {
+                UserName = userName;
+                Count = count;
+            }
+
+            public string UserName { get; }
+            public int Count { get; }
+
+            public override string ToString()
+            {
+                return $"{UserName} ({Count})";
+            }
+        }
+
         public MainForm()
         {
             InitializeComponent();
@@ -120,6 +153,7 @@ namespace MyManager
             ApplyQueueVisualStyle();
             InitializeStatusFilter();
             InitializeOrderNoSearch();
+            InitializeUserFilter();
             InitializeQueueNavigation();
         }
 
@@ -221,6 +255,47 @@ namespace MyManager
             UpdateOrderNoSearchCaption();
         }
 
+        private void InitializeUserFilter()
+        {
+            var insertIndex = flpFilters.Controls.IndexOf(cbUser);
+            if (insertIndex >= 0)
+                flpFilters.Controls.Remove(cbUser);
+
+            cbUser.Visible = false;
+
+            _userFilterGlyph = new PictureBox
+            {
+                Cursor = Cursors.Hand,
+                Margin = new Padding(3, 0, 0, 0),
+                Name = "picFUserGlyph",
+                Size = new Size(24, 33),
+                SizeMode = PictureBoxSizeMode.CenterImage
+            };
+
+            _userFilterLabel = new Label
+            {
+                Cursor = Cursors.Hand,
+                Margin = new Padding(0, 0, 3, 0),
+                Name = "lblFUser",
+                Size = new Size(150, 33),
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+
+            _userFilterGlyph.Click += LblFUser_Click;
+            _userFilterLabel.Click += LblFUser_Click;
+
+            flpFilters.Controls.Add(_userFilterGlyph);
+            flpFilters.Controls.Add(_userFilterLabel);
+            if (insertIndex >= 0)
+            {
+                flpFilters.Controls.SetChildIndex(_userFilterGlyph, insertIndex);
+                flpFilters.Controls.SetChildIndex(_userFilterLabel, insertIndex + 1);
+            }
+
+            ApplyUserFilterChevronIcon();
+            UpdateUserFilterCaption();
+        }
+
         private void ApplyOrderNoSearchIcon()
         {
             using var icon = CreateDropDownGlyphIcon(24);
@@ -228,6 +303,18 @@ namespace MyManager
             picFOrderNoGlyph.Image = (Image)icon.Clone();
             lblFOrderNo.TextAlign = ContentAlignment.MiddleLeft;
             lblFOrderNo.Padding = new Padding(0, 3, 0, 0);
+        }
+
+        private void ApplyUserFilterChevronIcon()
+        {
+            if (_userFilterGlyph == null || _userFilterLabel == null)
+                return;
+
+            using var icon = CreateDropDownGlyphIcon(24);
+            _userFilterGlyph.Image?.Dispose();
+            _userFilterGlyph.Image = (Image)icon.Clone();
+            _userFilterLabel.TextAlign = ContentAlignment.MiddleLeft;
+            _userFilterLabel.Padding = new Padding(0, 3, 0, 0);
         }
 
         private static Bitmap CreateDropDownGlyphIcon(int iconSize)
