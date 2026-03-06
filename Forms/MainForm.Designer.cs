@@ -42,6 +42,7 @@
             cbFStatus = new ComboBox();
             cbFOrderNo = new ComboBox();
             cbUser = new ComboBox();
+            cbFCreated = new ComboBox();
             cbFReceived = new ComboBox();
             dgvJobs = new DataGridView();
             colStatus = new DataGridViewTextBoxColumn();
@@ -61,7 +62,6 @@
             tsbBrowse = new ToolStripButton();
             tsbConsole = new ToolStripButton();
             tsbParameters = new ToolStripButton();
-            cbFCreated = new ComboBox();
             ((System.ComponentModel.ISupportInitialize)scMain).BeginInit();
             scMain.Panel1.SuspendLayout();
             scMain.Panel2.SuspendLayout();
@@ -230,6 +230,16 @@
             cbUser.Size = new Size(170, 33);
             cbUser.TabIndex = 2;
             // 
+            // cbFCreated
+            // 
+            cbFCreated.DropDownStyle = ComboBoxStyle.DropDownList;
+            cbFCreated.FormattingEnabled = true;
+            cbFCreated.IntegralHeight = false;
+            cbFCreated.Location = new Point(531, 3);
+            cbFCreated.Name = "cbFCreated";
+            cbFCreated.Size = new Size(170, 33);
+            cbFCreated.TabIndex = 3;
+            // 
             // cbFReceived
             // 
             cbFReceived.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -376,16 +386,6 @@
             tsbParameters.Name = "tsbParameters";
             tsbParameters.Size = new Size(111, 29);
             tsbParameters.Text = "Параметры";
-            // 
-            // cbFCreated
-            // 
-            cbFCreated.DropDownStyle = ComboBoxStyle.DropDownList;
-            cbFCreated.FormattingEnabled = true;
-            cbFCreated.IntegralHeight = false;
-            cbFCreated.Location = new Point(531, 3);
-            cbFCreated.Name = "cbFCreated";
-            cbFCreated.Size = new Size(170, 33);
-            cbFCreated.TabIndex = 3;
             // 
             // MainForm
             // 

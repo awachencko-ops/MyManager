@@ -57,6 +57,10 @@ namespace MyManager
 
         private bool _isSyncingQueueSelection;
         private string _currentUserName = string.Empty;
+        private readonly HashSet<string> _selectedFilterStatuses = new(StringComparer.Ordinal);
+        private ToolStripDropDown? _statusFilterDropDown;
+        private CheckedListBox? _statusFilterCheckedList;
+        private bool _isUpdatingStatusFilterList;
 
         private static readonly Color QueuePanelBackColor = Color.FromArgb(68, 74, 94);
         private static readonly Color QueueHeaderBackColor = Color.FromArgb(103, 163, 216);
@@ -77,6 +81,23 @@ namespace MyManager
             public override string ToString()
             {
                 return Text;
+            }
+        }
+
+        private sealed class StatusFilterOption
+        {
+            public StatusFilterOption(string statusName, int count)
+            {
+                StatusName = statusName;
+                Count = count;
+            }
+
+            public string StatusName { get; }
+            public int Count { get; }
+
+            public override string ToString()
+            {
+                return $"{StatusName} ({Count})";
             }
         }
 
@@ -137,9 +158,9 @@ namespace MyManager
 
             treeView1.AfterSelect += TreeView1_AfterSelect;
             cbQueue.SelectedIndexChanged += CbQueue_SelectedIndexChanged;
-            dgvJobs.RowsAdded += (_, _) => RefreshQueuePresentation();
-            dgvJobs.RowsRemoved += (_, _) => RefreshQueuePresentation();
-            dgvJobs.DataBindingComplete += (_, _) => RefreshQueuePresentation();
+            dgvJobs.RowsAdded += (_, _) => HandleOrdersGridChanged();
+            dgvJobs.RowsRemoved += (_, _) => HandleOrdersGridChanged();
+            dgvJobs.DataBindingComplete += (_, _) => HandleOrdersGridChanged();
             dgvJobs.CellValueChanged += DgvJobs_CellValueChanged;
 
             if (treeView1.Nodes.Count == 0)
@@ -155,11 +176,8 @@ namespace MyManager
 
         private void InitializeStatusFilter()
         {
-            cbFStatus.BeginUpdate();
-            cbFStatus.Items.Clear();
-            cbFStatus.Items.AddRange(FilterStatuses);
-            cbFStatus.EndUpdate();
-            cbFStatus.SelectedIndex = -1;
+            cbFStatus.DropDown += CbFStatus_DropDown;
+            UpdateStatusFilterCaption();
         }
 
         private void PopulateQueueTree()
@@ -312,7 +330,7 @@ namespace MyManager
         private void DgvJobs_CellValueChanged(object? sender, DataGridViewCellEventArgs e)
         {
             if (e.ColumnIndex == colStatus.Index || e.ColumnIndex < 0)
-                RefreshQueuePresentation();
+                HandleOrdersGridChanged();
         }
 
         private void RefreshQueuePresentation()
@@ -325,6 +343,164 @@ namespace MyManager
 
             var preferredStatus = GetSelectedQueueStatusName();
             FillQueueCombo(preferredStatus);
+        }
+
+        private void HandleOrdersGridChanged()
+        {
+            ApplyStatusFilterToGrid();
+            UpdateStatusFilterCaption();
+            RefreshStatusFilterChecklist();
+            RefreshQueuePresentation();
+        }
+
+        private void CbFStatus_DropDown(object? sender, EventArgs e)
+        {
+            cbFStatus.DroppedDown = false;
+            ShowStatusFilterDropDown();
+        }
+
+        private void ShowStatusFilterDropDown()
+        {
+            EnsureStatusFilterDropDown();
+            RefreshStatusFilterChecklist();
+
+            if (_statusFilterDropDown == null)
+                return;
+
+            var location = cbFStatus.PointToScreen(new Point(0, cbFStatus.Height));
+            _statusFilterDropDown.Show(location);
+        }
+
+        private void EnsureStatusFilterDropDown()
+        {
+            if (_statusFilterDropDown != null && _statusFilterCheckedList != null)
+                return;
+
+            _statusFilterCheckedList = new CheckedListBox
+            {
+                CheckOnClick = true,
+                BorderStyle = BorderStyle.None,
+                IntegralHeight = false,
+                Font = cbFStatus.Font,
+                BackColor = Color.White,
+                ForeColor = Color.FromArgb(47, 53, 72),
+                Width = Math.Max(cbFStatus.Width + 140, 280),
+                Height = 240
+            };
+            _statusFilterCheckedList.ItemCheck += StatusFilterCheckedList_ItemCheck;
+
+            var host = new ToolStripControlHost(_statusFilterCheckedList)
+            {
+                AutoSize = false,
+                Size = _statusFilterCheckedList.Size,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
+            };
+
+            _statusFilterDropDown = new ToolStripDropDown
+            {
+                AutoClose = true,
+                Padding = new Padding(4)
+            };
+            _statusFilterDropDown.Items.Add(host);
+        }
+
+        private void RefreshStatusFilterChecklist()
+        {
+            if (_statusFilterCheckedList == null)
+                return;
+
+            var countsByFilterStatus = GetCountsByFilterStatus();
+
+            _isUpdatingStatusFilterList = true;
+            _statusFilterCheckedList.BeginUpdate();
+            _statusFilterCheckedList.Items.Clear();
+
+            foreach (var statusName in FilterStatuses)
+            {
+                countsByFilterStatus.TryGetValue(statusName, out var count);
+                var item = new StatusFilterOption(statusName, count);
+                _statusFilterCheckedList.Items.Add(item, _selectedFilterStatuses.Contains(statusName));
+            }
+
+            _statusFilterCheckedList.EndUpdate();
+            _isUpdatingStatusFilterList = false;
+        }
+
+        private void StatusFilterCheckedList_ItemCheck(object? sender, ItemCheckEventArgs e)
+        {
+            if (_isUpdatingStatusFilterList)
+                return;
+
+            BeginInvoke(new Action(() =>
+            {
+                UpdateSelectedStatusesFromChecklist();
+                ApplyStatusFilterToGrid();
+                UpdateStatusFilterCaption();
+                RefreshQueuePresentation();
+            }));
+        }
+
+        private void UpdateSelectedStatusesFromChecklist()
+        {
+            if (_statusFilterCheckedList == null)
+                return;
+
+            _selectedFilterStatuses.Clear();
+            foreach (var item in _statusFilterCheckedList.CheckedItems)
+            {
+                if (item is StatusFilterOption statusItem)
+                    _selectedFilterStatuses.Add(statusItem.StatusName);
+            }
+        }
+
+        private void UpdateStatusFilterCaption()
+        {
+            var caption = BuildStatusFilterCaption();
+
+            cbFStatus.BeginUpdate();
+            cbFStatus.Items.Clear();
+            cbFStatus.Items.Add(caption);
+            cbFStatus.EndUpdate();
+            cbFStatus.SelectedIndex = cbFStatus.Items.Count > 0 ? 0 : -1;
+        }
+
+        private string BuildStatusFilterCaption()
+        {
+            if (_selectedFilterStatuses.Count == 0)
+                return "Все статусы";
+
+            if (_selectedFilterStatuses.Count == 1)
+            {
+                foreach (var statusName in _selectedFilterStatuses)
+                    return statusName;
+            }
+
+            return $"Выбрано: {_selectedFilterStatuses.Count}";
+        }
+
+        private void ApplyStatusFilterToGrid()
+        {
+            var hasSelectedStatuses = _selectedFilterStatuses.Count > 0;
+
+            foreach (DataGridViewRow row in dgvJobs.Rows)
+            {
+                if (row.IsNewRow)
+                    continue;
+
+                var statusValue = row.Cells[colStatus.Index].Value?.ToString();
+                var normalizedStatus = NormalizeStatus(statusValue);
+                var shouldShow = !hasSelectedStatuses || (normalizedStatus != null && _selectedFilterStatuses.Contains(normalizedStatus));
+
+                try
+                {
+                    row.Visible = shouldShow;
+                }
+                catch (InvalidOperationException)
+                {
+                    // Если строка управляется внешним DataSource, пропускаем скрытие без падения формы.
+                }
+            }
         }
 
         private void FillQueueCombo(string? preferredStatus)
@@ -340,8 +516,7 @@ namespace MyManager
             cbQueue.Items.Clear();
             foreach (var statusName in QueueStatuses)
             {
-                var count = GetQueueStatusCount(statusName);
-                cbQueue.Items.Add(new QueueStatusItem(statusName, $"• {statusName} ({count})"));
+                cbQueue.Items.Add(new QueueStatusItem(statusName, statusName));
             }
             cbQueue.EndUpdate();
 
