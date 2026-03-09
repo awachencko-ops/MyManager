@@ -4,6 +4,8 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Globalization;
 using System.IO;
+using System.Linq;
+using System.Text.Json;
 using System.Windows.Forms;
 using Svg;
 
@@ -18,6 +20,9 @@ namespace MyManager
         private string _jsonHistoryFile = "history.json";
         private string _managerLogFilePath = "manager.log";
         private string _orderLogsFolderPath = string.Empty;
+        private readonly List<OrderData> _orderHistory = [];
+        private readonly HashSet<string> _expandedOrderIds = new(StringComparer.Ordinal);
+        private bool _isRebuildingGrid;
 
         // На будущее: список пользователей можно наполнять из настроек/БД.
         private readonly List<string> _users = ["Сервер \"Таудеми\""];
@@ -222,6 +227,7 @@ namespace MyManager
             InitializeCreatedDateFilter();
             InitializeReceivedDateFilter();
             InitializeQueueNavigation();
+            InitializeOrdersDataFlow();
         }
 
         // обработчик нажатия кнопок в ToolStrip
@@ -276,6 +282,7 @@ namespace MyManager
             dgvJobs.RowsRemoved += (_, _) => HandleOrdersGridChanged();
             dgvJobs.DataBindingComplete += (_, _) => HandleOrdersGridChanged();
             dgvJobs.CellValueChanged += DgvJobs_CellValueChanged;
+            dgvJobs.CellDoubleClick += DgvJobs_CellDoubleClick;
 
             if (treeView1.Nodes.Count == 0)
                 return;
@@ -295,6 +302,13 @@ namespace MyManager
                 firstUserNode.EnsureVisible();
             }
             _isSyncingQueueSelection = false;
+        }
+
+        private void InitializeOrdersDataFlow()
+        {
+            tbSearch.TextChanged += (_, _) => RebuildOrdersGrid();
+            LoadHistory();
+            RebuildOrdersGrid();
         }
 
         private void InitializeStatusFilter()
@@ -606,6 +620,7 @@ namespace MyManager
             _isSyncingQueueSelection = true;
             SelectUser(userNode, preferredStatus);
             _isSyncingQueueSelection = false;
+            HandleOrdersGridChanged();
         }
 
         private void CbQueue_SelectedIndexChanged(object? sender, EventArgs e)
@@ -630,6 +645,7 @@ namespace MyManager
             treeView1.SelectedNode = statusNode;
             statusNode.EnsureVisible();
             _isSyncingQueueSelection = false;
+            HandleOrdersGridChanged();
         }
 
         private TreeNode? FindUserNode(string userName)
@@ -708,8 +724,36 @@ namespace MyManager
 
         private void DgvJobs_CellValueChanged(object? sender, DataGridViewCellEventArgs e)
         {
+            if (_isRebuildingGrid)
+                return;
+
             if (e.ColumnIndex == colStatus.Index || e.ColumnIndex == colCreated.Index || e.ColumnIndex == colReceived.Index || e.ColumnIndex < 0)
                 HandleOrdersGridChanged();
+        }
+
+        private void DgvJobs_CellDoubleClick(object? sender, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex < 0)
+                return;
+
+            var tag = dgvJobs.Rows[e.RowIndex].Tag?.ToString();
+            if (!IsOrderTag(tag))
+                return;
+
+            var orderInternalId = ExtractOrderInternalIdFromTag(tag);
+            if (string.IsNullOrWhiteSpace(orderInternalId))
+                return;
+
+            var order = FindOrderByInternalId(orderInternalId);
+            if (!OrderTopologyService.IsMultiFileOrder(order))
+                return;
+
+            if (_expandedOrderIds.Contains(orderInternalId))
+                _expandedOrderIds.Remove(orderInternalId);
+            else
+                _expandedOrderIds.Add(orderInternalId);
+
+            RebuildOrdersGrid();
         }
 
         private void RefreshQueuePresentation()
@@ -726,6 +770,9 @@ namespace MyManager
 
         private void HandleOrdersGridChanged()
         {
+            if (_isRebuildingGrid)
+                return;
+
             ApplyStatusFilterToGrid();
             UpdateStatusFilterCaption();
             UpdateOrderNoSearchCaption();
@@ -735,6 +782,327 @@ namespace MyManager
             RefreshStatusFilterChecklist();
             RefreshUserFilterChecklist();
             RefreshQueuePresentation();
+        }
+
+        private void LoadHistory()
+        {
+            _orderHistory.Clear();
+            _jsonHistoryFile = StoragePaths.ResolveExistingFilePath(_jsonHistoryFile, "history.json");
+
+            if (File.Exists(_jsonHistoryFile))
+            {
+                try
+                {
+                    var parsed = JsonSerializer.Deserialize<List<OrderData>>(File.ReadAllText(_jsonHistoryFile));
+                    if (parsed != null)
+                        _orderHistory.AddRange(parsed);
+                }
+                catch
+                {
+                    _orderHistory.Clear();
+                }
+            }
+
+            foreach (var order in _orderHistory)
+            {
+                if (string.IsNullOrWhiteSpace(order.InternalId))
+                    order.InternalId = Guid.NewGuid().ToString("N");
+                if (order.ArrivalDate == default)
+                    order.ArrivalDate = order.OrderDate != default ? order.OrderDate : DateTime.Now;
+            }
+
+            if (NormalizeOrderTopologyInHistory(logIssues: true))
+                SaveHistory();
+        }
+
+        private void SaveHistory()
+        {
+            NormalizeOrderTopologyInHistory(logIssues: false);
+
+            var targetPath = StoragePaths.ResolveFilePath(_jsonHistoryFile, "history.json");
+            var dir = Path.GetDirectoryName(targetPath);
+            if (!string.IsNullOrWhiteSpace(dir))
+                Directory.CreateDirectory(dir);
+
+            File.WriteAllText(
+                targetPath,
+                JsonSerializer.Serialize(_orderHistory, new JsonSerializerOptions { WriteIndented = true }));
+            _jsonHistoryFile = targetPath;
+        }
+
+        private bool NormalizeOrderTopologyInHistory(bool logIssues)
+        {
+            if (_orderHistory.Count == 0)
+                return false;
+
+            var changed = false;
+            foreach (var order in _orderHistory)
+            {
+                var result = OrderTopologyService.Normalize(order);
+                if (result.Changed)
+                    changed = true;
+
+                if (!logIssues || result.Issues.Count == 0)
+                    continue;
+
+                foreach (var issue in result.Issues)
+                    Logger.Warn($"TOPOLOGY | order={GetOrderDisplayId(order)} | {issue}");
+            }
+
+            return changed;
+        }
+
+        private void RebuildOrdersGrid()
+        {
+            if (_isRebuildingGrid)
+                return;
+
+            if (NormalizeOrderTopologyInHistory(logIssues: false))
+                SaveHistory();
+
+            _isRebuildingGrid = true;
+            dgvJobs.SuspendLayout();
+
+            try
+            {
+                var selectedTag = dgvJobs.CurrentRow?.Tag?.ToString();
+                dgvJobs.Rows.Clear();
+
+                var sortedOrders = _orderHistory
+                    .OrderByDescending(x => x.ArrivalDate)
+                    .ToList();
+
+                var searchText = (tbSearch.Text ?? string.Empty).Trim();
+                if (!string.IsNullOrWhiteSpace(searchText))
+                {
+                    sortedOrders = sortedOrders
+                        .Where(x => OrderMatchesSearch(x, searchText))
+                        .ToList();
+                }
+
+                foreach (var order in sortedOrders)
+                    AddOrderRowsToGrid(order);
+
+                if (!string.IsNullOrWhiteSpace(selectedTag))
+                    TryRestoreSelectedRowByTag(selectedTag);
+            }
+            finally
+            {
+                dgvJobs.ResumeLayout();
+                _isRebuildingGrid = false;
+            }
+
+            HandleOrdersGridChanged();
+        }
+
+        private void AddOrderRowsToGrid(OrderData order)
+        {
+            if (order == null)
+                return;
+
+            var normalizedStatus = NormalizeStatus(order.Status) ?? (order.Status ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(normalizedStatus))
+                normalizedStatus = "Обрабатывается";
+
+            var isMulti = OrderTopologyService.IsMultiFileOrder(order);
+            var isExpanded = isMulti && _expandedOrderIds.Contains(order.InternalId);
+            var statePrefix = isMulti ? (isExpanded ? "∧ " : "∨ ") : string.Empty;
+
+            var groupSource = isMulti ? "..." : GetFileName(order.SourcePath);
+            var groupPrepared = isMulti ? BuildGroupTitle(order) : GetFileName(order.PreparedPath);
+            var groupPrint = isMulti ? "..." : GetFileName(order.PrintPath);
+            var groupPitStop = isMulti ? GetCommonGroupAction(order.Items, x => x.PitStopAction) : NormalizeAction(order.PitStopAction);
+            var groupImposing = isMulti ? GetCommonGroupAction(order.Items, x => x.ImposingAction) : NormalizeAction(order.ImposingAction);
+
+            var orderRowIndex = dgvJobs.Rows.Add(
+                statePrefix + normalizedStatus,
+                GetOrderDisplayId(order),
+                groupSource,
+                groupPrepared,
+                groupPitStop,
+                groupImposing,
+                groupPrint,
+                FormatDate(order.OrderDate),
+                FormatDate(order.ArrivalDate));
+
+            dgvJobs.Rows[orderRowIndex].Tag = $"order|{order.InternalId}";
+
+            if (!isMulti || !isExpanded || order.Items == null || order.Items.Count == 0)
+                return;
+
+            foreach (var item in order.Items.OrderBy(x => x.SequenceNo))
+            {
+                if (item == null)
+                    continue;
+
+                var itemStatus = NormalizeStatus(item.FileStatus) ?? item.FileStatus;
+                if (string.IsNullOrWhiteSpace(itemStatus))
+                    itemStatus = "Обрабатывается";
+
+                var itemRowIndex = dgvJobs.Rows.Add(
+                    $"   • {itemStatus}",
+                    $"   └ {GetOrderDisplayId(order)}",
+                    GetFileName(item.SourcePath),
+                    BuildItemTitle(item),
+                    NormalizeAction(item.PitStopAction),
+                    NormalizeAction(item.ImposingAction),
+                    GetFileName(item.PrintPath),
+                    FormatDate(item.UpdatedAt),
+                    FormatDate(order.ArrivalDate));
+
+                dgvJobs.Rows[itemRowIndex].Tag = $"item|{order.InternalId}|{item.ItemId}";
+            }
+        }
+
+        private bool OrderMatchesSearch(OrderData order, string searchText)
+        {
+            if (order == null)
+                return false;
+
+            var query = searchText.Trim();
+            if (string.IsNullOrWhiteSpace(query))
+                return true;
+
+            static bool Contains(string source, string queryValue)
+                => !string.IsNullOrWhiteSpace(source) &&
+                   source.IndexOf(queryValue, StringComparison.OrdinalIgnoreCase) >= 0;
+
+            if (Contains(order.Id, query)
+                || Contains(Path.GetFileName(order.SourcePath), query)
+                || Contains(Path.GetFileName(order.PreparedPath), query)
+                || Contains(Path.GetFileName(order.PrintPath), query))
+            {
+                return true;
+            }
+
+            if (order.Items == null || order.Items.Count == 0)
+                return false;
+
+            foreach (var item in order.Items)
+            {
+                if (item == null)
+                    continue;
+
+                if (Contains(item.ClientFileLabel, query)
+                    || Contains(Path.GetFileName(item.SourcePath), query)
+                    || Contains(Path.GetFileName(item.PreparedPath), query)
+                    || Contains(Path.GetFileName(item.PrintPath), query))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private void TryRestoreSelectedRowByTag(string selectedTag)
+        {
+            foreach (DataGridViewRow row in dgvJobs.Rows)
+            {
+                if (string.Equals(row.Tag?.ToString(), selectedTag, StringComparison.Ordinal))
+                {
+                    dgvJobs.CurrentCell = row.Cells[colStatus.Index];
+                    return;
+                }
+            }
+        }
+
+        private OrderData? FindOrderByInternalId(string? internalId)
+        {
+            if (string.IsNullOrWhiteSpace(internalId))
+                return null;
+
+            return _orderHistory.FirstOrDefault(x => string.Equals(x.InternalId, internalId, StringComparison.Ordinal));
+        }
+
+        private static bool IsOrderTag(string? tag)
+        {
+            return !string.IsNullOrWhiteSpace(tag) && tag.StartsWith("order|", StringComparison.Ordinal);
+        }
+
+        private static bool IsItemTag(string? tag)
+        {
+            return !string.IsNullOrWhiteSpace(tag) && tag.StartsWith("item|", StringComparison.Ordinal);
+        }
+
+        private static string? ExtractOrderInternalIdFromTag(string? tag)
+        {
+            if (string.IsNullOrWhiteSpace(tag))
+                return null;
+
+            var parts = tag.Split('|');
+            if (parts.Length < 2)
+                return null;
+
+            return parts[1];
+        }
+
+        private static string GetOrderDisplayId(OrderData order)
+        {
+            return string.IsNullOrWhiteSpace(order.Id) ? "—" : order.Id.Trim();
+        }
+
+        private static string GetFileName(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return "...";
+
+            var normalizedPath = path.Trim();
+            if (Directory.Exists(normalizedPath))
+                return "...";
+
+            var fileName = Path.GetFileName(normalizedPath);
+            return string.IsNullOrWhiteSpace(fileName) ? "..." : fileName;
+        }
+
+        private static string FormatDate(DateTime value)
+        {
+            if (value == default)
+                return string.Empty;
+
+            return value.ToString("dd.MM.yyyy");
+        }
+
+        private static string NormalizeAction(string? action)
+        {
+            return string.IsNullOrWhiteSpace(action) ? "-" : action.Trim();
+        }
+
+        private static string GetCommonGroupAction(List<OrderFileItem> items, Func<OrderFileItem, string> selector)
+        {
+            if (items == null || items.Count == 0)
+                return "-";
+
+            var values = items
+                .Where(x => x != null)
+                .Select(x => NormalizeAction(selector(x)))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            return values.Count == 1 ? values[0] : "-";
+        }
+
+        private static string BuildGroupTitle(OrderData order)
+        {
+            var itemCount = order.Items?.Count ?? 0;
+            if (itemCount > 0)
+                return $"{itemCount} файлов";
+
+            return GetFileName(order.PreparedPath);
+        }
+
+        private static string BuildItemTitle(OrderFileItem item)
+        {
+            if (!string.IsNullOrWhiteSpace(item.ClientFileLabel))
+                return item.ClientFileLabel.Trim();
+
+            if (!string.IsNullOrWhiteSpace(item.PreparedPath))
+                return GetFileName(item.PreparedPath);
+
+            if (!string.IsNullOrWhiteSpace(item.SourcePath))
+                return GetFileName(item.SourcePath);
+
+            return "...";
         }
 
         private void LblFStatus_Click(object? sender, EventArgs e)
@@ -2357,14 +2725,21 @@ namespace MyManager
         {
             var hasSelectedStatuses = _selectedFilterStatuses.Count > 0;
             var hasOrderNoFilter = !string.IsNullOrWhiteSpace(_orderNumberFilterText);
+            var selectedQueueStatus = GetSelectedQueueStatusName();
+            var orderVisibilityByInternalId = new Dictionary<string, bool>(StringComparer.Ordinal);
 
             foreach (DataGridViewRow row in dgvJobs.Rows)
             {
                 if (row.IsNewRow)
                     continue;
 
+                var rowTag = row.Tag?.ToString();
+                if (IsItemTag(rowTag))
+                    continue;
+
                 var statusValue = row.Cells[colStatus.Index].Value?.ToString();
                 var normalizedStatus = NormalizeStatus(statusValue);
+                var queueMatches = MatchesQueueStatus(selectedQueueStatus, normalizedStatus);
                 var statusMatches = !hasSelectedStatuses || (normalizedStatus != null && _selectedFilterStatuses.Contains(normalizedStatus));
                 var orderNoValue = row.Cells[colOrderNumber.Index].Value?.ToString();
                 var orderNoMatches = !hasOrderNoFilter ||
@@ -2374,7 +2749,35 @@ namespace MyManager
                 var createdDateMatches = MatchesCreatedDateFilter(createdDateValue);
                 var receivedDateValue = row.Cells[colReceived.Index].Value?.ToString();
                 var receivedDateMatches = MatchesReceivedDateFilter(receivedDateValue);
-                var shouldShow = statusMatches && orderNoMatches && createdDateMatches && receivedDateMatches;
+                var shouldShow = queueMatches && statusMatches && orderNoMatches && createdDateMatches && receivedDateMatches;
+
+                var orderInternalId = ExtractOrderInternalIdFromTag(rowTag);
+                if (!string.IsNullOrWhiteSpace(orderInternalId))
+                    orderVisibilityByInternalId[orderInternalId] = shouldShow;
+
+                try
+                {
+                    row.Visible = shouldShow;
+                }
+                catch (InvalidOperationException)
+                {
+                    // Если строка управляется внешним DataSource, пропускаем скрытие без падения формы.
+                }
+            }
+
+            foreach (DataGridViewRow row in dgvJobs.Rows)
+            {
+                if (row.IsNewRow)
+                    continue;
+
+                var rowTag = row.Tag?.ToString();
+                if (!IsItemTag(rowTag))
+                    continue;
+
+                var orderInternalId = ExtractOrderInternalIdFromTag(rowTag);
+                var shouldShow = !string.IsNullOrWhiteSpace(orderInternalId) &&
+                                 orderVisibilityByInternalId.TryGetValue(orderInternalId, out var visible) &&
+                                 visible;
 
                 try
                 {
@@ -2478,6 +2881,10 @@ namespace MyManager
                 if (row.IsNewRow)
                     continue;
 
+                var rowTag = row.Tag?.ToString();
+                if (IsItemTag(rowTag))
+                    continue;
+
                 total++;
             }
 
@@ -2576,6 +2983,10 @@ namespace MyManager
                 if (row.IsNewRow)
                     continue;
 
+                var rowTag = row.Tag?.ToString();
+                if (IsItemTag(rowTag))
+                    continue;
+
                 var statusValue = row.Cells[colStatus.Index].Value?.ToString();
                 var normalizedStatus = NormalizeStatus(statusValue);
                 if (normalizedStatus == null)
@@ -2602,10 +3013,56 @@ namespace MyManager
                     return status;
             }
 
-            if (value.Contains("Готово", StringComparison.OrdinalIgnoreCase))
+            if (value.Contains("архив", StringComparison.OrdinalIgnoreCase))
+                return "В архиве";
+
+            if (value.Contains("отмен", StringComparison.OrdinalIgnoreCase))
+                return "Отменено";
+
+            if (value.Contains("ошиб", StringComparison.OrdinalIgnoreCase))
+                return "Ошибка";
+
+            if (value.Contains("сборк", StringComparison.OrdinalIgnoreCase)
+                || value.Contains("imposing", StringComparison.OrdinalIgnoreCase)
+                || value.Contains("pitstop", StringComparison.OrdinalIgnoreCase))
+                return "Выполняется сборка";
+
+            if (value.Contains("обрабатыва", StringComparison.OrdinalIgnoreCase)
+                || value.Contains("в работе", StringComparison.OrdinalIgnoreCase)
+                || value.Contains("запуск", StringComparison.OrdinalIgnoreCase))
+                return "Обрабатывается";
+
+            if (value.Contains("обработано", StringComparison.OrdinalIgnoreCase))
+                return "Обработано";
+
+            if (value.Contains("Готово", StringComparison.OrdinalIgnoreCase)
+                || value.Contains("Заверш", StringComparison.OrdinalIgnoreCase))
                 return "Завершено";
 
             return null;
+        }
+
+        private static bool MatchesQueueStatus(string? queueStatusName, string? normalizedWorkflowStatus)
+        {
+            if (string.IsNullOrWhiteSpace(queueStatusName)
+                || string.Equals(queueStatusName, "Все задания", StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            if (string.IsNullOrWhiteSpace(normalizedWorkflowStatus))
+                return false;
+
+            if (!QueueStatusMappings.TryGetValue(queueStatusName, out var mappedStatuses))
+                return false;
+
+            foreach (var mappedStatus in mappedStatuses)
+            {
+                if (string.Equals(mappedStatus, normalizedWorkflowStatus, StringComparison.Ordinal))
+                    return true;
+            }
+
+            return false;
         }
 
         private void ShowSettingsDialog()

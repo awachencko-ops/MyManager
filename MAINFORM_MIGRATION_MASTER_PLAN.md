@@ -64,7 +64,7 @@
 | `Состояние задания`, `Номер заказа` | `Form1` | `MainForm` popup-фильтры | Готово | Регрессия без визуальных дефектов |
 | `Пользователь` | `Form1` | `MainForm` + реальный источник пользователей | In progress | Убрать болванки |
 | `Дата поступления`, `Начало обработки` | `Form1` | `MainForm` + календари | In progress | Финальная стабилизация popup |
-| Топология заказа (`SingleFile`/`MultiFile`) | `Form1` (неявно) | Общий `OrderTopologyService` для всех форм/сервисов | In progress | Нормализация и единые правила везде |
+| Топология заказа (`SingleFile`/`MultiFile`) | `Form1` (неявно) | Общий `OrderTopologyService` для всех форм/сервисов | In progress | Нормализация и единые правила везде (включая загрузку в `MainForm`) |
 | Построение строк таблицы (`FillGrid` parity) | `Form1` | `MainForm` | Legacy only | Перенести полностью |
 | Контекстное меню таблицы | `Form1` + `UI/OrderGridContextMenu.cs` | `MainForm` | Legacy only | Подключить и валидировать |
 | `OrderProcessor` orchestration | `Form1` + `Services/OrderProcessor.cs` | `MainForm` + `Services` | Legacy only | Подключить run/stop/status |
@@ -144,7 +144,7 @@
 | Дата | Блок дня | Итог | Дефекты (кратко) | Решение |
 |---|---|---|---|---|
 | 2026-03-09 | Дата-фильтры и popup | Planned | - | - |
-| 2026-03-10 | Group-first + FillGrid parity | In progress | - | Нормализатор топологии добавлен |
+| 2026-03-10 | Group-first + FillGrid parity | In progress | - | Нормализатор топологии добавлен и подключен в загрузке `MainForm` |
 | 2026-03-11 | Контекстное меню + open/log | Planned | - | - |
 | 2026-03-12 | `OrderProcessor` интеграция | Planned | - | - |
 | 2026-03-13 | Drag&Drop + file ops | Planned | - | - |
