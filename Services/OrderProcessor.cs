@@ -25,6 +25,13 @@ namespace MyManager
 
         public async Task RunAsync(OrderData order, CancellationToken ct, IEnumerable<string>? selectedItemIds = null)
         {
+            var topologyResult = OrderTopologyService.Normalize(order);
+            if (topologyResult.Issues.Count > 0)
+            {
+                foreach (var issue in topologyResult.Issues)
+                    Logger.Warn($"TOPOLOGY | order={order.Id} | {issue}");
+            }
+
             var settings = AppSettings.Load();
             var timeout = TimeSpan.FromMinutes(settings.RunTimeoutMinutes);
             bool useExtendedMode = order.StartMode == OrderStartMode.Unknown

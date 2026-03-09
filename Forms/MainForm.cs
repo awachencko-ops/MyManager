@@ -2618,10 +2618,16 @@ namespace MyManager
                 _jsonHistoryFile,
                 _managerLogFilePath,
                 _orderLogsFolderPath,
-                AppSettings.Load().MaxParallelism);
+                AppSettings.Load().MaxParallelism,
+                showLegacyInterfaceSwitch: true);
 
             if (settingsForm.ShowDialog(this) != DialogResult.OK)
+            {
+                if (settingsForm.SwitchToLegacyRequested)
+                    Program.SwitchToLegacyInterface(this);
+
                 return;
+            }
 
             _ordersRootPath = settingsForm.OrdersRootPath;
             _tempRootPath = settingsForm.TempRootPath;

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Windows.Forms;
 
@@ -16,6 +16,7 @@ namespace MyManager
         private readonly TextBox _txtManagerLogFilePath = new TextBox();
         private readonly TextBox _txtOrderLogsFolderPath = new TextBox();
         private readonly NumericUpDown _numMaxParallelism = new NumericUpDown();
+        private readonly bool _showLegacyInterfaceSwitch;
 
         private readonly ActionManagerForm _pitStopForm;
         private readonly ImposingManagerForm _imposingForm;
@@ -28,6 +29,7 @@ namespace MyManager
         public string ManagerLogFilePath => _txtManagerLogFilePath.Text.Trim();
         public string OrderLogsFolderPath => _txtOrderLogsFolderPath.Text.Trim();
         public int MaxParallelism => (int)_numMaxParallelism.Value;
+        public bool SwitchToLegacyRequested { get; private set; }
 
         public SettingsDialogForm(
             string ordersRootPath,
@@ -37,8 +39,10 @@ namespace MyManager
             string historyFilePath,
             string managerLogFilePath,
             string orderLogsFolderPath,
-            int maxParallelism)
+            int maxParallelism,
+            bool showLegacyInterfaceSwitch = false)
         {
+            _showLegacyInterfaceSwitch = showLegacyInterfaceSwitch;
             Text = "Настройки";
             StartPosition = FormStartPosition.CenterParent;
             FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -164,6 +168,32 @@ namespace MyManager
                 ForeColor = Color.DimGray,
                 Text = "Если \"Папка логов заказов\" пустая, будет использоваться ./order-logs рядом с приложением."
             };
+
+            if (_showLegacyInterfaceSwitch)
+            {
+                var switchPanel = new Panel
+                {
+                    Dock = DockStyle.Top,
+                    Height = 56,
+                    Padding = new Padding(22, 8, 22, 8)
+                };
+
+                var btnSwitchToLegacy = new Button
+                {
+                    Text = "\u041f\u0435\u0440\u0435\u0439\u0442\u0438 \u043d\u0430 \u0441\u0442\u0430\u0440\u044b\u0439 \u0438\u043d\u0442\u0435\u0440\u0444\u0435\u0439\u0441",
+                    AutoSize = true,
+                    AutoSizeMode = AutoSizeMode.GrowAndShrink
+                };
+                btnSwitchToLegacy.Click += (s, e) =>
+                {
+                    SwitchToLegacyRequested = true;
+                    DialogResult = DialogResult.Cancel;
+                    Close();
+                };
+
+                switchPanel.Controls.Add(btnSwitchToLegacy);
+                page.Controls.Add(switchPanel);
+            }
 
             page.Controls.Add(hint);
             page.Controls.Add(panel);

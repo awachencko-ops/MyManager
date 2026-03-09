@@ -719,6 +719,9 @@ namespace MyManager
         private void FillGrid()
         {
             if (gridOrders.Columns.Count == 0) return;
+            if (NormalizeOrderTopologyInHistory(logIssues: false))
+                SaveHistory();
+
             PrepareGridCaches();
             RefreshArchivedStatuses();
             string? selTag = gridOrders.CurrentRow?.Tag?.ToString();
@@ -815,7 +818,7 @@ namespace MyManager
             => string.IsNullOrWhiteSpace(order.Id) ? "—" : order.Id;
 
         private bool IsVisualGroupOrder(OrderData order)
-            => order?.Items != null && order.Items.Count > 1;
+            => OrderTopologyService.IsMultiFileOrder(order);
 
         private string GetCommonGroupAction(List<OrderFileItem> items, Func<OrderFileItem, string> selector)
         {
@@ -2118,15 +2121,42 @@ namespace MyManager
                 if (order.ArrivalDate == default)
                     order.ArrivalDate = order.OrderDate != default ? order.OrderDate : DateTime.Now;
             }
+
+            if (NormalizeOrderTopologyInHistory(logIssues: true))
+                SaveHistory();
         }
 
         private void SaveHistory()
         {
+            NormalizeOrderTopologyInHistory(logIssues: false);
+
             string? dir = Path.GetDirectoryName(_jsonHistoryFile);
             if (!string.IsNullOrWhiteSpace(dir))
                 Directory.CreateDirectory(dir);
 
             File.WriteAllText(_jsonHistoryFile, JsonSerializer.Serialize(_orderHistory, new JsonSerializerOptions { WriteIndented = true }));
+        }
+
+        private bool NormalizeOrderTopologyInHistory(bool logIssues)
+        {
+            if (_orderHistory == null || _orderHistory.Count == 0)
+                return false;
+
+            var changed = false;
+            foreach (var order in _orderHistory)
+            {
+                var result = OrderTopologyService.Normalize(order);
+                if (result.Changed)
+                    changed = true;
+
+                if (!logIssues || result.Issues.Count == 0)
+                    continue;
+
+                foreach (var issue in result.Issues)
+                    Logger.Warn($"TOPOLOGY | order={GetOrderDisplayId(order)} | {issue}");
+            }
+
+            return changed;
         }
         private bool SetOrderStatus(OrderData o, string s, string source = "manual", string reason = "", bool refreshGrid = true, bool persistHistory = true)
         {
