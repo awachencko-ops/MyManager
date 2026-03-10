@@ -514,9 +514,18 @@ namespace MyManager
         {
             dgvJobs.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             dgvJobs.MultiSelect = false;
-            dgvJobs.EnableHeadersVisualStyles = false;
             dgvJobs.DefaultCellStyle.SelectionBackColor = OrdersRowSelectedBackColor;
             dgvJobs.DefaultCellStyle.SelectionForeColor = Color.Black;
+            dgvJobs.EnableHeadersVisualStyles = true;
+
+            var headerBackColor = dgvJobs.ColumnHeadersDefaultCellStyle.BackColor.IsEmpty
+                ? SystemColors.Control
+                : dgvJobs.ColumnHeadersDefaultCellStyle.BackColor;
+            var headerForeColor = dgvJobs.ColumnHeadersDefaultCellStyle.ForeColor.IsEmpty
+                ? SystemColors.ControlText
+                : dgvJobs.ColumnHeadersDefaultCellStyle.ForeColor;
+            dgvJobs.ColumnHeadersDefaultCellStyle.SelectionBackColor = headerBackColor;
+            dgvJobs.ColumnHeadersDefaultCellStyle.SelectionForeColor = headerForeColor;
 
             dgvJobs.CellFormatting += DgvJobs_CellFormatting;
             dgvJobs.CellMouseEnter += DgvJobs_CellMouseEnter;
