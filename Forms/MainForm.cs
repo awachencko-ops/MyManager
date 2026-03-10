@@ -517,15 +517,10 @@ namespace MyManager
             dgvJobs.DefaultCellStyle.SelectionBackColor = OrdersRowSelectedBackColor;
             dgvJobs.DefaultCellStyle.SelectionForeColor = Color.Black;
             dgvJobs.EnableHeadersVisualStyles = true;
-
-            var headerBackColor = dgvJobs.ColumnHeadersDefaultCellStyle.BackColor.IsEmpty
-                ? SystemColors.Control
-                : dgvJobs.ColumnHeadersDefaultCellStyle.BackColor;
-            var headerForeColor = dgvJobs.ColumnHeadersDefaultCellStyle.ForeColor.IsEmpty
-                ? SystemColors.ControlText
-                : dgvJobs.ColumnHeadersDefaultCellStyle.ForeColor;
-            dgvJobs.ColumnHeadersDefaultCellStyle.SelectionBackColor = headerBackColor;
-            dgvJobs.ColumnHeadersDefaultCellStyle.SelectionForeColor = headerForeColor;
+            dgvJobs.ColumnHeadersDefaultCellStyle.BackColor = Color.White;
+            dgvJobs.ColumnHeadersDefaultCellStyle.ForeColor = Color.Black;
+            dgvJobs.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.White;
+            dgvJobs.ColumnHeadersDefaultCellStyle.SelectionForeColor = Color.Black;
 
             dgvJobs.CellPainting += DgvJobs_CellPainting;
             dgvJobs.CellFormatting += DgvJobs_CellFormatting;
@@ -1019,26 +1014,11 @@ namespace MyManager
             if (e.RowIndex != -1 || e.ColumnIndex < 0)
                 return;
 
-            var mouseClient = dgvJobs.PointToClient(Cursor.Position);
-            var hit = dgvJobs.HitTest(mouseClient.X, mouseClient.Y);
-            var isHoveredHeader = hit.RowIndex == -1 && hit.ColumnIndex == e.ColumnIndex;
-
-            if (isHoveredHeader)
-            {
-                // Keep native hover look on the header under cursor.
-                e.Paint(e.CellBounds, e.PaintParts);
-                e.Handled = true;
-                return;
-            }
-
-            // For non-hovered headers, paint a neutral background so "active column" is not highlighted.
-            var headerBackColor = dgvJobs.ColumnHeadersDefaultCellStyle.BackColor.IsEmpty
-                ? SystemColors.Control
-                : dgvJobs.ColumnHeadersDefaultCellStyle.BackColor;
-            using var backBrush = new SolidBrush(headerBackColor);
+            using var backBrush = new SolidBrush(Color.White);
             e.Graphics.FillRectangle(backBrush, e.CellBounds);
-            e.Paint(e.CellBounds, DataGridViewPaintParts.Border);
-            e.PaintContent(e.CellBounds);
+            e.Paint(
+                e.CellBounds,
+                e.PaintParts & ~(DataGridViewPaintParts.Background | DataGridViewPaintParts.SelectionBackground));
             e.Handled = true;
         }
 
