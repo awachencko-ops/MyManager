@@ -35,6 +35,9 @@ namespace MyManager
         private OrderProcessor? _processor;
         private bool _isRebuildingGrid;
         private int _hoveredRowIndex = -1;
+        private Rectangle _dragBoxFromMouseDown = Rectangle.Empty;
+        private int _dragSourceRowIndex = -1;
+        private int _dragSourceColumnIndex = -1;
 
         // На будущее: список пользователей можно наполнять из настроек/БД.
         private readonly List<string> _users = ["Сервер \"Таудеми\""];
@@ -544,6 +547,8 @@ namespace MyManager
             dgvJobs.CellClick += DgvJobs_CellClick;
             dgvJobs.CellMouseEnter += DgvJobs_CellMouseEnter;
             dgvJobs.CellMouseLeave += DgvJobs_CellMouseLeave;
+            dgvJobs.MouseDown += DgvJobs_MouseDown;
+            dgvJobs.MouseMove += DgvJobs_MouseMove;
             dgvJobs.DragEnter += DgvJobs_DragEnter;
             dgvJobs.DragOver += DgvJobs_DragOver;
             dgvJobs.DragDrop += DgvJobs_DragDrop;
@@ -608,6 +613,71 @@ namespace MyManager
             _ctxDeleteMenuItem.Enabled = order != null;
 
             _orderRowContextMenu.Show(Cursor.Position);
+        }
+
+        private void DgvJobs_MouseDown(object? sender, MouseEventArgs e)
+        {
+            _dragBoxFromMouseDown = Rectangle.Empty;
+            _dragSourceRowIndex = -1;
+            _dragSourceColumnIndex = -1;
+
+            if (e.Button != MouseButtons.Left)
+                return;
+
+            var hit = dgvJobs.HitTest(e.X, e.Y);
+            if (hit.RowIndex < 0 || hit.ColumnIndex < 0)
+                return;
+
+            var stage = GetStageByColumnIndex(hit.ColumnIndex);
+            if (stage == 0)
+                return;
+
+            var rowTag = dgvJobs.Rows[hit.RowIndex].Tag?.ToString();
+            if (string.IsNullOrWhiteSpace(rowTag))
+                return;
+
+            var order = GetOrderByRowIndex(hit.RowIndex);
+            if (order == null)
+                return;
+
+            if (IsOrderTag(rowTag) && OrderTopologyService.IsMultiFileOrder(order))
+                return;
+
+            _dragSourceRowIndex = hit.RowIndex;
+            _dragSourceColumnIndex = hit.ColumnIndex;
+
+            var dragSize = SystemInformation.DragSize;
+            _dragBoxFromMouseDown = new Rectangle(
+                new Point(e.X - (dragSize.Width / 2), e.Y - (dragSize.Height / 2)),
+                dragSize);
+        }
+
+        private void DgvJobs_MouseMove(object? sender, MouseEventArgs e)
+        {
+            if ((e.Button & MouseButtons.Left) != MouseButtons.Left)
+                return;
+
+            if (_dragBoxFromMouseDown == Rectangle.Empty || _dragBoxFromMouseDown.Contains(e.X, e.Y))
+                return;
+
+            if (_dragSourceRowIndex < 0 || _dragSourceColumnIndex < 0)
+                return;
+
+            var stage = GetStageByColumnIndex(_dragSourceColumnIndex);
+            if (stage == 0)
+                return;
+
+            var sourcePath = GetDragSourceFilePath(_dragSourceRowIndex, stage);
+            if (!HasExistingFile(sourcePath))
+                return;
+
+            var dragData = new DataObject();
+            dragData.SetData(DataFormats.FileDrop, new[] { sourcePath });
+            dragData.SetData("InternalSourceColumn", _dragSourceColumnIndex);
+            dragData.SetData("InternalSourceRow", _dragSourceRowIndex);
+
+            _dragBoxFromMouseDown = Rectangle.Empty;
+            dgvJobs.DoDragDrop(dragData, DragDropEffects.Copy | DragDropEffects.Move);
         }
 
         private void InitializeStatusFilter()
@@ -1518,6 +1588,33 @@ namespace MyManager
                 3 => item.PrintPath ?? string.Empty,
                 _ => string.Empty
             };
+        }
+
+        private string GetDragSourceFilePath(int rowIndex, int stage)
+        {
+            if (rowIndex < 0 || rowIndex >= dgvJobs.Rows.Count)
+                return string.Empty;
+
+            var rowTag = dgvJobs.Rows[rowIndex].Tag?.ToString();
+            if (string.IsNullOrWhiteSpace(rowTag))
+                return string.Empty;
+
+            var order = GetOrderByRowIndex(rowIndex);
+            if (order == null)
+                return string.Empty;
+
+            if (IsItemTag(rowTag))
+            {
+                if (!TryGetItemByRowIndex(rowIndex, out _, out var item) || item == null)
+                    return string.Empty;
+
+                return GetItemStagePath(item, stage);
+            }
+
+            if (!IsOrderTag(rowTag) || OrderTopologyService.IsMultiFileOrder(order))
+                return string.Empty;
+
+            return GetOrderStagePath(order, stage);
         }
 
         private static void SetItemStagePath(OrderFileItem item, int stage, string path)
