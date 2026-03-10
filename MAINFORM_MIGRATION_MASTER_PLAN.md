@@ -57,21 +57,21 @@
 
 ## 3. Карта переноса (старое -> новое)
 
-| Функциональный блок | Источник в legacy | Целевая реализация | Статус на 2026-03-06 | Цель на неделе |
+| Функциональный блок | Источник в legacy | Целевая реализация | Статус на 2026-03-10 (факт) | Цель на неделе |
 |---|---|---|---|---|
 | Startup/Shell | `Forms/Archive/Form1.cs` | `Forms/MainForm.cs` | Готово | Подтверждение стабильности |
 | Дерево очереди + `cbQueue` | `Form1` | `MainForm` | Готово | Подтверждение счетчиков и sync |
 | `Состояние задания`, `Номер заказа` | `Form1` | `MainForm` popup-фильтры | Готово | Регрессия без визуальных дефектов |
 | `Пользователь` | `Form1` | `MainForm` + реальный источник пользователей | In progress | Убрать болванки |
-| `Дата поступления`, `Начало обработки` | `Form1` | `MainForm` + календари | In progress | Финальная стабилизация popup |
+| `Дата поступления`, `Начало обработки` | `Form1` | `MainForm` + календари | Готово (popup-стабилизация) | Финальная стабилизация popup |
 | Топология заказа (`SingleFile`/`MultiFile`) | `Form1` (неявно) | Общий `OrderTopologyService` для всех форм/сервисов | In progress | Нормализация и единые правила везде (включая загрузку в `MainForm`) |
-| Построение строк таблицы (`FillGrid` parity) | `Form1` | `MainForm` | Legacy only | Перенести полностью |
-| Контекстное меню таблицы | `Form1` + `UI/OrderGridContextMenu.cs` | `MainForm` | Legacy only | Подключить и валидировать |
-| `OrderProcessor` orchestration | `Form1` + `Services/OrderProcessor.cs` | `MainForm` + `Services` | Legacy only | Подключить run/stop/status |
-| Drag&Drop и файловые операции | `Form1` | `MainForm` + `Services` | Legacy only | Перенести и протестировать |
-| Форматирование/tooltip/hover | `Form1` | `MainForm` | Legacy only | Довести UI parity |
-| Группы и item-строки | `Form1` | `MainForm` | Legacy only | Перенести convert/add/toggle |
-| Просмотр лога заказа | `Form1` + `Forms/OrderLogViewerForm.cs` | `MainForm` | Legacy only | Подключить из новой формы |
+| Построение строк таблицы (`FillGrid` parity) | `Form1` | `MainForm` | In progress (ядро + `Tag` перенесены) | Перенести полностью |
+| Контекстное меню таблицы | `Form1` + `UI/OrderGridContextMenu.cs` | `MainForm` | In progress (базовый ПКМ без column-actions) | Подключить и валидировать |
+| `OrderProcessor` orchestration | `Form1` + `Services/OrderProcessor.cs` | `MainForm` + `Services` | In progress (run/stop/status подключены) | Подключить run/stop/status |
+| Drag&Drop и файловые операции | `Form1` | `MainForm` + `Services` | In progress (основные сценарии перенесены) | Перенести и протестировать |
+| Форматирование/tooltip/hover | `Form1` | `MainForm` | In progress (tooltip legacy не перенесён) | Довести UI parity |
+| Группы и item-строки | `Form1` | `MainForm` | In progress (expand/collapse есть; convert/add pending) | Перенести convert/add/toggle |
+| Просмотр лога заказа | `Form1` + `Forms/OrderLogViewerForm.cs` | `MainForm` | Готово | Подключить из новой формы |
 | Менеджеры PitStop/Imposing | `Form1` | `MainForm` | Legacy only | Подключить точки входа |
 
 ## 4. Недельный план (исполнение + проверка)
@@ -143,10 +143,16 @@
 
 | Дата | Блок дня | Итог | Дефекты (кратко) | Решение |
 |---|---|---|---|---|
-| 2026-03-09 | Дата-фильтры и popup | Planned | - | - |
-| 2026-03-10 | Group-first + FillGrid parity | In progress | - | Нормализатор топологии добавлен и подключен в загрузке `MainForm` |
+| 2026-03-09 | Дата-фильтры и popup | Done | - | Popup-календари и закрытие по клику стабилизированы |
+| 2026-03-10 | Group-first + FillGrid parity | In progress | Не завершена сверка parity на одном наборе данных | Нормализатор топологии подключен, `RebuildOrdersGrid` и `Tag`-модель перенесены, добавлен базовый ПКМ |
 | 2026-03-11 | Контекстное меню + open/log | Planned | - | - |
 | 2026-03-12 | `OrderProcessor` интеграция | Planned | - | - |
 | 2026-03-13 | Drag&Drop + file ops | Planned | - | - |
 | 2026-03-14 | UX parity + group/item + managers | Planned | - | - |
 | 2026-03-15 | Полная регрессия и Go/No-Go | Planned | - | - |
+
+## 8. Следующий шаг (2026-03-11)
+
+1. Подключить в `MainForm` полноценный `UI/OrderGridContextMenu` вместо текущего базового row-only меню.
+2. Довести действия ПКМ до legacy-паритета для колонок `colSource`/`colPrep`/`colPrint`/`colState` (open/pick/remove/rename/copy path/open log).
+3. Прогнать ручную проверку ПКМ на `order`, `item`, пустой области; зафиксировать дефекты и обновить статус строки `2026-03-11`.
