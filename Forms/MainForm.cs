@@ -3480,6 +3480,7 @@ namespace MyManager
 
         private void ShowSettingsDialog()
         {
+            var currentSettings = AppSettings.Load();
             using var settingsForm = new SettingsDialogForm(
                 _ordersRootPath,
                 _tempRootPath,
@@ -3488,7 +3489,8 @@ namespace MyManager
                 _jsonHistoryFile,
                 _managerLogFilePath,
                 _orderLogsFolderPath,
-                AppSettings.Load().MaxParallelism,
+                currentSettings.MaxParallelism,
+                useExtendedMode: currentSettings.UseExtendedMode,
                 showLegacyInterfaceSwitch: true);
 
             if (settingsForm.ShowDialog(this) != DialogResult.OK)
@@ -3516,6 +3518,7 @@ namespace MyManager
             settings.ManagerLogFilePath = _managerLogFilePath;
             settings.OrderLogsFolderPath = _orderLogsFolderPath;
             settings.MaxParallelism = settingsForm.MaxParallelism;
+            settings.UseExtendedMode = settingsForm.UseExtendedMode;
             settings.Save();
 
             Logger.LogFilePath = _managerLogFilePath;

@@ -12,7 +12,7 @@ namespace MyManager
         public string ArchiveDoneSubfolder { get; set; } = "Готово";
 
         public int RunTimeoutMinutes { get; set; } = 10;
-        public bool UseExtendedMode { get; set; } = true;
+        public bool UseExtendedMode { get; set; } = false;
         public string TempFolderName { get; set; } = "TempMyManager";
         public string TempFolderPath { get; set; } = "";
         public bool SortArrivalDescending { get; set; } = true;

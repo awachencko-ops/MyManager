@@ -16,6 +16,7 @@ namespace MyManager
         private readonly TextBox _txtManagerLogFilePath = new TextBox();
         private readonly TextBox _txtOrderLogsFolderPath = new TextBox();
         private readonly NumericUpDown _numMaxParallelism = new NumericUpDown();
+        private readonly CheckBox _chkUseExtendedMode = new CheckBox();
         private readonly bool _showLegacyInterfaceSwitch;
 
         private readonly ActionManagerForm _pitStopForm;
@@ -29,6 +30,7 @@ namespace MyManager
         public string ManagerLogFilePath => _txtManagerLogFilePath.Text.Trim();
         public string OrderLogsFolderPath => _txtOrderLogsFolderPath.Text.Trim();
         public int MaxParallelism => (int)_numMaxParallelism.Value;
+        public bool UseExtendedMode => _chkUseExtendedMode.Checked;
         public bool SwitchToLegacyRequested { get; private set; }
 
         public SettingsDialogForm(
@@ -40,6 +42,7 @@ namespace MyManager
             string managerLogFilePath,
             string orderLogsFolderPath,
             int maxParallelism,
+            bool useExtendedMode = false,
             bool showLegacyInterfaceSwitch = false)
         {
             _showLegacyInterfaceSwitch = showLegacyInterfaceSwitch;
@@ -77,7 +80,8 @@ namespace MyManager
                 historyFilePath,
                 managerLogFilePath,
                 orderLogsFolderPath,
-                maxParallelism));
+                maxParallelism,
+                useExtendedMode));
             _tabs.TabPages.Add(CreateEmbeddedManagerTab("Диспетчер PitStop", _pitStopForm));
             _tabs.TabPages.Add(CreateEmbeddedManagerTab("Диспетчер Imposing", _imposingForm));
 
@@ -131,7 +135,8 @@ namespace MyManager
             string historyFilePath,
             string managerLogFilePath,
             string orderLogsFolderPath,
-            int maxParallelism)
+            int maxParallelism,
+            bool useExtendedMode)
         {
             var page = new TabPage("Основное");
 
@@ -140,14 +145,14 @@ namespace MyManager
                 Dock = DockStyle.Top,
                 AutoSize = true,
                 ColumnCount = 3,
-                RowCount = 8,
+                RowCount = 9,
                 Padding = new Padding(18, 18, 18, 0)
             };
 
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 270));
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140));
-            for (int i = 0; i < 8; i++)
+            for (int i = 0; i < 9; i++)
                 panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
 
             AddRow(panel, 0, "Папка хранения заказов", _txtOrdersRoot, ordersRootPath, true);
@@ -159,6 +164,7 @@ namespace MyManager
             AddRow(panel, 6, "Папка логов заказов (опц.)", _txtOrderLogsFolderPath, orderLogsFolderPath, true, optional: true);
 
             AddNumericRow(panel, 7, "Параллельных item (0=без лимита)", _numMaxParallelism, maxParallelism);
+            AddCheckboxRow(panel, 8, "Режим обработки", _chkUseExtendedMode, useExtendedMode, "Вкл. — расширенный; выкл. — простой.");
 
             var hint = new Label
             {
@@ -198,6 +204,42 @@ namespace MyManager
             page.Controls.Add(hint);
             page.Controls.Add(panel);
             return page;
+        }
+
+        private void AddCheckboxRow(TableLayoutPanel panel, int row, string labelText, CheckBox box, bool value, string hintText)
+        {
+            var label = new Label
+            {
+                Text = labelText,
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleLeft,
+                AutoSize = false
+            };
+
+            box.Text = "Расширенный режим";
+            box.Checked = value;
+            box.AutoSize = true;
+            box.Dock = DockStyle.Left;
+            box.Margin = new Padding(0, 10, 8, 6);
+
+            var boxHost = new Panel
+            {
+                Dock = DockStyle.Fill
+            };
+            boxHost.Controls.Add(box);
+
+            var lblHint = new Label
+            {
+                Text = hintText,
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleLeft,
+                ForeColor = Color.DimGray,
+                AutoSize = false
+            };
+
+            panel.Controls.Add(label, 0, row);
+            panel.Controls.Add(boxHost, 1, row);
+            panel.Controls.Add(lblHint, 2, row);
         }
 
         private void AddNumericRow(TableLayoutPanel panel, int row, string labelText, NumericUpDown box, int value)

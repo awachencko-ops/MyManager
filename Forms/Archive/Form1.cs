@@ -25,7 +25,7 @@ namespace MyManager
         private string _archiveDoneSubfolder = "Готово";
         private string _managerLogFilePath = "manager.log";
         private string _orderLogsFolderPath = "";
-        private bool _useExtendedMode = true;
+        private bool _useExtendedMode = false;
         private bool _sortArrivalDescending = true;
         private readonly Dictionary<string, bool> _fileExistsCache = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _archivedFileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -2402,6 +2402,7 @@ namespace MyManager
 
         private void ShowSettingsDialog()
         {
+            var currentSettings = AppSettings.Load();
             using var settingsForm = new SettingsDialogForm(
                 _ordersRootPath,
                 _tempRootPath,
@@ -2410,7 +2411,8 @@ namespace MyManager
                 _jsonHistoryFile,
                 _managerLogFilePath,
                 _orderLogsFolderPath,
-                AppSettings.Load().MaxParallelism);
+                currentSettings.MaxParallelism,
+                useExtendedMode: currentSettings.UseExtendedMode);
             if (settingsForm.ShowDialog(this) != DialogResult.OK)
                 return;
 
@@ -2431,11 +2433,14 @@ namespace MyManager
             settings.ManagerLogFilePath = _managerLogFilePath;
             settings.OrderLogsFolderPath = _orderLogsFolderPath;
             settings.MaxParallelism = settingsForm.MaxParallelism;
+            settings.UseExtendedMode = settingsForm.UseExtendedMode;
             settings.Save();
             Logger.LogFilePath = _managerLogFilePath;
+            _useExtendedMode = settings.UseExtendedMode;
 
             EnsureTempFolders();
             InitializeProcessor();
+            UpdateTopButtons();
             SetBottomStatus("Настройки сохранены");
         }
 
