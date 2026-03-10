@@ -518,6 +518,9 @@ namespace MyManager
             dgvJobs.DefaultCellStyle.SelectionForeColor = Color.Black;
             dgvJobs.EnableHeadersVisualStyles = true;
 
+            foreach (DataGridViewColumn column in dgvJobs.Columns)
+                column.SortMode = DataGridViewColumnSortMode.NotSortable;
+
             var headerBackColor = dgvJobs.ColumnHeadersDefaultCellStyle.BackColor.IsEmpty
                 ? SystemColors.Control
                 : dgvJobs.ColumnHeadersDefaultCellStyle.BackColor;
