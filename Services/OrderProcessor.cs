@@ -34,9 +34,6 @@ namespace MyManager
 
             var settings = AppSettings.Load();
             var timeout = TimeSpan.FromMinutes(settings.RunTimeoutMinutes);
-            bool useExtendedMode = order.StartMode == OrderStartMode.Unknown
-                ? settings.UseExtendedMode
-                : order.StartMode == OrderStartMode.Extended;
             string tempRoot = string.IsNullOrWhiteSpace(settings.TempFolderPath)
                 ? Path.Combine(_rootPath, settings.TempFolderName)
                 : settings.TempFolderPath;
@@ -48,7 +45,7 @@ namespace MyManager
 
             if (order.Items != null && order.Items.Count > 0)
             {
-                await RunGroupAsync(order, settings, timeout, useExtendedMode, tempRoot, selectedSet, ct);
+                await RunGroupAsync(order, settings, timeout, tempRoot, selectedSet, ct);
                 return;
             }
 
@@ -117,7 +114,7 @@ namespace MyManager
                     if (outFile == null) throw new Exception("Таймаут Imposing.");
 
                     string printName = $"{order.Id}.pdf";
-                    if (useExtendedMode)
+                    if (ShouldStoreInOrderFolder(order))
                     {
                         order.PrintPath = CopyIntoStage(order, 3, outFile, printName, tempRoot);
                         try { File.Delete(outFile); } catch { }
@@ -131,7 +128,7 @@ namespace MyManager
 
                 if (!string.IsNullOrEmpty(order.PrintPath) && File.Exists(order.PrintPath))
                 {
-                    if (useExtendedMode)
+                    if (ShouldStoreInOrderFolder(order))
                         MoveTempToOrderFolder(order, tempRoot);
                     else if (!IsInGrandpa(order.PrintPath, settings.GrandpaPath))
                         MovePrintToGrandpa(order, settings.GrandpaPath);
@@ -151,7 +148,7 @@ namespace MyManager
             }
         }
 
-        private async Task RunGroupAsync(OrderData order, AppSettings settings, TimeSpan timeout, bool useExtendedMode, string tempRoot, HashSet<string>? selectedSet, CancellationToken ct)
+        private async Task RunGroupAsync(OrderData order, AppSettings settings, TimeSpan timeout, string tempRoot, HashSet<string>? selectedSet, CancellationToken ct)
         {
             var allItems = order.Items
                 .Where(x => x != null)
@@ -182,7 +179,7 @@ namespace MyManager
                     item.UpdatedAt = DateTime.Now;
                     order.RefreshAggregatedStatus();
                     Notify(order, order.Status, $"Обработка {item.ClientFileLabel}");
-                    await RunSingleItemAsync(order, item, itemIndex, settings, timeout, useExtendedMode, tempRoot, ct);
+                    await RunSingleItemAsync(order, item, itemIndex, settings, timeout, tempRoot, ct);
                 }
                 catch (OperationCanceledException)
                 {
@@ -218,7 +215,7 @@ namespace MyManager
             Notify(order, order.Status, "Обработка группы завершена");
         }
 
-        private async Task RunSingleItemAsync(OrderData order, OrderFileItem item, int itemIndex, AppSettings settings, TimeSpan timeout, bool useExtendedMode, string tempRoot, CancellationToken ct)
+        private async Task RunSingleItemAsync(OrderData order, OrderFileItem item, int itemIndex, AppSettings settings, TimeSpan timeout, string tempRoot, CancellationToken ct)
         {
             string pitAction = string.IsNullOrWhiteSpace(item.PitStopAction) || item.PitStopAction == "-"
                 ? order.PitStopAction
@@ -275,7 +272,7 @@ namespace MyManager
 
                 string printNameBase = string.IsNullOrWhiteSpace(order.Id) ? "order" : order.Id;
                 string printName = $"{printNameBase}_{itemIndex}.pdf";
-                if (useExtendedMode)
+                if (ShouldStoreInOrderFolder(order))
                 {
                     item.PrintPath = CopyIntoStage(order, 3, outFile, printName, tempRoot);
                     try { File.Delete(outFile); } catch { }
@@ -290,6 +287,11 @@ namespace MyManager
             item.FileStatus = !string.IsNullOrWhiteSpace(item.PrintPath) && File.Exists(item.PrintPath) ? "✅ Готово" : "⚪ Ожидание";
             item.LastReason = string.Empty;
             item.UpdatedAt = DateTime.Now;
+        }
+
+        private static bool ShouldStoreInOrderFolder(OrderData order)
+        {
+            return !string.IsNullOrWhiteSpace(order.FolderName);
         }
 
         private string EnsureUniquePath(string fullPath)

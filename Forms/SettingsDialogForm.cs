@@ -164,7 +164,7 @@ namespace MyManager
             AddRow(panel, 6, "Папка логов заказов (опц.)", _txtOrderLogsFolderPath, orderLogsFolderPath, true, optional: true);
 
             AddNumericRow(panel, 7, "Параллельных item (0=без лимита)", _numMaxParallelism, maxParallelism);
-            AddCheckboxRow(panel, 8, "Режим обработки", _chkUseExtendedMode, useExtendedMode, "Вкл. — расширенный; выкл. — простой.");
+            AddCheckboxRow(panel, 8, "Форма заказа", _chkUseExtendedMode, useExtendedMode, "Вкл. — расширенная форма; выкл. — простая.");
 
             var hint = new Label
             {
@@ -216,7 +216,7 @@ namespace MyManager
                 AutoSize = false
             };
 
-            box.Text = "Расширенный режим";
+            box.Text = "Расширенная форма заказа";
             box.Checked = value;
             box.AutoSize = true;
             box.Dock = DockStyle.Left;

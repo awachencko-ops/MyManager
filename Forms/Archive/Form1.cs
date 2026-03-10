@@ -321,7 +321,7 @@ namespace MyManager
             // 1. Очищаем входящий путь от кавычек и пробелов (частая причина глюков)
             sourceFile = sourceFile.Trim().Replace("\"", "");
 
-            if (stage == 3 && GetOrderStartMode(o) == OrderStartMode.Simple)
+            if (stage == 3 && !UsesOrderFolderStorage(o))
                 return CopyToGrandpaFromSource(sourceFile, targetName);
 
             string folder = GetStageFolder(o, stage);
@@ -1013,19 +1013,16 @@ namespace MyManager
                 _ctxRow = e.RowIndex; _ctxCol = e.ColumnIndex;
                 gridOrders.CurrentCell = gridOrders.Rows[e.RowIndex].Cells[e.ColumnIndex];
                 var order = GetOrderByRow(e.RowIndex);
-                bool allowCopyToGrandpa = order == null || ResolveMenuStartMode(order) != OrderStartMode.Simple;
+                bool allowCopyToGrandpa = order == null || UsesOrderFolderStorage(order);
                 bool canConvertToGroup = order != null && (order.Items == null || order.Items.Count == 0);
                 bool canConvertToSingle = order != null && order.Items != null && order.Items.Count == 1;
                 _gridMenu.Build(gridOrders.Columns[e.ColumnIndex].Name, allowCopyToGrandpa, canConvertToGroup, canConvertToSingle).Show(Cursor.Position);
             }
         }
 
-        private OrderStartMode ResolveMenuStartMode(OrderData order)
+        private static bool UsesOrderFolderStorage(OrderData order)
         {
-            if (order.StartMode == OrderStartMode.Unknown)
-                return _useExtendedMode ? OrderStartMode.Extended : OrderStartMode.Simple;
-
-            return order.StartMode;
+            return !string.IsNullOrWhiteSpace(order.FolderName);
         }
 
         private enum GroupRunMode
@@ -2004,7 +2001,7 @@ namespace MyManager
 
         private string CopyPrintFile(OrderData order, string sourceFile, string targetName)
         {
-            if (GetOrderStartMode(order) == OrderStartMode.Simple)
+            if (!UsesOrderFolderStorage(order))
                 return CopyToGrandpaFromSource(sourceFile, targetName);
 
             return CopyIntoStage(order, 3, sourceFile, targetName);
