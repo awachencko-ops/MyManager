@@ -1024,18 +1024,25 @@ namespace MyManager
             {
                 // Keep native hover look on the header under cursor.
                 e.Paint(e.CellBounds, e.PaintParts);
-                e.Handled = true;
-                return;
             }
 
-            using var backBrush = new SolidBrush(Color.White);
-            e.Graphics.FillRectangle(backBrush, e.CellBounds);
-            e.Paint(
-                e.CellBounds,
-                DataGridViewPaintParts.Border |
-                DataGridViewPaintParts.ContentForeground |
-                DataGridViewPaintParts.ErrorIcon |
-                DataGridViewPaintParts.Focus);
+            if (!isHoveredHeader)
+            {
+                using var backBrush = new SolidBrush(Color.White);
+                e.Graphics.FillRectangle(backBrush, e.CellBounds);
+                e.Paint(
+                    e.CellBounds,
+                    DataGridViewPaintParts.ContentForeground |
+                    DataGridViewPaintParts.ErrorIcon |
+                    DataGridViewPaintParts.Focus);
+            }
+
+            // Draw header separators with the same color as the table grid.
+            using var gridPen = new Pen(dgvJobs.GridColor);
+            if (e.ColumnIndex == 0)
+                e.Graphics.DrawLine(gridPen, e.CellBounds.Left, e.CellBounds.Top, e.CellBounds.Left, e.CellBounds.Bottom - 1);
+            e.Graphics.DrawLine(gridPen, e.CellBounds.Right - 1, e.CellBounds.Top, e.CellBounds.Right - 1, e.CellBounds.Bottom - 1);
+            e.Graphics.DrawLine(gridPen, e.CellBounds.Left, e.CellBounds.Bottom - 1, e.CellBounds.Right - 1, e.CellBounds.Bottom - 1);
             e.Handled = true;
         }
 
