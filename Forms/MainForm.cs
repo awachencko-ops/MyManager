@@ -45,7 +45,7 @@ namespace MyManager
         // Сопоставление рабочих статусов с группами очереди (treeView1/cbQueue):
         // Обработанные: Обработано
         // В архиве: В архиве
-        // Обрабатывается: Выполняется сборка, Обрабатывается
+        // Обрабатывается: Выполняется сборка, Обрабатывается, Ожидание
         // Задержанные: Отменено, Ошибка
         // Завершено: Завершено
         private static readonly string[] FilterStatuses =
@@ -54,6 +54,7 @@ namespace MyManager
             "В архиве",
             "Выполняется сборка",
             "Обрабатывается",
+            "Ожидание",
             "Отменено",
             "Ошибка",
             "Завершено"
@@ -74,7 +75,7 @@ namespace MyManager
         {
             ["Обработанные"] = ["Обработано"],
             ["В архиве"] = ["В архиве"],
-            ["Обрабатывается"] = ["Выполняется сборка", "Обрабатывается"],
+            ["Обрабатывается"] = ["Выполняется сборка", "Обрабатывается", "Ожидание"],
             ["Задержанные"] = ["Отменено", "Ошибка"],
             ["Завершено"] = ["Завершено"]
         };
@@ -304,7 +305,7 @@ namespace MyManager
                 ArrivalDate = DateTime.Now,
                 OrderDate = form.OrderDate,
                 FolderName = string.Empty,
-                Status = "⚪ Ожидание",
+                Status = "Ожидание",
                 PitStopAction = "-",
                 ImposingAction = "-"
             };
@@ -3508,6 +3509,9 @@ namespace MyManager
                 || value.Contains("в работе", StringComparison.OrdinalIgnoreCase)
                 || value.Contains("запуск", StringComparison.OrdinalIgnoreCase))
                 return "Обрабатывается";
+
+            if (value.Contains("ожид", StringComparison.OrdinalIgnoreCase))
+                return "Ожидание";
 
             if (value.Contains("обработано", StringComparison.OrdinalIgnoreCase))
                 return "Обработано";
