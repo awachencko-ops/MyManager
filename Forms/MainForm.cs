@@ -542,6 +542,7 @@ namespace MyManager
             dgvJobs.CellPainting += DgvJobs_CellPainting;
             dgvJobs.CellFormatting += DgvJobs_CellFormatting;
             dgvJobs.CellClick += DgvJobs_CellClick;
+            dgvJobs.CellToolTipTextNeeded += DgvJobs_CellToolTipTextNeeded;
             dgvJobs.CellMouseEnter += DgvJobs_CellMouseEnter;
             dgvJobs.CellMouseLeave += DgvJobs_CellMouseLeave;
             dgvJobs.MouseDown += DgvJobs_MouseDown;
@@ -598,10 +599,37 @@ namespace MyManager
             _gridMenu.RenameFile = (stage) => RenameFileFromContext(stage);
             _gridMenu.CopyPathToClipboard = (stage) => CopyPathFromContextToClipboard(stage);
             _gridMenu.PastePathFromClipboard = (stage) => _ = PastePathFromClipboardToContextAsync(stage);
+            _gridMenu.ApplyWatermark = () => ApplyWatermarkFromContext(isVertical: false);
+            _gridMenu.ApplyWatermarkLeft = () => ApplyWatermarkFromContext(isVertical: true);
+            _gridMenu.CopyToGrandpa = CopyPrintFromContextToGrandpa;
+            _gridMenu.OpenPitStopMan = OpenPitStopManager;
+            _gridMenu.OpenImpMan = OpenImposingManager;
+            _gridMenu.RemovePitStopAction = RemovePitStopActionFromContext;
+            _gridMenu.RemoveImposingAction = RemoveImposingActionFromContext;
             _gridMenu.OpenOrderLog = () =>
             {
                 if (TrySelectContextRow())
                     OpenLogForSelectionOrManager();
+            };
+            _gridMenu.ConvertToGroup = () =>
+            {
+                var order = GetContextOrder();
+                if (order != null)
+                    ConvertOrderToGroup(order);
+            };
+            _gridMenu.ConvertToSingle = () =>
+            {
+                var order = GetContextOrder();
+                if (order != null)
+                    ConvertGroupToSingle(order);
+            };
+            _gridMenu.AddItemRow = () =>
+            {
+                var order = GetContextOrder();
+                if (order == null)
+                    return;
+
+                AddItemRowToOrder(order);
             };
 
             dgvJobs.CellMouseDown += DgvJobs_CellMouseDown;
@@ -622,10 +650,10 @@ namespace MyManager
             if (!TrySelectContextRow())
                 return;
 
-            // Пока миграция не завершена, скрываем convert-сценарии и copy-to-grandpa.
-            const bool allowCopyToGrandpa = false;
-            const bool canConvertToGroup = false;
-            const bool canConvertToSingle = false;
+            var order = GetContextOrder();
+            var allowCopyToGrandpa = order == null || UsesOrderFolderStorage(order);
+            var canConvertToGroup = order != null && (order.Items == null || order.Items.Count == 0);
+            var canConvertToSingle = order != null && order.Items != null && order.Items.Count == 1;
             var columnName = dgvJobs.Columns[e.ColumnIndex].Name;
             var menu = _gridMenu.Build(columnName, allowCopyToGrandpa, canConvertToGroup, canConvertToSingle);
             if (menu.Items.Count == 0)
@@ -831,6 +859,213 @@ namespace MyManager
             {
                 MessageBox.Show(this, $"Не удалось вставить файл из буфера: {ex.Message}", "Файловая операция", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        private void ApplyWatermarkFromContext(bool isVertical)
+        {
+            if (TryGetContextItem(out var itemOrder, out var item) &&
+                itemOrder != null &&
+                item != null)
+            {
+                ProcessWatermark(itemOrder, item, isVertical);
+                return;
+            }
+
+            var order = GetContextOrder();
+            if (order == null)
+                return;
+
+            if (IsContextGroupOrderHeader(order))
+            {
+                ShowGroupHeadFileOperationBlocked();
+                return;
+            }
+
+            ProcessWatermark(order, isVertical);
+        }
+
+        private void CopyPrintFromContextToGrandpa()
+        {
+            if (TryGetContextItem(out var itemOrder, out var item) &&
+                itemOrder != null &&
+                item != null)
+            {
+                CopyToGrandpa(itemOrder, item);
+                return;
+            }
+
+            var order = GetContextOrder();
+            if (order == null)
+                return;
+
+            if (IsContextGroupOrderHeader(order))
+            {
+                ShowGroupHeadFileOperationBlocked();
+                return;
+            }
+
+            CopyToGrandpa(order);
+        }
+
+        private void RemovePitStopActionFromContext()
+        {
+            if (TryGetContextItem(out var itemOrder, out var item) &&
+                itemOrder != null &&
+                item != null)
+            {
+                RemovePitStopAction(itemOrder, item);
+                return;
+            }
+
+            var order = GetContextOrder();
+            if (order == null)
+                return;
+
+            RemovePitStopAction(order);
+        }
+
+        private void RemoveImposingActionFromContext()
+        {
+            if (TryGetContextItem(out var itemOrder, out var item) &&
+                itemOrder != null &&
+                item != null)
+            {
+                RemoveImposingAction(itemOrder, item);
+                return;
+            }
+
+            var order = GetContextOrder();
+            if (order == null)
+                return;
+
+            RemoveImposingAction(order);
+        }
+
+        private void OpenPitStopManager()
+        {
+            using var form = new ActionManagerForm();
+            form.ShowDialog(this);
+        }
+
+        private void OpenImposingManager()
+        {
+            using var form = new ImposingManagerForm();
+            form.ShowDialog(this);
+        }
+
+        private void ProcessWatermark(OrderData order, bool isVertical)
+        {
+            try
+            {
+                if (!HasExistingFile(order.PrintPath))
+                {
+                    MessageBox.Show(this, "Файл печати не найден.", "Водяной знак", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                PdfWatermark.Apply(order, isVertical);
+            }
+            catch (IOException)
+            {
+                MessageBox.Show(this, "Файл занят другой программой. Закройте PDF и повторите.", "Водяной знак", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Не удалось применить водяной знак: {ex.Message}", "Водяной знак", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void ProcessWatermark(OrderData order, OrderFileItem item, bool isVertical)
+        {
+            try
+            {
+                if (!HasExistingFile(item.PrintPath))
+                {
+                    MessageBox.Show(this, "Файл печати item не найден.", "Водяной знак", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                var originalPrintPath = order.PrintPath;
+                try
+                {
+                    order.PrintPath = item.PrintPath ?? string.Empty;
+                    PdfWatermark.Apply(order, isVertical);
+                }
+                finally
+                {
+                    order.PrintPath = originalPrintPath;
+                }
+            }
+            catch (IOException)
+            {
+                MessageBox.Show(this, "Файл занят другой программой. Закройте PDF и повторите.", "Водяной знак", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Не удалось применить водяной знак: {ex.Message}", "Водяной знак", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void RemovePitStopAction(OrderData order)
+        {
+            order.PitStopAction = "-";
+            if (order.Items != null)
+            {
+                foreach (var item in order.Items.Where(x => x != null))
+                    item.PitStopAction = "-";
+            }
+
+            PersistGridChanges($"order|{order.InternalId}");
+        }
+
+        private void RemoveImposingAction(OrderData order)
+        {
+            order.ImposingAction = "-";
+            if (order.Items != null)
+            {
+                foreach (var item in order.Items.Where(x => x != null))
+                    item.ImposingAction = "-";
+            }
+
+            PersistGridChanges($"order|{order.InternalId}");
+        }
+
+        private void RemovePitStopAction(OrderData order, OrderFileItem item)
+        {
+            item.PitStopAction = "-";
+            PersistGridChanges($"item|{order.InternalId}|{item.ItemId}");
+        }
+
+        private void RemoveImposingAction(OrderData order, OrderFileItem item)
+        {
+            item.ImposingAction = "-";
+            PersistGridChanges($"item|{order.InternalId}|{item.ItemId}");
+        }
+
+        private string CopyToGrandpa(OrderData order)
+        {
+            if (!HasExistingFile(order.PrintPath))
+            {
+                MessageBox.Show(this, "Файл печати не найден.", "Копирование", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return string.Empty;
+            }
+
+            var sourcePath = order.PrintPath ?? string.Empty;
+            var targetName = Path.GetFileName(sourcePath);
+            return CopyToGrandpaFromSource(sourcePath, targetName);
+        }
+
+        private string CopyToGrandpa(OrderData order, OrderFileItem item)
+        {
+            if (!HasExistingFile(item.PrintPath))
+            {
+                MessageBox.Show(this, "Файл печати item не найден.", "Копирование", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return string.Empty;
+            }
+
+            var sourcePath = item.PrintPath ?? string.Empty;
+            var targetName = Path.GetFileName(sourcePath);
+            return CopyToGrandpaFromSource(sourcePath, targetName);
         }
 
         private void DgvJobs_MouseDown(object? sender, MouseEventArgs e)
@@ -1431,6 +1666,19 @@ namespace MyManager
             if (e.RowIndex < 0)
                 return;
 
+            var columnName = dgvJobs.Columns[e.ColumnIndex].Name;
+            if (string.Equals(columnName, "colPitstop", StringComparison.Ordinal))
+            {
+                SelectPitStopActionFromGrid(e.RowIndex);
+                return;
+            }
+
+            if (string.Equals(columnName, "colHotimposing", StringComparison.Ordinal))
+            {
+                SelectImposingActionFromGrid(e.RowIndex);
+                return;
+            }
+
             if (e.ColumnIndex == colOrderNumber.Index)
             {
                 EditOrderFromGrid(e.RowIndex);
@@ -1455,6 +1703,103 @@ namespace MyManager
                 _expandedOrderIds.Add(orderInternalId);
 
             RebuildOrdersGrid();
+        }
+
+        private void SelectPitStopActionFromGrid(int rowIndex)
+        {
+            if (TryGetItemByRowIndex(rowIndex, out var itemOrder, out var item) &&
+                itemOrder != null &&
+                item != null)
+            {
+                using var itemForm = new PitStopSelectForm(item.PitStopAction);
+                if (itemForm.ShowDialog(this) != DialogResult.OK)
+                    return;
+
+                item.PitStopAction = NormalizeAction(itemForm.SelectedName);
+                PersistGridChanges($"item|{itemOrder.InternalId}|{item.ItemId}");
+                return;
+            }
+
+            var order = GetOrderByRowIndex(rowIndex);
+            if (order == null)
+                return;
+
+            using var form = new PitStopSelectForm(order.PitStopAction);
+            if (form.ShowDialog(this) != DialogResult.OK)
+                return;
+
+            var selected = NormalizeAction(form.SelectedName);
+            order.PitStopAction = selected;
+            if (OrderTopologyService.IsMultiFileOrder(order) && order.Items != null)
+            {
+                foreach (var entry in order.Items.Where(x => x != null))
+                    entry.PitStopAction = selected;
+            }
+
+            PersistGridChanges($"order|{order.InternalId}");
+        }
+
+        private void SelectImposingActionFromGrid(int rowIndex)
+        {
+            if (TryGetItemByRowIndex(rowIndex, out var itemOrder, out var item) &&
+                itemOrder != null &&
+                item != null)
+            {
+                using var itemForm = new ImposingSelectForm(item.ImposingAction);
+                if (itemForm.ShowDialog(this) != DialogResult.OK)
+                    return;
+
+                item.ImposingAction = NormalizeAction(itemForm.SelectedName);
+                PersistGridChanges($"item|{itemOrder.InternalId}|{item.ItemId}");
+                return;
+            }
+
+            var order = GetOrderByRowIndex(rowIndex);
+            if (order == null)
+                return;
+
+            using var form = new ImposingSelectForm(order.ImposingAction);
+            if (form.ShowDialog(this) != DialogResult.OK)
+                return;
+
+            var selected = NormalizeAction(form.SelectedName);
+            order.ImposingAction = selected;
+            if (OrderTopologyService.IsMultiFileOrder(order) && order.Items != null)
+            {
+                foreach (var entry in order.Items.Where(x => x != null))
+                    entry.ImposingAction = selected;
+            }
+
+            PersistGridChanges($"order|{order.InternalId}");
+        }
+
+        private void DgvJobs_CellToolTipTextNeeded(object? sender, DataGridViewCellToolTipTextNeededEventArgs e)
+        {
+            if (e.RowIndex < 0 || e.ColumnIndex < 0)
+                return;
+
+            if (!string.Equals(dgvJobs.Columns[e.ColumnIndex].Name, "colStatus", StringComparison.Ordinal))
+                return;
+
+            var rowTag = dgvJobs.Rows[e.RowIndex].Tag?.ToString();
+            if (!IsOrderTag(rowTag))
+                return;
+
+            var order = GetOrderByRowIndex(e.RowIndex);
+            if (order == null)
+                return;
+
+            var statusText = order.Status ?? string.Empty;
+            if (!statusText.Contains("Ошибка", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            var reason = string.IsNullOrWhiteSpace(order.LastStatusReason) ? "Причина не указана" : order.LastStatusReason;
+            var source = string.IsNullOrWhiteSpace(order.LastStatusSource) ? "неизвестно" : order.LastStatusSource;
+            var stamp = order.LastStatusAt == default
+                ? "неизвестно"
+                : order.LastStatusAt.ToString("dd.MM.yyyy HH:mm:ss");
+
+            e.ToolTipText = $"{statusText}\nИсточник: {source}\nПричина: {reason}\nВремя: {stamp}";
         }
 
         private async void DgvJobs_CellClick(object? sender, DataGridViewCellEventArgs e)
@@ -2062,6 +2407,153 @@ namespace MyManager
             }
 
             return cleanPath;
+        }
+
+        private void AddItemRowToOrder(OrderData order)
+        {
+            if (order == null)
+                return;
+
+            EnsureOrderConvertedToGroup(order);
+            order.Items ??= [];
+
+            var nextIndex = order.Items.Count + 1;
+            var nextSequence = order.Items.Count == 0
+                ? 0
+                : order.Items.Max(x => x.SequenceNo) + 1;
+
+            var newItem = new OrderFileItem
+            {
+                ClientFileLabel = BuildDefaultItemLabel(order, nextIndex),
+                SequenceNo = nextSequence,
+                FileStatus = "Ожидание",
+                PitStopAction = string.IsNullOrWhiteSpace(order.PitStopAction) ? "-" : order.PitStopAction,
+                ImposingAction = string.IsNullOrWhiteSpace(order.ImposingAction) ? "-" : order.ImposingAction,
+                UpdatedAt = DateTime.Now
+            };
+
+            order.Items.Add(newItem);
+            OrderTopologyService.Normalize(order);
+            RefreshOrderStatusFromItems(order);
+
+            if (!string.IsNullOrWhiteSpace(order.InternalId))
+                _expandedOrderIds.Add(order.InternalId);
+
+            PersistGridChanges($"item|{order.InternalId}|{newItem.ItemId}");
+        }
+
+        private void ConvertOrderToGroup(OrderData order)
+        {
+            if (order == null)
+                return;
+
+            EnsureOrderConvertedToGroup(order);
+            OrderTopologyService.Normalize(order);
+            RefreshOrderStatusFromItems(order);
+
+            if (!string.IsNullOrWhiteSpace(order.InternalId) && (order.Items?.Count ?? 0) > 1)
+                _expandedOrderIds.Add(order.InternalId);
+
+            PersistGridChanges($"order|{order.InternalId}");
+        }
+
+        private void ConvertGroupToSingle(OrderData order)
+        {
+            if (order?.Items == null || order.Items.Count != 1)
+            {
+                MessageBox.Show(
+                    this,
+                    "Преобразование в одиночный заказ доступно только для группы с одним item.",
+                    "Преобразование",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+                return;
+            }
+
+            var item = order.Items.OrderBy(x => x.SequenceNo).First();
+            order.SourcePath = item.SourcePath ?? string.Empty;
+            order.PreparedPath = item.PreparedPath ?? string.Empty;
+            order.PrintPath = item.PrintPath ?? string.Empty;
+
+            if (!string.IsNullOrWhiteSpace(item.PitStopAction) && item.PitStopAction != "-")
+                order.PitStopAction = item.PitStopAction;
+            if (!string.IsNullOrWhiteSpace(item.ImposingAction) && item.ImposingAction != "-")
+                order.ImposingAction = item.ImposingAction;
+
+            order.Status = ResolveWorkflowStatus(order.SourcePath, order.PreparedPath, order.PrintPath);
+            order.Items.Clear();
+            OrderTopologyService.Normalize(order);
+            _expandedOrderIds.Remove(order.InternalId);
+            PersistGridChanges($"order|{order.InternalId}");
+        }
+
+        private void EnsureOrderConvertedToGroup(OrderData order)
+        {
+            if (order == null)
+                return;
+
+            order.Items ??= [];
+            if (order.Items.Count == 0)
+            {
+                order.Items.Add(CreateItemFromOrderState(order, 1, 0));
+                return;
+            }
+
+            if (order.Items.Count != 1)
+                return;
+
+            var firstItem = order.Items[0];
+            if (firstItem == null)
+                return;
+
+            if (!string.IsNullOrWhiteSpace(order.SourcePath) || string.IsNullOrWhiteSpace(firstItem.SourcePath))
+                firstItem.SourcePath = order.SourcePath ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(order.PreparedPath) || string.IsNullOrWhiteSpace(firstItem.PreparedPath))
+                firstItem.PreparedPath = order.PreparedPath ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(order.PrintPath) || string.IsNullOrWhiteSpace(firstItem.PrintPath))
+                firstItem.PrintPath = order.PrintPath ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(firstItem.PitStopAction) || firstItem.PitStopAction == "-")
+                firstItem.PitStopAction = string.IsNullOrWhiteSpace(order.PitStopAction) ? "-" : order.PitStopAction;
+            if (string.IsNullOrWhiteSpace(firstItem.ImposingAction) || firstItem.ImposingAction == "-")
+                firstItem.ImposingAction = string.IsNullOrWhiteSpace(order.ImposingAction) ? "-" : order.ImposingAction;
+
+            if (string.IsNullOrWhiteSpace(firstItem.ClientFileLabel))
+                firstItem.ClientFileLabel = BuildDefaultItemLabel(order, 1);
+
+            firstItem.FileStatus = ResolveWorkflowStatus(firstItem.SourcePath, firstItem.PreparedPath, firstItem.PrintPath);
+            if (firstItem.SequenceNo < 0)
+                firstItem.SequenceNo = 0;
+            firstItem.UpdatedAt = DateTime.Now;
+        }
+
+        private OrderFileItem CreateItemFromOrderState(OrderData order, int itemIndex, long sequenceNo)
+        {
+            return new OrderFileItem
+            {
+                ClientFileLabel = BuildDefaultItemLabel(order, itemIndex),
+                SourcePath = order.SourcePath ?? string.Empty,
+                PreparedPath = order.PreparedPath ?? string.Empty,
+                PrintPath = order.PrintPath ?? string.Empty,
+                FileStatus = ResolveWorkflowStatus(order.SourcePath, order.PreparedPath, order.PrintPath),
+                SequenceNo = sequenceNo,
+                PitStopAction = string.IsNullOrWhiteSpace(order.PitStopAction) ? "-" : order.PitStopAction,
+                ImposingAction = string.IsNullOrWhiteSpace(order.ImposingAction) ? "-" : order.ImposingAction,
+                UpdatedAt = DateTime.Now
+            };
+        }
+
+        private static string BuildDefaultItemLabel(OrderData order, int itemIndex)
+        {
+            var pathCandidate = FirstNotEmpty(order.SourcePath, order.PreparedPath, order.PrintPath);
+            var fileName = Path.GetFileNameWithoutExtension(pathCandidate ?? string.Empty);
+            if (!string.IsNullOrWhiteSpace(fileName))
+                return fileName;
+
+            if (!string.IsNullOrWhiteSpace(order.Id))
+                return $"{order.Id}_item{itemIndex}";
+
+            return $"item_{itemIndex}";
         }
 
         private string GetDragSourceFilePath(int rowIndex, int stage)

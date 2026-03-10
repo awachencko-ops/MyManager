@@ -7,32 +7,32 @@ namespace MyManager
     {
         private readonly ContextMenuStrip _menu = new ContextMenuStrip();
 
-        // --- Связи с Form1 (Actions) ---
-        public Action<int> OpenFolder { get; set; } // int - это стадия (0-корень, 1-исходные, 2-подготовка, 3-печать)
-        public Action Delete { get; set; }
-        public Action Run { get; set; }
-        public Action Stop { get; set; }
-        public Action<int> RemoveFile { get; set; }
-        public Action<int, string> PickFile { get; set; }
-        public Action<int> RenameFile { get; set; }
-        public Action<int> CopyPathToClipboard { get; set; }
-        public Action<int> PastePathFromClipboard { get; set; }
+        // --- Связи с MainForm (Actions) ---
+        public Action<int>? OpenFolder { get; set; } // int - это стадия (0-корень, 1-исходные, 2-подготовка, 3-печать)
+        public Action? Delete { get; set; }
+        public Action? Run { get; set; }
+        public Action? Stop { get; set; }
+        public Action<int>? RemoveFile { get; set; }
+        public Action<int, string>? PickFile { get; set; }
+        public Action<int>? RenameFile { get; set; }
+        public Action<int>? CopyPathToClipboard { get; set; }
+        public Action<int>? PastePathFromClipboard { get; set; }
 
-        public Action ApplyWatermark { get; set; }
-        public Action ApplyWatermarkLeft { get; set; }
+        public Action? ApplyWatermark { get; set; }
+        public Action? ApplyWatermarkLeft { get; set; }
 
-        public Action CopyToPrepared { get; set; }
-        public Action CopyToPrint { get; set; }
-        public Action CopyToGrandpa { get; set; }
+        public Action? CopyToPrepared { get; set; }
+        public Action? CopyToPrint { get; set; }
+        public Action? CopyToGrandpa { get; set; }
 
-        public Action OpenPitStopMan { get; set; }
-        public Action OpenImpMan { get; set; }
-        public Action RemovePitStopAction { get; set; }
-        public Action RemoveImposingAction { get; set; }
-        public Action OpenOrderLog { get; set; }
-        public Action ConvertToGroup { get; set; }
-        public Action ConvertToSingle { get; set; }
-        public Action AddItemRow { get; set; }
+        public Action? OpenPitStopMan { get; set; }
+        public Action? OpenImpMan { get; set; }
+        public Action? RemovePitStopAction { get; set; }
+        public Action? RemoveImposingAction { get; set; }
+        public Action? OpenOrderLog { get; set; }
+        public Action? ConvertToGroup { get; set; }
+        public Action? ConvertToSingle { get; set; }
+        public Action? AddItemRow { get; set; }
 
         public ContextMenuStrip Build(string colName, bool allowCopyToGrandpa = true, bool canConvertToGroup = true, bool canConvertToSingle = false)
         {
@@ -97,16 +97,19 @@ namespace MyManager
                     break;
 
                 case "colPitStop":
+                case "colPitstop":
                     AddItem("Открыть диспетчер PitStop", OpenPitStopMan);
                     AddItem("Очистить операцию", RemovePitStopAction);
                     break;
 
                 case "colImposing":
+                case "colHotimposing":
                     AddItem("Открыть диспетчер Imposing", OpenImpMan);
                     AddItem("Очистить операцию", RemoveImposingAction);
                     break;
 
                 case "colState":
+                case "colStatus":
                     AddItem("📜 Открыть лог заказа", OpenOrderLog);
                     break;
             }
@@ -114,7 +117,7 @@ namespace MyManager
             return _menu;
         }
 
-        private void AddItem(string text, Action action)
+        private void AddItem(string text, Action? action)
         {
             if (action == null) return;
             var item = new ToolStripMenuItem(text);
