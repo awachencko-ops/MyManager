@@ -242,6 +242,7 @@ namespace MyManager
             InitializeQueueNavigation();
             InitializeOrdersDataFlow();
             InitializeOrderRowContextMenu();
+            InitializeActionButtonsState();
         }
 
         // обработчик нажатия кнопок в ToolStrip
@@ -502,6 +503,25 @@ namespace MyManager
             tbSearch.TextChanged += (_, _) => RebuildOrdersGrid();
             LoadHistory();
             RebuildOrdersGrid();
+        }
+
+        private void InitializeActionButtonsState()
+        {
+            dgvJobs.SelectionChanged += (_, _) => UpdateActionButtonsState();
+            dgvJobs.CurrentCellChanged += (_, _) => UpdateActionButtonsState();
+            UpdateActionButtonsState();
+        }
+
+        private void UpdateActionButtonsState()
+        {
+            var order = GetSelectedOrder();
+            var hasOrder = order != null;
+
+            tsbRun.Enabled = hasOrder;
+            tsbRemove.Enabled = hasOrder;
+            tsbBrowse.Enabled = hasOrder;
+            tsbConsole.Enabled = hasOrder;
+            tsbStop.Enabled = hasOrder && _runTokensByOrder.ContainsKey(order!.InternalId);
         }
 
         private void InitializeOrderRowContextMenu()
@@ -1023,6 +1043,7 @@ namespace MyManager
             RefreshStatusFilterChecklist();
             RefreshUserFilterChecklist();
             RefreshQueuePresentation();
+            UpdateActionButtonsState();
         }
 
         private void LoadHistory()
@@ -1405,6 +1426,7 @@ namespace MyManager
                 _runTokensByOrder.Remove(order.InternalId);
                 SaveHistory();
                 RebuildOrdersGrid();
+                UpdateActionButtonsState();
             }
         }
 
@@ -1426,6 +1448,7 @@ namespace MyManager
             cts.Cancel();
             _runTokensByOrder.Remove(order.InternalId);
             SetOrderStatus(order, "Отменено", "ui", "Остановлено пользователем", persistHistory: true, rebuildGrid: true);
+            UpdateActionButtonsState();
         }
 
         private void RemoveSelectedOrder()
@@ -1481,6 +1504,7 @@ namespace MyManager
             _orderHistory.Remove(order);
             SaveHistory();
             RebuildOrdersGrid();
+            UpdateActionButtonsState();
         }
 
         private void DeleteOrderFiles(OrderData order)
