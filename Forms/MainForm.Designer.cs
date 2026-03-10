@@ -65,6 +65,8 @@
             tsbBrowse = new ToolStripButton();
             tsbConsole = new ToolStripButton();
             tsbParameters = new ToolStripButton();
+            statusStrip1 = new StatusStrip();
+            toolStatus = new ToolStripStatusLabel();
             ((System.ComponentModel.ISupportInitialize)scMain).BeginInit();
             scMain.Panel1.SuspendLayout();
             scMain.Panel2.SuspendLayout();
@@ -76,7 +78,9 @@
             ((System.ComponentModel.ISupportInitialize)picFStatusGlyph).BeginInit();
             ((System.ComponentModel.ISupportInitialize)picFOrderNoGlyph).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgvJobs).BeginInit();
+            pnlTray.SuspendLayout();
             tsMainActions.SuspendLayout();
+            statusStrip1.SuspendLayout();
             SuspendLayout();
             // 
             // pnlSidebar
@@ -367,6 +371,7 @@
             // 
             // pnlTray
             // 
+            pnlTray.Controls.Add(statusStrip1);
             pnlTray.Dock = DockStyle.Fill;
             pnlTray.Location = new Point(3, 1161);
             pnlTray.Name = "pnlTray";
@@ -427,6 +432,22 @@
             tsbParameters.Size = new Size(111, 29);
             tsbParameters.Text = "Параметры";
             // 
+            // statusStrip1
+            // 
+            statusStrip1.ImageScalingSize = new Size(24, 24);
+            statusStrip1.Items.AddRange(new ToolStripItem[] { toolStatus });
+            statusStrip1.Location = new Point(0, 2);
+            statusStrip1.Name = "statusStrip1";
+            statusStrip1.Size = new Size(1743, 32);
+            statusStrip1.TabIndex = 0;
+            statusStrip1.Text = "statusStrip1";
+            // 
+            // toolStatus
+            // 
+            toolStatus.Name = "toolStatus";
+            toolStatus.Size = new Size(92, 25);
+            toolStatus.Text = "toolStatus";
+            // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(10F, 25F);
@@ -449,8 +470,12 @@
             ((System.ComponentModel.ISupportInitialize)picFStatusGlyph).EndInit();
             ((System.ComponentModel.ISupportInitialize)picFOrderNoGlyph).EndInit();
             ((System.ComponentModel.ISupportInitialize)dgvJobs).EndInit();
+            pnlTray.ResumeLayout(false);
+            pnlTray.PerformLayout();
             tsMainActions.ResumeLayout(false);
             tsMainActions.PerformLayout();
+            statusStrip1.ResumeLayout(false);
+            statusStrip1.PerformLayout();
             ResumeLayout(false);
         }
 
@@ -493,5 +518,7 @@
         private ToolStripButton tsbParameters;
         private ComboBox cbFCreated;
         private Panel pnlTray;
+        private StatusStrip statusStrip1;
+        private ToolStripStatusLabel toolStatus;
     }
 }
