@@ -10,8 +10,9 @@ namespace MyManager
 {
     public class OrderProcessor
     {
-        public event Action<string, string, string> OnStatusChanged;
-        public event Action<string> OnLog;
+        public event Action<string, string, string>? OnStatusChanged;
+        public event Action<string>? OnLog;
+        public event Action<string, int, string>? OnProgressChanged;
 
         private readonly string _rootPath;
         private const string TempInFolder = "in";
@@ -45,14 +46,17 @@ namespace MyManager
 
             if (order.Items != null && order.Items.Count > 0)
             {
+                ReportProgress(order, 0, "Запуск группы");
                 await RunGroupAsync(order, settings, timeout, tempRoot, selectedSet, ct);
                 return;
             }
 
+            ReportProgress(order, 0, "Запуск");
             try
             {
                 Logger.Info($">>> СТАРТ: Заказ {order.Id}");
                 Notify(order, "🟡 Запуск…", "Поиск конфигов...");
+                ReportProgress(order, 5, "Поиск конфигов");
 
                 var pitCfg = ConfigService.GetPitStopConfigByName(order.PitStopAction);
                 var impCfg = ConfigService.GetImposingConfigByName(order.ImposingAction);
@@ -60,12 +64,14 @@ namespace MyManager
                 if (pitCfg == null && impCfg == null)
                 {
                     Notify(order, "Ожидание", "Сценарии не выбраны.");
+                    ReportProgress(order, 100, "Сценарии не выбраны");
                     return;
                 }
 
                 // --- PITSTOP ---
                 if (pitCfg != null)
                 {
+                    ReportProgress(order, 20, "PitStop");
                     if (!File.Exists(order.PreparedPath)) throw new Exception("Файл для PitStop не найден.");
 
                     string fileName = Path.GetFileName(order.PreparedPath);
@@ -87,6 +93,7 @@ namespace MyManager
                         if (foundPath == null) throw new Exception("Таймаут PitStop.");
                         if (where == "PitStop Error") throw new Exception("Ошибка PitStop (см. отчет).");
                         Notify(order, "🟡 PitStop OK", $"PitStop завершен ({where})");
+                        ReportProgress(order, 55, "PitStop завершен");
                     }
                     else
                     {
@@ -95,12 +102,18 @@ namespace MyManager
                         string newName = $"{Path.GetFileNameWithoutExtension(fileName)}_pitstop{Path.GetExtension(fileName)}";
                         order.PreparedPath = CopyIntoStage(order, 2, okFile, newName, tempRoot);
                         Notify(order, "🟡 PitStop готово", "Версия сохранена.");
+                        ReportProgress(order, 60, "PitStop завершен");
                     }
+                }
+                else
+                {
+                    ReportProgress(order, 45, "PitStop пропущен");
                 }
 
                 // --- IMPOSING ---
                 if (impCfg != null)
                 {
+                    ReportProgress(order, 70, "Imposing");
                     string fileName = Path.GetFileName(order.PreparedPath);
                     string targetIn = Path.Combine(impCfg.In, fileName);
 
@@ -124,6 +137,12 @@ namespace MyManager
                         order.PrintPath = CopyToGrandpa(outFile, printName, settings.GrandpaPath);
                         try { File.Delete(outFile); } catch { }
                     }
+
+                    ReportProgress(order, 90, "Imposing завершен");
+                }
+                else
+                {
+                    ReportProgress(order, 90, "Imposing пропущен");
                 }
 
                 if (!string.IsNullOrEmpty(order.PrintPath) && File.Exists(order.PrintPath))
@@ -135,16 +154,19 @@ namespace MyManager
                 }
 
                 Notify(order, "✅ Готово", "Заказ успешно выполнен.");
+                ReportProgress(order, 100, "Завершено");
             }
             catch (OperationCanceledException)
             {
                 Logger.Warn($"Остановлено пользователем: {order.Id}");
                 Notify(order, "Отменено", "Остановлено пользователем");
+                ReportProgress(order, 100, "Остановлено");
             }
             catch (Exception ex)
             {
                 Logger.Error($"Ошибка в {order.Id}: {ex.Message}");
                 Notify(order, "🔴 Ошибка", ex.Message);
+                ReportProgress(order, 100, "Ошибка");
             }
         }
 
@@ -161,6 +183,7 @@ namespace MyManager
             if (runItems.Count == 0)
             {
                 Notify(order, "Ожидание", "Нет выбранных файлов для обработки");
+                ReportProgress(order, 100, "Нет выбранных файлов");
                 return;
             }
 
@@ -196,9 +219,11 @@ namespace MyManager
                 }
                 finally
                 {
-                    Interlocked.Increment(ref done);
+                    var doneCount = Interlocked.Increment(ref done);
+                    var progress = (int)Math.Round(doneCount * 100.0 / runItems.Count);
                     order.RefreshAggregatedStatus();
-                    Notify(order, order.Status, $"Прогресс {done}/{runItems.Count}");
+                    Notify(order, order.Status, $"Прогресс {doneCount}/{runItems.Count}");
+                    ReportProgress(order, progress, $"Прогресс {doneCount}/{runItems.Count}");
                     semaphore.Release();
                 }
             });
@@ -208,11 +233,13 @@ namespace MyManager
             if (ct.IsCancellationRequested)
             {
                 Notify(order, "Отменено", "Остановлено пользователем");
+                ReportProgress(order, 100, "Остановлено");
                 return;
             }
 
             order.RefreshAggregatedStatus();
             Notify(order, order.Status, "Обработка группы завершена");
+            ReportProgress(order, 100, "Группа завершена");
         }
 
         private async Task RunSingleItemAsync(OrderData order, OrderFileItem item, int itemIndex, AppSettings settings, TimeSpan timeout, string tempRoot, CancellationToken ct)
@@ -319,6 +346,12 @@ namespace MyManager
             OnStatusChanged?.Invoke(o.Id, s, l);
             OnLog?.Invoke(l);
             Logger.Info($"STATUS | order={o.Id} | source=processor | status={s} | reason={l}");
+        }
+
+        private void ReportProgress(OrderData order, int value, string stage)
+        {
+            var boundedValue = Math.Clamp(value, 0, 100);
+            OnProgressChanged?.Invoke(order.Id, boundedValue, stage ?? string.Empty);
         }
 
         private string CopyIntoStage(OrderData o, int stage, string src, string name, string rootPath)

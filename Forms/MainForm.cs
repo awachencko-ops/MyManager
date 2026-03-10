@@ -26,8 +26,10 @@ namespace MyManager
         private readonly List<OrderData> _orderHistory = [];
         private readonly HashSet<string> _expandedOrderIds = new(StringComparer.Ordinal);
         private readonly Dictionary<string, CancellationTokenSource> _runTokensByOrder = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, int> _runProgressByOrderInternalId = new(StringComparer.Ordinal);
         private readonly OrderGridContextMenu _gridMenu = new();
         private OrderProcessor? _processor;
+        private System.Windows.Forms.Timer? _trayIndicatorsTimer;
         private bool _isRebuildingGrid;
         private int _hoveredRowIndex = -1;
         private int _ctxRow = -1;
@@ -78,6 +80,7 @@ namespace MyManager
         private const string CreatedDateFilterLabelText = "Начало обработки";
         private const string ReceivedDateFilterLabelText = "Дата поступления";
         private const string DefaultTrayStatusText = "Готово";
+        private const int TrayIndicatorsRefreshIntervalMs = 15000;
         private const long DiskWarningThresholdBytes = 10L * 1024 * 1024 * 1024;
         private const long DiskCriticalThresholdBytes = 5L * 1024 * 1024 * 1024;
 
@@ -253,6 +256,7 @@ namespace MyManager
             InitializeOrderRowContextMenu();
             InitializeActionButtonsState();
             InitializeTrayIndicators();
+            FormClosed += MainForm_FormClosed;
             SetBottomStatus(DefaultTrayStatusText);
         }
 
@@ -456,6 +460,18 @@ namespace MyManager
                     Apply();
             };
             _processor.OnLog += message => SetBottomStatus(message);
+            _processor.OnProgressChanged += (orderId, progressValue, _) =>
+            {
+                void Apply()
+                {
+                    ApplyProcessorProgress(orderId, progressValue);
+                }
+
+                if (InvokeRequired)
+                    BeginInvoke((Action)Apply);
+                else
+                    Apply();
+            };
         }
 
         private void ApplyQueueVisualStyle()
@@ -581,12 +597,22 @@ namespace MyManager
             toolStatus.TextAlign = ContentAlignment.MiddleLeft;
 
             toolProgress.Visible = false;
-            toolProgress.Style = ProgressBarStyle.Marquee;
-            toolProgress.MarqueeAnimationSpeed = 30;
+            toolProgress.Style = ProgressBarStyle.Continuous;
+            toolProgress.Minimum = 0;
+            toolProgress.Maximum = 100;
+            toolProgress.Value = 0;
 
             toolAlerts.IsLink = true;
             toolAlerts.LinkBehavior = LinkBehavior.HoverUnderline;
             toolAlerts.Click += ToolAlerts_Click;
+
+            _trayIndicatorsTimer ??= new System.Windows.Forms.Timer
+            {
+                Interval = TrayIndicatorsRefreshIntervalMs
+            };
+            _trayIndicatorsTimer.Tick -= TrayIndicatorsTimer_Tick;
+            _trayIndicatorsTimer.Tick += TrayIndicatorsTimer_Tick;
+            _trayIndicatorsTimer.Start();
 
             _acknowledgedErrorCount = CountOrdersWithErrors();
             RefreshTrayIndicators();
@@ -596,6 +622,23 @@ namespace MyManager
         {
             AcknowledgeErrorNotifications();
             OpenLogForSelectionOrManager();
+        }
+
+        private void TrayIndicatorsTimer_Tick(object? sender, EventArgs e)
+        {
+            UpdateTrayConnectionIndicator();
+            UpdateTrayDiskIndicator();
+        }
+
+        private void MainForm_FormClosed(object? sender, FormClosedEventArgs e)
+        {
+            if (_trayIndicatorsTimer == null)
+                return;
+
+            _trayIndicatorsTimer.Stop();
+            _trayIndicatorsTimer.Tick -= TrayIndicatorsTimer_Tick;
+            _trayIndicatorsTimer.Dispose();
+            _trayIndicatorsTimer = null;
         }
 
         private void UpdateActionButtonsState()
@@ -661,7 +704,7 @@ namespace MyManager
 
             var row = dgvJobs.Rows[e.RowIndex];
             var rowTag = row.Tag?.ToString();
-            if (!IsOrderTag(rowTag) && !IsItemTag(rowTag))
+            if (!IsOrderTag(rowTag))
                 return;
 
             _ctxRow = e.RowIndex;
@@ -709,37 +752,6 @@ namespace MyManager
             return GetOrderByRowIndex(_ctxRow);
         }
 
-        private bool TryGetContextItem(out OrderData? order, out OrderFileItem? item)
-        {
-            order = null;
-            item = null;
-
-            if (_ctxRow < 0)
-                return false;
-
-            return TryGetItemByRowIndex(_ctxRow, out order, out item);
-        }
-
-        private bool IsContextGroupOrderHeader(OrderData order)
-        {
-            if (order == null || _ctxRow < 0 || _ctxRow >= dgvJobs.Rows.Count)
-                return false;
-
-            var tag = dgvJobs.Rows[_ctxRow].Tag?.ToString();
-            return IsOrderTag(tag) && OrderTopologyService.IsMultiFileOrder(order);
-        }
-
-        private void ShowGroupHeadFileOperationBlocked()
-        {
-            SetBottomStatus("Головная строка группы заблокирована для файловых операций");
-            MessageBox.Show(
-                this,
-                "Головная строка группы заблокирована для файловых операций.",
-                "Файловая операция",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
-        }
-
         private async Task PickFileFromContextAsync(int stage)
         {
             if (stage is < 1 or > 3)
@@ -747,23 +759,9 @@ namespace MyManager
 
             try
             {
-                if (TryGetContextItem(out var itemOrder, out var item) &&
-                    itemOrder != null &&
-                    item != null)
-                {
-                    await PickAndCopyFileForItemAsync(itemOrder, item, stage);
-                    return;
-                }
-
                 var order = GetContextOrder();
                 if (order == null)
                     return;
-
-                if (IsContextGroupOrderHeader(order))
-                {
-                    ShowGroupHeadFileOperationBlocked();
-                    return;
-                }
 
                 await PickAndCopyFileForOrderAsync(order, stage);
             }
@@ -779,23 +777,9 @@ namespace MyManager
             if (stage is < 1 or > 3)
                 return;
 
-            if (TryGetContextItem(out var itemOrder, out var item) &&
-                itemOrder != null &&
-                item != null)
-            {
-                RemoveFileFromItem(itemOrder, item, stage);
-                return;
-            }
-
             var order = GetContextOrder();
             if (order == null)
                 return;
-
-            if (IsContextGroupOrderHeader(order))
-            {
-                ShowGroupHeadFileOperationBlocked();
-                return;
-            }
 
             RemoveFileFromOrder(order, stage);
         }
@@ -805,23 +789,9 @@ namespace MyManager
             if (stage is < 1 or > 3)
                 return;
 
-            if (TryGetContextItem(out var itemOrder, out var item) &&
-                itemOrder != null &&
-                item != null)
-            {
-                RenameFileForItem(itemOrder, item, stage);
-                return;
-            }
-
             var order = GetContextOrder();
             if (order == null)
                 return;
-
-            if (IsContextGroupOrderHeader(order))
-            {
-                ShowGroupHeadFileOperationBlocked();
-                return;
-            }
 
             RenameFileForOrder(order, stage);
         }
@@ -831,23 +801,9 @@ namespace MyManager
             if (stage is < 1 or > 3)
                 return;
 
-            if (TryGetContextItem(out var itemOrder, out var item) &&
-                itemOrder != null &&
-                item != null)
-            {
-                CopyPathToClipboard(item, stage);
-                return;
-            }
-
             var order = GetContextOrder();
             if (order == null)
                 return;
-
-            if (IsContextGroupOrderHeader(order))
-            {
-                ShowGroupHeadFileOperationBlocked();
-                return;
-            }
 
             CopyPathToClipboard(order, stage);
         }
@@ -859,23 +815,9 @@ namespace MyManager
 
             try
             {
-                if (TryGetContextItem(out var itemOrder, out var item) &&
-                    itemOrder != null &&
-                    item != null)
-                {
-                    await PasteFileFromClipboardAsync(itemOrder, item, stage);
-                    return;
-                }
-
                 var order = GetContextOrder();
                 if (order == null)
                     return;
-
-                if (IsContextGroupOrderHeader(order))
-                {
-                    ShowGroupHeadFileOperationBlocked();
-                    return;
-                }
 
                 await PasteFileFromClipboardAsync(order, stage);
             }
@@ -888,60 +830,24 @@ namespace MyManager
 
         private void ApplyWatermarkFromContext(bool isVertical)
         {
-            if (TryGetContextItem(out var itemOrder, out var item) &&
-                itemOrder != null &&
-                item != null)
-            {
-                ProcessWatermark(itemOrder, item, isVertical);
-                return;
-            }
-
             var order = GetContextOrder();
             if (order == null)
                 return;
-
-            if (IsContextGroupOrderHeader(order))
-            {
-                ShowGroupHeadFileOperationBlocked();
-                return;
-            }
 
             ProcessWatermark(order, isVertical);
         }
 
         private void CopyPrintFromContextToGrandpa()
         {
-            if (TryGetContextItem(out var itemOrder, out var item) &&
-                itemOrder != null &&
-                item != null)
-            {
-                CopyToGrandpa(itemOrder, item);
-                return;
-            }
-
             var order = GetContextOrder();
             if (order == null)
                 return;
-
-            if (IsContextGroupOrderHeader(order))
-            {
-                ShowGroupHeadFileOperationBlocked();
-                return;
-            }
 
             CopyToGrandpa(order);
         }
 
         private void RemovePitStopActionFromContext()
         {
-            if (TryGetContextItem(out var itemOrder, out var item) &&
-                itemOrder != null &&
-                item != null)
-            {
-                RemovePitStopAction(itemOrder, item);
-                return;
-            }
-
             var order = GetContextOrder();
             if (order == null)
                 return;
@@ -951,14 +857,6 @@ namespace MyManager
 
         private void RemoveImposingActionFromContext()
         {
-            if (TryGetContextItem(out var itemOrder, out var item) &&
-                itemOrder != null &&
-                item != null)
-            {
-                RemoveImposingAction(itemOrder, item);
-                return;
-            }
-
             var order = GetContextOrder();
             if (order == null)
                 return;
@@ -1132,11 +1030,7 @@ namespace MyManager
             if (string.IsNullOrWhiteSpace(rowTag))
                 return;
 
-            var order = GetOrderByRowIndex(hit.RowIndex);
-            if (order == null)
-                return;
-
-            if (IsOrderTag(rowTag) && OrderTopologyService.IsMultiFileOrder(order))
+            if (!IsOrderTag(rowTag))
                 return;
 
             _dragSourceRowIndex = hit.RowIndex;
@@ -1638,17 +1532,6 @@ namespace MyManager
                 return;
 
             var row = dgvJobs.Rows[e.RowIndex];
-            var rowTag = row.Tag?.ToString();
-            var isItemRow = IsItemTag(rowTag);
-
-            if (isItemRow)
-            {
-                e.CellStyle.BackColor = OrdersItemRowBackColor;
-                e.CellStyle.SelectionBackColor = OrdersRowSelectedBackColor;
-                e.CellStyle.SelectionForeColor = Color.Black;
-                return;
-            }
-
             var rowBackColor = row.Selected
                 ? OrdersRowSelectedBackColor
                 : (e.RowIndex == _hoveredRowIndex ? OrdersRowHoverBackColor : Color.White);
@@ -1731,19 +1614,6 @@ namespace MyManager
 
         private void SelectPitStopActionFromGrid(int rowIndex)
         {
-            if (TryGetItemByRowIndex(rowIndex, out var itemOrder, out var item) &&
-                itemOrder != null &&
-                item != null)
-            {
-                using var itemForm = new PitStopSelectForm(item.PitStopAction);
-                if (itemForm.ShowDialog(this) != DialogResult.OK)
-                    return;
-
-                item.PitStopAction = NormalizeAction(itemForm.SelectedName);
-                PersistGridChanges($"item|{itemOrder.InternalId}|{item.ItemId}");
-                return;
-            }
-
             var order = GetOrderByRowIndex(rowIndex);
             if (order == null)
                 return;
@@ -1754,7 +1624,7 @@ namespace MyManager
 
             var selected = NormalizeAction(form.SelectedName);
             order.PitStopAction = selected;
-            if (OrderTopologyService.IsMultiFileOrder(order) && order.Items != null)
+            if (order.Items != null)
             {
                 foreach (var entry in order.Items.Where(x => x != null))
                     entry.PitStopAction = selected;
@@ -1765,19 +1635,6 @@ namespace MyManager
 
         private void SelectImposingActionFromGrid(int rowIndex)
         {
-            if (TryGetItemByRowIndex(rowIndex, out var itemOrder, out var item) &&
-                itemOrder != null &&
-                item != null)
-            {
-                using var itemForm = new ImposingSelectForm(item.ImposingAction);
-                if (itemForm.ShowDialog(this) != DialogResult.OK)
-                    return;
-
-                item.ImposingAction = NormalizeAction(itemForm.SelectedName);
-                PersistGridChanges($"item|{itemOrder.InternalId}|{item.ItemId}");
-                return;
-            }
-
             var order = GetOrderByRowIndex(rowIndex);
             if (order == null)
                 return;
@@ -1788,7 +1645,7 @@ namespace MyManager
 
             var selected = NormalizeAction(form.SelectedName);
             order.ImposingAction = selected;
-            if (OrderTopologyService.IsMultiFileOrder(order) && order.Items != null)
+            if (order.Items != null)
             {
                 foreach (var entry in order.Items.Where(x => x != null))
                     entry.ImposingAction = selected;
@@ -1842,30 +1699,7 @@ namespace MyManager
 
             try
             {
-                if (IsItemTag(rowTag))
-                {
-                    if (!TryGetItemByRowIndex(e.RowIndex, out var itemOrder, out var item)
-                        || itemOrder == null
-                        || item == null)
-                    {
-                        return;
-                    }
-
-                    var currentPath = GetItemStagePath(item, stage);
-                    if (HasExistingFile(currentPath))
-                    {
-                        OpenFileDefault(currentPath);
-                        return;
-                    }
-
-                    await PickAndCopyFileForItemAsync(itemOrder, item, stage);
-                    return;
-                }
-
                 if (!IsOrderTag(rowTag))
-                    return;
-
-                if (OrderTopologyService.IsMultiFileOrder(order))
                     return;
 
                 var orderPath = GetOrderStagePath(order, stage);
@@ -1922,7 +1756,7 @@ namespace MyManager
                 return;
             }
 
-            if (IsOrderTag(rowTag) && OrderTopologyService.IsMultiFileOrder(order))
+            if (!IsOrderTag(rowTag))
             {
                 e.Effect = DragDropEffects.None;
                 return;
@@ -1936,11 +1770,7 @@ namespace MyManager
                 return;
             }
 
-            string existingPath;
-            if (IsItemTag(rowTag) && TryGetItemByRowIndex(hit.RowIndex, out _, out var item) && item != null)
-                existingPath = GetItemStagePath(item, stage);
-            else
-                existingPath = GetOrderStagePath(order, stage);
+            var existingPath = GetOrderStagePath(order, stage);
 
             e.Effect = PathsEqual(existingPath, draggingFile)
                 ? DragDropEffects.None
@@ -1974,26 +1804,7 @@ namespace MyManager
 
             try
             {
-                if (IsItemTag(rowTag))
-                {
-                    if (!TryGetItemByRowIndex(hit.RowIndex, out var itemOrder, out var item)
-                        || itemOrder == null
-                        || item == null)
-                    {
-                        return;
-                    }
-
-                    if (!await AddFileToItemAsync(itemOrder, item, sourceFile, stage))
-                        return;
-
-                    PersistGridChanges($"item|{itemOrder.InternalId}|{item.ItemId}");
-                    return;
-                }
-
                 if (!IsOrderTag(rowTag))
-                    return;
-
-                if (OrderTopologyService.IsMultiFileOrder(order))
                     return;
 
                 if (!await AddFileToOrderAsync(order, sourceFile, stage))
@@ -2132,31 +1943,11 @@ namespace MyManager
                 return null;
 
             var rowTag = dgvJobs.Rows[rowIndex].Tag?.ToString();
-            if (!IsOrderTag(rowTag) && !IsItemTag(rowTag))
+            if (!IsOrderTag(rowTag))
                 return null;
 
             var orderInternalId = ExtractOrderInternalIdFromTag(rowTag);
             return FindOrderByInternalId(orderInternalId);
-        }
-
-        private bool TryGetItemByRowIndex(int rowIndex, out OrderData? order, out OrderFileItem? item)
-        {
-            order = GetOrderByRowIndex(rowIndex);
-            item = null;
-
-            if (order == null || rowIndex < 0 || rowIndex >= dgvJobs.Rows.Count)
-                return false;
-
-            var rowTag = dgvJobs.Rows[rowIndex].Tag?.ToString();
-            if (!IsItemTag(rowTag))
-                return false;
-
-            var itemId = ExtractItemIdFromTag(rowTag);
-            if (string.IsNullOrWhiteSpace(itemId))
-                return false;
-
-            item = order.Items?.FirstOrDefault(x => string.Equals(x.ItemId, itemId, StringComparison.Ordinal));
-            return item != null;
         }
 
         private static string GetOrderStagePath(OrderData order, int stage)
@@ -2611,15 +2402,7 @@ namespace MyManager
             if (order == null)
                 return string.Empty;
 
-            if (IsItemTag(rowTag))
-            {
-                if (!TryGetItemByRowIndex(rowIndex, out _, out var item) || item == null)
-                    return string.Empty;
-
-                return GetItemStagePath(item, stage);
-            }
-
-            if (!IsOrderTag(rowTag) || OrderTopologyService.IsMultiFileOrder(order))
+            if (!IsOrderTag(rowTag))
                 return string.Empty;
 
             return GetOrderStagePath(order, stage);
@@ -3307,9 +3090,12 @@ namespace MyManager
                 return;
             }
 
-            _processor ??= new OrderProcessor(_ordersRootPath);
+            if (_processor == null)
+                InitializeProcessor();
+
             var cts = new CancellationTokenSource();
             _runTokensByOrder[order.InternalId] = cts;
+            _runProgressByOrderInternalId[order.InternalId] = 0;
             UpdateTrayProgressIndicator();
 
             SetOrderStatus(order, "Обрабатывается", "ui", "Запуск из MainForm", persistHistory: true, rebuildGrid: true);
@@ -3317,8 +3103,7 @@ namespace MyManager
 
             try
             {
-                var selectedItemIds = GetSelectedItemIdsForOrder(order);
-                await _processor.RunAsync(order, cts.Token, selectedItemIds.Count > 0 ? selectedItemIds : null);
+                await _processor!.RunAsync(order, cts.Token, selectedItemIds: null);
             }
             catch (OperationCanceledException)
             {
@@ -3334,6 +3119,7 @@ namespace MyManager
             finally
             {
                 _runTokensByOrder.Remove(order.InternalId);
+                _runProgressByOrderInternalId.Remove(order.InternalId);
                 UpdateTrayProgressIndicator();
                 SaveHistory();
                 RebuildOrdersGrid();
@@ -3360,6 +3146,7 @@ namespace MyManager
 
             cts.Cancel();
             _runTokensByOrder.Remove(order.InternalId);
+            _runProgressByOrderInternalId.Remove(order.InternalId);
             UpdateTrayProgressIndicator();
             SetOrderStatus(order, "Отменено", "ui", "Остановлено пользователем", persistHistory: true, rebuildGrid: true);
             UpdateActionButtonsState();
@@ -3418,6 +3205,7 @@ namespace MyManager
             {
                 cts.Cancel();
                 _runTokensByOrder.Remove(order.InternalId);
+                _runProgressByOrderInternalId.Remove(order.InternalId);
                 UpdateTrayProgressIndicator();
             }
 
@@ -3591,38 +3379,6 @@ namespace MyManager
             return null;
         }
 
-        private List<string> GetSelectedItemIdsForOrder(OrderData order)
-        {
-            var selectedItemIds = new List<string>();
-            foreach (DataGridViewRow row in dgvJobs.SelectedRows)
-            {
-                var tag = row.Tag?.ToString();
-                if (!IsItemTag(tag))
-                    continue;
-
-                if (!string.Equals(ExtractOrderInternalIdFromTag(tag), order.InternalId, StringComparison.Ordinal))
-                    continue;
-
-                var itemId = ExtractItemIdFromTag(tag);
-                if (!string.IsNullOrWhiteSpace(itemId))
-                    selectedItemIds.Add(itemId);
-            }
-
-            return selectedItemIds;
-        }
-
-        private static string? ExtractItemIdFromTag(string? tag)
-        {
-            if (string.IsNullOrWhiteSpace(tag))
-                return null;
-
-            var parts = tag.Split('|');
-            if (parts.Length < 3)
-                return null;
-
-            return parts[2];
-        }
-
         private bool SetOrderStatus(
             OrderData order,
             string status,
@@ -3673,10 +3429,6 @@ namespace MyManager
             foreach (DataGridViewRow row in dgvJobs.Rows)
             {
                 if (row.IsNewRow || !row.Visible)
-                    continue;
-
-                var tag = row.Tag?.ToString();
-                if (IsItemTag(tag))
                     continue;
 
                 visibleOrders++;
@@ -3773,12 +3525,53 @@ namespace MyManager
                 toolAlerts.ForeColor = Color.Goldenrod;
         }
 
+        private void ApplyProcessorProgress(string orderId, int progressValue)
+        {
+            var boundedValue = Math.Clamp(progressValue, 0, 100);
+            var matchedAny = false;
+
+            foreach (var internalId in _runTokensByOrder.Keys.ToList())
+            {
+                var runningOrder = FindOrderByInternalId(internalId);
+                if (runningOrder == null)
+                    continue;
+
+                if (!string.Equals(runningOrder.Id ?? string.Empty, orderId ?? string.Empty, StringComparison.Ordinal))
+                    continue;
+
+                _runProgressByOrderInternalId[internalId] = boundedValue;
+                matchedAny = true;
+            }
+
+            if (!matchedAny && _runTokensByOrder.Count == 1)
+            {
+                var onlyInternalId = _runTokensByOrder.Keys.First();
+                _runProgressByOrderInternalId[onlyInternalId] = boundedValue;
+            }
+
+            UpdateTrayProgressIndicator();
+        }
+
         private void UpdateTrayProgressIndicator()
         {
             if (toolProgress.IsDisposed)
                 return;
 
-            toolProgress.Visible = _runTokensByOrder.Count > 0;
+            if (_runProgressByOrderInternalId.Count == 0)
+            {
+                toolProgress.Visible = false;
+                toolProgress.Value = 0;
+                toolProgress.ToolTipText = "Нет активной обработки.";
+                return;
+            }
+
+            var averageProgress = (int)Math.Round(_runProgressByOrderInternalId.Values.Average());
+            var boundedProgress = Math.Clamp(averageProgress, 0, 100);
+            toolProgress.Value = boundedProgress;
+            toolProgress.Visible = true;
+            toolProgress.ToolTipText = _runProgressByOrderInternalId.Count == 1
+                ? $"Прогресс обработки: {boundedProgress}%."
+                : $"Средний прогресс по {_runProgressByOrderInternalId.Count} заказам: {boundedProgress}%.";
         }
 
         private void AcknowledgeErrorNotifications()

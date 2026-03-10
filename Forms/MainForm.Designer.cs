@@ -455,10 +455,10 @@
             // 
             // toolProgress
             // 
-            toolProgress.MarqueeAnimationSpeed = 30;
+            toolProgress.MarqueeAnimationSpeed = 0;
             toolProgress.Name = "toolProgress";
             toolProgress.Size = new Size(140, 24);
-            toolProgress.Style = ProgressBarStyle.Marquee;
+            toolProgress.Style = ProgressBarStyle.Continuous;
             toolProgress.Visible = false;
             // 
             // toolStats
