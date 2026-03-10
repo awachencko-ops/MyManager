@@ -239,6 +239,12 @@ namespace MyManager
         // обработчик нажатия кнопок в ToolStrip
         private async void TsMainActions_ItemClicked(object sender, ToolStripItemClickedEventArgs e)
         {
+            if (e.ClickedItem == tsbNewJob)
+            {
+                CreateNewOrder();
+                return;
+            }
+
             if (e.ClickedItem == tsbParameters)
             {
                 ShowSettingsDialog();
@@ -273,6 +279,64 @@ namespace MyManager
             {
                 OpenFolderForSelectedOrder();
             }
+        }
+
+        private void CreateNewOrder()
+        {
+            var settings = AppSettings.Load();
+            if (settings.UseExtendedMode)
+                CreateNewExtendedOrder();
+            else
+                CreateNewSimpleOrder();
+        }
+
+        private void CreateNewSimpleOrder()
+        {
+            using var form = new SimpleOrderForm();
+            if (form.ShowDialog(this) != DialogResult.OK)
+                return;
+
+            var order = new OrderData
+            {
+                Id = form.OrderNumber.Trim(),
+                StartMode = OrderStartMode.Simple,
+                Keyword = string.Empty,
+                ArrivalDate = DateTime.Now,
+                OrderDate = form.OrderDate,
+                FolderName = string.Empty,
+                Status = "⚪ Ожидание",
+                PitStopAction = "-",
+                ImposingAction = "-"
+            };
+
+            AddCreatedOrder(order);
+        }
+
+        private void CreateNewExtendedOrder()
+        {
+            using var form = new OrderForm(_ordersRootPath);
+            if (form.ShowDialog(this) != DialogResult.OK || form.ResultOrder == null)
+                return;
+
+            AddCreatedOrder(form.ResultOrder);
+        }
+
+        private void AddCreatedOrder(OrderData order)
+        {
+            if (order == null)
+                return;
+
+            if (string.IsNullOrWhiteSpace(order.InternalId))
+                order.InternalId = Guid.NewGuid().ToString("N");
+            if (order.OrderDate == default)
+                order.OrderDate = DateTime.Now;
+            if (order.ArrivalDate == default)
+                order.ArrivalDate = DateTime.Now;
+
+            _orderHistory.Add(order);
+            SaveHistory();
+            RebuildOrdersGrid();
+            TryRestoreSelectedRowByTag($"order|{order.InternalId}");
         }
 
         private void LoadSettings()
