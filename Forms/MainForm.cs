@@ -34,6 +34,7 @@ namespace MyManager
         private readonly ToolStripMenuItem _ctxDeleteMenuItem = new ToolStripMenuItem("Удалить заказ");
         private OrderProcessor? _processor;
         private bool _isRebuildingGrid;
+        private int _hoveredRowIndex = -1;
 
         // На будущее: список пользователей можно наполнять из настроек/БД.
         private readonly List<string> _users = ["Сервер \"Таудеми\""];
@@ -161,6 +162,9 @@ namespace MyManager
         private static readonly Color QueueHeaderBackColor = Color.FromArgb(103, 163, 216);
         private static readonly Color QueueStatusSelectedBackColor = Color.FromArgb(57, 63, 81);
         private static readonly Color QueueTextColor = Color.FromArgb(244, 247, 252);
+        private static readonly Color OrdersRowSelectedBackColor = Color.FromArgb(235, 240, 250);
+        private static readonly Color OrdersRowHoverBackColor = Color.FromArgb(248, 250, 255);
+        private static readonly Color OrdersItemRowBackColor = Color.FromArgb(248, 248, 248);
 
         private sealed class QueueStatusItem
         {
@@ -240,6 +244,7 @@ namespace MyManager
             InitializeCreatedDateFilter();
             InitializeReceivedDateFilter();
             InitializeQueueNavigation();
+            InitializeOrdersGridVisuals();
             InitializeOrdersDataFlow();
             InitializeOrderRowContextMenu();
             InitializeActionButtonsState();
@@ -503,6 +508,19 @@ namespace MyManager
             tbSearch.TextChanged += (_, _) => RebuildOrdersGrid();
             LoadHistory();
             RebuildOrdersGrid();
+        }
+
+        private void InitializeOrdersGridVisuals()
+        {
+            dgvJobs.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            dgvJobs.MultiSelect = false;
+            dgvJobs.EnableHeadersVisualStyles = false;
+            dgvJobs.DefaultCellStyle.SelectionBackColor = OrdersRowSelectedBackColor;
+            dgvJobs.DefaultCellStyle.SelectionForeColor = Color.Black;
+
+            dgvJobs.CellFormatting += DgvJobs_CellFormatting;
+            dgvJobs.CellMouseEnter += DgvJobs_CellMouseEnter;
+            dgvJobs.CellMouseLeave += DgvJobs_CellMouseLeave;
         }
 
         private void InitializeActionButtonsState()
@@ -984,6 +1002,71 @@ namespace MyManager
 
             if (e.ColumnIndex == colStatus.Index || e.ColumnIndex == colCreated.Index || e.ColumnIndex == colReceived.Index || e.ColumnIndex < 0)
                 HandleOrdersGridChanged();
+        }
+
+        private void DgvJobs_CellFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
+        {
+            if (e.RowIndex < 0 || e.ColumnIndex < 0)
+                return;
+
+            var row = dgvJobs.Rows[e.RowIndex];
+            var rowTag = row.Tag?.ToString();
+            var isItemRow = IsItemTag(rowTag);
+
+            if (isItemRow)
+            {
+                e.CellStyle.BackColor = OrdersItemRowBackColor;
+                e.CellStyle.SelectionBackColor = OrdersRowSelectedBackColor;
+                e.CellStyle.SelectionForeColor = Color.Black;
+                return;
+            }
+
+            var rowBackColor = row.Selected
+                ? OrdersRowSelectedBackColor
+                : (e.RowIndex == _hoveredRowIndex ? OrdersRowHoverBackColor : Color.White);
+
+            e.CellStyle.BackColor = rowBackColor;
+            e.CellStyle.SelectionBackColor = OrdersRowSelectedBackColor;
+            e.CellStyle.SelectionForeColor = Color.Black;
+        }
+
+        private void DgvJobs_CellMouseEnter(object? sender, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex < 0)
+                return;
+
+            var rowTag = dgvJobs.Rows[e.RowIndex].Tag?.ToString();
+            if (!IsOrderTag(rowTag))
+            {
+                if (_hoveredRowIndex != -1)
+                {
+                    var oldIndex = _hoveredRowIndex;
+                    _hoveredRowIndex = -1;
+                    if (oldIndex >= 0 && oldIndex < dgvJobs.Rows.Count)
+                        dgvJobs.InvalidateRow(oldIndex);
+                }
+                return;
+            }
+
+            if (e.RowIndex == _hoveredRowIndex)
+                return;
+
+            var prevIndex = _hoveredRowIndex;
+            _hoveredRowIndex = e.RowIndex;
+            if (prevIndex >= 0 && prevIndex < dgvJobs.Rows.Count)
+                dgvJobs.InvalidateRow(prevIndex);
+            dgvJobs.InvalidateRow(_hoveredRowIndex);
+        }
+
+        private void DgvJobs_CellMouseLeave(object? sender, EventArgs e)
+        {
+            if (_hoveredRowIndex == -1)
+                return;
+
+            var oldIndex = _hoveredRowIndex;
+            _hoveredRowIndex = -1;
+            if (oldIndex >= 0 && oldIndex < dgvJobs.Rows.Count)
+                dgvJobs.InvalidateRow(oldIndex);
         }
 
         private void DgvJobs_CellDoubleClick(object? sender, DataGridViewCellEventArgs e)
