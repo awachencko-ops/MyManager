@@ -1014,11 +1014,26 @@ namespace MyManager
             if (e.RowIndex != -1 || e.ColumnIndex < 0)
                 return;
 
+            var mouseClient = dgvJobs.PointToClient(Cursor.Position);
+            var hit = dgvJobs.HitTest(mouseClient.X, mouseClient.Y);
+            var isHoveredHeader = hit.RowIndex == -1 && hit.ColumnIndex == e.ColumnIndex;
+
+            if (isHoveredHeader)
+            {
+                // Keep native hover look on the header under cursor.
+                e.Paint(e.CellBounds, e.PaintParts);
+                e.Handled = true;
+                return;
+            }
+
             using var backBrush = new SolidBrush(Color.White);
             e.Graphics.FillRectangle(backBrush, e.CellBounds);
             e.Paint(
                 e.CellBounds,
-                e.PaintParts & ~(DataGridViewPaintParts.Background | DataGridViewPaintParts.SelectionBackground));
+                DataGridViewPaintParts.Border |
+                DataGridViewPaintParts.ContentForeground |
+                DataGridViewPaintParts.ErrorIcon |
+                DataGridViewPaintParts.Focus);
             e.Handled = true;
         }
 
