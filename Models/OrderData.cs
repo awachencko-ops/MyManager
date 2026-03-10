@@ -11,13 +11,17 @@ namespace MyManager
         Simple = 2
     }
 
-    // Маркер бизнес-топологии: заказ как один файл или как группа файлов.
-    // `SingleFile` — это частный случай групповой модели (ровно один item).
+    // Маркер бизнес-топологии: "сингл-заказ" или "мульти-заказ".
+    // Сингл-заказ — это частный случай групповой модели (ровно один item).
     public enum OrderFileTopologyMarker
     {
         Unknown = 0,
-        SingleFile = 1,
-        MultiFile = 2
+        SingleOrder = 1,
+        MultiOrder = 2,
+
+        // Совместимость со старым именованием маркеров.
+        SingleFile = SingleOrder,
+        MultiFile = MultiOrder
     }
 
     public class OrderData
@@ -51,8 +55,12 @@ namespace MyManager
         public DateTime LastStatusAt { get; set; } = DateTime.Now;
 
         public int ItemsCount => Items?.Count ?? 0;
-        public bool IsSingleFileMarked => FileTopologyMarker == OrderFileTopologyMarker.SingleFile;
-        public bool IsMultiFileMarked => FileTopologyMarker == OrderFileTopologyMarker.MultiFile;
+        public bool IsSingleOrderMarked => FileTopologyMarker == OrderFileTopologyMarker.SingleOrder;
+        public bool IsMultiOrderMarked => FileTopologyMarker == OrderFileTopologyMarker.MultiOrder;
+
+        // Совместимость со старым именованием.
+        public bool IsSingleFileMarked => IsSingleOrderMarked;
+        public bool IsMultiFileMarked => IsMultiOrderMarked;
 
         public void RefreshAggregatedStatus()
         {

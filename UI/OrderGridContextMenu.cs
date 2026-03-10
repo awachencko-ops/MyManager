@@ -34,7 +34,12 @@ namespace MyManager
         public Action? ConvertToSingle { get; set; }
         public Action? AddItemRow { get; set; }
 
-        public ContextMenuStrip Build(string colName, bool allowCopyToGrandpa = true, bool canConvertToGroup = true, bool canConvertToSingle = false)
+        public ContextMenuStrip Build(
+            string colName,
+            bool allowCopyToGrandpa = true,
+            bool canConvertToGroup = true,
+            bool canConvertToSingle = false,
+            bool showGroupActions = true)
         {
             _menu.Items.Clear();
 
@@ -51,11 +56,14 @@ namespace MyManager
             // 1. ГЛАВНЫЕ КНОПКИ (Всегда сверху)
             AddItem("🚀 Запустить обработку", Run);
             AddItem("🛑 Остановить обработку", Stop);
-            if (canConvertToGroup)
-                AddItem("🧩 Преобразовать в группу", ConvertToGroup);
-            if (canConvertToSingle)
-                AddItem("↩ Преобразовать группу в одиночный заказ", ConvertToSingle);
-            AddItem("➕ Добавить строку", AddItemRow);
+            if (showGroupActions)
+            {
+                if (canConvertToGroup)
+                    AddItem("🧩 Преобразовать в группу", ConvertToGroup);
+                if (canConvertToSingle)
+                    AddItem("↩ Преобразовать группу в одиночный заказ", ConvertToSingle);
+                AddItem("➕ Добавить строку", AddItemRow);
+            }
             AddItem("❌ Удалить заказ из списка", Delete);
 
             // Откроет либо корень, либо конкретную подпапку (1. исходные и т.д.)

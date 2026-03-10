@@ -18,7 +18,7 @@ namespace MyManager
 
     /// <summary>
     /// Единый нормализатор модели заказа:
-    /// order = группа файлов, где single-флоу является частным случаем (один item).
+    /// order = группа файлов, где single-order является частным случаем (один item).
     /// </summary>
     public static class OrderTopologyService
     {
@@ -74,18 +74,18 @@ namespace MyManager
                     }
                 }
 
-                changed |= SetMarker(order, OrderFileTopologyMarker.SingleFile);
+                changed |= SetMarker(order, OrderFileTopologyMarker.SingleOrder);
             }
             else if (order.Items.Count > 1)
             {
-                changed |= SetMarker(order, OrderFileTopologyMarker.MultiFile);
+                changed |= SetMarker(order, OrderFileTopologyMarker.MultiOrder);
                 if (hasOrderLevelPaths)
-                    issues.Add("MultiFile-заказ содержит пути на уровне order; источником истины считаются item-пути.");
+                    issues.Add("MultiOrder-заказ содержит пути на уровне order; источником истины считаются item-пути.");
             }
             else
             {
                 // Пустой заказ трактуем как single-контур до появления item.
-                changed |= SetMarker(order, OrderFileTopologyMarker.SingleFile);
+                changed |= SetMarker(order, OrderFileTopologyMarker.SingleOrder);
             }
 
             if (order.FileTopologyMarker != markerBefore)
@@ -105,9 +105,20 @@ namespace MyManager
             return HasAnyPath(order.SourcePath, order.PreparedPath, order.PrintPath) ? 1 : 0;
         }
 
-        public static bool IsMultiFileOrder(OrderData? order)
+        public static bool IsMultiOrder(OrderData? order)
         {
             return GetEffectiveItemCount(order) > 1;
+        }
+
+        public static bool IsSingleOrder(OrderData? order)
+        {
+            return !IsMultiOrder(order);
+        }
+
+        // Совместимость со старым именованием метода.
+        public static bool IsMultiFileOrder(OrderData? order)
+        {
+            return IsMultiOrder(order);
         }
 
         private static bool SetMarker(OrderData order, OrderFileTopologyMarker nextMarker)

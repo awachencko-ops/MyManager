@@ -611,26 +611,6 @@ namespace MyManager
                 if (TrySelectContextRow())
                     OpenLogForSelectionOrManager();
             };
-            _gridMenu.ConvertToGroup = () =>
-            {
-                var order = GetContextOrder();
-                if (order != null)
-                    ConvertOrderToGroup(order);
-            };
-            _gridMenu.ConvertToSingle = () =>
-            {
-                var order = GetContextOrder();
-                if (order != null)
-                    ConvertGroupToSingle(order);
-            };
-            _gridMenu.AddItemRow = () =>
-            {
-                var order = GetContextOrder();
-                if (order == null)
-                    return;
-
-                AddItemRowToOrder(order);
-            };
 
             dgvJobs.CellMouseDown += DgvJobs_CellMouseDown;
         }
@@ -652,10 +632,13 @@ namespace MyManager
 
             var order = GetContextOrder();
             var allowCopyToGrandpa = order == null || UsesOrderFolderStorage(order);
-            var canConvertToGroup = order != null && (order.Items == null || order.Items.Count == 0);
-            var canConvertToSingle = order != null && order.Items != null && order.Items.Count == 1;
             var columnName = dgvJobs.Columns[e.ColumnIndex].Name;
-            var menu = _gridMenu.Build(columnName, allowCopyToGrandpa, canConvertToGroup, canConvertToSingle);
+            var menu = _gridMenu.Build(
+                columnName,
+                allowCopyToGrandpa,
+                canConvertToGroup: false,
+                canConvertToSingle: false,
+                showGroupActions: false);
             if (menu.Items.Count == 0)
                 return;
 
