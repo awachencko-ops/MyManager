@@ -1667,25 +1667,6 @@ namespace MyManager
                 EditOrderFromGrid(e.RowIndex);
                 return;
             }
-
-            var tag = dgvJobs.Rows[e.RowIndex].Tag?.ToString();
-            if (!IsOrderTag(tag))
-                return;
-
-            var orderInternalId = ExtractOrderInternalIdFromTag(tag);
-            if (string.IsNullOrWhiteSpace(orderInternalId))
-                return;
-
-            var order = FindOrderByInternalId(orderInternalId);
-            if (!OrderTopologyService.IsMultiFileOrder(order))
-                return;
-
-            if (_expandedOrderIds.Contains(orderInternalId))
-                _expandedOrderIds.Remove(orderInternalId);
-            else
-                _expandedOrderIds.Add(orderInternalId);
-
-            RebuildOrdersGrid();
         }
 
         private void SelectPitStopActionFromGrid(int rowIndex)
@@ -3031,54 +3012,66 @@ namespace MyManager
             if (string.IsNullOrWhiteSpace(normalizedStatus))
                 normalizedStatus = "Обрабатывается";
 
-            var isMulti = OrderTopologyService.IsMultiFileOrder(order);
-            var isExpanded = isMulti && _expandedOrderIds.Contains(order.InternalId);
-            var statePrefix = isMulti ? (isExpanded ? "∧ " : "∨ ") : string.Empty;
-
-            var groupSource = isMulti ? "..." : GetFileName(order.SourcePath);
-            var groupPrepared = isMulti ? BuildGroupTitle(order) : GetFileName(order.PreparedPath);
-            var groupPrint = isMulti ? "..." : GetFileName(order.PrintPath);
-            var groupPitStop = isMulti ? GetCommonGroupAction(order.Items, x => x.PitStopAction) : NormalizeAction(order.PitStopAction);
-            var groupImposing = isMulti ? GetCommonGroupAction(order.Items, x => x.ImposingAction) : NormalizeAction(order.ImposingAction);
+            var sourcePath = ResolveSingleOrderDisplayPath(order, 1);
+            var preparedPath = ResolveSingleOrderDisplayPath(order, 2);
+            var printPath = ResolveSingleOrderDisplayPath(order, 3);
+            var pitStopAction = ResolveSingleOrderDisplayAction(order, x => x.PitStopAction, order.PitStopAction);
+            var imposingAction = ResolveSingleOrderDisplayAction(order, x => x.ImposingAction, order.ImposingAction);
 
             var orderRowIndex = dgvJobs.Rows.Add(
-                statePrefix + normalizedStatus,
+                normalizedStatus,
                 GetOrderDisplayId(order),
-                groupSource,
-                groupPrepared,
-                groupPitStop,
-                groupImposing,
-                groupPrint,
+                GetFileName(sourcePath),
+                GetFileName(preparedPath),
+                pitStopAction,
+                imposingAction,
+                GetFileName(printPath),
                 FormatDate(order.OrderDate),
                 FormatDate(order.ArrivalDate));
 
             dgvJobs.Rows[orderRowIndex].Tag = $"order|{order.InternalId}";
+        }
 
-            if (!isMulti || !isExpanded || order.Items == null || order.Items.Count == 0)
-                return;
+        private static string ResolveSingleOrderDisplayPath(OrderData order, int stage)
+        {
+            var orderPath = GetOrderStagePath(order, stage);
+            var primaryItem = GetPrimaryItem(order);
+            var itemPath = primaryItem == null ? string.Empty : GetItemStagePath(primaryItem, stage);
 
-            foreach (var item in order.Items.OrderBy(x => x.SequenceNo))
-            {
-                if (item == null)
-                    continue;
+            if (HasExistingFile(itemPath))
+                return itemPath;
 
-                var itemStatus = NormalizeStatus(item.FileStatus) ?? item.FileStatus;
-                if (string.IsNullOrWhiteSpace(itemStatus))
-                    itemStatus = "Обрабатывается";
+            if (HasExistingFile(orderPath))
+                return orderPath;
 
-                var itemRowIndex = dgvJobs.Rows.Add(
-                    $"   • {itemStatus}",
-                    $"   └ {GetOrderDisplayId(order)}",
-                    GetFileName(item.SourcePath),
-                    BuildItemTitle(item),
-                    NormalizeAction(item.PitStopAction),
-                    NormalizeAction(item.ImposingAction),
-                    GetFileName(item.PrintPath),
-                    FormatDate(item.UpdatedAt),
-                    FormatDate(order.ArrivalDate));
+            if (!string.IsNullOrWhiteSpace(orderPath))
+                return orderPath;
 
-                dgvJobs.Rows[itemRowIndex].Tag = $"item|{order.InternalId}|{item.ItemId}";
-            }
+            return itemPath;
+        }
+
+        private static string ResolveSingleOrderDisplayAction(OrderData order, Func<OrderFileItem, string> selector, string? orderAction)
+        {
+            var normalizedOrderAction = NormalizeAction(orderAction);
+            if (!string.Equals(normalizedOrderAction, "-", StringComparison.Ordinal))
+                return normalizedOrderAction;
+
+            var primaryItem = GetPrimaryItem(order);
+            if (primaryItem == null)
+                return normalizedOrderAction;
+
+            return NormalizeAction(selector(primaryItem));
+        }
+
+        private static OrderFileItem? GetPrimaryItem(OrderData order)
+        {
+            if (order?.Items == null || order.Items.Count == 0)
+                return null;
+
+            return order.Items
+                .Where(x => x != null)
+                .OrderBy(x => x.SequenceNo)
+                .FirstOrDefault();
         }
 
         private bool OrderMatchesSearch(OrderData order, string searchText)
@@ -3193,43 +3186,6 @@ namespace MyManager
         private static string NormalizeAction(string? action)
         {
             return string.IsNullOrWhiteSpace(action) ? "-" : action.Trim();
-        }
-
-        private static string GetCommonGroupAction(List<OrderFileItem> items, Func<OrderFileItem, string> selector)
-        {
-            if (items == null || items.Count == 0)
-                return "-";
-
-            var values = items
-                .Where(x => x != null)
-                .Select(x => NormalizeAction(selector(x)))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
-
-            return values.Count == 1 ? values[0] : "-";
-        }
-
-        private static string BuildGroupTitle(OrderData order)
-        {
-            var itemCount = order.Items?.Count ?? 0;
-            if (itemCount > 0)
-                return $"{itemCount} файлов";
-
-            return GetFileName(order.PreparedPath);
-        }
-
-        private static string BuildItemTitle(OrderFileItem item)
-        {
-            if (!string.IsNullOrWhiteSpace(item.ClientFileLabel))
-                return item.ClientFileLabel.Trim();
-
-            if (!string.IsNullOrWhiteSpace(item.PreparedPath))
-                return GetFileName(item.PreparedPath);
-
-            if (!string.IsNullOrWhiteSpace(item.SourcePath))
-                return GetFileName(item.SourcePath);
-
-            return "...";
         }
 
         private OrderData? GetSelectedOrder()
