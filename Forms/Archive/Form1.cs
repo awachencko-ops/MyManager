@@ -112,9 +112,9 @@ namespace MyManager
         private void InitializeProcessor()
         {
             _processor = new OrderProcessor(_ordersRootPath);
-            _processor.OnStatusChanged += (id, status, reason) =>
+            _processor.OnStatusChanged += (orderKey, status, reason) =>
             {
-                var order = _orderHistory.FirstOrDefault(x => x.Id == id);
+                var order = _orderHistory.FirstOrDefault(x => string.Equals(x.InternalId, orderKey, StringComparison.Ordinal)) ?? _orderHistory.FirstOrDefault(x => x.Id == orderKey);
                 if (order != null) SetOrderStatus(order, status, "processor", reason);
             };
             _processor.OnLog += (msg) => SetBottomStatus(msg);

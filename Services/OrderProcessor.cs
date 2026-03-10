@@ -316,7 +316,8 @@ namespace MyManager
 
         private void Notify(OrderData o, string s, string l)
         {
-            OnStatusChanged?.Invoke(o.Id, s, l);
+            var statusKey = string.IsNullOrWhiteSpace(o.InternalId) ? o.Id : o.InternalId;
+            OnStatusChanged?.Invoke(statusKey, s, l);
             OnLog?.Invoke(l);
             Logger.Info($"STATUS | order={o.Id} | source=processor | status={s} | reason={l}");
         }

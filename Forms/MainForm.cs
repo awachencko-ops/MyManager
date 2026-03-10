@@ -355,11 +355,12 @@ namespace MyManager
         private void InitializeProcessor()
         {
             _processor = new OrderProcessor(_ordersRootPath);
-            _processor.OnStatusChanged += (orderId, status, reason) =>
+            _processor.OnStatusChanged += (orderKey, status, reason) =>
             {
                 void Apply()
                 {
-                    var order = _orderHistory.FirstOrDefault(x => string.Equals(x.Id, orderId, StringComparison.Ordinal));
+                    var order = _orderHistory.FirstOrDefault(x => string.Equals(x.InternalId, orderKey, StringComparison.Ordinal))
+                        ?? _orderHistory.FirstOrDefault(x => string.Equals(x.Id, orderKey, StringComparison.Ordinal));
                     if (order == null)
                         return;
 
@@ -3506,7 +3507,8 @@ namespace MyManager
 
             if (value.Contains("обрабатыва", StringComparison.OrdinalIgnoreCase)
                 || value.Contains("в работе", StringComparison.OrdinalIgnoreCase)
-                || value.Contains("запуск", StringComparison.OrdinalIgnoreCase))
+                || value.Contains("запуск", StringComparison.OrdinalIgnoreCase)
+                || value.Contains("ожидан", StringComparison.OrdinalIgnoreCase))
                 return "Обрабатывается";
 
             if (value.Contains("обработано", StringComparison.OrdinalIgnoreCase))
