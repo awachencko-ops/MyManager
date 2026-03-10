@@ -293,27 +293,6 @@ namespace MyManager
                 var o = GetOrderByRow(_ctxRow);
                 if (o != null) OpenOrderLog(o);
             };
-            _gridMenu.ConvertToGroup = () =>
-            {
-                var o = GetOrderByRow(_ctxRow);
-                if (o != null) ConvertOrderToGroup(o);
-            };
-            _gridMenu.ConvertToSingle = () =>
-            {
-                var o = GetOrderByRow(_ctxRow);
-                if (o != null) ConvertGroupToSingle(o);
-            };
-            _gridMenu.AddItemRow = () =>
-            {
-                var o = GetOrderByRow(_ctxRow);
-                if (o == null)
-                    return;
-
-                if (!IsVisualGroupOrder(o) && (o.Items == null || o.Items.Count == 0))
-                    ConvertOrderToGroup(o);
-
-                CreateEmptyItemRow(o);
-            };
         }
 
         private string SmartCopy(string sourceFile, OrderData o, int stage, string targetName, bool isInternal)
@@ -1014,9 +993,7 @@ namespace MyManager
                 gridOrders.CurrentCell = gridOrders.Rows[e.RowIndex].Cells[e.ColumnIndex];
                 var order = GetOrderByRow(e.RowIndex);
                 bool allowCopyToGrandpa = order == null || UsesOrderFolderStorage(order);
-                bool canConvertToGroup = order != null && (order.Items == null || order.Items.Count == 0);
-                bool canConvertToSingle = order != null && order.Items != null && order.Items.Count == 1;
-                _gridMenu.Build(gridOrders.Columns[e.ColumnIndex].Name, allowCopyToGrandpa, canConvertToGroup, canConvertToSingle).Show(Cursor.Position);
+                _gridMenu.Build(gridOrders.Columns[e.ColumnIndex].Name, allowCopyToGrandpa).Show(Cursor.Position);
             }
         }
 
