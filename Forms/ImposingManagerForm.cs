@@ -109,7 +109,7 @@ namespace MyManager
             }
         }
 
-        private void DataGridView1_SelectionChanged(object sender, EventArgs e)
+        private void DataGridView1_SelectionChanged(object? sender, EventArgs e)
         {
             if (dataGridView1.CurrentRow != null &&
                 dataGridView1.CurrentRow.DataBoundItem is ImposingConfig selected)
@@ -139,7 +139,7 @@ namespace MyManager
             txtError.Clear();
         }
 
-        private void ButtonCreateSequance_Click(object sender, EventArgs e)
+        private void ButtonCreateSequance_Click(object? sender, EventArgs e)
         {
             if (string.IsNullOrWhiteSpace(txtName.Text))
             {
@@ -228,7 +228,7 @@ namespace MyManager
                     var catItems = catDict.Element(ns + "ITEMS");
                     if (catItems == null) continue;
 
-                    string catName = catItems.Elements(ns + "S").FirstOrDefault(s => s.Attribute("N")?.Value == "Name")?.Value;
+                    string? catName = catItems.Elements(ns + "S").FirstOrDefault(s => s.Attribute("N")?.Value == "Name")?.Value;
 
                     // Пропускаем системные категории
                     if (string.IsNullOrEmpty(catName) || catName == "Automation sequences" || catName == "Memory") continue;
@@ -244,7 +244,7 @@ namespace MyManager
                         var seqItems = seqDict.Element(ns + "ITEMS");
                         if (seqItems == null) continue;
 
-                        string seqName = seqItems.Elements(ns + "S").FirstOrDefault(s => s.Attribute("N")?.Value == "Name")?.Value;
+                        string? seqName = seqItems.Elements(ns + "S").FirstOrDefault(s => s.Attribute("N")?.Value == "Name")?.Value;
 
                         if (string.IsNullOrEmpty(seqName)) continue;
                         if (allActions.Any(a => a.Name == seqName)) continue;
@@ -393,9 +393,9 @@ namespace MyManager
             treeCategories.EndUpdate();
         }
 
-        private void TreeCategories_AfterSelect(object sender, TreeViewEventArgs e)
+        private void TreeCategories_AfterSelect(object? sender, TreeViewEventArgs e)
         {
-            string selectedCategory = e.Node.Name;
+            var selectedCategory = e.Node?.Name ?? string.Empty;
 
             if (selectedCategory == "ALL")
             {
@@ -413,7 +413,7 @@ namespace MyManager
             }
         }
 
-        private void ButtonDeleteSequance_Click(object sender, EventArgs e)
+        private void ButtonDeleteSequance_Click(object? sender, EventArgs e)
         {
             if (dataGridView1.CurrentRow == null || !(dataGridView1.CurrentRow.DataBoundItem is ImposingConfig selected))
             {

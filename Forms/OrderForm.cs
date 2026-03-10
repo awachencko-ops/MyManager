@@ -8,7 +8,7 @@ namespace MyManager
 {
     public partial class OrderForm : Form
     {
-        public OrderData ResultOrder { get; private set; }
+        public OrderData? ResultOrder { get; private set; }
         private readonly string ordersRootPath;
         private readonly bool _infoOnly;
         private readonly string _internalId;
@@ -16,7 +16,7 @@ namespace MyManager
         private readonly DateTime _arrivalDate;
         private readonly string _currentStatus;
 
-        public OrderForm(string ordersRootPath, OrderData data = null, bool infoOnly = false)
+        public OrderForm(string ordersRootPath, OrderData? data = null, bool infoOnly = false)
         {
             InitializeComponent();
             this.StartPosition = FormStartPosition.CenterParent;

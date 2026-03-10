@@ -15,7 +15,7 @@ namespace MyManager
         public static List<ActionConfig> GetAllPitStopConfigs()
             => LoadJson<ActionConfig>(PitStopFile);
 
-        public static ActionConfig GetPitStopConfigByName(string name)
+        public static ActionConfig? GetPitStopConfigByName(string name)
             => GetAllPitStopConfigs().FirstOrDefault(c => c.Name == name);
 
         public static void SavePitStopConfigs(List<ActionConfig> configs)
@@ -25,7 +25,7 @@ namespace MyManager
         public static List<ImposingConfig> GetAllImposingConfigs()
             => LoadJson<ImposingConfig>(ImposingFile);
 
-        public static ImposingConfig GetImposingConfigByName(string name)
+        public static ImposingConfig? GetImposingConfigByName(string name)
             => GetAllImposingConfigs().FirstOrDefault(c => c.Name == name);
 
         public static void SaveImposingConfigs(List<ImposingConfig> configs)

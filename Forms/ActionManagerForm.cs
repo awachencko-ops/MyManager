@@ -108,7 +108,7 @@ namespace MyManager
             }
         }
 
-        private void GridActions_SelectionChanged(object sender, EventArgs e)
+        private void GridActions_SelectionChanged(object? sender, EventArgs e)
         {
             if (gridActions.CurrentRow != null &&
                 gridActions.CurrentRow.DataBoundItem is ActionConfig selectedAction)
@@ -148,7 +148,7 @@ namespace MyManager
             txtNonPdfFiles.Clear();
         }
 
-        private void ButtonDeleteAction_Click(object sender, EventArgs e)
+        private void ButtonDeleteAction_Click(object? sender, EventArgs e)
         {
             if (gridActions.CurrentRow == null ||
                 !(gridActions.CurrentRow.DataBoundItem is ActionConfig selected))
@@ -166,7 +166,7 @@ namespace MyManager
             }
         }
 
-        private void ButtonCreateAction_Click(object sender, EventArgs e)
+        private void ButtonCreateAction_Click(object? sender, EventArgs e)
         {
             if (string.IsNullOrWhiteSpace(txtActionName.Text) || txtActionName.Text == "Action Name")
             {
