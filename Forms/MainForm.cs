@@ -520,6 +520,7 @@ namespace MyManager
             dgvJobs.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None;
             dgvJobs.RowTemplate.Resizable = DataGridViewTriState.False;
             dgvJobs.RowTemplate.Height = 34;
+            dgvJobs.AllowDrop = true;
             dgvJobs.CellBorderStyle = DataGridViewCellBorderStyle.Single;
             dgvJobs.GridColor = Color.FromArgb(218, 218, 218);
             dgvJobs.DefaultCellStyle.SelectionBackColor = OrdersRowSelectedBackColor;
@@ -540,8 +541,12 @@ namespace MyManager
 
             dgvJobs.CellPainting += DgvJobs_CellPainting;
             dgvJobs.CellFormatting += DgvJobs_CellFormatting;
+            dgvJobs.CellClick += DgvJobs_CellClick;
             dgvJobs.CellMouseEnter += DgvJobs_CellMouseEnter;
             dgvJobs.CellMouseLeave += DgvJobs_CellMouseLeave;
+            dgvJobs.DragEnter += DgvJobs_DragEnter;
+            dgvJobs.DragOver += DgvJobs_DragOver;
+            dgvJobs.DragDrop += DgvJobs_DragDrop;
         }
 
         private void InitializeActionButtonsState()
@@ -1092,6 +1097,11 @@ namespace MyManager
             if (e.RowIndex < 0)
                 return;
 
+            var isFileColumn = e.ColumnIndex == colSource.Index
+                || e.ColumnIndex == colPrep.Index
+                || e.ColumnIndex == colPrint.Index;
+            dgvJobs.Cursor = isFileColumn ? Cursors.Hand : Cursors.Default;
+
             var rowTag = dgvJobs.Rows[e.RowIndex].Tag?.ToString();
             if (!IsOrderTag(rowTag))
             {
@@ -1117,6 +1127,8 @@ namespace MyManager
 
         private void DgvJobs_CellMouseLeave(object? sender, EventArgs e)
         {
+            dgvJobs.Cursor = Cursors.Default;
+
             if (_hoveredRowIndex == -1)
                 return;
 
@@ -1155,6 +1167,673 @@ namespace MyManager
                 _expandedOrderIds.Add(orderInternalId);
 
             RebuildOrdersGrid();
+        }
+
+        private async void DgvJobs_CellClick(object? sender, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex < 0 || e.ColumnIndex < 0)
+                return;
+
+            var stage = GetStageByColumnIndex(e.ColumnIndex);
+            if (stage == 0)
+                return;
+
+            var rowTag = dgvJobs.Rows[e.RowIndex].Tag?.ToString();
+            var order = GetOrderByRowIndex(e.RowIndex);
+            if (order == null || string.IsNullOrWhiteSpace(rowTag))
+                return;
+
+            try
+            {
+                if (IsItemTag(rowTag))
+                {
+                    if (!TryGetItemByRowIndex(e.RowIndex, out var itemOrder, out var item)
+                        || itemOrder == null
+                        || item == null)
+                    {
+                        return;
+                    }
+
+                    var currentPath = GetItemStagePath(item, stage);
+                    if (HasExistingFile(currentPath))
+                    {
+                        OpenFileDefault(currentPath);
+                        return;
+                    }
+
+                    await PickAndCopyFileForItemAsync(itemOrder, item, stage);
+                    return;
+                }
+
+                if (!IsOrderTag(rowTag))
+                    return;
+
+                if (OrderTopologyService.IsMultiFileOrder(order))
+                    return;
+
+                var orderPath = GetOrderStagePath(order, stage);
+                if (HasExistingFile(orderPath))
+                {
+                    OpenFileDefault(orderPath);
+                    return;
+                }
+
+                await PickAndCopyFileForOrderAsync(order, stage);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Не удалось обработать действие по файлу: {ex.Message}", "Файловая операция", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void DgvJobs_DragEnter(object? sender, DragEventArgs e)
+        {
+            e.Effect = e.Data?.GetDataPresent(DataFormats.FileDrop) == true
+                ? DragDropEffects.Copy
+                : DragDropEffects.None;
+        }
+
+        private void DgvJobs_DragOver(object? sender, DragEventArgs e)
+        {
+            if (e.Data?.GetDataPresent(DataFormats.FileDrop) != true)
+            {
+                e.Effect = DragDropEffects.None;
+                return;
+            }
+
+            var clientPoint = dgvJobs.PointToClient(new Point(e.X, e.Y));
+            var hit = dgvJobs.HitTest(clientPoint.X, clientPoint.Y);
+            if (hit.RowIndex < 0 || hit.ColumnIndex < 0)
+            {
+                e.Effect = DragDropEffects.None;
+                return;
+            }
+
+            var stage = GetStageByColumnIndex(hit.ColumnIndex);
+            if (stage == 0)
+            {
+                e.Effect = DragDropEffects.None;
+                return;
+            }
+
+            var rowTag = dgvJobs.Rows[hit.RowIndex].Tag?.ToString();
+            var order = GetOrderByRowIndex(hit.RowIndex);
+            if (order == null || string.IsNullOrWhiteSpace(rowTag))
+            {
+                e.Effect = DragDropEffects.None;
+                return;
+            }
+
+            if (IsOrderTag(rowTag) && OrderTopologyService.IsMultiFileOrder(order))
+            {
+                e.Effect = DragDropEffects.None;
+                return;
+            }
+
+            var draggingFile = (e.Data.GetData(DataFormats.FileDrop) as string[])?.FirstOrDefault();
+            draggingFile = CleanPath(draggingFile);
+            if (string.IsNullOrWhiteSpace(draggingFile))
+            {
+                e.Effect = DragDropEffects.None;
+                return;
+            }
+
+            string existingPath;
+            if (IsItemTag(rowTag) && TryGetItemByRowIndex(hit.RowIndex, out _, out var item) && item != null)
+                existingPath = GetItemStagePath(item, stage);
+            else
+                existingPath = GetOrderStagePath(order, stage);
+
+            e.Effect = PathsEqual(existingPath, draggingFile)
+                ? DragDropEffects.None
+                : DragDropEffects.Copy;
+        }
+
+        private async void DgvJobs_DragDrop(object? sender, DragEventArgs e)
+        {
+            if (e.Data?.GetDataPresent(DataFormats.FileDrop) != true)
+                return;
+
+            var files = e.Data.GetData(DataFormats.FileDrop) as string[];
+            var sourceFile = CleanPath(files?.FirstOrDefault());
+            if (string.IsNullOrWhiteSpace(sourceFile) || !File.Exists(sourceFile))
+                return;
+
+            var clientPoint = dgvJobs.PointToClient(new Point(e.X, e.Y));
+            var hit = dgvJobs.HitTest(clientPoint.X, clientPoint.Y);
+            if (hit.RowIndex < 0 || hit.ColumnIndex < 0)
+                return;
+
+            var stage = GetStageByColumnIndex(hit.ColumnIndex);
+            if (stage == 0)
+                return;
+
+            var row = dgvJobs.Rows[hit.RowIndex];
+            var rowTag = row.Tag?.ToString();
+            var order = GetOrderByRowIndex(hit.RowIndex);
+            if (order == null || string.IsNullOrWhiteSpace(rowTag))
+                return;
+
+            try
+            {
+                if (IsItemTag(rowTag))
+                {
+                    if (!TryGetItemByRowIndex(hit.RowIndex, out var itemOrder, out var item)
+                        || itemOrder == null
+                        || item == null)
+                    {
+                        return;
+                    }
+
+                    if (!await AddFileToItemAsync(itemOrder, item, sourceFile, stage))
+                        return;
+
+                    PersistGridChanges($"item|{itemOrder.InternalId}|{item.ItemId}");
+                    return;
+                }
+
+                if (!IsOrderTag(rowTag))
+                    return;
+
+                if (OrderTopologyService.IsMultiFileOrder(order))
+                    return;
+
+                if (!await AddFileToOrderAsync(order, sourceFile, stage))
+                    return;
+
+                PersistGridChanges($"order|{order.InternalId}");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Не удалось добавить файл: {ex.Message}", "Drag&Drop", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private async Task PickAndCopyFileForOrderAsync(OrderData order, int stage)
+        {
+            var targetFolder = GetStageFolder(order, stage);
+            Directory.CreateDirectory(targetFolder);
+
+            using var ofd = new OpenFileDialog
+            {
+                Filter = "PDF|*.pdf|Все файлы|*.*",
+                InitialDirectory = targetFolder,
+                RestoreDirectory = false
+            };
+
+            if (ofd.ShowDialog(this) != DialogResult.OK)
+                return;
+
+            if (!await AddFileToOrderAsync(order, ofd.FileName, stage))
+                return;
+
+            PersistGridChanges($"order|{order.InternalId}");
+        }
+
+        private async Task PickAndCopyFileForItemAsync(OrderData order, OrderFileItem item, int stage)
+        {
+            var targetFolder = GetStageFolder(order, stage);
+            Directory.CreateDirectory(targetFolder);
+
+            using var ofd = new OpenFileDialog
+            {
+                Filter = "PDF|*.pdf|Все файлы|*.*",
+                InitialDirectory = targetFolder,
+                RestoreDirectory = false
+            };
+
+            if (ofd.ShowDialog(this) != DialogResult.OK)
+                return;
+
+            if (!await AddFileToItemAsync(order, item, ofd.FileName, stage))
+                return;
+
+            PersistGridChanges($"item|{order.InternalId}|{item.ItemId}");
+        }
+
+        private async Task<bool> AddFileToOrderAsync(OrderData order, string sourceFile, int stage)
+        {
+            var cleanSource = CleanPath(sourceFile);
+            if (string.IsNullOrWhiteSpace(cleanSource) || !File.Exists(cleanSource))
+                return false;
+
+            if (stage == 3 && !await EnsureSimpleOrderInfoForPrintAsync(order))
+                return false;
+
+            string targetName;
+            if (stage == 3 && !string.IsNullOrWhiteSpace(order.Id))
+                targetName = $"{order.Id}{Path.GetExtension(cleanSource)}";
+            else
+                targetName = EnsureUniqueStageFileName(order, stage, Path.GetFileName(cleanSource));
+
+            var newPath = stage == 3
+                ? CopyPrintFile(order, cleanSource, targetName)
+                : CopyIntoStage(order, stage, cleanSource, targetName);
+
+            if (stage == 2)
+                EnsureSourceCopy(order, cleanSource);
+
+            UpdateOrderFilePath(order, stage, newPath);
+            return true;
+        }
+
+        private async Task<bool> AddFileToItemAsync(OrderData order, OrderFileItem item, string sourceFile, int stage)
+        {
+            var cleanSource = CleanPath(sourceFile);
+            if (string.IsNullOrWhiteSpace(cleanSource) || !File.Exists(cleanSource))
+                return false;
+
+            if (stage == 3 && !await EnsureSimpleOrderInfoForPrintAsync(order))
+                return false;
+
+            if (string.IsNullOrWhiteSpace(item.ClientFileLabel))
+                item.ClientFileLabel = Path.GetFileNameWithoutExtension(cleanSource);
+
+            string newPath;
+            if (stage == 3)
+            {
+                var printName = EnsureUniqueStageFileName(order, 3, BuildItemPrintFileName(order, item, cleanSource));
+                newPath = CopyPrintFile(order, cleanSource, printName);
+            }
+            else
+            {
+                var targetName = EnsureUniqueStageFileName(order, stage, Path.GetFileName(cleanSource));
+                newPath = CopyIntoStage(order, stage, cleanSource, targetName);
+            }
+
+            UpdateItemFilePath(order, item, stage, newPath);
+            return true;
+        }
+
+        private void PersistGridChanges(string selectedTag)
+        {
+            SaveHistory();
+            RebuildOrdersGrid();
+            if (!string.IsNullOrWhiteSpace(selectedTag))
+                TryRestoreSelectedRowByTag(selectedTag);
+        }
+
+        private int GetStageByColumnIndex(int columnIndex)
+        {
+            var colName = dgvJobs.Columns[columnIndex].Name;
+            return colName switch
+            {
+                "colSource" => 1,
+                "colPrep" => 2,
+                "colPrint" => 3,
+                _ => 0
+            };
+        }
+
+        private OrderData? GetOrderByRowIndex(int rowIndex)
+        {
+            if (rowIndex < 0 || rowIndex >= dgvJobs.Rows.Count)
+                return null;
+
+            var rowTag = dgvJobs.Rows[rowIndex].Tag?.ToString();
+            if (!IsOrderTag(rowTag) && !IsItemTag(rowTag))
+                return null;
+
+            var orderInternalId = ExtractOrderInternalIdFromTag(rowTag);
+            return FindOrderByInternalId(orderInternalId);
+        }
+
+        private bool TryGetItemByRowIndex(int rowIndex, out OrderData? order, out OrderFileItem? item)
+        {
+            order = GetOrderByRowIndex(rowIndex);
+            item = null;
+
+            if (order == null || rowIndex < 0 || rowIndex >= dgvJobs.Rows.Count)
+                return false;
+
+            var rowTag = dgvJobs.Rows[rowIndex].Tag?.ToString();
+            if (!IsItemTag(rowTag))
+                return false;
+
+            var itemId = ExtractItemIdFromTag(rowTag);
+            if (string.IsNullOrWhiteSpace(itemId))
+                return false;
+
+            item = order.Items?.FirstOrDefault(x => string.Equals(x.ItemId, itemId, StringComparison.Ordinal));
+            return item != null;
+        }
+
+        private static string GetOrderStagePath(OrderData order, int stage)
+        {
+            return stage switch
+            {
+                1 => order.SourcePath ?? string.Empty,
+                2 => order.PreparedPath ?? string.Empty,
+                3 => order.PrintPath ?? string.Empty,
+                _ => string.Empty
+            };
+        }
+
+        private static string GetItemStagePath(OrderFileItem item, int stage)
+        {
+            return stage switch
+            {
+                1 => item.SourcePath ?? string.Empty,
+                2 => item.PreparedPath ?? string.Empty,
+                3 => item.PrintPath ?? string.Empty,
+                _ => string.Empty
+            };
+        }
+
+        private static void SetItemStagePath(OrderFileItem item, int stage, string path)
+        {
+            if (stage == 1)
+                item.SourcePath = path;
+            else if (stage == 2)
+                item.PreparedPath = path;
+            else if (stage == 3)
+                item.PrintPath = path;
+        }
+
+        private void UpdateOrderFilePath(OrderData order, int stage, string path)
+        {
+            if (stage == 1)
+                order.SourcePath = path;
+            else if (stage == 2)
+                order.PreparedPath = path;
+            else if (stage == 3)
+                order.PrintPath = path;
+
+            var status = ResolveWorkflowStatus(order.SourcePath, order.PreparedPath, order.PrintPath);
+            SetOrderStatus(order, status, "file-sync", $"stage-{stage}", persistHistory: false, rebuildGrid: false);
+
+            if (order.Items != null && order.Items.Count == 1)
+            {
+                var singleItem = order.Items[0];
+                SetItemStagePath(singleItem, stage, path);
+                singleItem.FileStatus = status;
+                singleItem.UpdatedAt = DateTime.Now;
+            }
+        }
+
+        private void UpdateItemFilePath(OrderData order, OrderFileItem item, int stage, string path)
+        {
+            SetItemStagePath(item, stage, path);
+            item.FileStatus = ResolveWorkflowStatus(item.SourcePath, item.PreparedPath, item.PrintPath);
+            item.UpdatedAt = DateTime.Now;
+
+            if (order.Items != null && order.Items.Count == 1 && string.Equals(order.Items[0].ItemId, item.ItemId, StringComparison.Ordinal))
+            {
+                if (stage == 1)
+                    order.SourcePath = item.SourcePath;
+                else if (stage == 2)
+                    order.PreparedPath = item.PreparedPath;
+                else if (stage == 3)
+                    order.PrintPath = item.PrintPath;
+
+                SetOrderStatus(order, item.FileStatus, "file-sync", $"item-stage-{stage}", persistHistory: false, rebuildGrid: false);
+                return;
+            }
+
+            RefreshOrderStatusFromItems(order);
+        }
+
+        private void RefreshOrderStatusFromItems(OrderData order)
+        {
+            if (order.Items == null || order.Items.Count == 0)
+            {
+                var status = ResolveWorkflowStatus(order.SourcePath, order.PreparedPath, order.PrintPath);
+                SetOrderStatus(order, status, "file-sync", "no-items", persistHistory: false, rebuildGrid: false);
+                return;
+            }
+
+            var items = order.Items.Where(x => x != null).ToList();
+            if (items.Count == 0)
+            {
+                SetOrderStatus(order, "Ожидание", "file-sync", "empty-items", persistHistory: false, rebuildGrid: false);
+                return;
+            }
+
+            var total = items.Count;
+            var done = items.Count(x => HasExistingFile(x.PrintPath));
+            var active = items.Count(x => HasExistingFile(x.SourcePath) || HasExistingFile(x.PreparedPath) || HasExistingFile(x.PrintPath));
+
+            var statusValue = done == total
+                ? "Завершено"
+                : active > 0
+                    ? "Обрабатывается"
+                    : "Ожидание";
+
+            SetOrderStatus(order, statusValue, "file-sync", "aggregate", persistHistory: false, rebuildGrid: false);
+        }
+
+        private static string ResolveWorkflowStatus(string? sourcePath, string? preparedPath, string? printPath)
+        {
+            if (HasExistingFile(printPath))
+                return "Завершено";
+
+            if (HasExistingFile(preparedPath) || HasExistingFile(sourcePath))
+                return "Обрабатывается";
+
+            return "Ожидание";
+        }
+
+        private string GetStageFolder(OrderData order, int stage)
+        {
+            if (stage == 3 && HasExistingFile(order.PrintPath))
+                return Path.GetDirectoryName(order.PrintPath) ?? GetTempStageFolder(stage);
+
+            if (string.IsNullOrWhiteSpace(order.FolderName))
+                return GetTempStageFolder(stage);
+
+            var sub = stage switch
+            {
+                1 => "1. исходные",
+                2 => "2. подготовка",
+                3 => "3. печать",
+                _ => string.Empty
+            };
+
+            var path = Path.Combine(_ordersRootPath, order.FolderName, sub);
+            Directory.CreateDirectory(path);
+            return path;
+        }
+
+        private string GetTempStageFolder(int stage)
+        {
+            var sub = stage switch
+            {
+                1 => "in",
+                2 => "prepress",
+                3 => "print",
+                _ => string.Empty
+            };
+
+            var root = string.IsNullOrWhiteSpace(_tempRootPath)
+                ? Path.Combine(_ordersRootPath, "_temp")
+                : _tempRootPath;
+            var path = Path.Combine(root, sub);
+            Directory.CreateDirectory(path);
+            return path;
+        }
+
+        private string CopyIntoStage(OrderData order, int stage, string sourceFile, string? targetName = null)
+        {
+            var cleanSource = CleanPath(sourceFile);
+            if (string.IsNullOrWhiteSpace(cleanSource) || !File.Exists(cleanSource))
+                throw new FileNotFoundException("Файл для копирования не найден.", cleanSource);
+
+            var stageFolder = GetStageFolder(order, stage);
+            Directory.CreateDirectory(stageFolder);
+
+            var fileName = string.IsNullOrWhiteSpace(targetName) ? Path.GetFileName(cleanSource) : targetName;
+            var destination = Path.Combine(stageFolder, fileName);
+
+            if (PathsEqual(cleanSource, destination))
+                return destination;
+
+            if (File.Exists(destination))
+                return destination;
+
+            File.Copy(cleanSource, destination, true);
+            return destination;
+        }
+
+        private string CopyPrintFile(OrderData order, string sourceFile, string targetName)
+        {
+            if (!UsesOrderFolderStorage(order))
+                return CopyToGrandpaFromSource(sourceFile, targetName);
+
+            return CopyIntoStage(order, 3, sourceFile, targetName);
+        }
+
+        private static bool UsesOrderFolderStorage(OrderData order)
+        {
+            return !string.IsNullOrWhiteSpace(order.FolderName);
+        }
+
+        private string CopyToGrandpaFromSource(string sourceFile, string targetName)
+        {
+            var cleanSource = CleanPath(sourceFile);
+            if (string.IsNullOrWhiteSpace(cleanSource) || !File.Exists(cleanSource))
+                throw new FileNotFoundException("Файл для копирования не найден.", cleanSource);
+
+            var destinationRoot = string.IsNullOrWhiteSpace(_grandpaFolder)
+                ? GetTempStageFolder(3)
+                : _grandpaFolder;
+            Directory.CreateDirectory(destinationRoot);
+
+            var destination = Path.Combine(destinationRoot, targetName);
+
+            if (PathsEqual(cleanSource, destination))
+            {
+                TrySetClipboardText(destination);
+                return destination;
+            }
+
+            if (File.Exists(destination))
+            {
+                TrySetClipboardText(destination);
+                return destination;
+            }
+
+            File.Copy(cleanSource, destination, true);
+            TrySetClipboardText(destination);
+            return destination;
+        }
+
+        private static void TrySetClipboardText(string? text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return;
+
+            try
+            {
+                Clipboard.SetText(text);
+            }
+            catch
+            {
+                // Clipboard access should not fail file workflow.
+            }
+        }
+
+        private string EnsureUniqueStageFileName(OrderData order, int stage, string fileName)
+        {
+            var folder = GetStageFolder(order, stage);
+            Directory.CreateDirectory(folder);
+
+            var ext = Path.GetExtension(fileName);
+            var baseName = Path.GetFileNameWithoutExtension(fileName);
+            var candidate = fileName;
+            var index = 1;
+
+            while (File.Exists(Path.Combine(folder, candidate)))
+            {
+                candidate = $"{baseName}_{index}{ext}";
+                index++;
+            }
+
+            return candidate;
+        }
+
+        private string BuildItemPrintFileName(OrderData order, OrderFileItem item, string sourceFile)
+        {
+            var ext = Path.GetExtension(sourceFile);
+            var orderNo = string.IsNullOrWhiteSpace(order.Id) ? "order" : order.Id;
+            var orderedItems = (order.Items ?? []).OrderBy(x => x.SequenceNo).ToList();
+            var idx = orderedItems.FindIndex(x => string.Equals(x.ItemId, item.ItemId, StringComparison.Ordinal));
+            var itemIndex = idx >= 0 ? idx + 1 : 1;
+            return $"{orderNo}_{itemIndex}{ext}";
+        }
+
+        private void EnsureSourceCopy(OrderData order, string sourceFile)
+        {
+            if (!string.IsNullOrWhiteSpace(order.SourcePath) && HasExistingFile(order.SourcePath))
+                return;
+
+            var newPath = CopyIntoStage(order, 1, sourceFile);
+            UpdateOrderFilePath(order, 1, newPath);
+        }
+
+        private async Task<bool> EnsureSimpleOrderInfoForPrintAsync(OrderData order)
+        {
+            if (UsesOrderFolderStorage(order))
+                return true;
+
+            if (!string.IsNullOrWhiteSpace(order.Id))
+                return true;
+
+            using var form = new SimpleOrderForm(order);
+            if (form.ShowDialog(this) != DialogResult.OK)
+                return false;
+
+            order.Id = form.OrderNumber.Trim();
+            order.OrderDate = form.OrderDate;
+            if (order.ArrivalDate == default)
+                order.ArrivalDate = DateTime.Now;
+
+            return !string.IsNullOrWhiteSpace(order.Id);
+        }
+
+        private static void OpenFileDefault(string filePath)
+        {
+            if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+                return;
+
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = filePath,
+                UseShellExecute = true
+            });
+        }
+
+        private static bool HasExistingFile(string? path)
+        {
+            return !string.IsNullOrWhiteSpace(path) && File.Exists(path);
+        }
+
+        private static string CleanPath(string? path)
+        {
+            return string.IsNullOrWhiteSpace(path)
+                ? string.Empty
+                : path.Trim().Trim('"');
+        }
+
+        private static bool PathsEqual(string? leftPath, string? rightPath)
+        {
+            if (string.IsNullOrWhiteSpace(leftPath) || string.IsNullOrWhiteSpace(rightPath))
+                return false;
+
+            var left = NormalizePath(leftPath);
+            var right = NormalizePath(rightPath);
+            return string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string NormalizePath(string path)
+        {
+            try
+            {
+                return Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            }
+            catch
+            {
+                return path.Trim();
+            }
         }
 
         private void RefreshQueuePresentation()
