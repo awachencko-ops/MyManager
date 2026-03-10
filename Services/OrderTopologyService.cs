@@ -115,12 +115,6 @@ namespace MyManager
             return !IsMultiOrder(order);
         }
 
-        // Совместимость со старым именованием метода.
-        public static bool IsMultiFileOrder(OrderData? order)
-        {
-            return IsMultiOrder(order);
-        }
-
         private static bool SetMarker(OrderData order, OrderFileTopologyMarker nextMarker)
         {
             if (order.FileTopologyMarker == nextMarker)

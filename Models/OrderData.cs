@@ -17,11 +17,7 @@ namespace MyManager
     {
         Unknown = 0,
         SingleOrder = 1,
-        MultiOrder = 2,
-
-        // Совместимость со старым именованием маркеров.
-        SingleFile = SingleOrder,
-        MultiFile = MultiOrder
+        MultiOrder = 2
     }
 
     public class OrderData
@@ -57,10 +53,6 @@ namespace MyManager
         public int ItemsCount => Items?.Count ?? 0;
         public bool IsSingleOrderMarked => FileTopologyMarker == OrderFileTopologyMarker.SingleOrder;
         public bool IsMultiOrderMarked => FileTopologyMarker == OrderFileTopologyMarker.MultiOrder;
-
-        // Совместимость со старым именованием.
-        public bool IsSingleFileMarked => IsSingleOrderMarked;
-        public bool IsMultiFileMarked => IsMultiOrderMarked;
 
         public void RefreshAggregatedStatus()
         {

@@ -1490,6 +1490,10 @@ namespace MyManager
             if (e.RowIndex != -1 || e.ColumnIndex < 0)
                 return;
 
+            if (e.Graphics == null)
+                return;
+
+            var graphics = e.Graphics;
             var mouseClient = dgvJobs.PointToClient(Cursor.Position);
             var hit = dgvJobs.HitTest(mouseClient.X, mouseClient.Y);
             var isHoveredHeader = hit.RowIndex == -1 && hit.ColumnIndex == e.ColumnIndex;
@@ -1503,7 +1507,7 @@ namespace MyManager
             if (!isHoveredHeader)
             {
                 using var backBrush = new SolidBrush(Color.White);
-                e.Graphics.FillRectangle(backBrush, e.CellBounds);
+                graphics.FillRectangle(backBrush, e.CellBounds);
                 e.Paint(
                     e.CellBounds,
                     DataGridViewPaintParts.ContentForeground |
@@ -1514,10 +1518,10 @@ namespace MyManager
             // Draw header separators in black.
             using var gridPen = new Pen(Color.Black);
             if (e.ColumnIndex == 0)
-                e.Graphics.DrawLine(gridPen, e.CellBounds.Left, e.CellBounds.Top, e.CellBounds.Left, e.CellBounds.Bottom - 1);
-            e.Graphics.DrawLine(gridPen, e.CellBounds.Left, e.CellBounds.Top, e.CellBounds.Right - 1, e.CellBounds.Top);
-            e.Graphics.DrawLine(gridPen, e.CellBounds.Right - 1, e.CellBounds.Top, e.CellBounds.Right - 1, e.CellBounds.Bottom - 1);
-            e.Graphics.DrawLine(gridPen, e.CellBounds.Left, e.CellBounds.Bottom - 1, e.CellBounds.Right - 1, e.CellBounds.Bottom - 1);
+                graphics.DrawLine(gridPen, e.CellBounds.Left, e.CellBounds.Top, e.CellBounds.Left, e.CellBounds.Bottom - 1);
+            graphics.DrawLine(gridPen, e.CellBounds.Left, e.CellBounds.Top, e.CellBounds.Right - 1, e.CellBounds.Top);
+            graphics.DrawLine(gridPen, e.CellBounds.Right - 1, e.CellBounds.Top, e.CellBounds.Right - 1, e.CellBounds.Bottom - 1);
+            graphics.DrawLine(gridPen, e.CellBounds.Left, e.CellBounds.Bottom - 1, e.CellBounds.Right - 1, e.CellBounds.Bottom - 1);
             e.Handled = true;
         }
 
@@ -1530,6 +1534,9 @@ namespace MyManager
             var rowBackColor = row.Selected
                 ? OrdersRowSelectedBackColor
                 : (e.RowIndex == _hoveredRowIndex ? OrdersRowHoverBackColor : Color.White);
+
+            if (e.CellStyle == null)
+                return;
 
             e.CellStyle.BackColor = rowBackColor;
             e.CellStyle.SelectionBackColor = OrdersRowSelectedBackColor;
@@ -5541,16 +5548,10 @@ namespace MyManager
                 _managerLogFilePath,
                 _orderLogsFolderPath,
                 currentSettings.MaxParallelism,
-                useExtendedMode: currentSettings.UseExtendedMode,
-                showLegacyInterfaceSwitch: true);
+                useExtendedMode: currentSettings.UseExtendedMode);
 
             if (settingsForm.ShowDialog(this) != DialogResult.OK)
-            {
-                if (settingsForm.SwitchToLegacyRequested)
-                    Program.SwitchToLegacyInterface(this);
-
                 return;
-            }
 
             _ordersRootPath = settingsForm.OrdersRootPath;
             _tempRootPath = settingsForm.TempRootPath;
