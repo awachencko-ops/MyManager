@@ -340,6 +340,70 @@ namespace MyManager
             TryRestoreSelectedRowByTag($"order|{order.InternalId}");
         }
 
+        private void EditOrderFromGrid(int rowIndex)
+        {
+            if (rowIndex < 0 || rowIndex >= dgvJobs.Rows.Count)
+                return;
+
+            var rowTag = dgvJobs.Rows[rowIndex].Tag?.ToString();
+            if (!IsOrderTag(rowTag))
+                return;
+
+            var orderInternalId = ExtractOrderInternalIdFromTag(rowTag);
+            if (string.IsNullOrWhiteSpace(orderInternalId))
+                return;
+
+            var order = FindOrderByInternalId(orderInternalId);
+            if (order == null)
+                return;
+
+            var settings = AppSettings.Load();
+            if (settings.UseExtendedMode)
+                EditOrderExtended(order);
+            else
+                EditOrderSimple(order);
+        }
+
+        private void EditOrderSimple(OrderData order)
+        {
+            using var form = new SimpleOrderForm(order);
+            if (form.ShowDialog(this) != DialogResult.OK)
+                return;
+
+            order.Id = form.OrderNumber.Trim();
+            order.OrderDate = form.OrderDate;
+            if (order.ArrivalDate == default)
+                order.ArrivalDate = DateTime.Now;
+
+            SaveHistory();
+            RebuildOrdersGrid();
+            TryRestoreSelectedRowByTag($"order|{order.InternalId}");
+        }
+
+        private void EditOrderExtended(OrderData order)
+        {
+            using var form = new OrderForm(_ordersRootPath, order);
+            if (form.ShowDialog(this) != DialogResult.OK || form.ResultOrder == null)
+                return;
+
+            var updated = form.ResultOrder;
+            order.Id = updated.Id;
+            order.StartMode = updated.StartMode;
+            order.Keyword = updated.Keyword;
+            order.ArrivalDate = updated.ArrivalDate;
+            order.OrderDate = updated.OrderDate;
+            order.FolderName = updated.FolderName;
+            order.SourcePath = updated.SourcePath;
+            order.PreparedPath = updated.PreparedPath;
+            order.PrintPath = updated.PrintPath;
+            order.PitStopAction = updated.PitStopAction;
+            order.ImposingAction = updated.ImposingAction;
+
+            SaveHistory();
+            RebuildOrdersGrid();
+            TryRestoreSelectedRowByTag($"order|{order.InternalId}");
+        }
+
         private void LoadSettings()
         {
             var settings = AppSettings.Load();
@@ -857,6 +921,12 @@ namespace MyManager
         {
             if (e.RowIndex < 0)
                 return;
+
+            if (e.ColumnIndex == colOrderNumber.Index)
+            {
+                EditOrderFromGrid(e.RowIndex);
+                return;
+            }
 
             var tag = dgvJobs.Rows[e.RowIndex].Tag?.ToString();
             if (!IsOrderTag(tag))

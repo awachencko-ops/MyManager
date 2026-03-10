@@ -193,7 +193,7 @@ namespace MyManager
                 PrintPath = order.PrintPath ?? string.Empty,
                 PitStopAction = string.IsNullOrWhiteSpace(order.PitStopAction) ? "-" : order.PitStopAction,
                 ImposingAction = string.IsNullOrWhiteSpace(order.ImposingAction) ? "-" : order.ImposingAction,
-                FileStatus = string.IsNullOrWhiteSpace(order.Status) ? "⚪ Ожидание" : order.Status,
+                FileStatus = string.IsNullOrWhiteSpace(order.Status) ? "Ожидание" : order.Status,
                 UpdatedAt = DateTime.Now,
                 SequenceNo = 0
             };

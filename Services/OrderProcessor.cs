@@ -59,7 +59,7 @@ namespace MyManager
 
                 if (pitCfg == null && impCfg == null)
                 {
-                    Notify(order, "⚪ Ожидание", "Сценарии не выбраны.");
+                    Notify(order, "Ожидание", "Сценарии не выбраны.");
                     return;
                 }
 
@@ -160,7 +160,7 @@ namespace MyManager
 
             if (runItems.Count == 0)
             {
-                Notify(order, "⚪ Ожидание", "Нет выбранных файлов для обработки");
+                Notify(order, "Ожидание", "Нет выбранных файлов для обработки");
                 return;
             }
 
@@ -284,7 +284,7 @@ namespace MyManager
                 }
             }
 
-            item.FileStatus = !string.IsNullOrWhiteSpace(item.PrintPath) && File.Exists(item.PrintPath) ? "✅ Готово" : "⚪ Ожидание";
+            item.FileStatus = !string.IsNullOrWhiteSpace(item.PrintPath) && File.Exists(item.PrintPath) ? "✅ Готово" : "Ожидание";
             item.LastReason = string.Empty;
             item.UpdatedAt = DateTime.Now;
         }

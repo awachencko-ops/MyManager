@@ -1130,7 +1130,7 @@ namespace MyManager
             {
                 ClientFileLabel = GetOrderDisplayId(order),
                 SequenceNo = order.Items.Count == 0 ? 0 : order.Items.Max(x => x.SequenceNo) + 1,
-                FileStatus = "⚪ Ожидание",
+                FileStatus = "Ожидание",
                 PitStopAction = string.IsNullOrWhiteSpace(order.PitStopAction) ? "-" : order.PitStopAction,
                 ImposingAction = string.IsNullOrWhiteSpace(order.ImposingAction) ? "-" : order.ImposingAction,
                 UpdatedAt = DateTime.Now
@@ -1172,7 +1172,7 @@ namespace MyManager
             else if (stage == 3)
                 item.PrintPath = CopyPrintFile(order, source, EnsureUniqueStageFileName(order, 3, label + ext));
 
-            item.FileStatus = stage == 3 ? "✅ Готово" : "⚪ Ожидание";
+            item.FileStatus = stage == 3 ? "✅ Готово" : "Ожидание";
             item.UpdatedAt = DateTime.Now;
             order.Items.Add(item);
             order.RefreshAggregatedStatus();
@@ -1227,7 +1227,7 @@ namespace MyManager
                 ArrivalDate = DateTime.Now,
                 OrderDate = DateTime.Now,
                 FolderName = "",
-                Status = "⚪ Ожидание",
+                Status = "Ожидание",
                 PitStopAction = "-",
                 ImposingAction = "-"
             };
@@ -1366,7 +1366,7 @@ namespace MyManager
             // Если файлов нет (удалили)
             else if (string.IsNullOrEmpty(o.SourcePath))
             {
-                SetOrderStatus(o, "⚪ Ожидание", "file-sync", "Нет исходного файла");
+                SetOrderStatus(o, "Ожидание", "file-sync", "Нет исходного файла");
             }
         }
 
@@ -1437,7 +1437,7 @@ namespace MyManager
             else if (!string.IsNullOrEmpty(item.PreparedPath) && File.Exists(item.PreparedPath))
                 item.FileStatus = "🟡 В работе";
             else if (string.IsNullOrEmpty(item.SourcePath))
-                item.FileStatus = "⚪ Ожидание";
+                item.FileStatus = "Ожидание";
 
             item.UpdatedAt = DateTime.Now;
             order.RefreshAggregatedStatus();
@@ -1524,7 +1524,7 @@ namespace MyManager
                         SourcePath = order.SourcePath ?? string.Empty,
                         PreparedPath = order.PreparedPath ?? string.Empty,
                         PrintPath = order.PrintPath ?? string.Empty,
-                        FileStatus = order.Status ?? "⚪ Ожидание",
+                        FileStatus = order.Status ?? "Ожидание",
                         SequenceNo = 0,
                         PitStopAction = string.IsNullOrWhiteSpace(order.PitStopAction) ? "-" : order.PitStopAction,
                         ImposingAction = string.IsNullOrWhiteSpace(order.ImposingAction) ? "-" : order.ImposingAction
@@ -1537,7 +1537,7 @@ namespace MyManager
                 firstItem.SourcePath = order.SourcePath ?? string.Empty;
                 firstItem.PreparedPath = order.PreparedPath ?? string.Empty;
                 firstItem.PrintPath = order.PrintPath ?? string.Empty;
-                firstItem.FileStatus = order.Status ?? "⚪ Ожидание";
+                firstItem.FileStatus = order.Status ?? "Ожидание";
                 firstItem.PitStopAction = string.IsNullOrWhiteSpace(firstItem.PitStopAction) || firstItem.PitStopAction == "-"
                     ? (string.IsNullOrWhiteSpace(order.PitStopAction) ? "-" : order.PitStopAction)
                     : firstItem.PitStopAction;
@@ -2205,7 +2205,7 @@ namespace MyManager
                 {
                     string nextStatus = (!string.IsNullOrWhiteSpace(order.PrintPath) && FileExistsCached(order.PrintPath))
                         ? "✅ Готово"
-                        : "⚪ Ожидание";
+                        : "Ожидание";
                     changed |= SetOrderStatus(order, nextStatus, "archive-sync", "Заказ больше не считается архивным", refreshGrid: false, persistHistory: false);
                 }
             }

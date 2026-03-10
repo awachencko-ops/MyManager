@@ -14,6 +14,7 @@ namespace MyManager
         private readonly string _internalId;
         private readonly OrderStartMode _startMode;
         private readonly DateTime _arrivalDate;
+        private readonly string _currentStatus;
 
         public OrderForm(string ordersRootPath, OrderData data = null, bool infoOnly = false)
         {
@@ -25,6 +26,7 @@ namespace MyManager
             _internalId = data?.InternalId ?? Guid.NewGuid().ToString("N");
             _startMode = data?.StartMode ?? OrderStartMode.Extended;
             _arrivalDate = data?.ArrivalDate ?? DateTime.Now;
+            _currentStatus = string.IsNullOrWhiteSpace(data?.Status) ? "Ожидание" : data.Status;
 
             LoadConfigLists();
             SetupValidation();
@@ -187,7 +189,7 @@ namespace MyManager
                 PrintPath = textPrint.Text,
                 PitStopAction = comboBoxPitStop.Text,
                 ImposingAction = comboBoxHotImposing.Text,
-                Status = "⚪ Ожидание"
+                Status = _currentStatus
             };
             this.DialogResult = DialogResult.OK;
             this.Close();

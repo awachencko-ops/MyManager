@@ -31,7 +31,7 @@ namespace MyManager
         public DateTime ArrivalDate { get; set; } = DateTime.Now; // Дата поступления заказа в препресс-менеджер
         public DateTime OrderDate { get; set; } = DateTime.Now; // Дата формирования заказа (ДелаемДело)
         public string FolderName { get; set; } = ""; // Например: "23_10_25 №123"
-        public string Status { get; set; } = "⚪ Ожидание";
+        public string Status { get; set; } = "Ожидание";
 
         // Новый контейнер файлов заказа
         public List<OrderFileItem> Items { get; set; } = new();
@@ -67,14 +67,16 @@ namespace MyManager
             int successCount = normalizedItems.Count(x => x.FileStatus == "✅ Готово");
             int errorCount = normalizedItems.Count(x => x.FileStatus == "🔴 Ошибка");
             int inProgressCount = normalizedItems.Count(x => x.FileStatus == "🟡 В работе");
-            int waitingCount = normalizedItems.Count(x => x.FileStatus == "⚪ Ожидание");
+            int waitingCount = normalizedItems.Count(x =>
+                !string.IsNullOrWhiteSpace(x.FileStatus) &&
+                x.FileStatus.Contains("ожид", StringComparison.OrdinalIgnoreCase));
 
             if (errorCount == total)
                 Status = "🔴 Ошибка";
             else if (successCount == total)
                 Status = "✅ Готово";
             else if (waitingCount == total)
-                Status = "⚪ Ожидание";
+                Status = "Ожидание";
             else if (inProgressCount > 0)
                 Status = $"🟡 В работе ({successCount + inProgressCount}/{total})";
             else
