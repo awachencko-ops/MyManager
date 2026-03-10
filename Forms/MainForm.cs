@@ -518,19 +518,25 @@ namespace MyManager
             dgvJobs.MultiSelect = false;
             dgvJobs.AllowUserToResizeRows = false;
             dgvJobs.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None;
+            dgvJobs.RowTemplate.Resizable = DataGridViewTriState.False;
+            dgvJobs.RowTemplate.Height = 34;
             dgvJobs.CellBorderStyle = DataGridViewCellBorderStyle.Single;
             dgvJobs.GridColor = Color.FromArgb(218, 218, 218);
             dgvJobs.DefaultCellStyle.SelectionBackColor = OrdersRowSelectedBackColor;
             dgvJobs.DefaultCellStyle.SelectionForeColor = Color.Black;
             dgvJobs.DefaultCellStyle.Padding = unifiedPadding;
             dgvJobs.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
+            dgvJobs.DefaultCellStyle.WrapMode = DataGridViewTriState.False;
             dgvJobs.EnableHeadersVisualStyles = true;
+            dgvJobs.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+            dgvJobs.ColumnHeadersHeight = 34;
             dgvJobs.ColumnHeadersDefaultCellStyle.BackColor = Color.White;
             dgvJobs.ColumnHeadersDefaultCellStyle.ForeColor = Color.Black;
             dgvJobs.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.White;
             dgvJobs.ColumnHeadersDefaultCellStyle.SelectionForeColor = Color.Black;
             dgvJobs.ColumnHeadersDefaultCellStyle.Padding = unifiedPadding;
             dgvJobs.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
+            dgvJobs.ColumnHeadersDefaultCellStyle.WrapMode = DataGridViewTriState.False;
 
             dgvJobs.CellPainting += DgvJobs_CellPainting;
             dgvJobs.CellFormatting += DgvJobs_CellFormatting;
