@@ -26,15 +26,12 @@ namespace MyManager
         private readonly List<OrderData> _orderHistory = [];
         private readonly HashSet<string> _expandedOrderIds = new(StringComparer.Ordinal);
         private readonly Dictionary<string, CancellationTokenSource> _runTokensByOrder = new(StringComparer.Ordinal);
-        private readonly ContextMenuStrip _orderRowContextMenu = new ContextMenuStrip();
-        private readonly ToolStripMenuItem _ctxRunMenuItem = new ToolStripMenuItem("Запустить");
-        private readonly ToolStripMenuItem _ctxStopMenuItem = new ToolStripMenuItem("Остановить");
-        private readonly ToolStripMenuItem _ctxOpenFolderMenuItem = new ToolStripMenuItem("Открыть папку");
-        private readonly ToolStripMenuItem _ctxOpenLogMenuItem = new ToolStripMenuItem("Открыть лог");
-        private readonly ToolStripMenuItem _ctxDeleteMenuItem = new ToolStripMenuItem("Удалить заказ");
+        private readonly OrderGridContextMenu _gridMenu = new();
         private OrderProcessor? _processor;
         private bool _isRebuildingGrid;
         private int _hoveredRowIndex = -1;
+        private int _ctxRow = -1;
+        private int _ctxCol = -1;
         private Rectangle _dragBoxFromMouseDown = Rectangle.Empty;
         private int _dragSourceRowIndex = -1;
         private int _dragSourceColumnIndex = -1;
@@ -575,19 +572,37 @@ namespace MyManager
 
         private void InitializeOrderRowContextMenu()
         {
-            _ctxRunMenuItem.Click += async (_, _) => await RunSelectedOrderAsync();
-            _ctxStopMenuItem.Click += (_, _) => StopSelectedOrder();
-            _ctxOpenFolderMenuItem.Click += (_, _) => OpenFolderForSelectedOrder();
-            _ctxOpenLogMenuItem.Click += (_, _) => OpenLogForSelectionOrManager();
-            _ctxDeleteMenuItem.Click += (_, _) => RemoveSelectedOrder();
-
-            _orderRowContextMenu.Items.Add(_ctxRunMenuItem);
-            _orderRowContextMenu.Items.Add(_ctxStopMenuItem);
-            _orderRowContextMenu.Items.Add(new ToolStripSeparator());
-            _orderRowContextMenu.Items.Add(_ctxOpenFolderMenuItem);
-            _orderRowContextMenu.Items.Add(_ctxOpenLogMenuItem);
-            _orderRowContextMenu.Items.Add(new ToolStripSeparator());
-            _orderRowContextMenu.Items.Add(_ctxDeleteMenuItem);
+            _gridMenu.OpenFolder = (stage) =>
+            {
+                var order = GetContextOrder();
+                if (order != null)
+                    OpenOrderStageFolder(order, stage);
+            };
+            _gridMenu.Delete = () =>
+            {
+                if (TrySelectContextRow())
+                    RemoveSelectedOrder();
+            };
+            _gridMenu.Run = async () =>
+            {
+                if (TrySelectContextRow())
+                    await RunSelectedOrderAsync();
+            };
+            _gridMenu.Stop = () =>
+            {
+                if (TrySelectContextRow())
+                    StopSelectedOrder();
+            };
+            _gridMenu.PickFile = (stage, fileType) => _ = PickFileFromContextAsync(stage);
+            _gridMenu.RemoveFile = (stage) => RemoveFileFromContext(stage);
+            _gridMenu.RenameFile = (stage) => RenameFileFromContext(stage);
+            _gridMenu.CopyPathToClipboard = (stage) => CopyPathFromContextToClipboard(stage);
+            _gridMenu.PastePathFromClipboard = (stage) => _ = PastePathFromClipboardToContextAsync(stage);
+            _gridMenu.OpenOrderLog = () =>
+            {
+                if (TrySelectContextRow())
+                    OpenLogForSelectionOrManager();
+            };
 
             dgvJobs.CellMouseDown += DgvJobs_CellMouseDown;
         }
@@ -602,17 +617,220 @@ namespace MyManager
             if (!IsOrderTag(rowTag) && !IsItemTag(rowTag))
                 return;
 
-            dgvJobs.CurrentCell = row.Cells[e.ColumnIndex];
+            _ctxRow = e.RowIndex;
+            _ctxCol = e.ColumnIndex;
+            if (!TrySelectContextRow())
+                return;
+
+            // Пока миграция не завершена, скрываем convert-сценарии и copy-to-grandpa.
+            const bool allowCopyToGrandpa = false;
+            const bool canConvertToGroup = false;
+            const bool canConvertToSingle = false;
+            var columnName = dgvJobs.Columns[e.ColumnIndex].Name;
+            var menu = _gridMenu.Build(columnName, allowCopyToGrandpa, canConvertToGroup, canConvertToSingle);
+            if (menu.Items.Count == 0)
+                return;
+
+            menu.Show(Cursor.Position);
+        }
+
+        private bool TrySelectContextRow()
+        {
+            if (_ctxRow < 0 || _ctxRow >= dgvJobs.Rows.Count)
+                return false;
+
+            var row = dgvJobs.Rows[_ctxRow];
+            var columnIndex = _ctxCol >= 0 && _ctxCol < dgvJobs.Columns.Count
+                ? _ctxCol
+                : colStatus.Index;
+            if (columnIndex < 0 || columnIndex >= row.Cells.Count)
+                columnIndex = colStatus.Index;
+
+            dgvJobs.CurrentCell = row.Cells[columnIndex];
             row.Selected = true;
+            return true;
+        }
 
-            var order = GetSelectedOrder();
-            _ctxRunMenuItem.Enabled = order != null;
-            _ctxStopMenuItem.Enabled = order != null && _runTokensByOrder.ContainsKey(order.InternalId);
-            _ctxOpenFolderMenuItem.Enabled = order != null;
-            _ctxOpenLogMenuItem.Enabled = order != null;
-            _ctxDeleteMenuItem.Enabled = order != null;
+        private OrderData? GetContextOrder()
+        {
+            if (_ctxRow < 0)
+                return null;
 
-            _orderRowContextMenu.Show(Cursor.Position);
+            return GetOrderByRowIndex(_ctxRow);
+        }
+
+        private bool TryGetContextItem(out OrderData? order, out OrderFileItem? item)
+        {
+            order = null;
+            item = null;
+
+            if (_ctxRow < 0)
+                return false;
+
+            return TryGetItemByRowIndex(_ctxRow, out order, out item);
+        }
+
+        private bool IsContextGroupOrderHeader(OrderData order)
+        {
+            if (order == null || _ctxRow < 0 || _ctxRow >= dgvJobs.Rows.Count)
+                return false;
+
+            var tag = dgvJobs.Rows[_ctxRow].Tag?.ToString();
+            return IsOrderTag(tag) && OrderTopologyService.IsMultiFileOrder(order);
+        }
+
+        private void ShowGroupHeadFileOperationBlocked()
+        {
+            MessageBox.Show(
+                this,
+                "Головная строка группы заблокирована для файловых операций.",
+                "Файловая операция",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+
+        private async Task PickFileFromContextAsync(int stage)
+        {
+            if (stage is < 1 or > 3)
+                return;
+
+            try
+            {
+                if (TryGetContextItem(out var itemOrder, out var item) &&
+                    itemOrder != null &&
+                    item != null)
+                {
+                    await PickAndCopyFileForItemAsync(itemOrder, item, stage);
+                    return;
+                }
+
+                var order = GetContextOrder();
+                if (order == null)
+                    return;
+
+                if (IsContextGroupOrderHeader(order))
+                {
+                    ShowGroupHeadFileOperationBlocked();
+                    return;
+                }
+
+                await PickAndCopyFileForOrderAsync(order, stage);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Не удалось выбрать файл: {ex.Message}", "Файловая операция", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void RemoveFileFromContext(int stage)
+        {
+            if (stage is < 1 or > 3)
+                return;
+
+            if (TryGetContextItem(out var itemOrder, out var item) &&
+                itemOrder != null &&
+                item != null)
+            {
+                RemoveFileFromItem(itemOrder, item, stage);
+                return;
+            }
+
+            var order = GetContextOrder();
+            if (order == null)
+                return;
+
+            if (IsContextGroupOrderHeader(order))
+            {
+                ShowGroupHeadFileOperationBlocked();
+                return;
+            }
+
+            RemoveFileFromOrder(order, stage);
+        }
+
+        private void RenameFileFromContext(int stage)
+        {
+            if (stage is < 1 or > 3)
+                return;
+
+            if (TryGetContextItem(out var itemOrder, out var item) &&
+                itemOrder != null &&
+                item != null)
+            {
+                RenameFileForItem(itemOrder, item, stage);
+                return;
+            }
+
+            var order = GetContextOrder();
+            if (order == null)
+                return;
+
+            if (IsContextGroupOrderHeader(order))
+            {
+                ShowGroupHeadFileOperationBlocked();
+                return;
+            }
+
+            RenameFileForOrder(order, stage);
+        }
+
+        private void CopyPathFromContextToClipboard(int stage)
+        {
+            if (stage is < 1 or > 3)
+                return;
+
+            if (TryGetContextItem(out var itemOrder, out var item) &&
+                itemOrder != null &&
+                item != null)
+            {
+                CopyPathToClipboard(item, stage);
+                return;
+            }
+
+            var order = GetContextOrder();
+            if (order == null)
+                return;
+
+            if (IsContextGroupOrderHeader(order))
+            {
+                ShowGroupHeadFileOperationBlocked();
+                return;
+            }
+
+            CopyPathToClipboard(order, stage);
+        }
+
+        private async Task PastePathFromClipboardToContextAsync(int stage)
+        {
+            if (stage is < 1 or > 3)
+                return;
+
+            try
+            {
+                if (TryGetContextItem(out var itemOrder, out var item) &&
+                    itemOrder != null &&
+                    item != null)
+                {
+                    await PasteFileFromClipboardAsync(itemOrder, item, stage);
+                    return;
+                }
+
+                var order = GetContextOrder();
+                if (order == null)
+                    return;
+
+                if (IsContextGroupOrderHeader(order))
+                {
+                    ShowGroupHeadFileOperationBlocked();
+                    return;
+                }
+
+                await PasteFileFromClipboardAsync(order, stage);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Не удалось вставить файл из буфера: {ex.Message}", "Файловая операция", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void DgvJobs_MouseDown(object? sender, MouseEventArgs e)
@@ -1590,6 +1808,262 @@ namespace MyManager
             };
         }
 
+        private void RemoveFileFromOrder(OrderData order, int stage)
+        {
+            var currentPath = GetOrderStagePath(order, stage);
+            if (string.IsNullOrWhiteSpace(currentPath))
+                return;
+
+            var decision = MessageBox.Show(
+                this,
+                $"Удалить файл {Path.GetFileName(currentPath)}?",
+                "Удаление файла",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+            if (decision != DialogResult.Yes)
+                return;
+
+            try
+            {
+                if (File.Exists(currentPath))
+                    File.Delete(currentPath);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Не удалось удалить файл: {ex.Message}", "Удаление файла", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            UpdateOrderFilePath(order, stage, string.Empty);
+            PersistGridChanges($"order|{order.InternalId}");
+        }
+
+        private void RemoveFileFromItem(OrderData order, OrderFileItem item, int stage)
+        {
+            var currentPath = GetItemStagePath(item, stage);
+            if (string.IsNullOrWhiteSpace(currentPath))
+                return;
+
+            var decision = MessageBox.Show(
+                this,
+                $"Удалить файл {Path.GetFileName(currentPath)}?",
+                "Удаление файла",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+            if (decision != DialogResult.Yes)
+                return;
+
+            try
+            {
+                if (File.Exists(currentPath))
+                    File.Delete(currentPath);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Не удалось удалить файл: {ex.Message}", "Удаление файла", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            UpdateItemFilePath(order, item, stage, string.Empty);
+            PersistGridChanges($"item|{order.InternalId}|{item.ItemId}");
+        }
+
+        private void RenameFileForOrder(OrderData order, int stage)
+        {
+            var currentPath = GetOrderStagePath(order, stage);
+            if (!HasExistingFile(currentPath))
+                return;
+
+            if (!TryBuildRenamedPath(currentPath, out var renamedPath))
+                return;
+
+            try
+            {
+                File.Move(currentPath, renamedPath);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Не удалось переименовать файл: {ex.Message}", "Переименование", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            UpdateOrderFilePath(order, stage, renamedPath);
+            PersistGridChanges($"order|{order.InternalId}");
+        }
+
+        private void RenameFileForItem(OrderData order, OrderFileItem item, int stage)
+        {
+            var currentPath = GetItemStagePath(item, stage);
+            if (!HasExistingFile(currentPath))
+                return;
+
+            if (!TryBuildRenamedPath(currentPath, out var renamedPath))
+                return;
+
+            try
+            {
+                File.Move(currentPath, renamedPath);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Не удалось переименовать файл: {ex.Message}", "Переименование", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            UpdateItemFilePath(order, item, stage, renamedPath);
+            PersistGridChanges($"item|{order.InternalId}|{item.ItemId}");
+        }
+
+        private bool TryBuildRenamedPath(string currentPath, out string renamedPath)
+        {
+            renamedPath = string.Empty;
+            if (!HasExistingFile(currentPath))
+                return false;
+
+            var oldName = Path.GetFileNameWithoutExtension(currentPath);
+            var extension = Path.GetExtension(currentPath);
+            var nextName = ShowInputDialog("Переименование", "Введите новое имя файла:", oldName);
+            if (string.IsNullOrWhiteSpace(nextName))
+                return false;
+
+            nextName = nextName.Trim();
+            if (string.Equals(nextName, oldName, StringComparison.Ordinal))
+                return false;
+
+            foreach (var invalid in Path.GetInvalidFileNameChars())
+                nextName = nextName.Replace(invalid, '_');
+
+            var directory = Path.GetDirectoryName(currentPath);
+            if (string.IsNullOrWhiteSpace(directory))
+                return false;
+
+            var targetPath = Path.Combine(directory, nextName + extension);
+            if (PathsEqual(currentPath, targetPath))
+                return false;
+
+            if (File.Exists(targetPath))
+            {
+                MessageBox.Show(this, "Файл с таким именем уже существует.", "Переименование", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return false;
+            }
+
+            renamedPath = targetPath;
+            return true;
+        }
+
+        private string ShowInputDialog(string title, string promptText, string initialValue)
+        {
+            using var form = new Form();
+            using var promptLabel = new Label();
+            using var inputTextBox = new TextBox();
+            using var okButton = new Button();
+            using var cancelButton = new Button();
+
+            form.Text = title;
+            form.FormBorderStyle = FormBorderStyle.FixedDialog;
+            form.StartPosition = FormStartPosition.CenterParent;
+            form.ClientSize = new Size(430, 150);
+            form.MinimizeBox = false;
+            form.MaximizeBox = false;
+            form.ShowInTaskbar = false;
+
+            promptLabel.Text = promptText;
+            promptLabel.SetBounds(16, 16, 398, 22);
+
+            inputTextBox.Text = initialValue;
+            inputTextBox.SetBounds(16, 46, 398, 26);
+
+            okButton.Text = "ОК";
+            okButton.DialogResult = DialogResult.OK;
+            okButton.SetBounds(238, 96, 82, 32);
+
+            cancelButton.Text = "Отмена";
+            cancelButton.DialogResult = DialogResult.Cancel;
+            cancelButton.SetBounds(332, 96, 82, 32);
+
+            form.AcceptButton = okButton;
+            form.CancelButton = cancelButton;
+            form.Controls.AddRange([promptLabel, inputTextBox, okButton, cancelButton]);
+
+            return form.ShowDialog(this) == DialogResult.OK
+                ? inputTextBox.Text
+                : initialValue;
+        }
+
+        private void CopyPathToClipboard(OrderData order, int stage)
+        {
+            CopyExistingPathToClipboard(GetOrderStagePath(order, stage));
+        }
+
+        private void CopyPathToClipboard(OrderFileItem item, int stage)
+        {
+            CopyExistingPathToClipboard(GetItemStagePath(item, stage));
+        }
+
+        private void CopyExistingPathToClipboard(string? path)
+        {
+            if (!HasExistingFile(path))
+            {
+                MessageBox.Show(this, "Путь к файлу не найден.", "Буфер обмена", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            TrySetClipboardText(path);
+        }
+
+        private async Task PasteFileFromClipboardAsync(OrderData order, int stage)
+        {
+            var clipboardFilePath = TryGetClipboardFilePath();
+            if (string.IsNullOrWhiteSpace(clipboardFilePath))
+                return;
+
+            if (!await AddFileToOrderAsync(order, clipboardFilePath, stage))
+                return;
+
+            PersistGridChanges($"order|{order.InternalId}");
+        }
+
+        private async Task PasteFileFromClipboardAsync(OrderData order, OrderFileItem item, int stage)
+        {
+            var clipboardFilePath = TryGetClipboardFilePath();
+            if (string.IsNullOrWhiteSpace(clipboardFilePath))
+                return;
+
+            if (!await AddFileToItemAsync(order, item, clipboardFilePath, stage))
+                return;
+
+            PersistGridChanges($"item|{order.InternalId}|{item.ItemId}");
+        }
+
+        private string? TryGetClipboardFilePath()
+        {
+            string clipboardText;
+            try
+            {
+                clipboardText = Clipboard.GetText();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Не удалось прочитать буфер обмена: {ex.Message}", "Буфер обмена", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return null;
+            }
+
+            var cleanPath = CleanPath(clipboardText?.Replace("\"", string.Empty));
+            if (string.IsNullOrWhiteSpace(cleanPath))
+            {
+                MessageBox.Show(this, "Буфер обмена пуст.", "Буфер обмена", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return null;
+            }
+
+            if (!File.Exists(cleanPath))
+            {
+                MessageBox.Show(this, $"Файл не найден по указанному пути:\n{cleanPath}", "Буфер обмена", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return null;
+            }
+
+            return cleanPath;
+        }
+
         private string GetDragSourceFilePath(int rowIndex, int stage)
         {
             if (rowIndex < 0 || rowIndex >= dgvJobs.Rows.Count)
@@ -2507,6 +2981,31 @@ namespace MyManager
             {
                 targetPath = GetPreferredOrderFolder(order);
             }
+
+            if (string.IsNullOrWhiteSpace(targetPath))
+            {
+                MessageBox.Show(this, "Папка не определена.", "Папка", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            Directory.CreateDirectory(targetPath);
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = targetPath,
+                UseShellExecute = true
+            });
+        }
+
+        private void OpenOrderStageFolder(OrderData order, int stage)
+        {
+            if (order == null)
+                return;
+
+            string targetPath;
+            if (stage is >= 1 and <= 3)
+                targetPath = GetStageFolder(order, stage);
+            else
+                targetPath = GetPreferredOrderFolder(order);
 
             if (string.IsNullOrWhiteSpace(targetPath))
             {

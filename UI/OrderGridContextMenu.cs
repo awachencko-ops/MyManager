@@ -11,6 +11,7 @@ namespace MyManager
         public Action<int> OpenFolder { get; set; } // int - это стадия (0-корень, 1-исходные, 2-подготовка, 3-печать)
         public Action Delete { get; set; }
         public Action Run { get; set; }
+        public Action Stop { get; set; }
         public Action<int> RemoveFile { get; set; }
         public Action<int, string> PickFile { get; set; }
         public Action<int> RenameFile { get; set; }
@@ -41,6 +42,7 @@ namespace MyManager
             int currentStage = colName switch
             {
                 "colSource" => 1,
+                "colPrep" => 2,
                 "colReady" => 2,
                 "colPrint" => 3,
                 _ => 0 // 0 означает корень заказа
@@ -48,6 +50,7 @@ namespace MyManager
 
             // 1. ГЛАВНЫЕ КНОПКИ (Всегда сверху)
             AddItem("🚀 Запустить обработку", Run);
+            AddItem("🛑 Остановить обработку", Stop);
             if (canConvertToGroup)
                 AddItem("🧩 Преобразовать в группу", ConvertToGroup);
             if (canConvertToSingle)
@@ -71,6 +74,7 @@ namespace MyManager
                     AddItem("Удалить файл", () => RemoveFile?.Invoke(1));
                     break;
 
+                case "colPrep":
                 case "colReady":
                     AddItem("📋 Вставить путь из буфера", () => PastePathFromClipboard?.Invoke(2));
                     AddItem("✏️ Переименовать файл", () => RenameFile?.Invoke(2));
