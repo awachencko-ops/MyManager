@@ -1019,8 +1019,26 @@ namespace MyManager
             if (e.RowIndex != -1 || e.ColumnIndex < 0)
                 return;
 
-            // Keep default header rendering (including hover/sort glyph), but suppress selected-column fill.
-            e.Paint(e.CellBounds, e.PaintParts & ~DataGridViewPaintParts.SelectionBackground);
+            var mouseClient = dgvJobs.PointToClient(Cursor.Position);
+            var hit = dgvJobs.HitTest(mouseClient.X, mouseClient.Y);
+            var isHoveredHeader = hit.RowIndex == -1 && hit.ColumnIndex == e.ColumnIndex;
+
+            if (isHoveredHeader)
+            {
+                // Keep native hover look on the header under cursor.
+                e.Paint(e.CellBounds, e.PaintParts);
+                e.Handled = true;
+                return;
+            }
+
+            // For non-hovered headers, paint a neutral background so "active column" is not highlighted.
+            var headerBackColor = dgvJobs.ColumnHeadersDefaultCellStyle.BackColor.IsEmpty
+                ? SystemColors.Control
+                : dgvJobs.ColumnHeadersDefaultCellStyle.BackColor;
+            using var backBrush = new SolidBrush(headerBackColor);
+            e.Graphics.FillRectangle(backBrush, e.CellBounds);
+            e.Paint(e.CellBounds, DataGridViewPaintParts.Border);
+            e.PaintContent(e.CellBounds);
             e.Handled = true;
         }
 
