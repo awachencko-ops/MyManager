@@ -26,6 +26,12 @@ namespace MyManager
         private readonly List<OrderData> _orderHistory = [];
         private readonly HashSet<string> _expandedOrderIds = new(StringComparer.Ordinal);
         private readonly Dictionary<string, CancellationTokenSource> _runTokensByOrder = new(StringComparer.Ordinal);
+        private readonly ContextMenuStrip _orderRowContextMenu = new ContextMenuStrip();
+        private readonly ToolStripMenuItem _ctxRunMenuItem = new ToolStripMenuItem("Запустить");
+        private readonly ToolStripMenuItem _ctxStopMenuItem = new ToolStripMenuItem("Остановить");
+        private readonly ToolStripMenuItem _ctxOpenFolderMenuItem = new ToolStripMenuItem("Открыть папку");
+        private readonly ToolStripMenuItem _ctxOpenLogMenuItem = new ToolStripMenuItem("Открыть лог");
+        private readonly ToolStripMenuItem _ctxDeleteMenuItem = new ToolStripMenuItem("Удалить заказ");
         private OrderProcessor? _processor;
         private bool _isRebuildingGrid;
 
@@ -235,6 +241,7 @@ namespace MyManager
             InitializeReceivedDateFilter();
             InitializeQueueNavigation();
             InitializeOrdersDataFlow();
+            InitializeOrderRowContextMenu();
         }
 
         // обработчик нажатия кнопок в ToolStrip
@@ -495,6 +502,48 @@ namespace MyManager
             tbSearch.TextChanged += (_, _) => RebuildOrdersGrid();
             LoadHistory();
             RebuildOrdersGrid();
+        }
+
+        private void InitializeOrderRowContextMenu()
+        {
+            _ctxRunMenuItem.Click += async (_, _) => await RunSelectedOrderAsync();
+            _ctxStopMenuItem.Click += (_, _) => StopSelectedOrder();
+            _ctxOpenFolderMenuItem.Click += (_, _) => OpenFolderForSelectedOrder();
+            _ctxOpenLogMenuItem.Click += (_, _) => OpenLogForSelectionOrManager();
+            _ctxDeleteMenuItem.Click += (_, _) => RemoveSelectedOrder();
+
+            _orderRowContextMenu.Items.Add(_ctxRunMenuItem);
+            _orderRowContextMenu.Items.Add(_ctxStopMenuItem);
+            _orderRowContextMenu.Items.Add(new ToolStripSeparator());
+            _orderRowContextMenu.Items.Add(_ctxOpenFolderMenuItem);
+            _orderRowContextMenu.Items.Add(_ctxOpenLogMenuItem);
+            _orderRowContextMenu.Items.Add(new ToolStripSeparator());
+            _orderRowContextMenu.Items.Add(_ctxDeleteMenuItem);
+
+            dgvJobs.CellMouseDown += DgvJobs_CellMouseDown;
+        }
+
+        private void DgvJobs_CellMouseDown(object? sender, DataGridViewCellMouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Right || e.RowIndex < 0 || e.ColumnIndex < 0)
+                return;
+
+            var row = dgvJobs.Rows[e.RowIndex];
+            var rowTag = row.Tag?.ToString();
+            if (!IsOrderTag(rowTag) && !IsItemTag(rowTag))
+                return;
+
+            dgvJobs.CurrentCell = row.Cells[e.ColumnIndex];
+            row.Selected = true;
+
+            var order = GetSelectedOrder();
+            _ctxRunMenuItem.Enabled = order != null;
+            _ctxStopMenuItem.Enabled = order != null && _runTokensByOrder.ContainsKey(order.InternalId);
+            _ctxOpenFolderMenuItem.Enabled = order != null;
+            _ctxOpenLogMenuItem.Enabled = order != null;
+            _ctxDeleteMenuItem.Enabled = order != null;
+
+            _orderRowContextMenu.Show(Cursor.Position);
         }
 
         private void InitializeStatusFilter()
