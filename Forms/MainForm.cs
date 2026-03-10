@@ -516,6 +516,8 @@ namespace MyManager
 
             dgvJobs.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             dgvJobs.MultiSelect = false;
+            dgvJobs.AllowUserToResizeRows = false;
+            dgvJobs.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None;
             dgvJobs.CellBorderStyle = DataGridViewCellBorderStyle.Single;
             dgvJobs.GridColor = Color.FromArgb(218, 218, 218);
             dgvJobs.DefaultCellStyle.SelectionBackColor = OrdersRowSelectedBackColor;
