@@ -56,6 +56,7 @@
             colPrint = new DataGridViewTextBoxColumn();
             colReceived = new DataGridViewTextBoxColumn();
             colCreated = new DataGridViewTextBoxColumn();
+            pnlTray = new Panel();
             tsMainActions = new ToolStrip();
             tsbNewJob = new ToolStripButton();
             tsbRun = new ToolStripButton();
@@ -120,6 +121,7 @@
             tableLayoutPanel1.Controls.Add(pnlHeader, 0, 0);
             tableLayoutPanel1.Controls.Add(pnlFilters, 0, 1);
             tableLayoutPanel1.Controls.Add(dgvJobs, 0, 2);
+            tableLayoutPanel1.Controls.Add(pnlTray, 0, 3);
             tableLayoutPanel1.Dock = DockStyle.Fill;
             tableLayoutPanel1.Location = new Point(0, 46);
             tableLayoutPanel1.Margin = new Padding(0);
@@ -128,7 +130,7 @@
             tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));
             tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));
             tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-            tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
+            tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Absolute, 40F));
             tableLayoutPanel1.Size = new Size(1749, 1198);
             tableLayoutPanel1.TabIndex = 1;
             // 
@@ -231,7 +233,7 @@
             // picFOrderNoGlyph
             // 
             picFOrderNoGlyph.Cursor = Cursors.Hand;
-            picFOrderNoGlyph.Location = new Point(226, 0);
+            picFOrderNoGlyph.Location = new Point(229, 0);
             picFOrderNoGlyph.Margin = new Padding(3, 0, 0, 0);
             picFOrderNoGlyph.Name = "picFOrderNoGlyph";
             picFOrderNoGlyph.Size = new Size(24, 33);
@@ -242,7 +244,7 @@
             // lblFOrderNo
             // 
             lblFOrderNo.Cursor = Cursors.Hand;
-            lblFOrderNo.Location = new Point(250, 0);
+            lblFOrderNo.Location = new Point(253, 0);
             lblFOrderNo.Margin = new Padding(0, 0, 3, 0);
             lblFOrderNo.Name = "lblFOrderNo";
             lblFOrderNo.Size = new Size(196, 33);
@@ -255,7 +257,7 @@
             cbUser.DropDownStyle = ComboBoxStyle.DropDownList;
             cbUser.FormattingEnabled = true;
             cbUser.IntegralHeight = false;
-            cbUser.Location = new Point(452, 3);
+            cbUser.Location = new Point(455, 3);
             cbUser.Name = "cbUser";
             cbUser.Size = new Size(170, 33);
             cbUser.TabIndex = 4;
@@ -265,7 +267,7 @@
             cbFCreated.DropDownStyle = ComboBoxStyle.DropDownList;
             cbFCreated.FormattingEnabled = true;
             cbFCreated.IntegralHeight = false;
-            cbFCreated.Location = new Point(628, 3);
+            cbFCreated.Location = new Point(631, 3);
             cbFCreated.Name = "cbFCreated";
             cbFCreated.Size = new Size(170, 33);
             cbFCreated.TabIndex = 5;
@@ -275,7 +277,7 @@
             cbFReceived.DropDownStyle = ComboBoxStyle.DropDownList;
             cbFReceived.FormattingEnabled = true;
             cbFReceived.IntegralHeight = false;
-            cbFReceived.Location = new Point(804, 3);
+            cbFReceived.Location = new Point(807, 3);
             cbFReceived.Name = "cbFReceived";
             cbFReceived.Size = new Size(170, 33);
             cbFReceived.TabIndex = 6;
@@ -296,7 +298,7 @@
             dgvJobs.ReadOnly = true;
             dgvJobs.RowHeadersVisible = false;
             dgvJobs.RowHeadersWidth = 62;
-            dgvJobs.Size = new Size(1743, 1108);
+            dgvJobs.Size = new Size(1743, 1068);
             dgvJobs.TabIndex = 2;
             // 
             // colStatus
@@ -362,6 +364,14 @@
             colCreated.MinimumWidth = 8;
             colCreated.Name = "colCreated";
             colCreated.ReadOnly = true;
+            // 
+            // pnlTray
+            // 
+            pnlTray.Dock = DockStyle.Fill;
+            pnlTray.Location = new Point(3, 1161);
+            pnlTray.Name = "pnlTray";
+            pnlTray.Size = new Size(1743, 34);
+            pnlTray.TabIndex = 7;
             // 
             // tsMainActions
             // 
@@ -482,5 +492,6 @@
         private ToolStripButton tsbConsole;
         private ToolStripButton tsbParameters;
         private ComboBox cbFCreated;
+        private Panel pnlTray;
     }
 }
