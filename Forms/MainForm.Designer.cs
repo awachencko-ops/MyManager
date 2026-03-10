@@ -351,14 +351,14 @@
             // 
             // colReceived
             // 
-            colReceived.HeaderText = "Начало обработки";
+            colReceived.HeaderText = "Дата поступления";
             colReceived.MinimumWidth = 8;
             colReceived.Name = "colReceived";
             colReceived.ReadOnly = true;
             // 
             // colCreated
             // 
-            colCreated.HeaderText = "Дата поступления";
+            colCreated.HeaderText = "Начало обработки";
             colCreated.MinimumWidth = 8;
             colCreated.Name = "colCreated";
             colCreated.ReadOnly = true;

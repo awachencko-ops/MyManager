@@ -67,8 +67,8 @@ namespace MyManager
         private const string StatusFilterLabelText = "Состояние задания";
         private const string OrderNoSearchLabelText = "Номер заказа";
         private const string UserFilterLabelText = "Пользователь";
-        private const string CreatedDateFilterLabelText = "Дата поступления";
-        private const string ReceivedDateFilterLabelText = "Начало обработки";
+        private const string CreatedDateFilterLabelText = "Начало обработки";
+        private const string ReceivedDateFilterLabelText = "Дата поступления";
 
         private static readonly Dictionary<string, string[]> QueueStatusMappings = new(StringComparer.Ordinal)
         {
