@@ -512,17 +512,23 @@ namespace MyManager
 
         private void InitializeOrdersGridVisuals()
         {
+            var unifiedPadding = new Padding(8, 0, 0, 0);
+
             dgvJobs.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             dgvJobs.MultiSelect = false;
             dgvJobs.CellBorderStyle = DataGridViewCellBorderStyle.Single;
             dgvJobs.GridColor = Color.FromArgb(218, 218, 218);
             dgvJobs.DefaultCellStyle.SelectionBackColor = OrdersRowSelectedBackColor;
             dgvJobs.DefaultCellStyle.SelectionForeColor = Color.Black;
+            dgvJobs.DefaultCellStyle.Padding = unifiedPadding;
+            dgvJobs.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
             dgvJobs.EnableHeadersVisualStyles = true;
             dgvJobs.ColumnHeadersDefaultCellStyle.BackColor = Color.White;
             dgvJobs.ColumnHeadersDefaultCellStyle.ForeColor = Color.Black;
             dgvJobs.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.White;
             dgvJobs.ColumnHeadersDefaultCellStyle.SelectionForeColor = Color.Black;
+            dgvJobs.ColumnHeadersDefaultCellStyle.Padding = unifiedPadding;
+            dgvJobs.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
 
             dgvJobs.CellPainting += DgvJobs_CellPainting;
             dgvJobs.CellFormatting += DgvJobs_CellFormatting;
@@ -1037,8 +1043,8 @@ namespace MyManager
                     DataGridViewPaintParts.Focus);
             }
 
-            // Draw header separators with the same color as the table grid.
-            using var gridPen = new Pen(dgvJobs.GridColor);
+            // Draw header separators in black.
+            using var gridPen = new Pen(Color.Black);
             if (e.ColumnIndex == 0)
                 e.Graphics.DrawLine(gridPen, e.CellBounds.Left, e.CellBounds.Top, e.CellBounds.Left, e.CellBounds.Bottom - 1);
             e.Graphics.DrawLine(gridPen, e.CellBounds.Right - 1, e.CellBounds.Top, e.CellBounds.Right - 1, e.CellBounds.Bottom - 1);
