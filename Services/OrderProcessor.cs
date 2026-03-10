@@ -139,6 +139,11 @@ namespace MyManager
 
                 Notify(order, "✅ Готово", "Заказ успешно выполнен.");
             }
+            catch (OperationCanceledException)
+            {
+                Logger.Warn($"Остановлено пользователем: {order.Id}");
+                Notify(order, "Отменено", "Остановлено пользователем");
+            }
             catch (Exception ex)
             {
                 Logger.Error($"Ошибка в {order.Id}: {ex.Message}");
@@ -179,6 +184,12 @@ namespace MyManager
                     Notify(order, order.Status, $"Обработка {item.ClientFileLabel}");
                     await RunSingleItemAsync(order, item, itemIndex, settings, timeout, useExtendedMode, tempRoot, ct);
                 }
+                catch (OperationCanceledException)
+                {
+                    item.FileStatus = "Отменено";
+                    item.LastReason = "Остановлено пользователем";
+                    item.UpdatedAt = DateTime.Now;
+                }
                 catch (Exception ex)
                 {
                     item.FileStatus = "🔴 Ошибка";
@@ -196,6 +207,12 @@ namespace MyManager
             });
 
             await Task.WhenAll(tasks);
+
+            if (ct.IsCancellationRequested)
+            {
+                Notify(order, "Отменено", "Остановлено пользователем");
+                return;
+            }
 
             order.RefreshAggregatedStatus();
             Notify(order, order.Status, "Обработка группы завершена");

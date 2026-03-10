@@ -1,11 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using Svg;
 
@@ -22,6 +25,8 @@ namespace MyManager
         private string _orderLogsFolderPath = string.Empty;
         private readonly List<OrderData> _orderHistory = [];
         private readonly HashSet<string> _expandedOrderIds = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, CancellationTokenSource> _runTokensByOrder = new(StringComparer.Ordinal);
+        private OrderProcessor? _processor;
         private bool _isRebuildingGrid;
 
         // На будущее: список пользователей можно наполнять из настроек/БД.
@@ -220,6 +225,7 @@ namespace MyManager
         {
             InitializeComponent();
             LoadSettings();
+            InitializeProcessor();
             ApplyQueueVisualStyle();
             InitializeStatusFilter();
             InitializeOrderNoSearch();
@@ -231,11 +237,41 @@ namespace MyManager
         }
 
         // обработчик нажатия кнопок в ToolStrip
-        private void TsMainActions_ItemClicked(object sender, ToolStripItemClickedEventArgs e)
+        private async void TsMainActions_ItemClicked(object sender, ToolStripItemClickedEventArgs e)
         {
             if (e.ClickedItem == tsbParameters)
             {
                 ShowSettingsDialog();
+                return;
+            }
+
+            if (e.ClickedItem == tsbRun)
+            {
+                await RunSelectedOrderAsync();
+                return;
+            }
+
+            if (e.ClickedItem == tsbStop)
+            {
+                StopSelectedOrder();
+                return;
+            }
+
+            if (e.ClickedItem == tsbRemove)
+            {
+                RemoveSelectedOrder();
+                return;
+            }
+
+            if (e.ClickedItem == tsbConsole)
+            {
+                OpenLogForSelectionOrManager();
+                return;
+            }
+
+            if (e.ClickedItem == tsbBrowse)
+            {
+                OpenFolderForSelectedOrder();
             }
         }
 
@@ -250,6 +286,27 @@ namespace MyManager
             _managerLogFilePath = settings.ManagerLogFilePath;
             _orderLogsFolderPath = settings.OrderLogsFolderPath;
             Logger.LogFilePath = _managerLogFilePath;
+        }
+
+        private void InitializeProcessor()
+        {
+            _processor = new OrderProcessor(_ordersRootPath);
+            _processor.OnStatusChanged += (orderId, status, reason) =>
+            {
+                void Apply()
+                {
+                    var order = _orderHistory.FirstOrDefault(x => string.Equals(x.Id, orderId, StringComparison.Ordinal));
+                    if (order == null)
+                        return;
+
+                    SetOrderStatus(order, status, "processor", reason, persistHistory: false, rebuildGrid: true);
+                }
+
+                if (InvokeRequired)
+                    BeginInvoke((Action)Apply);
+                else
+                    Apply();
+            };
         }
 
         private void ApplyQueueVisualStyle()
@@ -1103,6 +1160,362 @@ namespace MyManager
                 return GetFileName(item.SourcePath);
 
             return "...";
+        }
+
+        private OrderData? GetSelectedOrder()
+        {
+            if (dgvJobs.CurrentRow == null)
+                return null;
+
+            var rowTag = dgvJobs.CurrentRow.Tag?.ToString();
+            var orderInternalId = ExtractOrderInternalIdFromTag(rowTag);
+            if (string.IsNullOrWhiteSpace(orderInternalId))
+                return null;
+
+            return FindOrderByInternalId(orderInternalId);
+        }
+
+        private async Task RunSelectedOrderAsync()
+        {
+            var order = GetSelectedOrder();
+            if (order == null)
+            {
+                MessageBox.Show(this, "Выберите строку заказа для запуска.", "Запуск", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(order.Id))
+            {
+                MessageBox.Show(this, "У заказа не указан № заказа. Перед запуском заполните карточку заказа.", "Запуск", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (_runTokensByOrder.ContainsKey(order.InternalId))
+            {
+                MessageBox.Show(this, $"Заказ {GetOrderDisplayId(order)} уже запущен.", "Запуск", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            _processor ??= new OrderProcessor(_ordersRootPath);
+            var cts = new CancellationTokenSource();
+            _runTokensByOrder[order.InternalId] = cts;
+
+            SetOrderStatus(order, "Обрабатывается", "ui", "Запуск из MainForm", persistHistory: true, rebuildGrid: true);
+
+            try
+            {
+                var selectedItemIds = GetSelectedItemIdsForOrder(order);
+                await _processor.RunAsync(order, cts.Token, selectedItemIds.Count > 0 ? selectedItemIds : null);
+            }
+            catch (OperationCanceledException)
+            {
+                SetOrderStatus(order, "Отменено", "ui", "Остановлено пользователем", persistHistory: true, rebuildGrid: true);
+            }
+            catch (Exception ex)
+            {
+                SetOrderStatus(order, "Ошибка", "ui", ex.Message, persistHistory: true, rebuildGrid: true);
+                MessageBox.Show(this, $"Не удалось запустить заказ: {ex.Message}", "Запуск", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                _runTokensByOrder.Remove(order.InternalId);
+                SaveHistory();
+                RebuildOrdersGrid();
+            }
+        }
+
+        private void StopSelectedOrder()
+        {
+            var order = GetSelectedOrder();
+            if (order == null)
+            {
+                MessageBox.Show(this, "Выберите заказ для остановки.", "Остановка", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            if (!_runTokensByOrder.TryGetValue(order.InternalId, out var cts))
+            {
+                MessageBox.Show(this, $"Заказ {GetOrderDisplayId(order)} сейчас не выполняется.", "Остановка", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            cts.Cancel();
+            _runTokensByOrder.Remove(order.InternalId);
+            SetOrderStatus(order, "Отменено", "ui", "Остановлено пользователем", persistHistory: true, rebuildGrid: true);
+        }
+
+        private void RemoveSelectedOrder()
+        {
+            var order = GetSelectedOrder();
+            if (order == null)
+            {
+                MessageBox.Show(this, "Выберите заказ для удаления.", "Удаление", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var orderFolder = string.IsNullOrWhiteSpace(order.FolderName)
+                ? string.Empty
+                : Path.Combine(_ordersRootPath, order.FolderName);
+
+            var decision = MessageBox.Show(
+                this,
+                $"Заказ №{GetOrderDisplayId(order)}\n\n" +
+                "Удалить папку заказа с диска?\n\n" +
+                "[Да] — удалить с диска и из списка.\n" +
+                "[Нет] — только удалить из списка.\n" +
+                "[Отмена] — ничего не менять.",
+                "Удаление заказа",
+                MessageBoxButtons.YesNoCancel,
+                MessageBoxIcon.Warning);
+
+            if (decision == DialogResult.Cancel)
+                return;
+
+            if (decision == DialogResult.Yes)
+            {
+                try
+                {
+                    if (!string.IsNullOrWhiteSpace(orderFolder) && Directory.Exists(orderFolder))
+                        Directory.Delete(orderFolder, true);
+                    else
+                        DeleteOrderFiles(order);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(this, $"Не удалось удалить файлы заказа: {ex.Message}", "Удаление заказа", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+            }
+
+            if (_runTokensByOrder.TryGetValue(order.InternalId, out var cts))
+            {
+                cts.Cancel();
+                _runTokensByOrder.Remove(order.InternalId);
+            }
+
+            _expandedOrderIds.Remove(order.InternalId);
+            _orderHistory.Remove(order);
+            SaveHistory();
+            RebuildOrdersGrid();
+        }
+
+        private void DeleteOrderFiles(OrderData order)
+        {
+            foreach (var path in GetOrderAllKnownPaths(order))
+            {
+                if (string.IsNullOrWhiteSpace(path))
+                    continue;
+
+                try
+                {
+                    if (File.Exists(path))
+                        File.Delete(path);
+                }
+                catch (Exception ex)
+                {
+                    throw new IOException($"Не удалось удалить файл: {path}", ex);
+                }
+            }
+        }
+
+        private static IEnumerable<string?> GetOrderAllKnownPaths(OrderData order)
+        {
+            if (order == null)
+                yield break;
+
+            yield return order.SourcePath;
+            yield return order.PreparedPath;
+            yield return order.PrintPath;
+
+            if (order.Items == null)
+                yield break;
+
+            foreach (var item in order.Items)
+            {
+                if (item == null)
+                    continue;
+
+                yield return item.SourcePath;
+                yield return item.PreparedPath;
+                yield return item.PrintPath;
+            }
+        }
+
+        private void OpenLogForSelectionOrManager()
+        {
+            var order = GetSelectedOrder();
+            if (order != null)
+            {
+                var orderLogPath = GetOrderLogFilePath(order);
+                if (File.Exists(orderLogPath))
+                {
+                    using var viewer = new OrderLogViewerForm(orderLogPath, GetOrderDisplayId(order));
+                    viewer.ShowDialog(this);
+                    return;
+                }
+            }
+
+            if (!File.Exists(_managerLogFilePath))
+            {
+                MessageBox.Show(this, "Лог пока не создан.", "Лог", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = _managerLogFilePath,
+                UseShellExecute = true
+            });
+        }
+
+        private void OpenFolderForSelectedOrder()
+        {
+            var order = GetSelectedOrder();
+            string targetPath;
+
+            if (order == null)
+            {
+                targetPath = !string.IsNullOrWhiteSpace(_ordersRootPath)
+                    ? _ordersRootPath
+                    : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            }
+            else
+            {
+                targetPath = GetPreferredOrderFolder(order);
+            }
+
+            if (string.IsNullOrWhiteSpace(targetPath))
+            {
+                MessageBox.Show(this, "Папка не определена.", "Папка", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            Directory.CreateDirectory(targetPath);
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = targetPath,
+                UseShellExecute = true
+            });
+        }
+
+        private string GetPreferredOrderFolder(OrderData order)
+        {
+            if (!string.IsNullOrWhiteSpace(order.FolderName))
+                return Path.Combine(_ordersRootPath, order.FolderName);
+
+            var knownPath = FirstNotEmpty(
+                order.PrintPath,
+                order.PreparedPath,
+                order.SourcePath,
+                order.Items?.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x.PrintPath))?.PrintPath,
+                order.Items?.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x.PreparedPath))?.PreparedPath,
+                order.Items?.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x.SourcePath))?.SourcePath);
+
+            if (!string.IsNullOrWhiteSpace(knownPath))
+                return Path.GetDirectoryName(knownPath) ?? _ordersRootPath;
+
+            return !string.IsNullOrWhiteSpace(_tempRootPath) ? _tempRootPath : _ordersRootPath;
+        }
+
+        private static string? FirstNotEmpty(params string?[] candidates)
+        {
+            foreach (var candidate in candidates)
+            {
+                if (!string.IsNullOrWhiteSpace(candidate))
+                    return candidate;
+            }
+
+            return null;
+        }
+
+        private List<string> GetSelectedItemIdsForOrder(OrderData order)
+        {
+            var selectedItemIds = new List<string>();
+            foreach (DataGridViewRow row in dgvJobs.SelectedRows)
+            {
+                var tag = row.Tag?.ToString();
+                if (!IsItemTag(tag))
+                    continue;
+
+                if (!string.Equals(ExtractOrderInternalIdFromTag(tag), order.InternalId, StringComparison.Ordinal))
+                    continue;
+
+                var itemId = ExtractItemIdFromTag(tag);
+                if (!string.IsNullOrWhiteSpace(itemId))
+                    selectedItemIds.Add(itemId);
+            }
+
+            return selectedItemIds;
+        }
+
+        private static string? ExtractItemIdFromTag(string? tag)
+        {
+            if (string.IsNullOrWhiteSpace(tag))
+                return null;
+
+            var parts = tag.Split('|');
+            if (parts.Length < 3)
+                return null;
+
+            return parts[2];
+        }
+
+        private bool SetOrderStatus(
+            OrderData order,
+            string status,
+            string source,
+            string reason,
+            bool persistHistory,
+            bool rebuildGrid)
+        {
+            var oldStatus = order.Status ?? string.Empty;
+            if (string.Equals(oldStatus, status, StringComparison.Ordinal)
+                && string.Equals(order.LastStatusSource ?? string.Empty, source ?? string.Empty, StringComparison.Ordinal)
+                && string.Equals(order.LastStatusReason ?? string.Empty, reason ?? string.Empty, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            order.Status = status;
+            order.LastStatusSource = source ?? string.Empty;
+            order.LastStatusReason = reason ?? string.Empty;
+            order.LastStatusAt = DateTime.Now;
+            AppendOrderStatusLog(order, oldStatus, status, source ?? string.Empty, reason ?? string.Empty);
+
+            if (persistHistory)
+                SaveHistory();
+            if (rebuildGrid)
+                RebuildOrdersGrid();
+
+            return true;
+        }
+
+        private string GetOrderLogFilePath(OrderData order)
+        {
+            var safeId = string.IsNullOrWhiteSpace(order.InternalId) ? order.Id : order.InternalId;
+            if (string.IsNullOrWhiteSpace(safeId))
+                safeId = "unknown-order";
+
+            foreach (var c in Path.GetInvalidFileNameChars())
+                safeId = safeId.Replace(c, '_');
+
+            var logFolder = StoragePaths.ResolveFolderPath(_orderLogsFolderPath, "order-logs");
+            Directory.CreateDirectory(logFolder);
+            return Path.Combine(logFolder, $"{safeId}.log");
+        }
+
+        private void AppendOrderStatusLog(OrderData order, string oldStatus, string newStatus, string source, string reason)
+        {
+            try
+            {
+                var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} | status: {oldStatus} -> {newStatus} | source: {source} | reason: {reason}";
+                File.AppendAllText(GetOrderLogFilePath(order), line + Environment.NewLine);
+                Logger.Info($"ORDER-STATUS | order={GetOrderDisplayId(order)} | {line}");
+            }
+            catch
+            {
+                // Лог не должен ломать основной поток.
+            }
         }
 
         private void LblFStatus_Click(object? sender, EventArgs e)
@@ -3106,6 +3519,7 @@ namespace MyManager
             settings.Save();
 
             Logger.LogFilePath = _managerLogFilePath;
+            InitializeProcessor();
             MessageBox.Show(this, "Настройки сохранены", "MainForm", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
