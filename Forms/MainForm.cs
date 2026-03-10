@@ -518,9 +518,6 @@ namespace MyManager
             dgvJobs.DefaultCellStyle.SelectionForeColor = Color.Black;
             dgvJobs.EnableHeadersVisualStyles = true;
 
-            foreach (DataGridViewColumn column in dgvJobs.Columns)
-                column.SortMode = DataGridViewColumnSortMode.NotSortable;
-
             var headerBackColor = dgvJobs.ColumnHeadersDefaultCellStyle.BackColor.IsEmpty
                 ? SystemColors.Control
                 : dgvJobs.ColumnHeadersDefaultCellStyle.BackColor;
@@ -530,6 +527,7 @@ namespace MyManager
             dgvJobs.ColumnHeadersDefaultCellStyle.SelectionBackColor = headerBackColor;
             dgvJobs.ColumnHeadersDefaultCellStyle.SelectionForeColor = headerForeColor;
 
+            dgvJobs.CellPainting += DgvJobs_CellPainting;
             dgvJobs.CellFormatting += DgvJobs_CellFormatting;
             dgvJobs.CellMouseEnter += DgvJobs_CellMouseEnter;
             dgvJobs.CellMouseLeave += DgvJobs_CellMouseLeave;
@@ -1014,6 +1012,16 @@ namespace MyManager
 
             if (e.ColumnIndex == colStatus.Index || e.ColumnIndex == colCreated.Index || e.ColumnIndex == colReceived.Index || e.ColumnIndex < 0)
                 HandleOrdersGridChanged();
+        }
+
+        private void DgvJobs_CellPainting(object? sender, DataGridViewCellPaintingEventArgs e)
+        {
+            if (e.RowIndex != -1 || e.ColumnIndex < 0)
+                return;
+
+            // Keep default header rendering (including hover/sort glyph), but suppress selected-column fill.
+            e.Paint(e.CellBounds, e.PaintParts & ~DataGridViewPaintParts.SelectionBackground);
+            e.Handled = true;
         }
 
         private void DgvJobs_CellFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
