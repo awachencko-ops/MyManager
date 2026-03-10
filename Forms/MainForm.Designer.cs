@@ -67,6 +67,11 @@
             tsbParameters = new ToolStripButton();
             statusStrip1 = new StatusStrip();
             toolStatus = new ToolStripStatusLabel();
+            toolProgress = new ToolStripProgressBar();
+            toolStats = new ToolStripStatusLabel();
+            toolConnection = new ToolStripStatusLabel();
+            toolDiskFree = new ToolStripStatusLabel();
+            toolAlerts = new ToolStripStatusLabel();
             ((System.ComponentModel.ISupportInitialize)scMain).BeginInit();
             scMain.Panel1.SuspendLayout();
             scMain.Panel2.SuspendLayout();
@@ -435,7 +440,7 @@
             // statusStrip1
             // 
             statusStrip1.ImageScalingSize = new Size(24, 24);
-            statusStrip1.Items.AddRange(new ToolStripItem[] { toolStatus });
+            statusStrip1.Items.AddRange(new ToolStripItem[] { toolStatus, toolProgress, toolStats, toolConnection, toolDiskFree, toolAlerts });
             statusStrip1.Location = new Point(0, 2);
             statusStrip1.Name = "statusStrip1";
             statusStrip1.Size = new Size(1743, 32);
@@ -447,6 +452,38 @@
             toolStatus.Name = "toolStatus";
             toolStatus.Size = new Size(67, 25);
             toolStatus.Text = "Готово";
+            // 
+            // toolProgress
+            // 
+            toolProgress.MarqueeAnimationSpeed = 30;
+            toolProgress.Name = "toolProgress";
+            toolProgress.Size = new Size(140, 24);
+            toolProgress.Style = ProgressBarStyle.Marquee;
+            toolProgress.Visible = false;
+            // 
+            // toolStats
+            // 
+            toolStats.Name = "toolStats";
+            toolStats.Size = new Size(135, 25);
+            toolStats.Text = "Строк: 0 | Выд: 0";
+            // 
+            // toolConnection
+            // 
+            toolConnection.Name = "toolConnection";
+            toolConnection.Size = new Size(154, 25);
+            toolConnection.Text = "Сервер: автономно";
+            // 
+            // toolDiskFree
+            // 
+            toolDiskFree.Name = "toolDiskFree";
+            toolDiskFree.Size = new Size(123, 25);
+            toolDiskFree.Text = "Свободно: н/д";
+            // 
+            // toolAlerts
+            // 
+            toolAlerts.Name = "toolAlerts";
+            toolAlerts.Size = new Size(34, 25);
+            toolAlerts.Text = "⚠ 0";
             // 
             // MainForm
             // 
@@ -520,5 +557,10 @@
         private Panel pnlTray;
         private StatusStrip statusStrip1;
         private ToolStripStatusLabel toolStatus;
+        private ToolStripProgressBar toolProgress;
+        private ToolStripStatusLabel toolStats;
+        private ToolStripStatusLabel toolConnection;
+        private ToolStripStatusLabel toolDiskFree;
+        private ToolStripStatusLabel toolAlerts;
     }
 }

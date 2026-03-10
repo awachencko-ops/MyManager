@@ -78,6 +78,8 @@ namespace MyManager
         private const string CreatedDateFilterLabelText = "Начало обработки";
         private const string ReceivedDateFilterLabelText = "Дата поступления";
         private const string DefaultTrayStatusText = "Готово";
+        private const long DiskWarningThresholdBytes = 10L * 1024 * 1024 * 1024;
+        private const long DiskCriticalThresholdBytes = 5L * 1024 * 1024 * 1024;
 
         private static readonly Dictionary<string, string[]> QueueStatusMappings = new(StringComparer.Ordinal)
         {
@@ -158,6 +160,7 @@ namespace MyManager
         private MonthCalendar? _receivedCalendar;
         private Button? _receivedCalendarOkButton;
         private DateTimePicker? _receivedCalendarTargetPicker;
+        private int _acknowledgedErrorCount;
 
         private static readonly Color QueuePanelBackColor = Color.FromArgb(68, 74, 94);
         private static readonly Color QueueHeaderBackColor = Color.FromArgb(103, 163, 216);
@@ -249,6 +252,7 @@ namespace MyManager
             InitializeOrdersDataFlow();
             InitializeOrderRowContextMenu();
             InitializeActionButtonsState();
+            InitializeTrayIndicators();
             SetBottomStatus(DefaultTrayStatusText);
         }
 
@@ -557,9 +561,41 @@ namespace MyManager
 
         private void InitializeActionButtonsState()
         {
-            dgvJobs.SelectionChanged += (_, _) => UpdateActionButtonsState();
-            dgvJobs.CurrentCellChanged += (_, _) => UpdateActionButtonsState();
+            dgvJobs.SelectionChanged += (_, _) =>
+            {
+                UpdateActionButtonsState();
+                UpdateTrayStatsIndicator();
+            };
+            dgvJobs.CurrentCellChanged += (_, _) =>
+            {
+                UpdateActionButtonsState();
+                UpdateTrayStatsIndicator();
+            };
             UpdateActionButtonsState();
+            UpdateTrayStatsIndicator();
+        }
+
+        private void InitializeTrayIndicators()
+        {
+            toolStatus.Spring = true;
+            toolStatus.TextAlign = ContentAlignment.MiddleLeft;
+
+            toolProgress.Visible = false;
+            toolProgress.Style = ProgressBarStyle.Marquee;
+            toolProgress.MarqueeAnimationSpeed = 30;
+
+            toolAlerts.IsLink = true;
+            toolAlerts.LinkBehavior = LinkBehavior.HoverUnderline;
+            toolAlerts.Click += ToolAlerts_Click;
+
+            _acknowledgedErrorCount = CountOrdersWithErrors();
+            RefreshTrayIndicators();
+        }
+
+        private void ToolAlerts_Click(object? sender, EventArgs e)
+        {
+            AcknowledgeErrorNotifications();
+            OpenLogForSelectionOrManager();
         }
 
         private void UpdateActionButtonsState()
@@ -2935,6 +2971,7 @@ namespace MyManager
             RefreshUserFilterChecklist();
             RefreshQueuePresentation();
             UpdateActionButtonsState();
+            RefreshTrayIndicators();
         }
 
         private void LoadHistory()
@@ -3273,6 +3310,7 @@ namespace MyManager
             _processor ??= new OrderProcessor(_ordersRootPath);
             var cts = new CancellationTokenSource();
             _runTokensByOrder[order.InternalId] = cts;
+            UpdateTrayProgressIndicator();
 
             SetOrderStatus(order, "Обрабатывается", "ui", "Запуск из MainForm", persistHistory: true, rebuildGrid: true);
             SetBottomStatus($"Запущен заказ {GetOrderDisplayId(order)}");
@@ -3296,6 +3334,7 @@ namespace MyManager
             finally
             {
                 _runTokensByOrder.Remove(order.InternalId);
+                UpdateTrayProgressIndicator();
                 SaveHistory();
                 RebuildOrdersGrid();
                 UpdateActionButtonsState();
@@ -3321,6 +3360,7 @@ namespace MyManager
 
             cts.Cancel();
             _runTokensByOrder.Remove(order.InternalId);
+            UpdateTrayProgressIndicator();
             SetOrderStatus(order, "Отменено", "ui", "Остановлено пользователем", persistHistory: true, rebuildGrid: true);
             UpdateActionButtonsState();
             SetBottomStatus($"Остановлен заказ {GetOrderDisplayId(order)}");
@@ -3378,6 +3418,7 @@ namespace MyManager
             {
                 cts.Cancel();
                 _runTokensByOrder.Remove(order.InternalId);
+                UpdateTrayProgressIndicator();
             }
 
             _expandedOrderIds.Remove(order.InternalId);
@@ -3432,6 +3473,8 @@ namespace MyManager
 
         private void OpenLogForSelectionOrManager()
         {
+            AcknowledgeErrorNotifications();
+
             var order = GetSelectedOrder();
             if (order != null)
             {
@@ -3607,7 +3650,228 @@ namespace MyManager
             if (rebuildGrid)
                 RebuildOrdersGrid();
 
+            UpdateTrayErrorIndicator();
+
             return true;
+        }
+
+        private void RefreshTrayIndicators()
+        {
+            UpdateTrayStatsIndicator();
+            UpdateTrayConnectionIndicator();
+            UpdateTrayDiskIndicator();
+            UpdateTrayErrorIndicator();
+            UpdateTrayProgressIndicator();
+        }
+
+        private void UpdateTrayStatsIndicator()
+        {
+            if (toolStats.IsDisposed || dgvJobs.IsDisposed)
+                return;
+
+            var visibleOrders = 0;
+            foreach (DataGridViewRow row in dgvJobs.Rows)
+            {
+                if (row.IsNewRow || !row.Visible)
+                    continue;
+
+                var tag = row.Tag?.ToString();
+                if (IsItemTag(tag))
+                    continue;
+
+                visibleOrders++;
+            }
+
+            var selectedOrderIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (DataGridViewRow row in dgvJobs.SelectedRows)
+            {
+                if (row.IsNewRow)
+                    continue;
+
+                var orderInternalId = ExtractOrderInternalIdFromTag(row.Tag?.ToString());
+                if (!string.IsNullOrWhiteSpace(orderInternalId))
+                    selectedOrderIds.Add(orderInternalId);
+            }
+
+            toolStats.Text = $"Строк: {visibleOrders} | Выделено: {selectedOrderIds.Count}";
+        }
+
+        private void UpdateTrayConnectionIndicator()
+        {
+            if (toolConnection.IsDisposed)
+                return;
+
+            var isConnected = CanAccessPath(_ordersRootPath);
+            toolConnection.Text = isConnected ? "● Сервер: подключен" : "● Сервер: автономно";
+            toolConnection.ForeColor = isConnected ? Color.SeaGreen : Color.Firebrick;
+            toolConnection.ToolTipText = isConnected
+                ? "Рабочая папка заказов доступна."
+                : "Рабочая папка заказов недоступна.";
+        }
+
+        private void UpdateTrayDiskIndicator()
+        {
+            if (toolDiskFree.IsDisposed)
+                return;
+
+            if (!TryGetProbeDrive(out var drive))
+            {
+                toolDiskFree.Text = "Свободно: н/д";
+                toolDiskFree.ForeColor = Color.Gray;
+                toolDiskFree.ToolTipText = "Не удалось определить диск.";
+                return;
+            }
+
+            long freeBytes;
+            try
+            {
+                freeBytes = drive.AvailableFreeSpace;
+            }
+            catch
+            {
+                toolDiskFree.Text = $"Свободно {drive.Name} н/д";
+                toolDiskFree.ForeColor = Color.Gray;
+                toolDiskFree.ToolTipText = "Нет доступа к данным о диске.";
+                return;
+            }
+
+            toolDiskFree.Text = $"Свободно {drive.Name} {FormatStorageSize(freeBytes)}";
+            toolDiskFree.ToolTipText = $"Свободное место на диске {drive.Name}";
+
+            if (freeBytes <= DiskCriticalThresholdBytes)
+                toolDiskFree.ForeColor = Color.Firebrick;
+            else if (freeBytes <= DiskWarningThresholdBytes)
+                toolDiskFree.ForeColor = Color.DarkOrange;
+            else
+                toolDiskFree.ForeColor = Color.SeaGreen;
+        }
+
+        private void UpdateTrayErrorIndicator()
+        {
+            if (toolAlerts.IsDisposed)
+                return;
+
+            var errorCount = CountOrdersWithErrors();
+            if (errorCount <= 0)
+                _acknowledgedErrorCount = 0;
+            else if (_acknowledgedErrorCount > errorCount)
+                _acknowledgedErrorCount = errorCount;
+
+            var hasUnseenErrors = errorCount > _acknowledgedErrorCount;
+            toolAlerts.Text = $"⚠ {errorCount}";
+            toolAlerts.ToolTipText = errorCount == 0
+                ? "Ошибок нет. Нажмите, чтобы открыть лог."
+                : hasUnseenErrors
+                    ? $"Есть новые ошибки: {errorCount}. Нажмите, чтобы открыть лог."
+                    : $"Ошибок: {errorCount}. Нажмите, чтобы открыть лог.";
+
+            if (errorCount == 0)
+                toolAlerts.ForeColor = Color.Gray;
+            else if (hasUnseenErrors)
+                toolAlerts.ForeColor = Color.Firebrick;
+            else
+                toolAlerts.ForeColor = Color.Goldenrod;
+        }
+
+        private void UpdateTrayProgressIndicator()
+        {
+            if (toolProgress.IsDisposed)
+                return;
+
+            toolProgress.Visible = _runTokensByOrder.Count > 0;
+        }
+
+        private void AcknowledgeErrorNotifications()
+        {
+            _acknowledgedErrorCount = CountOrdersWithErrors();
+            UpdateTrayErrorIndicator();
+        }
+
+        private int CountOrdersWithErrors()
+        {
+            var count = 0;
+            foreach (var order in _orderHistory)
+            {
+                if (order == null)
+                    continue;
+
+                var normalizedStatus = NormalizeStatus(order.Status);
+                if (string.Equals(normalizedStatus, "Ошибка", StringComparison.Ordinal))
+                    count++;
+            }
+
+            return count;
+        }
+
+        private bool TryGetProbeDrive(out DriveInfo drive)
+        {
+            drive = null!;
+
+            var probePath = FirstNotEmpty(_ordersRootPath, _tempRootPath, _grandpaFolder);
+            if (string.IsNullOrWhiteSpace(probePath))
+                return false;
+
+            string root;
+            try
+            {
+                root = Path.GetPathRoot(probePath) ?? string.Empty;
+            }
+            catch
+            {
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(root))
+                return false;
+
+            try
+            {
+                drive = new DriveInfo(root);
+                return drive.IsReady;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool CanAccessPath(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return false;
+
+            try
+            {
+                var fullPath = Path.GetFullPath(path);
+                if (Directory.Exists(fullPath))
+                    return true;
+
+                var root = Path.GetPathRoot(fullPath);
+                return !string.IsNullOrWhiteSpace(root) && Directory.Exists(root);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static string FormatStorageSize(long bytes)
+        {
+            if (bytes < 0)
+                bytes = 0;
+
+            string[] units = ["Б", "КБ", "МБ", "ГБ", "ТБ"];
+            double value = bytes;
+            var unit = 0;
+            while (value >= 1024 && unit < units.Length - 1)
+            {
+                value /= 1024;
+                unit++;
+            }
+
+            return unit == 0
+                ? $"{value:0} {units[unit]}"
+                : $"{value:0.0} {units[unit]}";
         }
 
         private void SetBottomStatus(string text)
@@ -5669,6 +5933,7 @@ namespace MyManager
 
             Logger.LogFilePath = _managerLogFilePath;
             InitializeProcessor();
+            RefreshTrayIndicators();
             SetBottomStatus("Настройки сохранены");
             MessageBox.Show(this, "Настройки сохранены", "MainForm", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
