@@ -445,8 +445,8 @@
             // toolStatus
             // 
             toolStatus.Name = "toolStatus";
-            toolStatus.Size = new Size(92, 25);
-            toolStatus.Text = "toolStatus";
+            toolStatus.Size = new Size(67, 25);
+            toolStatus.Text = "Готово";
             // 
             // MainForm
             // 

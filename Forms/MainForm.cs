@@ -77,6 +77,7 @@ namespace MyManager
         private const string UserFilterLabelText = "Пользователь";
         private const string CreatedDateFilterLabelText = "Начало обработки";
         private const string ReceivedDateFilterLabelText = "Дата поступления";
+        private const string DefaultTrayStatusText = "Готово";
 
         private static readonly Dictionary<string, string[]> QueueStatusMappings = new(StringComparer.Ordinal)
         {
@@ -248,6 +249,7 @@ namespace MyManager
             InitializeOrdersDataFlow();
             InitializeOrderRowContextMenu();
             InitializeActionButtonsState();
+            SetBottomStatus(DefaultTrayStatusText);
         }
 
         // обработчик нажатия кнопок в ToolStrip
@@ -449,6 +451,7 @@ namespace MyManager
                 else
                     Apply();
             };
+            _processor.OnLog += message => SetBottomStatus(message);
         }
 
         private void ApplyQueueVisualStyle()
@@ -692,6 +695,7 @@ namespace MyManager
 
         private void ShowGroupHeadFileOperationBlocked()
         {
+            SetBottomStatus("Головная строка группы заблокирована для файловых операций");
             MessageBox.Show(
                 this,
                 "Головная строка группы заблокирована для файловых операций.",
@@ -729,6 +733,7 @@ namespace MyManager
             }
             catch (Exception ex)
             {
+                SetBottomStatus($"Ошибка выбора файла: {ex.Message}");
                 MessageBox.Show(this, $"Не удалось выбрать файл: {ex.Message}", "Файловая операция", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -840,6 +845,7 @@ namespace MyManager
             }
             catch (Exception ex)
             {
+                SetBottomStatus($"Ошибка вставки из буфера: {ex.Message}");
                 MessageBox.Show(this, $"Не удалось вставить файл из буфера: {ex.Message}", "Файловая операция", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -942,18 +948,23 @@ namespace MyManager
             {
                 if (!HasExistingFile(order.PrintPath))
                 {
+                    SetBottomStatus("Файл печати не найден");
                     MessageBox.Show(this, "Файл печати не найден.", "Водяной знак", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
 
                 PdfWatermark.Apply(order, isVertical);
+                var pos = isVertical ? "слева" : "сверху";
+                SetBottomStatus($"Водяной знак ({pos}) нанесен на {GetOrderDisplayId(order)}");
             }
             catch (IOException)
             {
+                SetBottomStatus("Файл занят другой программой. Закройте PDF и повторите");
                 MessageBox.Show(this, "Файл занят другой программой. Закройте PDF и повторите.", "Водяной знак", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
             catch (Exception ex)
             {
+                SetBottomStatus($"Не удалось применить водяной знак: {ex.Message}");
                 MessageBox.Show(this, $"Не удалось применить водяной знак: {ex.Message}", "Водяной знак", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -964,6 +975,7 @@ namespace MyManager
             {
                 if (!HasExistingFile(item.PrintPath))
                 {
+                    SetBottomStatus("Файл печати item не найден");
                     MessageBox.Show(this, "Файл печати item не найден.", "Водяной знак", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
@@ -978,13 +990,19 @@ namespace MyManager
                 {
                     order.PrintPath = originalPrintPath;
                 }
+
+                var pos = isVertical ? "слева" : "сверху";
+                var fileName = Path.GetFileName(item.PrintPath);
+                SetBottomStatus($"Водяной знак ({pos}) нанесен на {fileName}");
             }
             catch (IOException)
             {
+                SetBottomStatus("Файл занят другой программой. Закройте PDF и повторите");
                 MessageBox.Show(this, "Файл занят другой программой. Закройте PDF и повторите.", "Водяной знак", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
             catch (Exception ex)
             {
+                SetBottomStatus($"Не удалось применить водяной знак: {ex.Message}");
                 MessageBox.Show(this, $"Не удалось применить водяной знак: {ex.Message}", "Водяной знак", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -999,6 +1017,7 @@ namespace MyManager
             }
 
             PersistGridChanges($"order|{order.InternalId}");
+            SetBottomStatus($"PitStop очищен для {GetOrderDisplayId(order)}");
         }
 
         private void RemoveImposingAction(OrderData order)
@@ -1011,24 +1030,28 @@ namespace MyManager
             }
 
             PersistGridChanges($"order|{order.InternalId}");
+            SetBottomStatus($"Imposing очищен для {GetOrderDisplayId(order)}");
         }
 
         private void RemovePitStopAction(OrderData order, OrderFileItem item)
         {
             item.PitStopAction = "-";
             PersistGridChanges($"item|{order.InternalId}|{item.ItemId}");
+            SetBottomStatus($"PitStop очищен для item {item.ClientFileLabel}");
         }
 
         private void RemoveImposingAction(OrderData order, OrderFileItem item)
         {
             item.ImposingAction = "-";
             PersistGridChanges($"item|{order.InternalId}|{item.ItemId}");
+            SetBottomStatus($"Imposing очищен для item {item.ClientFileLabel}");
         }
 
         private string CopyToGrandpa(OrderData order)
         {
             if (!HasExistingFile(order.PrintPath))
             {
+                SetBottomStatus("Файл печати не найден");
                 MessageBox.Show(this, "Файл печати не найден.", "Копирование", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return string.Empty;
             }
@@ -1042,6 +1065,7 @@ namespace MyManager
         {
             if (!HasExistingFile(item.PrintPath))
             {
+                SetBottomStatus("Файл печати item не найден");
                 MessageBox.Show(this, "Файл печати item не найден.", "Копирование", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return string.Empty;
             }
@@ -1819,6 +1843,7 @@ namespace MyManager
             }
             catch (Exception ex)
             {
+                SetBottomStatus($"Не удалось обработать действие по файлу: {ex.Message}");
                 MessageBox.Show(this, $"Не удалось обработать действие по файлу: {ex.Message}", "Файловая операция", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -1942,6 +1967,7 @@ namespace MyManager
             }
             catch (Exception ex)
             {
+                SetBottomStatus($"Не удалось добавить файл: {ex.Message}");
                 MessageBox.Show(this, $"Не удалось добавить файл: {ex.Message}", "Drag&Drop", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -1965,6 +1991,7 @@ namespace MyManager
                 return;
 
             PersistGridChanges($"order|{order.InternalId}");
+            SetBottomStatus("Файл добавлен в заказ");
         }
 
         private async Task PickAndCopyFileForItemAsync(OrderData order, OrderFileItem item, int stage)
@@ -1986,6 +2013,7 @@ namespace MyManager
                 return;
 
             PersistGridChanges($"item|{order.InternalId}|{item.ItemId}");
+            SetBottomStatus("Файл добавлен в item");
         }
 
         private async Task<bool> AddFileToOrderAsync(OrderData order, string sourceFile, int stage)
@@ -2139,12 +2167,14 @@ namespace MyManager
             }
             catch (Exception ex)
             {
+                SetBottomStatus($"Не удалось удалить файл: {ex.Message}");
                 MessageBox.Show(this, $"Не удалось удалить файл: {ex.Message}", "Удаление файла", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
             UpdateOrderFilePath(order, stage, string.Empty);
             PersistGridChanges($"order|{order.InternalId}");
+            SetBottomStatus("Файл удален");
         }
 
         private void RemoveFileFromItem(OrderData order, OrderFileItem item, int stage)
@@ -2169,12 +2199,14 @@ namespace MyManager
             }
             catch (Exception ex)
             {
+                SetBottomStatus($"Не удалось удалить файл: {ex.Message}");
                 MessageBox.Show(this, $"Не удалось удалить файл: {ex.Message}", "Удаление файла", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
             UpdateItemFilePath(order, item, stage, string.Empty);
             PersistGridChanges($"item|{order.InternalId}|{item.ItemId}");
+            SetBottomStatus("Файл item удален");
         }
 
         private void RenameFileForOrder(OrderData order, int stage)
@@ -2192,12 +2224,14 @@ namespace MyManager
             }
             catch (Exception ex)
             {
+                SetBottomStatus($"Не удалось переименовать файл: {ex.Message}");
                 MessageBox.Show(this, $"Не удалось переименовать файл: {ex.Message}", "Переименование", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
             UpdateOrderFilePath(order, stage, renamedPath);
             PersistGridChanges($"order|{order.InternalId}");
+            SetBottomStatus("Файл переименован");
         }
 
         private void RenameFileForItem(OrderData order, OrderFileItem item, int stage)
@@ -2215,12 +2249,14 @@ namespace MyManager
             }
             catch (Exception ex)
             {
+                SetBottomStatus($"Не удалось переименовать файл: {ex.Message}");
                 MessageBox.Show(this, $"Не удалось переименовать файл: {ex.Message}", "Переименование", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
             UpdateItemFilePath(order, item, stage, renamedPath);
             PersistGridChanges($"item|{order.InternalId}|{item.ItemId}");
+            SetBottomStatus("Файл item переименован");
         }
 
         private bool TryBuildRenamedPath(string currentPath, out string renamedPath)
@@ -2252,6 +2288,7 @@ namespace MyManager
 
             if (File.Exists(targetPath))
             {
+                SetBottomStatus("Файл с таким именем уже существует");
                 MessageBox.Show(this, "Файл с таким именем уже существует.", "Переименование", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return false;
             }
@@ -2313,11 +2350,13 @@ namespace MyManager
         {
             if (!HasExistingFile(path))
             {
+                SetBottomStatus("Путь к файлу не найден");
                 MessageBox.Show(this, "Путь к файлу не найден.", "Буфер обмена", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
             TrySetClipboardText(path);
+            SetBottomStatus("Путь скопирован в буфер");
         }
 
         private async Task PasteFileFromClipboardAsync(OrderData order, int stage)
@@ -2353,6 +2392,7 @@ namespace MyManager
             }
             catch (Exception ex)
             {
+                SetBottomStatus($"Не удалось прочитать буфер обмена: {ex.Message}");
                 MessageBox.Show(this, $"Не удалось прочитать буфер обмена: {ex.Message}", "Буфер обмена", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return null;
             }
@@ -2360,12 +2400,14 @@ namespace MyManager
             var cleanPath = CleanPath(clipboardText?.Replace("\"", string.Empty));
             if (string.IsNullOrWhiteSpace(cleanPath))
             {
+                SetBottomStatus("Буфер обмена пуст");
                 MessageBox.Show(this, "Буфер обмена пуст.", "Буфер обмена", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return null;
             }
 
             if (!File.Exists(cleanPath))
             {
+                SetBottomStatus("Файл не найден по указанному пути");
                 MessageBox.Show(this, $"Файл не найден по указанному пути:\n{cleanPath}", "Буфер обмена", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return null;
             }
@@ -2730,17 +2772,20 @@ namespace MyManager
             if (PathsEqual(cleanSource, destination))
             {
                 TrySetClipboardText(destination);
+                SetBottomStatus("Скопировано в Дедушку");
                 return destination;
             }
 
             if (File.Exists(destination))
             {
                 TrySetClipboardText(destination);
+                SetBottomStatus("Скопировано в Дедушку");
                 return destination;
             }
 
             File.Copy(cleanSource, destination, true);
             TrySetClipboardText(destination);
+            SetBottomStatus("Скопировано в Дедушку");
             return destination;
         }
 
@@ -3206,18 +3251,21 @@ namespace MyManager
             var order = GetSelectedOrder();
             if (order == null)
             {
+                SetBottomStatus("Выберите строку заказа для запуска");
                 MessageBox.Show(this, "Выберите строку заказа для запуска.", "Запуск", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
             if (string.IsNullOrWhiteSpace(order.Id))
             {
+                SetBottomStatus("У заказа не указан номер");
                 MessageBox.Show(this, "У заказа не указан № заказа. Перед запуском заполните карточку заказа.", "Запуск", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
             if (_runTokensByOrder.ContainsKey(order.InternalId))
             {
+                SetBottomStatus($"Заказ {GetOrderDisplayId(order)} уже запущен");
                 MessageBox.Show(this, $"Заказ {GetOrderDisplayId(order)} уже запущен.", "Запуск", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
@@ -3227,6 +3275,7 @@ namespace MyManager
             _runTokensByOrder[order.InternalId] = cts;
 
             SetOrderStatus(order, "Обрабатывается", "ui", "Запуск из MainForm", persistHistory: true, rebuildGrid: true);
+            SetBottomStatus($"Запущен заказ {GetOrderDisplayId(order)}");
 
             try
             {
@@ -3236,10 +3285,12 @@ namespace MyManager
             catch (OperationCanceledException)
             {
                 SetOrderStatus(order, "Отменено", "ui", "Остановлено пользователем", persistHistory: true, rebuildGrid: true);
+                SetBottomStatus($"Заказ {GetOrderDisplayId(order)} остановлен");
             }
             catch (Exception ex)
             {
                 SetOrderStatus(order, "Ошибка", "ui", ex.Message, persistHistory: true, rebuildGrid: true);
+                SetBottomStatus($"Ошибка запуска заказа {GetOrderDisplayId(order)}: {ex.Message}");
                 MessageBox.Show(this, $"Не удалось запустить заказ: {ex.Message}", "Запуск", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
@@ -3256,12 +3307,14 @@ namespace MyManager
             var order = GetSelectedOrder();
             if (order == null)
             {
+                SetBottomStatus("Выберите заказ для остановки");
                 MessageBox.Show(this, "Выберите заказ для остановки.", "Остановка", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
             if (!_runTokensByOrder.TryGetValue(order.InternalId, out var cts))
             {
+                SetBottomStatus($"Заказ {GetOrderDisplayId(order)} сейчас не выполняется");
                 MessageBox.Show(this, $"Заказ {GetOrderDisplayId(order)} сейчас не выполняется.", "Остановка", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
@@ -3270,6 +3323,7 @@ namespace MyManager
             _runTokensByOrder.Remove(order.InternalId);
             SetOrderStatus(order, "Отменено", "ui", "Остановлено пользователем", persistHistory: true, rebuildGrid: true);
             UpdateActionButtonsState();
+            SetBottomStatus($"Остановлен заказ {GetOrderDisplayId(order)}");
         }
 
         private void RemoveSelectedOrder()
@@ -3277,6 +3331,7 @@ namespace MyManager
             var order = GetSelectedOrder();
             if (order == null)
             {
+                SetBottomStatus("Выберите заказ для удаления");
                 MessageBox.Show(this, "Выберите заказ для удаления.", "Удаление", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
@@ -3297,7 +3352,10 @@ namespace MyManager
                 MessageBoxIcon.Warning);
 
             if (decision == DialogResult.Cancel)
+            {
+                SetBottomStatus("Удаление отменено");
                 return;
+            }
 
             if (decision == DialogResult.Yes)
             {
@@ -3310,6 +3368,7 @@ namespace MyManager
                 }
                 catch (Exception ex)
                 {
+                    SetBottomStatus($"Не удалось удалить файлы заказа: {ex.Message}");
                     MessageBox.Show(this, $"Не удалось удалить файлы заказа: {ex.Message}", "Удаление заказа", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
@@ -3326,6 +3385,7 @@ namespace MyManager
             SaveHistory();
             RebuildOrdersGrid();
             UpdateActionButtonsState();
+            SetBottomStatus($"Заказ {GetOrderDisplayId(order)} удален");
         }
 
         private void DeleteOrderFiles(OrderData order)
@@ -3386,6 +3446,7 @@ namespace MyManager
 
             if (!File.Exists(_managerLogFilePath))
             {
+                SetBottomStatus("Лог пока не создан");
                 MessageBox.Show(this, "Лог пока не создан.", "Лог", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
@@ -3395,6 +3456,7 @@ namespace MyManager
                 FileName = _managerLogFilePath,
                 UseShellExecute = true
             });
+            SetBottomStatus("Открыт лог менеджера");
         }
 
         private void OpenFolderForSelectedOrder()
@@ -3415,6 +3477,7 @@ namespace MyManager
 
             if (string.IsNullOrWhiteSpace(targetPath))
             {
+                SetBottomStatus("Папка не определена");
                 MessageBox.Show(this, "Папка не определена.", "Папка", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
@@ -3425,6 +3488,7 @@ namespace MyManager
                 FileName = targetPath,
                 UseShellExecute = true
             });
+            SetBottomStatus($"Открыта папка: {targetPath}");
         }
 
         private void OpenOrderStageFolder(OrderData order, int stage)
@@ -3440,6 +3504,7 @@ namespace MyManager
 
             if (string.IsNullOrWhiteSpace(targetPath))
             {
+                SetBottomStatus("Папка не определена");
                 MessageBox.Show(this, "Папка не определена.", "Папка", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
@@ -3450,6 +3515,7 @@ namespace MyManager
                 FileName = targetPath,
                 UseShellExecute = true
             });
+            SetBottomStatus($"Открыта папка этапа: {targetPath}");
         }
 
         private string GetPreferredOrderFolder(OrderData order)
@@ -3542,6 +3608,29 @@ namespace MyManager
                 RebuildOrdersGrid();
 
             return true;
+        }
+
+        private void SetBottomStatus(string text)
+        {
+            if (Disposing || IsDisposed)
+                return;
+
+            var nextText = string.IsNullOrWhiteSpace(text)
+                ? DefaultTrayStatusText
+                : text.Trim();
+
+            void Apply()
+            {
+                if (toolStatus.IsDisposed)
+                    return;
+
+                toolStatus.Text = nextText;
+            }
+
+            if (InvokeRequired)
+                BeginInvoke((Action)Apply);
+            else
+                Apply();
         }
 
         private string GetOrderLogFilePath(OrderData order)
@@ -5580,6 +5669,7 @@ namespace MyManager
 
             Logger.LogFilePath = _managerLogFilePath;
             InitializeProcessor();
+            SetBottomStatus("Настройки сохранены");
             MessageBox.Show(this, "Настройки сохранены", "MainForm", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
