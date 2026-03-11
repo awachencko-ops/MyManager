@@ -176,10 +176,10 @@
             // 
             // tbSearch
             // 
-            tbSearch.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            tbSearch.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Right;
             tbSearch.Location = new Point(1357, 2);
             tbSearch.Name = "tbSearch";
-            tbSearch.Size = new Size(240, 31);
+            tbSearch.Size = new Size(302, 31);
             tbSearch.TabIndex = 1;
             // 
             // cbQueue
@@ -434,8 +434,8 @@
             // 
             // tsMainActions
             // 
-            tsMainActions.ImageScalingSize = new Size(24, 24);
             tsMainActions.GripStyle = ToolStripGripStyle.Hidden;
+            tsMainActions.ImageScalingSize = new Size(24, 24);
             tsMainActions.Items.AddRange(new ToolStripItem[] { tsbNewJob, tsbRun, tsbStop, tsbRemove, tsbBrowse, tsbConsole, tsbParameters });
             tsMainActions.Location = new Point(0, 0);
             tsMainActions.Name = "tsMainActions";
