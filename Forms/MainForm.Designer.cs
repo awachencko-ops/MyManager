@@ -435,6 +435,7 @@
             // tsMainActions
             // 
             tsMainActions.ImageScalingSize = new Size(24, 24);
+            tsMainActions.GripStyle = ToolStripGripStyle.Hidden;
             tsMainActions.Items.AddRange(new ToolStripItem[] { tsbNewJob, tsbRun, tsbStop, tsbRemove, tsbBrowse, tsbConsole, tsbParameters });
             tsMainActions.Location = new Point(0, 0);
             tsMainActions.Name = "tsMainActions";
