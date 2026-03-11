@@ -28,6 +28,7 @@
         /// </summary>
         private void InitializeComponent()
         {
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(MainForm));
             pnlSidebar = new Panel();
             scMain = new SplitContainer();
             treeView1 = new TreeView();
@@ -47,6 +48,15 @@
             cbFCreated = new ComboBox();
             cbFReceived = new ComboBox();
             dgvJobs = new DataGridView();
+            colStatus = new DataGridViewTextBoxColumn();
+            colOrderNumber = new DataGridViewTextBoxColumn();
+            colSource = new DataGridViewTextBoxColumn();
+            colPrep = new DataGridViewTextBoxColumn();
+            colPitstop = new DataGridViewTextBoxColumn();
+            colHotimposing = new DataGridViewTextBoxColumn();
+            colPrint = new DataGridViewTextBoxColumn();
+            colReceived = new DataGridViewTextBoxColumn();
+            colCreated = new DataGridViewTextBoxColumn();
             pnlTray = new Panel();
             statusStrip1 = new StatusStrip();
             toolStatus = new ToolStripStatusLabel();
@@ -63,15 +73,6 @@
             tsbBrowse = new ToolStripButton();
             tsbConsole = new ToolStripButton();
             tsbParameters = new ToolStripButton();
-            colStatus = new DataGridViewTextBoxColumn();
-            colOrderNumber = new DataGridViewTextBoxColumn();
-            colSource = new DataGridViewTextBoxColumn();
-            colPrep = new DataGridViewTextBoxColumn();
-            colPitstop = new DataGridViewTextBoxColumn();
-            colHotimposing = new DataGridViewTextBoxColumn();
-            colPrint = new DataGridViewTextBoxColumn();
-            colReceived = new DataGridViewTextBoxColumn();
-            colCreated = new DataGridViewTextBoxColumn();
             ((System.ComponentModel.ISupportInitialize)scMain).BeginInit();
             scMain.Panel1.SuspendLayout();
             scMain.Panel2.SuspendLayout();
@@ -310,6 +311,70 @@
             dgvJobs.Size = new Size(1743, 1068);
             dgvJobs.TabIndex = 2;
             // 
+            // colStatus
+            // 
+            colStatus.HeaderText = "Состояние";
+            colStatus.MinimumWidth = 8;
+            colStatus.Name = "colStatus";
+            colStatus.ReadOnly = true;
+            // 
+            // colOrderNumber
+            // 
+            colOrderNumber.HeaderText = "№ заказа";
+            colOrderNumber.MinimumWidth = 8;
+            colOrderNumber.Name = "colOrderNumber";
+            colOrderNumber.ReadOnly = true;
+            // 
+            // colSource
+            // 
+            colSource.HeaderText = "Исходные";
+            colSource.MinimumWidth = 8;
+            colSource.Name = "colSource";
+            colSource.ReadOnly = true;
+            colSource.Visible = false;
+            // 
+            // colPrep
+            // 
+            colPrep.HeaderText = "Заголовок задания";
+            colPrep.MinimumWidth = 8;
+            colPrep.Name = "colPrep";
+            colPrep.ReadOnly = true;
+            // 
+            // colPitstop
+            // 
+            colPitstop.HeaderText = "Проверка файлов";
+            colPitstop.MinimumWidth = 8;
+            colPitstop.Name = "colPitstop";
+            colPitstop.ReadOnly = true;
+            // 
+            // colHotimposing
+            // 
+            colHotimposing.HeaderText = "Спуск полос";
+            colHotimposing.MinimumWidth = 8;
+            colHotimposing.Name = "colHotimposing";
+            colHotimposing.ReadOnly = true;
+            // 
+            // colPrint
+            // 
+            colPrint.HeaderText = "Готов к печати";
+            colPrint.MinimumWidth = 8;
+            colPrint.Name = "colPrint";
+            colPrint.ReadOnly = true;
+            // 
+            // colReceived
+            // 
+            colReceived.HeaderText = "Заказ принят";
+            colReceived.MinimumWidth = 8;
+            colReceived.Name = "colReceived";
+            colReceived.ReadOnly = true;
+            // 
+            // colCreated
+            // 
+            colCreated.HeaderText = "В препрессе";
+            colCreated.MinimumWidth = 8;
+            colCreated.Name = "colCreated";
+            colCreated.ReadOnly = true;
+            // 
             // pnlTray
             // 
             pnlTray.Controls.Add(statusStrip1);
@@ -381,109 +446,52 @@
             // 
             // tsbNewJob
             // 
+            tsbNewJob.Image = (Image)resources.GetObject("tsbNewJob.Image");
             tsbNewJob.Name = "tsbNewJob";
-            tsbNewJob.Size = new Size(81, 29);
+            tsbNewJob.Size = new Size(105, 29);
             tsbNewJob.Text = "Создать";
             // 
             // tsbRun
             // 
+            tsbRun.Image = (Image)resources.GetObject("tsbRun.Image");
             tsbRun.Name = "tsbRun";
-            tsbRun.Size = new Size(95, 29);
+            tsbRun.Size = new Size(119, 29);
             tsbRun.Text = "Запустить";
             // 
             // tsbStop
             // 
+            tsbStop.Image = (Image)resources.GetObject("tsbStop.Image");
             tsbStop.Name = "tsbStop";
-            tsbStop.Size = new Size(111, 29);
+            tsbStop.Size = new Size(135, 29);
             tsbStop.Text = "Остановить";
             // 
             // tsbRemove
             // 
+            tsbRemove.Image = (Image)resources.GetObject("tsbRemove.Image");
             tsbRemove.Name = "tsbRemove";
-            tsbRemove.Size = new Size(80, 29);
+            tsbRemove.Size = new Size(104, 29);
             tsbRemove.Text = "Удалить";
             // 
             // tsbBrowse
             // 
+            tsbBrowse.Image = (Image)resources.GetObject("tsbBrowse.Image");
             tsbBrowse.Name = "tsbBrowse";
-            tsbBrowse.Size = new Size(66, 29);
+            tsbBrowse.Size = new Size(90, 29);
             tsbBrowse.Text = "Папка";
             // 
             // tsbConsole
             // 
+            tsbConsole.Image = (Image)resources.GetObject("tsbConsole.Image");
             tsbConsole.Name = "tsbConsole";
-            tsbConsole.Size = new Size(46, 29);
+            tsbConsole.Size = new Size(70, 29);
             tsbConsole.Text = "Лог";
             // 
             // tsbParameters
             // 
+            tsbParameters.Image = (Image)resources.GetObject("tsbParameters.Image");
             tsbParameters.Name = "tsbParameters";
-            tsbParameters.Size = new Size(111, 29);
+            tsbParameters.Size = new Size(135, 29);
             tsbParameters.Text = "Параметры";
-            // 
-            // colStatus
-            // 
-            colStatus.HeaderText = "Состояние";
-            colStatus.MinimumWidth = 8;
-            colStatus.Name = "colStatus";
-            colStatus.ReadOnly = true;
-            // 
-            // colOrderNumber
-            // 
-            colOrderNumber.HeaderText = "№ заказа";
-            colOrderNumber.MinimumWidth = 8;
-            colOrderNumber.Name = "colOrderNumber";
-            colOrderNumber.ReadOnly = true;
-            // 
-            // colSource
-            // 
-            colSource.HeaderText = "Исходные";
-            colSource.MinimumWidth = 8;
-            colSource.Name = "colSource";
-            colSource.ReadOnly = true;
-            colSource.Visible = false;
-            // 
-            // colPrep
-            // 
-            colPrep.HeaderText = "Заголовок задания";
-            colPrep.MinimumWidth = 8;
-            colPrep.Name = "colPrep";
-            colPrep.ReadOnly = true;
-            // 
-            // colPitstop
-            // 
-            colPitstop.HeaderText = "Проверка файлов";
-            colPitstop.MinimumWidth = 8;
-            colPitstop.Name = "colPitstop";
-            colPitstop.ReadOnly = true;
-            // 
-            // colHotimposing
-            // 
-            colHotimposing.HeaderText = "Спуск полос";
-            colHotimposing.MinimumWidth = 8;
-            colHotimposing.Name = "colHotimposing";
-            colHotimposing.ReadOnly = true;
-            // 
-            // colPrint
-            // 
-            colPrint.HeaderText = "Готов к печати";
-            colPrint.MinimumWidth = 8;
-            colPrint.Name = "colPrint";
-            colPrint.ReadOnly = true;
-            // 
-            // colReceived
-            // 
-            colReceived.HeaderText = "Заказ принят";
-            colReceived.MinimumWidth = 8;
-            colReceived.Name = "colReceived";
-            colReceived.ReadOnly = true;
-            // 
-            // colCreated
-            // 
-            colCreated.HeaderText = "В препрессе";
-            colCreated.MinimumWidth = 8;
-            colCreated.Name = "colCreated";
-            colCreated.ReadOnly = true;
             // 
             // MainForm
             // 
