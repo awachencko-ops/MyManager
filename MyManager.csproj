@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <Compile Remove="Forms\Archive\**\*.cs" />
+    <Compile Remove="artifacts\**\*.cs" />
   </ItemGroup>
 
   <ItemGroup>
