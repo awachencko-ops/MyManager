@@ -38,6 +38,7 @@ namespace MyManager
             "MyManager",
             "ThumbnailCache");
         private readonly OrderGridContextMenu _gridMenu = new();
+        private readonly ContextMenuStrip _printTilesContextMenu = new();
         private readonly ListView _lvPrintTiles = new();
         private readonly ImageList _printTilesImageList = new();
         private Font? _printTileOrderFont;
@@ -639,6 +640,7 @@ namespace MyManager
             _lvPrintTiles.DrawItem += LvPrintTiles_DrawItem;
             _lvPrintTiles.SelectedIndexChanged += LvPrintTiles_SelectedIndexChanged;
             _lvPrintTiles.ItemActivate += LvPrintTiles_ItemActivate;
+            _lvPrintTiles.MouseUp += LvPrintTiles_MouseUp;
             _printTileOrderFont = new Font(_lvPrintTiles.Font, FontStyle.Bold);
 
             tableLayoutPanel1.Controls.Add(_lvPrintTiles, 0, 2);
@@ -719,6 +721,137 @@ namespace MyManager
                 return;
 
             OpenFileDefault(selectedTile.PrintPath);
+        }
+
+        private void LvPrintTiles_MouseUp(object? sender, MouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Right)
+                return;
+
+            var hit = _lvPrintTiles.HitTest(e.Location);
+            if (hit.Item == null || hit.Item.Tag is not PrintTileTag tileTag)
+                return;
+
+            if (!hit.Item.Selected)
+            {
+                _isSyncingTileSelection = true;
+                try
+                {
+                    _lvPrintTiles.SelectedItems.Clear();
+                    hit.Item.Selected = true;
+                    hit.Item.Focused = true;
+                }
+                finally
+                {
+                    _isSyncingTileSelection = false;
+                }
+
+                TrySelectGridRowByOrderInternalId(tileTag.OrderInternalId);
+                UpdateActionButtonsState();
+                UpdateTrayStatsIndicator();
+            }
+
+            var order = FindOrderByInternalId(tileTag.OrderInternalId);
+            if (order == null)
+                return;
+
+            ShowPrintTileContextMenu(order, tileTag, e.Location);
+        }
+
+        private void ShowPrintTileContextMenu(OrderData order, PrintTileTag tileTag, Point location)
+        {
+            _printTilesContextMenu.Items.Clear();
+            AddPrintTileMenuItem("📁 Открыть папку", () => OpenPrintTileFolder(order, tileTag));
+            _printTilesContextMenu.Items.Add(new ToolStripSeparator());
+            AddPrintTileMenuItem("✏️ Переименовать файл", () => RenamePrintTileFile(order, tileTag));
+            AddPrintTileMenuItem("📋 Копировать путь в буфер", () => CopyExistingPathToClipboard(tileTag.PrintPath));
+            _printTilesContextMenu.Show(_lvPrintTiles, location);
+        }
+
+        private void AddPrintTileMenuItem(string text, Action onClick)
+        {
+            var menuItem = new ToolStripMenuItem(text);
+            menuItem.Click += (_, _) => onClick();
+            _printTilesContextMenu.Items.Add(menuItem);
+        }
+
+        private void OpenPrintTileFolder(OrderData order, PrintTileTag tileTag)
+        {
+            var printPath = CleanPath(tileTag.PrintPath);
+            if (HasExistingFile(printPath))
+            {
+                var folderPath = Path.GetDirectoryName(printPath);
+                if (!string.IsNullOrWhiteSpace(folderPath))
+                {
+                    Directory.CreateDirectory(folderPath);
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = folderPath,
+                        UseShellExecute = true
+                    });
+                    SetBottomStatus($"Открыта папка этапа: {folderPath}");
+                    return;
+                }
+            }
+
+            OpenOrderStageFolder(order, 3);
+        }
+
+        private void RenamePrintTileFile(OrderData order, PrintTileTag tileTag)
+        {
+            var currentPath = CleanPath(tileTag.PrintPath);
+            if (!HasExistingFile(currentPath))
+            {
+                SetBottomStatus("Путь к файлу не найден");
+                MessageBox.Show(this, "Путь к файлу не найден.", "Переименование", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            if (!TryBuildRenamedPath(currentPath, out var renamedPath))
+                return;
+
+            try
+            {
+                File.Move(currentPath, renamedPath);
+            }
+            catch (Exception ex)
+            {
+                SetBottomStatus($"Не удалось переименовать файл: {ex.Message}");
+                MessageBox.Show(this, $"Не удалось переименовать файл: {ex.Message}", "Переименование", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            UpdatePrintPathReferencesForOrder(order, currentPath, renamedPath);
+            _printTileImageIndexesByPath.Remove(currentPath);
+            _printTileImageIndexesByPath.Remove(renamedPath);
+            PersistGridChanges($"order|{order.InternalId}");
+            SetBottomStatus("Файл переименован");
+        }
+
+        private void UpdatePrintPathReferencesForOrder(OrderData order, string oldPath, string newPath)
+        {
+            var hasUpdated = false;
+
+            if (PathsEqual(order.PrintPath, oldPath))
+            {
+                order.PrintPath = newPath;
+                hasUpdated = true;
+            }
+
+            if (order.Items != null)
+            {
+                foreach (var item in order.Items)
+                {
+                    if (item == null || !PathsEqual(item.PrintPath, oldPath))
+                        continue;
+
+                    item.PrintPath = newPath;
+                    hasUpdated = true;
+                }
+            }
+
+            if (!hasUpdated)
+                order.PrintPath = newPath;
         }
 
         private void LvPrintTiles_DrawItem(object? sender, DrawListViewItemEventArgs e)
@@ -1394,6 +1527,7 @@ namespace MyManager
 
             _printTileOrderFont?.Dispose();
             _printTileOrderFont = null;
+            _printTilesContextMenu.Dispose();
 
             if (_trayIndicatorsTimer == null)
                 return;
