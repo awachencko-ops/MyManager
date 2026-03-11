@@ -641,10 +641,9 @@ namespace MyManager
             _ordersViewMode = mode;
 
             var isTilesMode = _ordersViewMode == OrdersViewMode.Tiles;
+            RefreshPrintTilesFromVisibleRows();
             dgvJobs.Visible = !isTilesMode;
             _lvPrintTiles.Visible = isTilesMode;
-
-            RefreshPrintTilesFromVisibleRows();
 
             if (isTilesMode)
             {
@@ -884,7 +883,6 @@ namespace MyManager
             }
 
             _printTilesImageList.Images.Add(tileImage);
-            tileImage.Dispose();
 
             var createdIndex = _printTilesImageList.Images.Count - 1;
             _printTileImageIndexesByExtension[extensionKey] = createdIndex;
