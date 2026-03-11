@@ -10,6 +10,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using PdfiumViewer;
 using Svg;
 
 namespace MyManager
@@ -28,11 +29,13 @@ namespace MyManager
         private readonly Dictionary<string, CancellationTokenSource> _runTokensByOrder = new(StringComparer.Ordinal);
         private readonly Dictionary<string, int> _runProgressByOrderInternalId = new(StringComparer.Ordinal);
         private readonly Dictionary<string, int> _printTileImageIndexesByExtension = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, int> _printTileImageIndexesByPath = new(StringComparer.OrdinalIgnoreCase);
         private readonly OrderGridContextMenu _gridMenu = new();
         private readonly ListView _lvPrintTiles = new();
         private readonly ImageList _printTilesImageList = new();
         private OrderProcessor? _processor;
         private System.Windows.Forms.Timer? _trayIndicatorsTimer;
+        private CancellationTokenSource? _printTilesThumbnailsCts;
         private bool _isRebuildingGrid;
         private bool _isSyncingTileSelection;
         private int _hoveredRowIndex = -1;
@@ -709,6 +712,8 @@ namespace MyManager
             if (string.IsNullOrWhiteSpace(preferredOrderInternalId))
                 preferredOrderInternalId = ExtractOrderInternalIdFromTag(dgvJobs.CurrentRow?.Tag?.ToString());
 
+            var pendingPdfThumbnailPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
             _lvPrintTiles.BeginUpdate();
             _isSyncingTileSelection = true;
 
@@ -744,7 +749,7 @@ namespace MyManager
                     if (string.IsNullOrWhiteSpace(printFileName))
                         continue;
 
-                    var imageIndex = GetOrCreatePrintTileImageIndex(printPath);
+                    var imageIndex = ResolvePrintTileImageIndex(printPath);
                     var item = new ListViewItem(printFileName.Trim(), imageIndex)
                     {
                         Tag = new PrintTileTag(orderInternalId, printPath),
@@ -752,6 +757,9 @@ namespace MyManager
                     };
 
                     _lvPrintTiles.Items.Add(item);
+
+                    if (IsPdfPath(printPath) && !_printTileImageIndexesByPath.ContainsKey(printPath))
+                        pendingPdfThumbnailPaths.Add(printPath);
                 }
 
                 if (_ordersViewMode == OrdersViewMode.Tiles)
@@ -783,6 +791,8 @@ namespace MyManager
                 _isSyncingTileSelection = false;
                 _lvPrintTiles.EndUpdate();
             }
+
+            StartPdfThumbnailGeneration(pendingPdfThumbnailPaths);
         }
 
         private bool TrySelectTileByOrderInternalId(string? orderInternalId)
@@ -889,6 +899,174 @@ namespace MyManager
             return createdIndex;
         }
 
+        private int ResolvePrintTileImageIndex(string printPath)
+        {
+            if (_printTileImageIndexesByPath.TryGetValue(printPath, out var imageIndexByPath))
+                return imageIndexByPath;
+
+            return GetOrCreatePrintTileImageIndex(printPath);
+        }
+
+        private void StartPdfThumbnailGeneration(IEnumerable<string> pdfPaths)
+        {
+            _printTilesThumbnailsCts?.Cancel();
+            _printTilesThumbnailsCts?.Dispose();
+            _printTilesThumbnailsCts = null;
+
+            var pending = pdfPaths
+                .Where(path => !string.IsNullOrWhiteSpace(path) && HasExistingFile(path) && IsPdfPath(path))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (pending.Count == 0)
+                return;
+
+            var cts = new CancellationTokenSource();
+            _printTilesThumbnailsCts = cts;
+            var token = cts.Token;
+
+            _ = Task.Run(() =>
+            {
+                foreach (var pdfPath in pending)
+                {
+                    if (token.IsCancellationRequested)
+                        return;
+
+                    if (_printTileImageIndexesByPath.ContainsKey(pdfPath))
+                        continue;
+
+                    var thumbnail = TryRenderPdfThumbnail(pdfPath, _printTilesImageList.ImageSize);
+                    if (thumbnail == null)
+                        continue;
+
+                    AttachPdfThumbnailOnUiThread(pdfPath, thumbnail, token);
+                }
+            }, token);
+        }
+
+        private void AttachPdfThumbnailOnUiThread(string pdfPath, Bitmap thumbnail, CancellationToken token)
+        {
+            if (IsDisposed || !IsHandleCreated || token.IsCancellationRequested)
+            {
+                thumbnail.Dispose();
+                return;
+            }
+
+            try
+            {
+                BeginInvoke(new Action(() =>
+                {
+                    if (IsDisposed || token.IsCancellationRequested)
+                    {
+                        thumbnail.Dispose();
+                        return;
+                    }
+
+                    if (_printTileImageIndexesByPath.TryGetValue(pdfPath, out var existingIndex))
+                    {
+                        ApplyImageIndexToTileItems(pdfPath, existingIndex);
+                        thumbnail.Dispose();
+                        return;
+                    }
+
+                    _printTilesImageList.Images.Add(thumbnail);
+                    var createdIndex = _printTilesImageList.Images.Count - 1;
+                    _printTileImageIndexesByPath[pdfPath] = createdIndex;
+                    ApplyImageIndexToTileItems(pdfPath, createdIndex);
+                }));
+            }
+            catch
+            {
+                thumbnail.Dispose();
+            }
+        }
+
+        private void ApplyImageIndexToTileItems(string printPath, int imageIndex)
+        {
+            if (_lvPrintTiles.IsDisposed)
+                return;
+
+            foreach (ListViewItem item in _lvPrintTiles.Items)
+            {
+                if (item.Tag is not PrintTileTag tileTag)
+                    continue;
+
+                if (!PathsEqual(tileTag.PrintPath, printPath))
+                    continue;
+
+                item.ImageIndex = imageIndex;
+            }
+        }
+
+        private Bitmap? TryRenderPdfThumbnail(string pdfPath, Size targetSize)
+        {
+            if (!HasExistingFile(pdfPath))
+                return null;
+
+            try
+            {
+                using var document = PdfDocument.Load(pdfPath);
+                if (document.PageCount <= 0)
+                    return null;
+
+                const int renderDpi = 150;
+                using var rendered = document.Render(
+                    page: 0,
+                    width: targetSize.Width * 3,
+                    height: targetSize.Height * 3,
+                    dpiX: renderDpi,
+                    dpiY: renderDpi,
+                    flags: PdfRenderFlags.Annotations);
+
+                if (rendered == null)
+                    return null;
+
+                return ComposeThumbnailCanvas(rendered, targetSize);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn($"TILES | PDF thumbnail failed | {pdfPath} | {ex.Message}");
+                return null;
+            }
+        }
+
+        private static Bitmap ComposeThumbnailCanvas(Image source, Size targetSize)
+        {
+            var canvas = new Bitmap(targetSize.Width, targetSize.Height);
+
+            using (var graphics = Graphics.FromImage(canvas))
+            {
+                graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                graphics.Clear(Color.White);
+
+                var horizontalScale = (targetSize.Width - 6d) / Math.Max(source.Width, 1);
+                var verticalScale = (targetSize.Height - 6d) / Math.Max(source.Height, 1);
+                var scale = Math.Max(0.01d, Math.Min(horizontalScale, verticalScale));
+
+                var drawWidth = Math.Max(1, (int)Math.Round(source.Width * scale));
+                var drawHeight = Math.Max(1, (int)Math.Round(source.Height * scale));
+                var drawRect = new Rectangle(
+                    x: (targetSize.Width - drawWidth) / 2,
+                    y: (targetSize.Height - drawHeight) / 2,
+                    width: drawWidth,
+                    height: drawHeight);
+
+                graphics.DrawImage(source, drawRect);
+
+                using var borderPen = new Pen(Color.FromArgb(210, 216, 228));
+                graphics.DrawRectangle(borderPen, 0, 0, targetSize.Width - 1, targetSize.Height - 1);
+            }
+
+            return canvas;
+        }
+
+        private static bool IsPdfPath(string path)
+        {
+            return string.Equals(Path.GetExtension(path), ".pdf", StringComparison.OrdinalIgnoreCase);
+        }
+
         private static Bitmap CreatePrintTilePlaceholderImage(Size size, string extension)
         {
             var bitmap = new Bitmap(size.Width, size.Height);
@@ -990,6 +1168,13 @@ namespace MyManager
 
         private void MainForm_FormClosed(object? sender, FormClosedEventArgs e)
         {
+            if (_printTilesThumbnailsCts != null)
+            {
+                _printTilesThumbnailsCts.Cancel();
+                _printTilesThumbnailsCts.Dispose();
+                _printTilesThumbnailsCts = null;
+            }
+
             if (_trayIndicatorsTimer == null)
                 return;
 
