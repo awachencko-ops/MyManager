@@ -27,16 +27,21 @@ namespace MyManager
         private readonly HashSet<string> _expandedOrderIds = new(StringComparer.Ordinal);
         private readonly Dictionary<string, CancellationTokenSource> _runTokensByOrder = new(StringComparer.Ordinal);
         private readonly Dictionary<string, int> _runProgressByOrderInternalId = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, int> _printTileImageIndexesByExtension = new(StringComparer.OrdinalIgnoreCase);
         private readonly OrderGridContextMenu _gridMenu = new();
+        private readonly ListView _lvPrintTiles = new();
+        private readonly ImageList _printTilesImageList = new();
         private OrderProcessor? _processor;
         private System.Windows.Forms.Timer? _trayIndicatorsTimer;
         private bool _isRebuildingGrid;
+        private bool _isSyncingTileSelection;
         private int _hoveredRowIndex = -1;
         private int _ctxRow = -1;
         private int _ctxCol = -1;
         private Rectangle _dragBoxFromMouseDown = Rectangle.Empty;
         private int _dragSourceRowIndex = -1;
         private int _dragSourceColumnIndex = -1;
+        private OrdersViewMode _ordersViewMode = OrdersViewMode.List;
 
         // На будущее: список пользователей можно наполнять из настроек/БД.
         private readonly List<string> _users = ["Сервер \"Таудеми\""];
@@ -173,6 +178,24 @@ namespace MyManager
         private static readonly Color OrdersRowHoverBackColor = Color.FromArgb(248, 250, 255);
         private static readonly Color OrdersItemRowBackColor = Color.FromArgb(248, 248, 248);
 
+        private enum OrdersViewMode
+        {
+            List,
+            Tiles
+        }
+
+        private sealed class PrintTileTag
+        {
+            public PrintTileTag(string orderInternalId, string printPath)
+            {
+                OrderInternalId = orderInternalId;
+                PrintPath = printPath;
+            }
+
+            public string OrderInternalId { get; }
+            public string PrintPath { get; }
+        }
+
         private sealed class QueueStatusItem
         {
             public QueueStatusItem(string statusName, string text)
@@ -252,11 +275,14 @@ namespace MyManager
             InitializeReceivedDateFilter();
             InitializeQueueNavigation();
             InitializeOrdersGridVisuals();
+            InitializeOrdersTilesView();
+            InitializeViewModeSwitches();
             InitializeOrdersDataFlow();
             InitializeOrderRowContextMenu();
             InitializeActionButtonsState();
             InitializeTrayIndicators();
             FormClosed += MainForm_FormClosed;
+            SetOrdersViewMode(OrdersViewMode.List);
             SetBottomStatus(DefaultTrayStatusText);
         }
 
@@ -573,6 +599,340 @@ namespace MyManager
             dgvJobs.DragEnter += DgvJobs_DragEnter;
             dgvJobs.DragOver += DgvJobs_DragOver;
             dgvJobs.DragDrop += DgvJobs_DragDrop;
+        }
+
+        private void InitializeOrdersTilesView()
+        {
+            _printTilesImageList.ColorDepth = ColorDepth.Depth32Bit;
+            _printTilesImageList.ImageSize = new Size(96, 96);
+            _printTilesImageList.TransparentColor = Color.Transparent;
+            _printTilesImageList.Images.Add(CreatePrintTilePlaceholderImage(_printTilesImageList.ImageSize, string.Empty));
+
+            _lvPrintTiles.Dock = DockStyle.Fill;
+            _lvPrintTiles.Margin = dgvJobs.Margin;
+            _lvPrintTiles.BackColor = dgvJobs.BackgroundColor;
+            _lvPrintTiles.BorderStyle = BorderStyle.None;
+            _lvPrintTiles.MultiSelect = false;
+            _lvPrintTiles.HideSelection = false;
+            _lvPrintTiles.View = View.LargeIcon;
+            _lvPrintTiles.LargeImageList = _printTilesImageList;
+            _lvPrintTiles.SmallImageList = _printTilesImageList;
+            _lvPrintTiles.UseCompatibleStateImageBehavior = false;
+            _lvPrintTiles.ShowItemToolTips = true;
+            _lvPrintTiles.Visible = false;
+            _lvPrintTiles.SelectedIndexChanged += LvPrintTiles_SelectedIndexChanged;
+            _lvPrintTiles.ItemActivate += LvPrintTiles_ItemActivate;
+
+            tableLayoutPanel1.Controls.Add(_lvPrintTiles, 0, 2);
+            _lvPrintTiles.BringToFront();
+        }
+
+        private void InitializeViewModeSwitches()
+        {
+            btnViewList.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            btnViewTiles.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            btnViewList.Click += (_, _) => SetOrdersViewMode(OrdersViewMode.List);
+            btnViewTiles.Click += (_, _) => SetOrdersViewMode(OrdersViewMode.Tiles);
+            UpdateViewModeSwitchesVisuals();
+        }
+
+        private void SetOrdersViewMode(OrdersViewMode mode)
+        {
+            _ordersViewMode = mode;
+
+            var isTilesMode = _ordersViewMode == OrdersViewMode.Tiles;
+            dgvJobs.Visible = !isTilesMode;
+            _lvPrintTiles.Visible = isTilesMode;
+
+            RefreshPrintTilesFromVisibleRows();
+
+            if (isTilesMode)
+            {
+                var selectedTile = GetSelectedPrintTileTag();
+                if (selectedTile == null)
+                    ClearGridSelection();
+                else
+                    TrySelectGridRowByOrderInternalId(selectedTile.OrderInternalId);
+            }
+
+            UpdateViewModeSwitchesVisuals();
+            UpdateActionButtonsState();
+            UpdateTrayStatsIndicator();
+        }
+
+        private void UpdateViewModeSwitchesVisuals()
+        {
+            var listModeActive = _ordersViewMode == OrdersViewMode.List;
+            var activeBackColor = Color.FromArgb(229, 236, 247);
+            var inactiveBackColor = SystemColors.Control;
+
+            btnViewList.UseVisualStyleBackColor = false;
+            btnViewTiles.UseVisualStyleBackColor = false;
+            btnViewList.BackColor = listModeActive ? activeBackColor : inactiveBackColor;
+            btnViewTiles.BackColor = listModeActive ? inactiveBackColor : activeBackColor;
+            btnViewList.Enabled = !listModeActive;
+            btnViewTiles.Enabled = listModeActive;
+        }
+
+        private void LvPrintTiles_SelectedIndexChanged(object? sender, EventArgs e)
+        {
+            if (_isSyncingTileSelection)
+                return;
+
+            var selectedTile = GetSelectedPrintTileTag();
+            if (selectedTile == null)
+            {
+                if (_ordersViewMode == OrdersViewMode.Tiles)
+                    ClearGridSelection();
+
+                UpdateActionButtonsState();
+                UpdateTrayStatsIndicator();
+                return;
+            }
+
+            TrySelectGridRowByOrderInternalId(selectedTile.OrderInternalId);
+            UpdateActionButtonsState();
+            UpdateTrayStatsIndicator();
+        }
+
+        private void LvPrintTiles_ItemActivate(object? sender, EventArgs e)
+        {
+            var selectedTile = GetSelectedPrintTileTag();
+            if (selectedTile == null || !HasExistingFile(selectedTile.PrintPath))
+                return;
+
+            OpenFileDefault(selectedTile.PrintPath);
+        }
+
+        private void RefreshPrintTilesFromVisibleRows()
+        {
+            var preferredOrderInternalId = GetSelectedPrintTileTag()?.OrderInternalId;
+            if (string.IsNullOrWhiteSpace(preferredOrderInternalId))
+                preferredOrderInternalId = ExtractOrderInternalIdFromTag(dgvJobs.CurrentRow?.Tag?.ToString());
+
+            _lvPrintTiles.BeginUpdate();
+            _isSyncingTileSelection = true;
+
+            try
+            {
+                _lvPrintTiles.Items.Clear();
+
+                foreach (DataGridViewRow row in dgvJobs.Rows)
+                {
+                    if (row.IsNewRow || !row.Visible)
+                        continue;
+
+                    var rowTag = row.Tag?.ToString();
+                    if (!IsOrderTag(rowTag))
+                        continue;
+
+                    var orderInternalId = ExtractOrderInternalIdFromTag(rowTag);
+                    if (string.IsNullOrWhiteSpace(orderInternalId))
+                        continue;
+
+                    var order = FindOrderByInternalId(orderInternalId);
+                    if (order == null)
+                        continue;
+
+                    var printPath = ResolveSingleOrderDisplayPath(order, 3);
+                    if (!HasExistingFile(printPath))
+                        continue;
+
+                    var printFileName = row.Cells[colPrint.Index].Value?.ToString();
+                    if (string.IsNullOrWhiteSpace(printFileName) || string.Equals(printFileName, "...", StringComparison.Ordinal))
+                        printFileName = Path.GetFileName(printPath);
+
+                    if (string.IsNullOrWhiteSpace(printFileName))
+                        continue;
+
+                    var imageIndex = GetOrCreatePrintTileImageIndex(printPath);
+                    var item = new ListViewItem(printFileName.Trim(), imageIndex)
+                    {
+                        Tag = new PrintTileTag(orderInternalId, printPath),
+                        ToolTipText = printPath
+                    };
+
+                    _lvPrintTiles.Items.Add(item);
+                }
+
+                if (_ordersViewMode == OrdersViewMode.Tiles)
+                {
+                    if (!TrySelectTileByOrderInternalId(preferredOrderInternalId) && _lvPrintTiles.Items.Count > 0)
+                    {
+                        _lvPrintTiles.Items[0].Selected = true;
+                    }
+
+                    if (_lvPrintTiles.SelectedItems.Count > 0)
+                    {
+                        _lvPrintTiles.SelectedItems[0].Focused = true;
+                        _lvPrintTiles.SelectedItems[0].EnsureVisible();
+                        if (_lvPrintTiles.SelectedItems[0].Tag is PrintTileTag selectedTileTag)
+                            TrySelectGridRowByOrderInternalId(selectedTileTag.OrderInternalId);
+                    }
+                    else
+                    {
+                        ClearGridSelection();
+                    }
+                }
+                else
+                {
+                    TrySelectTileByOrderInternalId(preferredOrderInternalId);
+                }
+            }
+            finally
+            {
+                _isSyncingTileSelection = false;
+                _lvPrintTiles.EndUpdate();
+            }
+        }
+
+        private bool TrySelectTileByOrderInternalId(string? orderInternalId)
+        {
+            _lvPrintTiles.SelectedItems.Clear();
+
+            if (string.IsNullOrWhiteSpace(orderInternalId))
+                return false;
+
+            foreach (ListViewItem item in _lvPrintTiles.Items)
+            {
+                if (item.Tag is not PrintTileTag tileTag)
+                    continue;
+
+                if (!string.Equals(tileTag.OrderInternalId, orderInternalId, StringComparison.Ordinal))
+                    continue;
+
+                item.Selected = true;
+                item.Focused = true;
+                item.EnsureVisible();
+                return true;
+            }
+
+            return false;
+        }
+
+        private PrintTileTag? GetSelectedPrintTileTag()
+        {
+            return _lvPrintTiles.SelectedItems.Count > 0
+                ? _lvPrintTiles.SelectedItems[0].Tag as PrintTileTag
+                : null;
+        }
+
+        private bool TrySelectGridRowByOrderInternalId(string? orderInternalId)
+        {
+            if (string.IsNullOrWhiteSpace(orderInternalId))
+                return false;
+
+            var targetColumnIndex = colPrint.Index >= 0 ? colPrint.Index : colStatus.Index;
+
+            foreach (DataGridViewRow row in dgvJobs.Rows)
+            {
+                if (row.IsNewRow || !row.Visible)
+                    continue;
+
+                var rowTag = row.Tag?.ToString();
+                if (!IsOrderTag(rowTag))
+                    continue;
+
+                var rowOrderInternalId = ExtractOrderInternalIdFromTag(rowTag);
+                if (!string.Equals(rowOrderInternalId, orderInternalId, StringComparison.Ordinal))
+                    continue;
+
+                dgvJobs.ClearSelection();
+                dgvJobs.CurrentCell = row.Cells[targetColumnIndex];
+                row.Selected = true;
+                return true;
+            }
+
+            return false;
+        }
+
+        private void ClearGridSelection()
+        {
+            dgvJobs.ClearSelection();
+            dgvJobs.CurrentCell = null;
+        }
+
+        private int GetOrCreatePrintTileImageIndex(string printPath)
+        {
+            var extensionKey = Path.GetExtension(printPath);
+            if (string.IsNullOrWhiteSpace(extensionKey))
+                extensionKey = "__default";
+
+            if (_printTileImageIndexesByExtension.TryGetValue(extensionKey, out var existingIndex))
+                return existingIndex;
+
+            var tileImage = CreatePrintTilePlaceholderImage(_printTilesImageList.ImageSize, extensionKey);
+
+            if (HasExistingFile(printPath))
+            {
+                try
+                {
+                    using var icon = Icon.ExtractAssociatedIcon(printPath);
+                    if (icon != null)
+                    {
+                        using var iconBitmap = icon.ToBitmap();
+                        using var graphics = Graphics.FromImage(tileImage);
+                        graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                        var iconBounds = new Rectangle(24, 14, 48, 48);
+                        graphics.DrawImage(iconBitmap, iconBounds);
+                    }
+                }
+                catch
+                {
+                    // Фоллбеком остается placeholder.
+                }
+            }
+
+            _printTilesImageList.Images.Add(tileImage);
+            tileImage.Dispose();
+
+            var createdIndex = _printTilesImageList.Images.Count - 1;
+            _printTileImageIndexesByExtension[extensionKey] = createdIndex;
+            return createdIndex;
+        }
+
+        private static Bitmap CreatePrintTilePlaceholderImage(Size size, string extension)
+        {
+            var bitmap = new Bitmap(size.Width, size.Height);
+
+            using (var graphics = Graphics.FromImage(bitmap))
+            {
+                graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                graphics.Clear(Color.FromArgb(247, 248, 250));
+
+                var pageRect = new Rectangle(18, 10, size.Width - 36, size.Height - 24);
+                using var borderPen = new Pen(Color.FromArgb(190, 197, 210), 2f);
+                using var pageBrush = new SolidBrush(Color.White);
+                graphics.FillRectangle(pageBrush, pageRect);
+                graphics.DrawRectangle(borderPen, pageRect);
+
+                var fold = new Point[]
+                {
+                    new(pageRect.Right - 18, pageRect.Top),
+                    new(pageRect.Right, pageRect.Top),
+                    new(pageRect.Right, pageRect.Top + 18)
+                };
+                using var foldBrush = new SolidBrush(Color.FromArgb(235, 238, 244));
+                graphics.FillPolygon(foldBrush, fold);
+
+                var cleanExt = string.IsNullOrWhiteSpace(extension)
+                    ? "FILE"
+                    : extension.Trim().TrimStart('.').ToUpperInvariant();
+                if (cleanExt.Length > 5)
+                    cleanExt = cleanExt[..5];
+
+                var textRect = new Rectangle(pageRect.Left + 6, pageRect.Bottom - 26, pageRect.Width - 12, 20);
+                using var extFont = new Font("Segoe UI", 8f, FontStyle.Bold);
+                TextRenderer.DrawText(
+                    graphics,
+                    cleanExt,
+                    extFont,
+                    textRect,
+                    Color.FromArgb(110, 117, 129),
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+            }
+
+            return bitmap;
         }
 
         private void InitializeActionButtonsState()
@@ -2608,6 +2968,7 @@ namespace MyManager
             RefreshStatusFilterChecklist();
             RefreshUserFilterChecklist();
             RefreshQueuePresentation();
+            RefreshPrintTilesFromVisibleRows();
             UpdateActionButtonsState();
             RefreshTrayIndicators();
         }
@@ -3279,6 +3640,12 @@ namespace MyManager
         {
             if (toolStats.IsDisposed || dgvJobs.IsDisposed)
                 return;
+
+            if (_ordersViewMode == OrdersViewMode.Tiles && !_lvPrintTiles.IsDisposed)
+            {
+                toolStats.Text = $"Плиток: {_lvPrintTiles.Items.Count} | Выделено: {_lvPrintTiles.SelectedItems.Count}";
+                return;
+            }
 
             var visibleOrders = 0;
             foreach (DataGridViewRow row in dgvJobs.Rows)
