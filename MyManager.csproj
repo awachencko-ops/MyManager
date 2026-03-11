@@ -20,6 +20,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Remove="Forms\MainForm\Filters\MainForm.Filters.Evaluation.resx" />
+    <EmbeddedResource Remove="Forms\MainForm\Filters\MainForm.Filters.Popups.resx" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Update="Properties\Resources.Designer.cs">
       <DesignTime>True</DesignTime>
       <AutoGen>True</AutoGen>
