@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -32,7 +33,7 @@ namespace MyManager
         private readonly Dictionary<string, CancellationTokenSource> _runTokensByOrder = new(StringComparer.Ordinal);
         private readonly Dictionary<string, int> _runProgressByOrderInternalId = new(StringComparer.Ordinal);
         private readonly Dictionary<string, int> _printTileImageIndexesByExtension = new(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, int> _printTileImageIndexesByPath = new(StringComparer.OrdinalIgnoreCase);
+        private readonly ConcurrentDictionary<string, int> _printTileImageIndexesByPath = new(StringComparer.OrdinalIgnoreCase);
         private readonly string _printTilesCacheFolderPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "MyManager",
@@ -822,8 +823,8 @@ namespace MyManager
             }
 
             UpdatePrintPathReferencesForOrder(order, currentPath, renamedPath);
-            _printTileImageIndexesByPath.Remove(currentPath);
-            _printTileImageIndexesByPath.Remove(renamedPath);
+            RemovePrintTileImageIndex(currentPath);
+            RemovePrintTileImageIndex(renamedPath);
             PersistGridChanges($"order|{order.InternalId}");
             SetBottomStatus("Файл переименован");
         }
@@ -984,7 +985,7 @@ namespace MyManager
 
                     _lvPrintTiles.Items.Add(item);
 
-                    if (IsPdfPath(printPath) && !_printTileImageIndexesByPath.ContainsKey(printPath))
+                    if (IsPdfPath(printPath) && !HasPrintTileImageIndex(printPath))
                     {
                         if (TryLoadPdfThumbnailFromDiskCache(printPath, out var cachedImageIndex))
                             item.ImageIndex = cachedImageIndex;
@@ -1132,15 +1133,62 @@ namespace MyManager
 
         private int ResolvePrintTileImageIndex(string printPath)
         {
-            if (_printTileImageIndexesByPath.TryGetValue(printPath, out var imageIndexByPath))
+            if (TryGetPrintTileImageIndex(printPath, out var imageIndexByPath))
                 return imageIndexByPath;
 
             return GetOrCreatePrintTileImageIndex(printPath);
         }
 
+        private static string GetPrintTileImageIndexKey(string printPath)
+        {
+            return string.IsNullOrWhiteSpace(printPath) ? string.Empty : NormalizePath(printPath);
+        }
+
+        private bool HasPrintTileImageIndex(string printPath)
+        {
+            var cacheKey = GetPrintTileImageIndexKey(printPath);
+            return !string.IsNullOrWhiteSpace(cacheKey) && _printTileImageIndexesByPath.ContainsKey(cacheKey);
+        }
+
+        private bool TryGetPrintTileImageIndex(string printPath, out int imageIndex)
+        {
+            var cacheKey = GetPrintTileImageIndexKey(printPath);
+            if (string.IsNullOrWhiteSpace(cacheKey))
+            {
+                imageIndex = -1;
+                return false;
+            }
+
+            return _printTileImageIndexesByPath.TryGetValue(cacheKey, out imageIndex);
+        }
+
+        private void SetPrintTileImageIndex(string printPath, int imageIndex)
+        {
+            var cacheKey = GetPrintTileImageIndexKey(printPath);
+            if (string.IsNullOrWhiteSpace(cacheKey))
+                return;
+
+            _printTileImageIndexesByPath[cacheKey] = imageIndex;
+        }
+
+        private void RemovePrintTileImageIndex(string printPath)
+        {
+            var cacheKey = GetPrintTileImageIndexKey(printPath);
+            if (string.IsNullOrWhiteSpace(cacheKey))
+                return;
+
+            _printTileImageIndexesByPath.TryRemove(cacheKey, out _);
+        }
+
         private bool TryLoadPdfThumbnailFromDiskCache(string pdfPath, out int imageIndex)
         {
             imageIndex = -1;
+
+            if (TryGetPrintTileImageIndex(pdfPath, out var existingIndex))
+            {
+                imageIndex = existingIndex;
+                return true;
+            }
 
             if (!TryGetPdfThumbnailCachePath(pdfPath, out var cachePath))
                 return false;
@@ -1155,7 +1203,7 @@ namespace MyManager
                 var thumbnailBitmap = new Bitmap(cacheImage);
                 _printTilesImageList.Images.Add(thumbnailBitmap);
                 imageIndex = _printTilesImageList.Images.Count - 1;
-                _printTileImageIndexesByPath[pdfPath] = imageIndex;
+                SetPrintTileImageIndex(pdfPath, imageIndex);
                 return true;
             }
             catch (Exception ex)
@@ -1222,7 +1270,9 @@ namespace MyManager
             _printTilesThumbnailsCts = null;
 
             var pending = pdfPaths
+                .Select(CleanPath)
                 .Where(path => !string.IsNullOrWhiteSpace(path) && HasExistingFile(path) && IsPdfPath(path))
+                .Select(NormalizePath)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
@@ -1240,12 +1290,18 @@ namespace MyManager
                     if (token.IsCancellationRequested)
                         return;
 
-                    if (_printTileImageIndexesByPath.ContainsKey(pdfPath))
+                    if (HasPrintTileImageIndex(pdfPath))
                         continue;
 
                     var thumbnail = TryRenderPdfThumbnail(pdfPath, _printTilesImageList.ImageSize);
                     if (thumbnail == null)
                         continue;
+
+                    if (HasPrintTileImageIndex(pdfPath))
+                    {
+                        thumbnail.Dispose();
+                        continue;
+                    }
 
                     SavePdfThumbnailToDiskCache(pdfPath, thumbnail);
                     AttachPdfThumbnailOnUiThread(pdfPath, thumbnail, token);
@@ -1271,7 +1327,7 @@ namespace MyManager
                         return;
                     }
 
-                    if (_printTileImageIndexesByPath.TryGetValue(pdfPath, out var existingIndex))
+                    if (TryGetPrintTileImageIndex(pdfPath, out var existingIndex))
                     {
                         ApplyImageIndexToTileItems(pdfPath, existingIndex);
                         thumbnail.Dispose();
@@ -1280,7 +1336,7 @@ namespace MyManager
 
                     _printTilesImageList.Images.Add(thumbnail);
                     var createdIndex = _printTilesImageList.Images.Count - 1;
-                    _printTileImageIndexesByPath[pdfPath] = createdIndex;
+                    SetPrintTileImageIndex(pdfPath, createdIndex);
                     ApplyImageIndexToTileItems(pdfPath, createdIndex);
                 }));
             }
