@@ -3,9 +3,12 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -30,6 +33,10 @@ namespace MyManager
         private readonly Dictionary<string, int> _runProgressByOrderInternalId = new(StringComparer.Ordinal);
         private readonly Dictionary<string, int> _printTileImageIndexesByExtension = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, int> _printTileImageIndexesByPath = new(StringComparer.OrdinalIgnoreCase);
+        private readonly string _printTilesCacheFolderPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "MyManager",
+            "ThumbnailCache");
         private readonly OrderGridContextMenu _gridMenu = new();
         private readonly ListView _lvPrintTiles = new();
         private readonly ImageList _printTilesImageList = new();
@@ -845,7 +852,12 @@ namespace MyManager
                     _lvPrintTiles.Items.Add(item);
 
                     if (IsPdfPath(printPath) && !_printTileImageIndexesByPath.ContainsKey(printPath))
-                        pendingPdfThumbnailPaths.Add(printPath);
+                    {
+                        if (TryLoadPdfThumbnailFromDiskCache(printPath, out var cachedImageIndex))
+                            item.ImageIndex = cachedImageIndex;
+                        else
+                            pendingPdfThumbnailPaths.Add(printPath);
+                    }
                 }
 
                 if (_ordersViewMode == OrdersViewMode.Tiles)
@@ -993,6 +1005,83 @@ namespace MyManager
             return GetOrCreatePrintTileImageIndex(printPath);
         }
 
+        private bool TryLoadPdfThumbnailFromDiskCache(string pdfPath, out int imageIndex)
+        {
+            imageIndex = -1;
+
+            if (!TryGetPdfThumbnailCachePath(pdfPath, out var cachePath))
+                return false;
+
+            if (!File.Exists(cachePath))
+                return false;
+
+            try
+            {
+                using var cacheStream = new FileStream(cachePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+                using var cacheImage = Image.FromStream(cacheStream);
+                var thumbnailBitmap = new Bitmap(cacheImage);
+                _printTilesImageList.Images.Add(thumbnailBitmap);
+                imageIndex = _printTilesImageList.Images.Count - 1;
+                _printTileImageIndexesByPath[pdfPath] = imageIndex;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn($"TILES | PDF thumbnail cache read failed | {cachePath} | {ex.Message}");
+                return false;
+            }
+        }
+
+        private void SavePdfThumbnailToDiskCache(string pdfPath, Bitmap thumbnail)
+        {
+            if (!TryGetPdfThumbnailCachePath(pdfPath, out var cachePath))
+                return;
+
+            try
+            {
+                var cacheFolder = Path.GetDirectoryName(cachePath);
+                if (!string.IsNullOrWhiteSpace(cacheFolder))
+                    Directory.CreateDirectory(cacheFolder);
+
+                thumbnail.Save(cachePath, ImageFormat.Png);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn($"TILES | PDF thumbnail cache write failed | {cachePath} | {ex.Message}");
+            }
+        }
+
+        private bool TryGetPdfThumbnailCachePath(string pdfPath, out string cachePath)
+        {
+            cachePath = string.Empty;
+            if (!HasExistingFile(pdfPath))
+                return false;
+
+            try
+            {
+                var fileInfo = new FileInfo(pdfPath);
+                var normalizedPath = NormalizePath(pdfPath);
+                var cacheKeySource = string.Join(
+                    "|",
+                    normalizedPath,
+                    fileInfo.Length.ToString(CultureInfo.InvariantCulture),
+                    fileInfo.LastWriteTimeUtc.Ticks.ToString(CultureInfo.InvariantCulture),
+                    _printTilesImageList.ImageSize.Width.ToString(CultureInfo.InvariantCulture),
+                    _printTilesImageList.ImageSize.Height.ToString(CultureInfo.InvariantCulture),
+                    "v1");
+
+                var cacheKeyBytes = SHA256.HashData(Encoding.UTF8.GetBytes(cacheKeySource));
+                var cacheKey = Convert.ToHexString(cacheKeyBytes);
+                cachePath = Path.Combine(_printTilesCacheFolderPath, $"{cacheKey}.png");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn($"TILES | PDF thumbnail cache key failed | {pdfPath} | {ex.Message}");
+                return false;
+            }
+        }
+
         private void StartPdfThumbnailGeneration(IEnumerable<string> pdfPaths)
         {
             _printTilesThumbnailsCts?.Cancel();
@@ -1025,6 +1114,7 @@ namespace MyManager
                     if (thumbnail == null)
                         continue;
 
+                    SavePdfThumbnailToDiskCache(pdfPath, thumbnail);
                     AttachPdfThumbnailOnUiThread(pdfPath, thumbnail, token);
                 }
             }, token);
