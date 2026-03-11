@@ -4,8 +4,8 @@
 
 ## 1) Рабочие пути приложения
 
-- Папка хранения заказов: `C:\MyManager\Orders`
-- Папка временных файлов: `C:\MyManager\Orders\TempMyManager`
+- Папка хранения заказов: `\\NAS\work\Первая Чукотская Типография\Шкалы\MYMANAGER BASEFOLDER\Orders`
+- Папка временных файлов: `\\NAS\work\Первая Чукотская Типография\Шкалы\MYMANAGER BASEFOLDER\Orders\TempMyManager`
 - Папка архива (Дедушка): `\\NAS\work\Temp\!!!Дедушка`
 - История заказов: `\\NAS\work\Первая Чукотская Типография\Шкалы\MYMANAGER BASEFOLDER\AppData\history.json`
 - Общий лог: `\\NAS\work\Первая Чукотская Типография\Шкалы\MYMANAGER BASEFOLDER\AppData\manager.log`
@@ -15,9 +15,9 @@
 
 Используется один рабочий temp-контур:
 
-- `C:\MyManager\Orders\TempMyManager\in`
-- `C:\MyManager\Orders\TempMyManager\prepress`
-- `C:\MyManager\Orders\TempMyManager\print`
+- `\\NAS\work\Первая Чукотская Типография\Шкалы\MYMANAGER BASEFOLDER\Orders\TempMyManager\in`
+- `\\NAS\work\Первая Чукотская Типография\Шкалы\MYMANAGER BASEFOLDER\Orders\TempMyManager\prepress`
+- `\\NAS\work\Первая Чукотская Типография\Шкалы\MYMANAGER BASEFOLDER\Orders\TempMyManager\print`
 
 ## 3) Контур HotFolder (критично, не удалять)
 
@@ -42,4 +42,3 @@
 - Не удалять и не переименовывать папку `WARNING NOT DELETE`.
 - Не менять вручную структуру `in/prepress/print` без обновления логики обработки.
 - Изменения путей делать через настройки приложения (или отдельный миграционный скрипт с бэкапом).
-
