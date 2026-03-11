@@ -159,7 +159,7 @@ namespace MyManager
             AddRow(panel, 5, "Файл общего лога", _txtManagerLogFilePath, managerLogFilePath, false);
             AddRow(panel, 6, "Папка логов заказов (опц.)", _txtOrderLogsFolderPath, orderLogsFolderPath, true, optional: true);
 
-            AddNumericRow(panel, 7, "Параллельных item (0=без лимита)", _numMaxParallelism, maxParallelism);
+            AddNumericRow(panel, 7, "Параллельных файлов (мульти-заказ)", _numMaxParallelism, maxParallelism);
             AddCheckboxRow(panel, 8, "Форма заказа", _chkUseExtendedMode, useExtendedMode, "Вкл. — расширенная форма; выкл. — простая.");
 
             var hint = new Label
@@ -230,7 +230,7 @@ namespace MyManager
 
             var lblHint = new Label
             {
-                Text = "0 — без ограничений",
+                Text = "0 — без ограничений (все файлы сразу)",
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleLeft,
                 ForeColor = Color.DimGray,
