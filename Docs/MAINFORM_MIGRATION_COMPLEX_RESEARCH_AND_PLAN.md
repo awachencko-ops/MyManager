@@ -17,7 +17,8 @@
 - Стек: `WinForms`, `.NET 8`, C# (`MyManager.csproj`).
 - Точка входа: `Program.cs` -> `Application.Run(new MainForm());`.
 - Legacy-формы из `Forms/Archive` исключены из сборки (`Compile Remove="Forms\\Archive\\**\\*.cs"`).
-- Конфиги/история: JSON (`settings.json`, `history.json`, `pitstop_actions.json`, `imposing_configs.json`).
+- Конфиги/история: JSON (`settings.json`, `history.json`, `pitstop_actions.json`, `imposing_configs.json`), рабочие пути переведены на NAS.
+- Добавлен сетевой контур hotfolder: `\\NAS\...\MYMANAGER BASEFOLDER\WARNING NOT DELETE\{HotImposing|PitStop}`.
 
 ### 2.2 Карта модулей (обновлено)
 
@@ -30,6 +31,7 @@
 | `Forms/MainForm/Views/*` | Плиточный view/thumbnail логика | Done |
 | `Services/OrderProcessor.cs` | Run pipeline (PitStop/Imposing), timeout, progress, multi-item параллелизм | Рабочий |
 | `Services/OrderTopologyService.cs` | Нормализация group-first модели, marker `SingleOrder/MultiOrder`, legacy-sync | Рабочий |
+| `Services/ConfigService.cs` | Загрузка/сохранение `pitstop/imposing` конфигов | Рабочий, переведен на пути из `AppSettings` |
 | `Models/OrderData.cs` + `OrderFileItem.cs` | Контракт заказа и item-уровня | Рабочий, есть legacy-поля order-level путей |
 | `Forms/Managers/*`, `Forms/Selectors/*`, `Forms/Orders/*`, `Forms/Settings/*` | Диалоги и менеджеры, разнесены по смысловым папкам | Done |
 
@@ -53,13 +55,20 @@
 6. Nullable-cleanup (сборка без предупреждений).
 7. Group-first нормализация (`SingleOrder`/`MultiOrder`) внедрена в pipeline/историю.
 8. Крупная декомпозиция `MainForm` выполнена: partial-файлы + структурирование по папкам.
+9. Выполнен NAS-cutover для рабочих путей:
+   - `OrdersRootPath` -> `\\NAS\...\MYMANAGER BASEFOLDER\Orders`
+   - `TempFolderPath` -> `\\NAS\...\MYMANAGER BASEFOLDER\Orders\TempMyManager` (+ `in/prepress/print`).
+10. Выполнен перенос `C:\HotImposing` и `C:\PitStop` в `\\NAS\...\WARNING NOT DELETE\HotImposing|PitStop`.
+11. `imposing_configs.json` и `pitstop_actions.json` централизованы в `\\NAS\...\Config\...`, пути внутри JSON переписаны на NAS.
+12. `qihot4.xml` экспортирован с NAS-путями (`%APPDATA%\\Quite\\Preferences\\qihot4.xml`), сделан backup.
+13. Исправлен источник ошибки сборки `Duplicate ... Attribute`: исключены `artifacts\**\*.cs` из компиляции.
 
 ### 3.2 Что реально осталось по обязательному контуру
 
 1. Пользовательский фильтр: сейчас используется заглушка (`FilterUsers`) и не подключен к реальному источнику данных.
 2. Финальная parity-регрессия `MainForm` против контрольного набора сценариев (single-focus).
 3. Дочистка string-контрактов (status/stage/column-name) до централизованного typed-контура.
-4. Подключение локальной сети в минимально-полезном режиме (см. раздел 9).
+4. Вывести новые NAS-пути `PitStop/Imposing` в UI настроек (сейчас уже работают через `settings.json`, но без отдельных полей в форме).
 
 ## 4. Ключевые наблюдения и риски
 
@@ -126,7 +135,8 @@ Definition of Done:
 ## Этап B1: LAN интеграция (практичный план)
 Срок: 1-2 рабочих дня
 
-1. Вынести источник пользователей в сетевой файл (`users.json` или `users.csv` на UNC-пути).
+1. Вынести источник пользователей в сетевой файл (`users.json` или `users.csv` на UNC-пути).  
+   Статус: инфраструктура NAS уже готова, файл `users.json` создан; загрузка в `FilterUsers` еще не подключена.
 2. Реализовать загрузку пользователей при старте с периодическим обновлением (без рестарта формы).
 3. Добавить локальный кэш последней успешной версии списка пользователей.
 4. Зафиксировать fallback-поведение: при недоступности сети использовать кэш и показать статус автономного режима.
@@ -205,4 +215,4 @@ Definition of Done:
 
 ---
 
-Статус документа: актуален на 2026-03-11, синхронизирован с текущим состоянием рабочего дерева проекта.
+Статус документа: актуален на 2026-03-11, синхронизирован с текущим состоянием рабочего дерева проекта (включая NAS-cutover и Quite Hot Imposing export).
