@@ -447,51 +447,58 @@
             // 
             // tsbNewJob
             // 
+            tsbNewJob.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold, GraphicsUnit.Point, 204);
             tsbNewJob.Image = (Image)resources.GetObject("tsbNewJob.Image");
             tsbNewJob.Name = "tsbNewJob";
-            tsbNewJob.Size = new Size(105, 29);
+            tsbNewJob.Size = new Size(107, 29);
             tsbNewJob.Text = "Создать";
             // 
             // tsbRun
             // 
+            tsbRun.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
             tsbRun.Image = (Image)resources.GetObject("tsbRun.Image");
             tsbRun.Name = "tsbRun";
-            tsbRun.Size = new Size(119, 29);
+            tsbRun.Size = new Size(124, 29);
             tsbRun.Text = "Запустить";
             // 
             // tsbStop
             // 
+            tsbStop.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
             tsbStop.Image = (Image)resources.GetObject("tsbStop.Image");
             tsbStop.Name = "tsbStop";
-            tsbStop.Size = new Size(135, 29);
+            tsbStop.Size = new Size(140, 29);
             tsbStop.Text = "Остановить";
             // 
             // tsbRemove
             // 
+            tsbRemove.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
             tsbRemove.Image = (Image)resources.GetObject("tsbRemove.Image");
             tsbRemove.Name = "tsbRemove";
-            tsbRemove.Size = new Size(104, 29);
+            tsbRemove.Size = new Size(107, 29);
             tsbRemove.Text = "Удалить";
             // 
             // tsbBrowse
             // 
+            tsbBrowse.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
             tsbBrowse.Image = (Image)resources.GetObject("tsbBrowse.Image");
             tsbBrowse.Name = "tsbBrowse";
-            tsbBrowse.Size = new Size(90, 29);
+            tsbBrowse.Size = new Size(91, 29);
             tsbBrowse.Text = "Папка";
             // 
             // tsbConsole
             // 
+            tsbConsole.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
             tsbConsole.Image = (Image)resources.GetObject("tsbConsole.Image");
             tsbConsole.Name = "tsbConsole";
-            tsbConsole.Size = new Size(70, 29);
+            tsbConsole.Size = new Size(71, 29);
             tsbConsole.Text = "Лог";
             // 
             // tsbParameters
             // 
+            tsbParameters.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
             tsbParameters.Image = (Image)resources.GetObject("tsbParameters.Image");
             tsbParameters.Name = "tsbParameters";
-            tsbParameters.Size = new Size(135, 29);
+            tsbParameters.Size = new Size(138, 29);
             tsbParameters.Text = "Параметры";
             // 
             // MainForm
