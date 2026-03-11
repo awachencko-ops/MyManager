@@ -220,7 +220,10 @@ namespace MyManager
                 var categories = memoryDict.Element(ns + "ITEMS")?.Elements(ns + "DICT");
                 if (categories == null) return;
 
-                string rootPath = @"C:\HotImposing";
+                var settings = AppSettings.Load();
+                string rootPath = string.IsNullOrWhiteSpace(settings.ImposingHotfoldersRootPath)
+                    ? @"C:\HotImposing"
+                    : settings.ImposingHotfoldersRootPath;
                 int added = 0;
 
                 foreach (var catDict in categories)

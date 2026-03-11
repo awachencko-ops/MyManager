@@ -20,6 +20,10 @@ namespace MyManager
         public string HistoryFilePath { get; set; } = "history.json";
         public string ManagerLogFilePath { get; set; } = "manager.log";
         public string OrderLogsFolderPath { get; set; } = "";
+        public string PitStopConfigFilePath { get; set; } = "pitstop_actions.json";
+        public string ImposingConfigFilePath { get; set; } = "imposing_configs.json";
+        public string PitStopHotfoldersRootPath { get; set; } = @"C:\PitStop";
+        public string ImposingHotfoldersRootPath { get; set; } = @"C:\HotImposing";
 
         // Настройки многофайловых заказов
         public bool AllowManualSequenceReordering { get; set; } = true;

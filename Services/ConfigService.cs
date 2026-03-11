@@ -8,34 +8,53 @@ namespace MyManager
 {
     public static class ConfigService
     {
-        private static readonly string PitStopFile = "pitstop_actions.json";
-        private static readonly string ImposingFile = "imposing_configs.json";
+        private const string PitStopDefaultFile = "pitstop_actions.json";
+        private const string ImposingDefaultFile = "imposing_configs.json";
 
         // --- PitStop ---
         public static List<ActionConfig> GetAllPitStopConfigs()
-            => LoadJson<ActionConfig>(PitStopFile);
+            => LoadJson<ActionConfig>(ResolvePitStopConfigPath(forRead: true));
 
         public static ActionConfig? GetPitStopConfigByName(string name)
             => GetAllPitStopConfigs().FirstOrDefault(c => c.Name == name);
 
         public static void SavePitStopConfigs(List<ActionConfig> configs)
-            => SaveJson(PitStopFile, configs);
+            => SaveJson(ResolvePitStopConfigPath(forRead: false), configs);
 
         // --- Imposing ---
         public static List<ImposingConfig> GetAllImposingConfigs()
-            => LoadJson<ImposingConfig>(ImposingFile);
+            => LoadJson<ImposingConfig>(ResolveImposingConfigPath(forRead: true));
 
         public static ImposingConfig? GetImposingConfigByName(string name)
             => GetAllImposingConfigs().FirstOrDefault(c => c.Name == name);
 
         public static void SaveImposingConfigs(List<ImposingConfig> configs)
-            => SaveJson(ImposingFile, configs);
+            => SaveJson(ResolveImposingConfigPath(forRead: false), configs);
 
         // --- Универсальные методы работы с JSON ---
-        private static List<T> LoadJson<T>(string filePath)
+        private static string ResolvePitStopConfigPath(bool forRead)
         {
-            var resolvedPath = StoragePaths.ResolveExistingFilePath(filePath, filePath);
-            if (!File.Exists(resolvedPath)) return new List<T>();
+            var settings = AppSettings.Load();
+            var configuredPath = settings.PitStopConfigFilePath;
+            return forRead
+                ? StoragePaths.ResolveExistingFilePath(configuredPath, PitStopDefaultFile)
+                : StoragePaths.ResolveFilePath(configuredPath, PitStopDefaultFile);
+        }
+
+        private static string ResolveImposingConfigPath(bool forRead)
+        {
+            var settings = AppSettings.Load();
+            var configuredPath = settings.ImposingConfigFilePath;
+            return forRead
+                ? StoragePaths.ResolveExistingFilePath(configuredPath, ImposingDefaultFile)
+                : StoragePaths.ResolveFilePath(configuredPath, ImposingDefaultFile);
+        }
+
+        private static List<T> LoadJson<T>(string resolvedPath)
+        {
+            if (!File.Exists(resolvedPath))
+                return new List<T>();
+
             try
             {
                 string json = File.ReadAllText(resolvedPath);
@@ -44,9 +63,8 @@ namespace MyManager
             catch { return new List<T>(); }
         }
 
-        private static void SaveJson<T>(string filePath, List<T> data)
+        private static void SaveJson<T>(string resolvedPath, List<T> data)
         {
-            var resolvedPath = StoragePaths.ResolveFilePath(filePath, filePath);
             var dir = Path.GetDirectoryName(resolvedPath);
             if (!string.IsNullOrWhiteSpace(dir))
                 Directory.CreateDirectory(dir);
