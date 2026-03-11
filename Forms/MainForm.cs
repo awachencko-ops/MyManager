@@ -33,6 +33,7 @@ namespace MyManager
         private readonly OrderGridContextMenu _gridMenu = new();
         private readonly ListView _lvPrintTiles = new();
         private readonly ImageList _printTilesImageList = new();
+        private Font? _printTileOrderFont;
         private OrderProcessor? _processor;
         private System.Windows.Forms.Timer? _trayIndicatorsTimer;
         private CancellationTokenSource? _printTilesThumbnailsCts;
@@ -189,14 +190,18 @@ namespace MyManager
 
         private sealed class PrintTileTag
         {
-            public PrintTileTag(string orderInternalId, string printPath)
+            public PrintTileTag(string orderInternalId, string orderNumber, string printPath, string printFileName)
             {
                 OrderInternalId = orderInternalId;
+                OrderNumber = orderNumber;
                 PrintPath = printPath;
+                PrintFileName = printFileName;
             }
 
             public string OrderInternalId { get; }
+            public string OrderNumber { get; }
             public string PrintPath { get; }
+            public string PrintFileName { get; }
         }
 
         private sealed class QueueStatusItem
@@ -607,7 +612,7 @@ namespace MyManager
         private void InitializeOrdersTilesView()
         {
             _printTilesImageList.ColorDepth = ColorDepth.Depth32Bit;
-            _printTilesImageList.ImageSize = new Size(96, 96);
+            _printTilesImageList.ImageSize = new Size(120, 120);
             _printTilesImageList.TransparentColor = Color.Transparent;
             _printTilesImageList.Images.Add(CreatePrintTilePlaceholderImage(_printTilesImageList.ImageSize, string.Empty));
 
@@ -621,10 +626,13 @@ namespace MyManager
             _lvPrintTiles.LargeImageList = _printTilesImageList;
             _lvPrintTiles.SmallImageList = _printTilesImageList;
             _lvPrintTiles.UseCompatibleStateImageBehavior = false;
+            _lvPrintTiles.OwnerDraw = true;
             _lvPrintTiles.ShowItemToolTips = true;
             _lvPrintTiles.Visible = false;
+            _lvPrintTiles.DrawItem += LvPrintTiles_DrawItem;
             _lvPrintTiles.SelectedIndexChanged += LvPrintTiles_SelectedIndexChanged;
             _lvPrintTiles.ItemActivate += LvPrintTiles_ItemActivate;
+            _printTileOrderFont = new Font(_lvPrintTiles.Font, FontStyle.Bold);
 
             tableLayoutPanel1.Controls.Add(_lvPrintTiles, 0, 2);
             _lvPrintTiles.BringToFront();
@@ -706,6 +714,75 @@ namespace MyManager
             OpenFileDefault(selectedTile.PrintPath);
         }
 
+        private void LvPrintTiles_DrawItem(object? sender, DrawListViewItemEventArgs e)
+        {
+            var bounds = e.Bounds;
+            if (bounds.Width <= 0 || bounds.Height <= 0)
+                return;
+
+            var isSelected = (e.State & ListViewItemStates.Selected) != 0;
+            var isFocused = (e.State & ListViewItemStates.Focused) != 0;
+            var itemBackColor = isSelected ? Color.FromArgb(219, 233, 253) : _lvPrintTiles.BackColor;
+            var textColor = Color.FromArgb(24, 28, 36);
+
+            using (var backBrush = new SolidBrush(itemBackColor))
+                e.Graphics.FillRectangle(backBrush, bounds);
+
+            var tileTag = e.Item.Tag as PrintTileTag;
+            var orderNumber = string.IsNullOrWhiteSpace(tileTag?.OrderNumber) ? "—" : tileTag.OrderNumber.Trim();
+            var fileName = string.IsNullOrWhiteSpace(tileTag?.PrintFileName) ? e.Item.Text : tileTag.PrintFileName.Trim();
+
+            const int outerPadding = 8;
+            const int textSpacing = 4;
+            var contentRect = Rectangle.Inflate(bounds, -outerPadding, -outerPadding);
+            if (contentRect.Width <= 0 || contentRect.Height <= 0)
+                return;
+
+            var orderFont = _printTileOrderFont ?? _lvPrintTiles.Font;
+            var fileFont = _lvPrintTiles.Font;
+            var orderTextHeight = TextRenderer.MeasureText(e.Graphics, "Hg", orderFont, new Size(int.MaxValue, int.MaxValue), TextFormatFlags.NoPadding).Height;
+            var fileTextHeight = TextRenderer.MeasureText(e.Graphics, "Hg", fileFont, new Size(int.MaxValue, int.MaxValue), TextFormatFlags.NoPadding).Height;
+            var textTotalHeight = orderTextHeight + textSpacing + fileTextHeight;
+
+            var availablePreviewHeight = contentRect.Height - textTotalHeight - textSpacing;
+            var frameSize = Math.Min(contentRect.Width, availablePreviewHeight);
+            if (frameSize < 42)
+                frameSize = Math.Max(42, Math.Min(contentRect.Width, contentRect.Height));
+
+            var frameRect = new Rectangle(
+                x: contentRect.Left + (contentRect.Width - frameSize) / 2,
+                y: contentRect.Top,
+                width: frameSize,
+                height: frameSize);
+
+            using (var frameBackBrush = new SolidBrush(Color.White))
+                e.Graphics.FillRectangle(frameBackBrush, frameRect);
+            using (var frameBorderPen = new Pen(Color.FromArgb(195, 203, 216)))
+                e.Graphics.DrawRectangle(frameBorderPen, frameRect);
+
+            var image = GetPrintTileImage(e.Item);
+            if (image != null)
+            {
+                var imageBounds = Rectangle.Inflate(frameRect, -4, -4);
+                var drawRect = FitImageToBounds(image.Size, imageBounds);
+                e.Graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                e.Graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                e.Graphics.DrawImage(image, drawRect);
+            }
+
+            var textRectTop = frameRect.Bottom + textSpacing;
+            var textRectWidth = contentRect.Width;
+            var orderRect = new Rectangle(contentRect.Left, textRectTop, textRectWidth, orderTextHeight);
+            var fileRect = new Rectangle(contentRect.Left, orderRect.Bottom + textSpacing, textRectWidth, fileTextHeight);
+            var textFlags = TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine | TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter;
+
+            TextRenderer.DrawText(e.Graphics, orderNumber, orderFont, orderRect, textColor, textFlags);
+            TextRenderer.DrawText(e.Graphics, fileName, fileFont, fileRect, textColor, textFlags);
+
+            if (isFocused && isSelected)
+                e.DrawFocusRectangle();
+        }
+
         private void RefreshPrintTilesFromVisibleRows()
         {
             var preferredOrderInternalId = GetSelectedPrintTileTag()?.OrderInternalId;
@@ -749,11 +826,20 @@ namespace MyManager
                     if (string.IsNullOrWhiteSpace(printFileName))
                         continue;
 
+                    var orderNumber = row.Cells[colOrderNumber.Index].Value?.ToString();
+                    if (string.IsNullOrWhiteSpace(orderNumber))
+                        orderNumber = GetOrderDisplayId(order);
+
+                    var cleanOrderNumber = orderNumber?.Trim();
+                    if (string.IsNullOrWhiteSpace(cleanOrderNumber))
+                        cleanOrderNumber = "—";
+
+                    var cleanPrintFileName = printFileName.Trim();
                     var imageIndex = ResolvePrintTileImageIndex(printPath);
-                    var item = new ListViewItem(printFileName.Trim(), imageIndex)
+                    var item = new ListViewItem(cleanPrintFileName, imageIndex)
                     {
-                        Tag = new PrintTileTag(orderInternalId, printPath),
-                        ToolTipText = printPath
+                        Tag = new PrintTileTag(orderInternalId, cleanOrderNumber, printPath, cleanPrintFileName),
+                        ToolTipText = $"{cleanOrderNumber}{Environment.NewLine}{cleanPrintFileName}{Environment.NewLine}{printPath}"
                     };
 
                     _lvPrintTiles.Items.Add(item);
@@ -998,6 +1084,37 @@ namespace MyManager
             }
         }
 
+        private Image? GetPrintTileImage(ListViewItem item)
+        {
+            if (item == null)
+                return null;
+
+            var imageIndex = item.ImageIndex;
+            if (imageIndex < 0 || imageIndex >= _printTilesImageList.Images.Count)
+                return null;
+
+            return _printTilesImageList.Images[imageIndex];
+        }
+
+        private static Rectangle FitImageToBounds(Size sourceSize, Rectangle targetBounds)
+        {
+            if (sourceSize.Width <= 0 || sourceSize.Height <= 0 || targetBounds.Width <= 0 || targetBounds.Height <= 0)
+                return targetBounds;
+
+            var widthRatio = targetBounds.Width / (double)sourceSize.Width;
+            var heightRatio = targetBounds.Height / (double)sourceSize.Height;
+            var scale = Math.Min(widthRatio, heightRatio);
+            if (scale <= 0)
+                scale = 1d;
+
+            var drawWidth = Math.Max(1, (int)Math.Round(sourceSize.Width * scale));
+            var drawHeight = Math.Max(1, (int)Math.Round(sourceSize.Height * scale));
+            var drawX = targetBounds.Left + (targetBounds.Width - drawWidth) / 2;
+            var drawY = targetBounds.Top + (targetBounds.Height - drawHeight) / 2;
+
+            return new Rectangle(drawX, drawY, drawWidth, drawHeight);
+        }
+
         private Bitmap? TryRenderPdfThumbnail(string pdfPath, Size targetSize)
         {
             if (!HasExistingFile(pdfPath))
@@ -1009,11 +1126,28 @@ namespace MyManager
                 if (document.PageCount <= 0)
                     return null;
 
+                var pageSize = document.PageSizes.Count > 0 ? document.PageSizes[0] : new SizeF(1f, 1f);
+                var pageWidth = Math.Max(1f, pageSize.Width);
+                var pageHeight = Math.Max(1f, pageSize.Height);
+                const int renderBasePixels = 1200;
+                int renderWidth;
+                int renderHeight;
+                if (pageWidth >= pageHeight)
+                {
+                    renderWidth = renderBasePixels;
+                    renderHeight = Math.Max(200, (int)Math.Round(renderBasePixels * (pageHeight / pageWidth)));
+                }
+                else
+                {
+                    renderHeight = renderBasePixels;
+                    renderWidth = Math.Max(200, (int)Math.Round(renderBasePixels * (pageWidth / pageHeight)));
+                }
+
                 const int renderDpi = 150;
                 using var rendered = document.Render(
                     page: 0,
-                    width: targetSize.Width * 3,
-                    height: targetSize.Height * 3,
+                    width: renderWidth,
+                    height: renderHeight,
                     dpiX: renderDpi,
                     dpiY: renderDpi,
                     flags: PdfRenderFlags.Annotations);
@@ -1039,24 +1173,17 @@ namespace MyManager
                 graphics.SmoothingMode = SmoothingMode.AntiAlias;
                 graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
                 graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
-                graphics.Clear(Color.White);
+                graphics.Clear(Color.FromArgb(248, 250, 253));
 
-                var horizontalScale = (targetSize.Width - 6d) / Math.Max(source.Width, 1);
-                var verticalScale = (targetSize.Height - 6d) / Math.Max(source.Height, 1);
-                var scale = Math.Max(0.01d, Math.Min(horizontalScale, verticalScale));
+                var frameRect = new Rectangle(2, 2, targetSize.Width - 4, targetSize.Height - 4);
+                using (var frameBackBrush = new SolidBrush(Color.White))
+                    graphics.FillRectangle(frameBackBrush, frameRect);
+                using (var frameBorderPen = new Pen(Color.FromArgb(205, 212, 225)))
+                    graphics.DrawRectangle(frameBorderPen, frameRect);
 
-                var drawWidth = Math.Max(1, (int)Math.Round(source.Width * scale));
-                var drawHeight = Math.Max(1, (int)Math.Round(source.Height * scale));
-                var drawRect = new Rectangle(
-                    x: (targetSize.Width - drawWidth) / 2,
-                    y: (targetSize.Height - drawHeight) / 2,
-                    width: drawWidth,
-                    height: drawHeight);
-
+                var imageRect = Rectangle.Inflate(frameRect, -4, -4);
+                var drawRect = FitImageToBounds(source.Size, imageRect);
                 graphics.DrawImage(source, drawRect);
-
-                using var borderPen = new Pen(Color.FromArgb(210, 216, 228));
-                graphics.DrawRectangle(borderPen, 0, 0, targetSize.Width - 1, targetSize.Height - 1);
             }
 
             return canvas;
@@ -1174,6 +1301,9 @@ namespace MyManager
                 _printTilesThumbnailsCts.Dispose();
                 _printTilesThumbnailsCts = null;
             }
+
+            _printTileOrderFont?.Dispose();
+            _printTileOrderFont = null;
 
             if (_trayIndicatorsTimer == null)
                 return;
