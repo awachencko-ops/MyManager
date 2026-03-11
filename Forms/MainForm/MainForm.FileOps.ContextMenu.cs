@@ -1,0 +1,376 @@
+﻿using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using PdfiumViewer;
+using Svg;
+
+namespace MyManager
+{
+    public partial class MainForm
+    {
+        private void InitializeOrderRowContextMenu()
+        {
+            _gridMenu.OpenFolder = (stage) =>
+            {
+                var order = GetContextOrder();
+                if (order != null)
+                    OpenOrderStageFolder(order, stage);
+            };
+            _gridMenu.Delete = () =>
+            {
+                if (TrySelectContextRow())
+                    RemoveSelectedOrder();
+            };
+            _gridMenu.Run = async () =>
+            {
+                if (TrySelectContextRow())
+                    await RunSelectedOrderAsync();
+            };
+            _gridMenu.Stop = () =>
+            {
+                if (TrySelectContextRow())
+                    StopSelectedOrder();
+            };
+            _gridMenu.PickFile = (stage, fileType) => _ = PickFileFromContextAsync(stage);
+            _gridMenu.RemoveFile = (stage) => RemoveFileFromContext(stage);
+            _gridMenu.RenameFile = (stage) => RenameFileFromContext(stage);
+            _gridMenu.CopyPathToClipboard = (stage) => CopyPathFromContextToClipboard(stage);
+            _gridMenu.PastePathFromClipboard = (stage) => _ = PastePathFromClipboardToContextAsync(stage);
+            _gridMenu.ApplyWatermark = () => ApplyWatermarkFromContext(isVertical: false);
+            _gridMenu.ApplyWatermarkLeft = () => ApplyWatermarkFromContext(isVertical: true);
+            _gridMenu.CopyToGrandpa = CopyPrintFromContextToGrandpa;
+            _gridMenu.OpenPitStopMan = OpenPitStopManager;
+            _gridMenu.OpenImpMan = OpenImposingManager;
+            _gridMenu.RemovePitStopAction = RemovePitStopActionFromContext;
+            _gridMenu.RemoveImposingAction = RemoveImposingActionFromContext;
+            _gridMenu.OpenOrderLog = () =>
+            {
+                if (TrySelectContextRow())
+                    OpenLogForSelectionOrManager();
+            };
+
+            dgvJobs.CellMouseDown += DgvJobs_CellMouseDown;
+        }
+
+        private void DgvJobs_CellMouseDown(object? sender, DataGridViewCellMouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Right || e.RowIndex < 0 || e.ColumnIndex < 0)
+                return;
+
+            var row = dgvJobs.Rows[e.RowIndex];
+            var rowTag = row.Tag?.ToString();
+            if (!IsOrderTag(rowTag))
+                return;
+
+            _ctxRow = e.RowIndex;
+            _ctxCol = e.ColumnIndex;
+            if (!TrySelectContextRow())
+                return;
+
+            var order = GetContextOrder();
+            var allowCopyToGrandpa = order == null || UsesOrderFolderStorage(order);
+            var columnName = dgvJobs.Columns[e.ColumnIndex].Name;
+            var menu = _gridMenu.Build(columnName, allowCopyToGrandpa);
+            if (menu.Items.Count == 0)
+                return;
+
+            menu.Show(Cursor.Position);
+        }
+
+        private bool TrySelectContextRow()
+        {
+            if (_ctxRow < 0 || _ctxRow >= dgvJobs.Rows.Count)
+                return false;
+
+            var row = dgvJobs.Rows[_ctxRow];
+            var columnIndex = _ctxCol >= 0 && _ctxCol < dgvJobs.Columns.Count
+                ? _ctxCol
+                : colStatus.Index;
+            if (columnIndex < 0 || columnIndex >= row.Cells.Count)
+                columnIndex = colStatus.Index;
+
+            dgvJobs.CurrentCell = row.Cells[columnIndex];
+            row.Selected = true;
+            return true;
+        }
+
+        private OrderData? GetContextOrder()
+        {
+            if (_ctxRow < 0)
+                return null;
+
+            return GetOrderByRowIndex(_ctxRow);
+        }
+
+        private async Task PickFileFromContextAsync(int stage)
+        {
+            if (stage is < 1 or > 3)
+                return;
+
+            try
+            {
+                var order = GetContextOrder();
+                if (order == null)
+                    return;
+
+                await PickAndCopyFileForOrderAsync(order, stage);
+            }
+            catch (Exception ex)
+            {
+                SetBottomStatus($"Ошибка выбора файла: {ex.Message}");
+                MessageBox.Show(this, $"Не удалось выбрать файл: {ex.Message}", "Файловая операция", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void RemoveFileFromContext(int stage)
+        {
+            if (stage is < 1 or > 3)
+                return;
+
+            var order = GetContextOrder();
+            if (order == null)
+                return;
+
+            RemoveFileFromOrder(order, stage);
+        }
+
+        private void RenameFileFromContext(int stage)
+        {
+            if (stage is < 1 or > 3)
+                return;
+
+            var order = GetContextOrder();
+            if (order == null)
+                return;
+
+            RenameFileForOrder(order, stage);
+        }
+
+        private void CopyPathFromContextToClipboard(int stage)
+        {
+            if (stage is < 1 or > 3)
+                return;
+
+            var order = GetContextOrder();
+            if (order == null)
+                return;
+
+            CopyPathToClipboard(order, stage);
+        }
+
+        private async Task PastePathFromClipboardToContextAsync(int stage)
+        {
+            if (stage is < 1 or > 3)
+                return;
+
+            try
+            {
+                var order = GetContextOrder();
+                if (order == null)
+                    return;
+
+                await PasteFileFromClipboardAsync(order, stage);
+            }
+            catch (Exception ex)
+            {
+                SetBottomStatus($"Ошибка вставки из буфера: {ex.Message}");
+                MessageBox.Show(this, $"Не удалось вставить файл из буфера: {ex.Message}", "Файловая операция", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void ApplyWatermarkFromContext(bool isVertical)
+        {
+            var order = GetContextOrder();
+            if (order == null)
+                return;
+
+            ProcessWatermark(order, isVertical);
+        }
+
+        private void CopyPrintFromContextToGrandpa()
+        {
+            var order = GetContextOrder();
+            if (order == null)
+                return;
+
+            CopyToGrandpa(order);
+        }
+
+        private void RemovePitStopActionFromContext()
+        {
+            var order = GetContextOrder();
+            if (order == null)
+                return;
+
+            RemovePitStopAction(order);
+        }
+
+        private void RemoveImposingActionFromContext()
+        {
+            var order = GetContextOrder();
+            if (order == null)
+                return;
+
+            RemoveImposingAction(order);
+        }
+
+        private void OpenPitStopManager()
+        {
+            using var form = new ActionManagerForm();
+            form.ShowDialog(this);
+        }
+
+        private void OpenImposingManager()
+        {
+            using var form = new ImposingManagerForm();
+            form.ShowDialog(this);
+        }
+
+        private void ProcessWatermark(OrderData order, bool isVertical)
+        {
+            try
+            {
+                if (!HasExistingFile(order.PrintPath))
+                {
+                    SetBottomStatus("Файл печати не найден");
+                    MessageBox.Show(this, "Файл печати не найден.", "Водяной знак", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                PdfWatermark.Apply(order, isVertical);
+                var pos = isVertical ? "слева" : "сверху";
+                SetBottomStatus($"Водяной знак ({pos}) нанесен на {GetOrderDisplayId(order)}");
+            }
+            catch (IOException)
+            {
+                SetBottomStatus("Файл занят другой программой. Закройте PDF и повторите");
+                MessageBox.Show(this, "Файл занят другой программой. Закройте PDF и повторите.", "Водяной знак", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            catch (Exception ex)
+            {
+                SetBottomStatus($"Не удалось применить водяной знак: {ex.Message}");
+                MessageBox.Show(this, $"Не удалось применить водяной знак: {ex.Message}", "Водяной знак", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void ProcessWatermark(OrderData order, OrderFileItem item, bool isVertical)
+        {
+            try
+            {
+                if (!HasExistingFile(item.PrintPath))
+                {
+                    SetBottomStatus("Файл печати item не найден");
+                    MessageBox.Show(this, "Файл печати item не найден.", "Водяной знак", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                var originalPrintPath = order.PrintPath;
+                try
+                {
+                    order.PrintPath = item.PrintPath ?? string.Empty;
+                    PdfWatermark.Apply(order, isVertical);
+                }
+                finally
+                {
+                    order.PrintPath = originalPrintPath;
+                }
+
+                var pos = isVertical ? "слева" : "сверху";
+                var fileName = Path.GetFileName(item.PrintPath);
+                SetBottomStatus($"Водяной знак ({pos}) нанесен на {fileName}");
+            }
+            catch (IOException)
+            {
+                SetBottomStatus("Файл занят другой программой. Закройте PDF и повторите");
+                MessageBox.Show(this, "Файл занят другой программой. Закройте PDF и повторите.", "Водяной знак", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            catch (Exception ex)
+            {
+                SetBottomStatus($"Не удалось применить водяной знак: {ex.Message}");
+                MessageBox.Show(this, $"Не удалось применить водяной знак: {ex.Message}", "Водяной знак", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void RemovePitStopAction(OrderData order)
+        {
+            order.PitStopAction = "-";
+            if (order.Items != null)
+            {
+                foreach (var item in order.Items.Where(x => x != null))
+                    item.PitStopAction = "-";
+            }
+
+            PersistGridChanges($"order|{order.InternalId}");
+            SetBottomStatus($"PitStop очищен для {GetOrderDisplayId(order)}");
+        }
+
+        private void RemoveImposingAction(OrderData order)
+        {
+            order.ImposingAction = "-";
+            if (order.Items != null)
+            {
+                foreach (var item in order.Items.Where(x => x != null))
+                    item.ImposingAction = "-";
+            }
+
+            PersistGridChanges($"order|{order.InternalId}");
+            SetBottomStatus($"Imposing очищен для {GetOrderDisplayId(order)}");
+        }
+
+        private void RemovePitStopAction(OrderData order, OrderFileItem item)
+        {
+            item.PitStopAction = "-";
+            PersistGridChanges($"item|{order.InternalId}|{item.ItemId}");
+            SetBottomStatus($"PitStop очищен для item {item.ClientFileLabel}");
+        }
+
+        private void RemoveImposingAction(OrderData order, OrderFileItem item)
+        {
+            item.ImposingAction = "-";
+            PersistGridChanges($"item|{order.InternalId}|{item.ItemId}");
+            SetBottomStatus($"Imposing очищен для item {item.ClientFileLabel}");
+        }
+
+        private string CopyToGrandpa(OrderData order)
+        {
+            if (!HasExistingFile(order.PrintPath))
+            {
+                SetBottomStatus("Файл печати не найден");
+                MessageBox.Show(this, "Файл печати не найден.", "Копирование", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return string.Empty;
+            }
+
+            var sourcePath = order.PrintPath ?? string.Empty;
+            var targetName = Path.GetFileName(sourcePath);
+            return CopyToGrandpaFromSource(sourcePath, targetName);
+        }
+
+        private string CopyToGrandpa(OrderData order, OrderFileItem item)
+        {
+            if (!HasExistingFile(item.PrintPath))
+            {
+                SetBottomStatus("Файл печати item не найден");
+                MessageBox.Show(this, "Файл печати item не найден.", "Копирование", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return string.Empty;
+            }
+
+            var sourcePath = item.PrintPath ?? string.Empty;
+            var targetName = Path.GetFileName(sourcePath);
+            return CopyToGrandpaFromSource(sourcePath, targetName);
+        }
+
+    }
+}
