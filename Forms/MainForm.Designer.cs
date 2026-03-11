@@ -47,6 +47,22 @@
             cbFCreated = new ComboBox();
             cbFReceived = new ComboBox();
             dgvJobs = new DataGridView();
+            pnlTray = new Panel();
+            statusStrip1 = new StatusStrip();
+            toolStatus = new ToolStripStatusLabel();
+            toolProgress = new ToolStripProgressBar();
+            toolStats = new ToolStripStatusLabel();
+            toolConnection = new ToolStripStatusLabel();
+            toolDiskFree = new ToolStripStatusLabel();
+            toolAlerts = new ToolStripStatusLabel();
+            tsMainActions = new ToolStrip();
+            tsbNewJob = new ToolStripButton();
+            tsbRun = new ToolStripButton();
+            tsbStop = new ToolStripButton();
+            tsbRemove = new ToolStripButton();
+            tsbBrowse = new ToolStripButton();
+            tsbConsole = new ToolStripButton();
+            tsbParameters = new ToolStripButton();
             colStatus = new DataGridViewTextBoxColumn();
             colOrderNumber = new DataGridViewTextBoxColumn();
             colSource = new DataGridViewTextBoxColumn();
@@ -56,22 +72,6 @@
             colPrint = new DataGridViewTextBoxColumn();
             colReceived = new DataGridViewTextBoxColumn();
             colCreated = new DataGridViewTextBoxColumn();
-            pnlTray = new Panel();
-            tsMainActions = new ToolStrip();
-            tsbNewJob = new ToolStripButton();
-            tsbRun = new ToolStripButton();
-            tsbStop = new ToolStripButton();
-            tsbRemove = new ToolStripButton();
-            tsbBrowse = new ToolStripButton();
-            tsbConsole = new ToolStripButton();
-            tsbParameters = new ToolStripButton();
-            statusStrip1 = new StatusStrip();
-            toolStatus = new ToolStripStatusLabel();
-            toolProgress = new ToolStripProgressBar();
-            toolStats = new ToolStripStatusLabel();
-            toolConnection = new ToolStripStatusLabel();
-            toolDiskFree = new ToolStripStatusLabel();
-            toolAlerts = new ToolStripStatusLabel();
             ((System.ComponentModel.ISupportInitialize)scMain).BeginInit();
             scMain.Panel1.SuspendLayout();
             scMain.Panel2.SuspendLayout();
@@ -84,8 +84,8 @@
             ((System.ComponentModel.ISupportInitialize)picFOrderNoGlyph).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgvJobs).BeginInit();
             pnlTray.SuspendLayout();
-            tsMainActions.SuspendLayout();
             statusStrip1.SuspendLayout();
+            tsMainActions.SuspendLayout();
             SuspendLayout();
             // 
             // pnlSidebar
@@ -310,70 +310,6 @@
             dgvJobs.Size = new Size(1743, 1068);
             dgvJobs.TabIndex = 2;
             // 
-            // colStatus
-            // 
-            colStatus.HeaderText = "Состояние";
-            colStatus.MinimumWidth = 8;
-            colStatus.Name = "colStatus";
-            colStatus.ReadOnly = true;
-            // 
-            // colOrderNumber
-            // 
-            colOrderNumber.HeaderText = "№ заказа";
-            colOrderNumber.MinimumWidth = 8;
-            colOrderNumber.Name = "colOrderNumber";
-            colOrderNumber.ReadOnly = true;
-            // 
-            // colSource
-            // 
-            colSource.HeaderText = "Исходные";
-            colSource.MinimumWidth = 8;
-            colSource.Name = "colSource";
-            colSource.ReadOnly = true;
-            colSource.Visible = false;
-            // 
-            // colPrep
-            // 
-            colPrep.HeaderText = "Заголовок задания";
-            colPrep.MinimumWidth = 8;
-            colPrep.Name = "colPrep";
-            colPrep.ReadOnly = true;
-            // 
-            // colPitstop
-            // 
-            colPitstop.HeaderText = "Pitstop";
-            colPitstop.MinimumWidth = 8;
-            colPitstop.Name = "colPitstop";
-            colPitstop.ReadOnly = true;
-            // 
-            // colHotimposing
-            // 
-            colHotimposing.HeaderText = "HotImposing";
-            colHotimposing.MinimumWidth = 8;
-            colHotimposing.Name = "colHotimposing";
-            colHotimposing.ReadOnly = true;
-            // 
-            // colPrint
-            // 
-            colPrint.HeaderText = "Печать";
-            colPrint.MinimumWidth = 8;
-            colPrint.Name = "colPrint";
-            colPrint.ReadOnly = true;
-            // 
-            // colReceived
-            // 
-            colReceived.HeaderText = "Дата поступления";
-            colReceived.MinimumWidth = 8;
-            colReceived.Name = "colReceived";
-            colReceived.ReadOnly = true;
-            // 
-            // colCreated
-            // 
-            colCreated.HeaderText = "Начало обработки";
-            colCreated.MinimumWidth = 8;
-            colCreated.Name = "colCreated";
-            colCreated.ReadOnly = true;
-            // 
             // pnlTray
             // 
             pnlTray.Controls.Add(statusStrip1);
@@ -382,6 +318,54 @@
             pnlTray.Name = "pnlTray";
             pnlTray.Size = new Size(1743, 34);
             pnlTray.TabIndex = 7;
+            // 
+            // statusStrip1
+            // 
+            statusStrip1.ImageScalingSize = new Size(24, 24);
+            statusStrip1.Items.AddRange(new ToolStripItem[] { toolStatus, toolProgress, toolStats, toolConnection, toolDiskFree, toolAlerts });
+            statusStrip1.Location = new Point(0, 2);
+            statusStrip1.Name = "statusStrip1";
+            statusStrip1.Size = new Size(1743, 32);
+            statusStrip1.TabIndex = 0;
+            statusStrip1.Text = "statusStrip1";
+            // 
+            // toolStatus
+            // 
+            toolStatus.Name = "toolStatus";
+            toolStatus.Size = new Size(70, 25);
+            toolStatus.Text = "Готово";
+            // 
+            // toolProgress
+            // 
+            toolProgress.MarqueeAnimationSpeed = 0;
+            toolProgress.Name = "toolProgress";
+            toolProgress.Size = new Size(140, 24);
+            toolProgress.Style = ProgressBarStyle.Continuous;
+            toolProgress.Visible = false;
+            // 
+            // toolStats
+            // 
+            toolStats.Name = "toolStats";
+            toolStats.Size = new Size(146, 25);
+            toolStats.Text = "Строк: 0 | Выд: 0";
+            // 
+            // toolConnection
+            // 
+            toolConnection.Name = "toolConnection";
+            toolConnection.Size = new Size(174, 25);
+            toolConnection.Text = "Сервер: автономно";
+            // 
+            // toolDiskFree
+            // 
+            toolDiskFree.Name = "toolDiskFree";
+            toolDiskFree.Size = new Size(132, 25);
+            toolDiskFree.Text = "Свободно: н/д";
+            // 
+            // toolAlerts
+            // 
+            toolAlerts.Name = "toolAlerts";
+            toolAlerts.Size = new Size(52, 25);
+            toolAlerts.Text = "⚠ 0";
             // 
             // tsMainActions
             // 
@@ -437,53 +421,69 @@
             tsbParameters.Size = new Size(111, 29);
             tsbParameters.Text = "Параметры";
             // 
-            // statusStrip1
+            // colStatus
             // 
-            statusStrip1.ImageScalingSize = new Size(24, 24);
-            statusStrip1.Items.AddRange(new ToolStripItem[] { toolStatus, toolProgress, toolStats, toolConnection, toolDiskFree, toolAlerts });
-            statusStrip1.Location = new Point(0, 2);
-            statusStrip1.Name = "statusStrip1";
-            statusStrip1.Size = new Size(1743, 32);
-            statusStrip1.TabIndex = 0;
-            statusStrip1.Text = "statusStrip1";
+            colStatus.HeaderText = "Состояние";
+            colStatus.MinimumWidth = 8;
+            colStatus.Name = "colStatus";
+            colStatus.ReadOnly = true;
             // 
-            // toolStatus
+            // colOrderNumber
             // 
-            toolStatus.Name = "toolStatus";
-            toolStatus.Size = new Size(67, 25);
-            toolStatus.Text = "Готово";
+            colOrderNumber.HeaderText = "№ заказа";
+            colOrderNumber.MinimumWidth = 8;
+            colOrderNumber.Name = "colOrderNumber";
+            colOrderNumber.ReadOnly = true;
             // 
-            // toolProgress
+            // colSource
             // 
-            toolProgress.MarqueeAnimationSpeed = 0;
-            toolProgress.Name = "toolProgress";
-            toolProgress.Size = new Size(140, 24);
-            toolProgress.Style = ProgressBarStyle.Continuous;
-            toolProgress.Visible = false;
+            colSource.HeaderText = "Исходные";
+            colSource.MinimumWidth = 8;
+            colSource.Name = "colSource";
+            colSource.ReadOnly = true;
+            colSource.Visible = false;
             // 
-            // toolStats
+            // colPrep
             // 
-            toolStats.Name = "toolStats";
-            toolStats.Size = new Size(135, 25);
-            toolStats.Text = "Строк: 0 | Выд: 0";
+            colPrep.HeaderText = "Заголовок задания";
+            colPrep.MinimumWidth = 8;
+            colPrep.Name = "colPrep";
+            colPrep.ReadOnly = true;
             // 
-            // toolConnection
+            // colPitstop
             // 
-            toolConnection.Name = "toolConnection";
-            toolConnection.Size = new Size(154, 25);
-            toolConnection.Text = "Сервер: автономно";
+            colPitstop.HeaderText = "Проверка файлов";
+            colPitstop.MinimumWidth = 8;
+            colPitstop.Name = "colPitstop";
+            colPitstop.ReadOnly = true;
             // 
-            // toolDiskFree
+            // colHotimposing
             // 
-            toolDiskFree.Name = "toolDiskFree";
-            toolDiskFree.Size = new Size(123, 25);
-            toolDiskFree.Text = "Свободно: н/д";
+            colHotimposing.HeaderText = "Спуск полос";
+            colHotimposing.MinimumWidth = 8;
+            colHotimposing.Name = "colHotimposing";
+            colHotimposing.ReadOnly = true;
             // 
-            // toolAlerts
+            // colPrint
             // 
-            toolAlerts.Name = "toolAlerts";
-            toolAlerts.Size = new Size(34, 25);
-            toolAlerts.Text = "⚠ 0";
+            colPrint.HeaderText = "Готов к печати";
+            colPrint.MinimumWidth = 8;
+            colPrint.Name = "colPrint";
+            colPrint.ReadOnly = true;
+            // 
+            // colReceived
+            // 
+            colReceived.HeaderText = "Заказ принят";
+            colReceived.MinimumWidth = 8;
+            colReceived.Name = "colReceived";
+            colReceived.ReadOnly = true;
+            // 
+            // colCreated
+            // 
+            colCreated.HeaderText = "В препрессе";
+            colCreated.MinimumWidth = 8;
+            colCreated.Name = "colCreated";
+            colCreated.ReadOnly = true;
             // 
             // MainForm
             // 
@@ -509,10 +509,10 @@
             ((System.ComponentModel.ISupportInitialize)dgvJobs).EndInit();
             pnlTray.ResumeLayout(false);
             pnlTray.PerformLayout();
-            tsMainActions.ResumeLayout(false);
-            tsMainActions.PerformLayout();
             statusStrip1.ResumeLayout(false);
             statusStrip1.PerformLayout();
+            tsMainActions.ResumeLayout(false);
+            tsMainActions.PerformLayout();
             ResumeLayout(false);
         }
 
@@ -536,15 +536,6 @@
         private Label lblFOrderNo;
         private ComboBox cbUser;
         private ComboBox cbFReceived;
-        private DataGridViewTextBoxColumn colStatus;
-        private DataGridViewTextBoxColumn colOrderNumber;
-        private DataGridViewTextBoxColumn colSource;
-        private DataGridViewTextBoxColumn colPrep;
-        private DataGridViewTextBoxColumn colPitstop;
-        private DataGridViewTextBoxColumn colHotimposing;
-        private DataGridViewTextBoxColumn colPrint;
-        private DataGridViewTextBoxColumn colReceived;
-        private DataGridViewTextBoxColumn colCreated;
         private ToolStrip tsMainActions;
         private ToolStripButton tsbNewJob;
         private ToolStripButton tsbRun;
@@ -562,5 +553,14 @@
         private ToolStripStatusLabel toolConnection;
         private ToolStripStatusLabel toolDiskFree;
         private ToolStripStatusLabel toolAlerts;
+        private DataGridViewTextBoxColumn colStatus;
+        private DataGridViewTextBoxColumn colOrderNumber;
+        private DataGridViewTextBoxColumn colSource;
+        private DataGridViewTextBoxColumn colPrep;
+        private DataGridViewTextBoxColumn colPitstop;
+        private DataGridViewTextBoxColumn colHotimposing;
+        private DataGridViewTextBoxColumn colPrint;
+        private DataGridViewTextBoxColumn colReceived;
+        private DataGridViewTextBoxColumn colCreated;
     }
 }
