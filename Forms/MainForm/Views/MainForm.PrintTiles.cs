@@ -42,9 +42,7 @@ namespace MyManager
             _lvPrintTiles.DrawItem += LvPrintTiles_DrawItem;
             _lvPrintTiles.SelectedIndexChanged += LvPrintTiles_SelectedIndexChanged;
             _lvPrintTiles.ItemActivate += LvPrintTiles_ItemActivate;
-            _lvPrintTiles.Paint += LvPrintTiles_Paint;
             _lvPrintTiles.MouseDown += LvPrintTiles_MouseDown;
-            _lvPrintTiles.MouseMove += LvPrintTiles_MouseMove;
             _lvPrintTiles.MouseUp += LvPrintTiles_MouseUp;
             _printTileOrderFont = new Font(_lvPrintTiles.Font, FontStyle.Bold);
 
@@ -112,22 +110,12 @@ namespace MyManager
             var hasSelectionModifiers = (ModifierKeys & (Keys.Control | Keys.Shift)) != Keys.None;
             var hit = _lvPrintTiles.HitTest(e.Location);
 
-            if (hit.Item == null)
-            {
-                if (!hasSelectionModifiers)
-                    BeginTileMarqueeSelection(e.Location);
-                return;
-            }
-
-            EndTileMarqueeSelection();
-        }
-
-        private void LvPrintTiles_MouseMove(object? sender, MouseEventArgs e)
-        {
-            if (!_isTileMarqueeSelecting || (e.Button & MouseButtons.Left) != MouseButtons.Left)
+            // Оставляем нативное прямоугольное выделение ListView как в Проводнике.
+            // Здесь только сбрасываем текущее выделение по клику в пустую область без модификаторов.
+            if (hit.Item != null || hasSelectionModifiers || _lvPrintTiles.SelectedItems.Count == 0)
                 return;
 
-            UpdateTileMarqueeSelection(e.Location);
+            ClearTilesSelectionAndSync();
         }
 
         private void LvPrintTiles_ItemActivate(object? sender, EventArgs e)
@@ -141,12 +129,6 @@ namespace MyManager
 
         private void LvPrintTiles_MouseUp(object? sender, MouseEventArgs e)
         {
-            if (e.Button == MouseButtons.Left)
-            {
-                EndTileMarqueeSelection();
-                return;
-            }
-
             if (e.Button != MouseButtons.Right)
                 return;
 
@@ -196,134 +178,6 @@ namespace MyManager
             ClearGridSelection();
             UpdateActionButtonsState();
             UpdateTrayStatsIndicator();
-        }
-
-        private void BeginTileMarqueeSelection(Point clientPoint)
-        {
-            EndTileMarqueeSelection();
-
-            _isTileMarqueeSelecting = true;
-            _tileMarqueeStartPoint = ClampTilePointToClientBounds(clientPoint);
-            _tileMarqueeCurrentClientRect = Rectangle.Empty;
-            _lvPrintTiles.Capture = true;
-            ClearTilesSelectionAndSync();
-            _lvPrintTiles.Invalidate();
-        }
-
-        private void UpdateTileMarqueeSelection(Point clientPoint)
-        {
-            if (!_isTileMarqueeSelecting)
-                return;
-
-            var clampedPoint = ClampTilePointToClientBounds(clientPoint);
-            var clientRect = GetNormalizedSelectionRect(_tileMarqueeStartPoint, clampedPoint);
-            if (clientRect == _tileMarqueeCurrentClientRect)
-                return;
-
-            InvalidateTileMarqueeRect(_tileMarqueeCurrentClientRect);
-            _tileMarqueeCurrentClientRect = clientRect;
-            InvalidateTileMarqueeRect(_tileMarqueeCurrentClientRect);
-
-            ApplyTileMarqueeSelection(clientRect);
-        }
-
-        private void EndTileMarqueeSelection()
-        {
-            if (!_isTileMarqueeSelecting)
-                return;
-
-            var rectToInvalidate = _tileMarqueeCurrentClientRect;
-            _tileMarqueeCurrentClientRect = Rectangle.Empty;
-            _isTileMarqueeSelecting = false;
-            _lvPrintTiles.Capture = false;
-            InvalidateTileMarqueeRect(rectToInvalidate);
-        }
-
-        private void ApplyTileMarqueeSelection(Rectangle clientRect)
-        {
-            _isSyncingTileSelection = true;
-            try
-            {
-                _lvPrintTiles.BeginUpdate();
-                _lvPrintTiles.SelectedItems.Clear();
-
-                ListViewItem? firstSelected = null;
-                foreach (ListViewItem item in _lvPrintTiles.Items)
-                {
-                    var isHit = item.Bounds.IntersectsWith(clientRect);
-                    item.Selected = isHit;
-                    if (isHit && firstSelected == null)
-                        firstSelected = item;
-                }
-
-                if (firstSelected != null)
-                    firstSelected.Focused = true;
-            }
-            finally
-            {
-                _lvPrintTiles.EndUpdate();
-                _isSyncingTileSelection = false;
-            }
-
-            SyncGridSelectionWithTiles();
-            UpdateActionButtonsState();
-            UpdateTrayStatsIndicator();
-        }
-
-        private void LvPrintTiles_Paint(object? sender, PaintEventArgs e)
-        {
-            if (!_isTileMarqueeSelecting)
-                return;
-
-            if (_tileMarqueeCurrentClientRect.Width <= 0 || _tileMarqueeCurrentClientRect.Height <= 0)
-                return;
-
-            var marqueeFillColor = Color.FromArgb(140, OrdersRowSelectedBackColor);
-            var marqueeBorderColor = Color.FromArgb(220, ControlPaint.Dark(OrdersRowSelectedBackColor, 0.15f));
-
-            using var fillBrush = new SolidBrush(marqueeFillColor);
-            using var borderPen = new Pen(marqueeBorderColor);
-            e.Graphics.FillRectangle(fillBrush, _tileMarqueeCurrentClientRect);
-            e.Graphics.DrawRectangle(borderPen, GetBorderRect(_tileMarqueeCurrentClientRect));
-        }
-
-        private void InvalidateTileMarqueeRect(Rectangle rect)
-        {
-            if (rect.Width <= 0 || rect.Height <= 0)
-                return;
-
-            var invalidateRect = Rectangle.Inflate(rect, 2, 2);
-            invalidateRect.Intersect(_lvPrintTiles.ClientRectangle);
-            if (invalidateRect.Width <= 0 || invalidateRect.Height <= 0)
-                return;
-
-            _lvPrintTiles.Invalidate(invalidateRect);
-        }
-
-        private Point ClampTilePointToClientBounds(Point point)
-        {
-            var maxX = Math.Max(0, _lvPrintTiles.ClientSize.Width - 1);
-            var maxY = Math.Max(0, _lvPrintTiles.ClientSize.Height - 1);
-            var x = Math.Min(maxX, Math.Max(0, point.X));
-            var y = Math.Min(maxY, Math.Max(0, point.Y));
-            return new Point(x, y);
-        }
-
-        private static Rectangle GetBorderRect(Rectangle rect)
-        {
-            if (rect.Width <= 1 || rect.Height <= 1)
-                return rect;
-
-            return new Rectangle(rect.X, rect.Y, rect.Width - 1, rect.Height - 1);
-        }
-
-        private static Rectangle GetNormalizedSelectionRect(Point start, Point end)
-        {
-            var left = Math.Min(start.X, end.X);
-            var top = Math.Min(start.Y, end.Y);
-            var width = Math.Abs(end.X - start.X);
-            var height = Math.Abs(end.Y - start.Y);
-            return new Rectangle(left, top, width, height);
         }
 
         private void ShowPrintTileContextMenu(OrderData order, PrintTileTag tileTag, Point location)
