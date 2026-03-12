@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace MyManager
@@ -11,10 +12,18 @@ namespace MyManager
         private const int WmLButtonUp = 0x0202;
         private const int WmMouseMove = 0x0200;
         private const int WmCaptureChanged = 0x0215;
+        private const int LvmFirst = 0x1000;
+        private const int LvmSetExtendedListViewStyle = LvmFirst + 54;
+        private const int LvsExDoubleBuffer = 0x00010000;
+        private const int SelectionUpdateIntervalMs = 20;
 
         private bool _isMarqueeSelecting;
+        private bool _isSelectionUpdatePending;
         private Point _marqueeStartPoint;
         private Rectangle _marqueeClientRect = Rectangle.Empty;
+        private Rectangle _pendingSelectionRect = Rectangle.Empty;
+        private readonly System.Windows.Forms.Timer _selectionUpdateTimer;
+        private readonly HashSet<ListViewItem> _marqueeSelectedItems = [];
 
         public event EventHandler? MarqueeSelectionCompleted;
         public Color MarqueeColor { get; set; } = Color.FromArgb(235, 240, 250);
@@ -24,6 +33,34 @@ namespace MyManager
         {
             SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint, true);
             DoubleBuffered = true;
+
+            _selectionUpdateTimer = new System.Windows.Forms.Timer
+            {
+                Interval = SelectionUpdateIntervalMs
+            };
+            _selectionUpdateTimer.Tick += SelectionUpdateTimer_Tick;
+        }
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            EnableNativeDoubleBuffering();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            EndMarqueeSelection();
+
+            if (disposing)
+            {
+                _selectionUpdateTimer.Tick -= SelectionUpdateTimer_Tick;
+                _selectionUpdateTimer.Dispose();
+            }
+
+            base.Dispose(disposing);
         }
 
         protected override void WndProc(ref Message m)
@@ -74,12 +111,6 @@ namespace MyManager
             base.OnLostFocus(e);
         }
 
-        protected override void Dispose(bool disposing)
-        {
-            EndMarqueeSelection();
-            base.Dispose(disposing);
-        }
-
         private void BeginMarqueeSelection(Point clientPoint)
         {
             EndMarqueeSelection();
@@ -87,8 +118,12 @@ namespace MyManager
             _isMarqueeSelecting = true;
             _marqueeStartPoint = ClampToClient(clientPoint);
             _marqueeClientRect = Rectangle.Empty;
+            _pendingSelectionRect = Rectangle.Empty;
+            _isSelectionUpdatePending = false;
+            _marqueeSelectedItems.Clear();
             Capture = true;
             Focus();
+            _selectionUpdateTimer.Start();
 
             BeginUpdate();
             try
@@ -115,6 +150,8 @@ namespace MyManager
             InvalidateMarqueeRect(_marqueeClientRect);
             _marqueeClientRect = clientRect;
             InvalidateMarqueeRect(_marqueeClientRect);
+            _pendingSelectionRect = clientRect;
+            _isSelectionUpdatePending = true;
         }
 
         private void EndMarqueeSelection()
@@ -123,34 +160,70 @@ namespace MyManager
                 return;
 
             var rectToInvalidate = _marqueeClientRect;
-            var finalSelectionRect = _marqueeClientRect;
+            _selectionUpdateTimer.Stop();
+            if (_isSelectionUpdatePending)
+                ApplyMarqueeSelection(_pendingSelectionRect);
+
             _marqueeClientRect = Rectangle.Empty;
+            _pendingSelectionRect = Rectangle.Empty;
+            _isSelectionUpdatePending = false;
             _isMarqueeSelecting = false;
             Capture = false;
             InvalidateMarqueeRect(rectToInvalidate);
-
-            if (finalSelectionRect.Width > 0 && finalSelectionRect.Height > 0)
-                ApplyMarqueeSelection(finalSelectionRect);
-
+            _marqueeSelectedItems.Clear();
             MarqueeSelectionCompleted?.Invoke(this, EventArgs.Empty);
         }
 
         private void ApplyMarqueeSelection(Rectangle clientRect)
         {
+            if (!_isMarqueeSelecting && (clientRect.Width <= 0 || clientRect.Height <= 0))
+                return;
+
             ListViewItem? firstSelected = null;
 
             foreach (ListViewItem item in Items)
             {
-                var isSelected = item.Bounds.IntersectsWith(clientRect);
-                if (item.Selected != isSelected)
-                    item.Selected = isSelected;
+                var shouldBeSelected = item.Bounds.IntersectsWith(clientRect);
+                var isTrackedAsSelected = _marqueeSelectedItems.Contains(item);
 
-                if (isSelected && firstSelected == null)
-                    firstSelected = item;
+                if (shouldBeSelected)
+                {
+                    firstSelected ??= item;
+
+                    if (!isTrackedAsSelected)
+                    {
+                        item.Selected = true;
+                        _marqueeSelectedItems.Add(item);
+                    }
+                }
+                else if (isTrackedAsSelected)
+                {
+                    item.Selected = false;
+                    _marqueeSelectedItems.Remove(item);
+                }
+                else if (item.Selected)
+                {
+                    item.Selected = false;
+                }
             }
 
             if (firstSelected != null && !ReferenceEquals(FocusedItem, firstSelected))
                 firstSelected.Focused = true;
+        }
+
+        private void SelectionUpdateTimer_Tick(object? sender, EventArgs e)
+        {
+            if (!_isMarqueeSelecting)
+            {
+                _selectionUpdateTimer.Stop();
+                return;
+            }
+
+            if (!_isSelectionUpdatePending)
+                return;
+
+            _isSelectionUpdatePending = false;
+            ApplyMarqueeSelection(_pendingSelectionRect);
         }
 
         private void DrawMarqueeOverlay()
@@ -209,6 +282,18 @@ namespace MyManager
             var x = (short)(value & 0xFFFF);
             var y = (short)((value >> 16) & 0xFFFF);
             return new Point(x, y);
+        }
+
+        private void EnableNativeDoubleBuffering()
+        {
+            if (!IsHandleCreated)
+                return;
+
+            SendMessage(
+                Handle,
+                LvmSetExtendedListViewStyle,
+                (IntPtr)LvsExDoubleBuffer,
+                (IntPtr)LvsExDoubleBuffer);
         }
 
         private static Rectangle GetBorderRect(Rectangle rect)
