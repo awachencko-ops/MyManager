@@ -103,7 +103,7 @@ namespace MyManager
         private const string ReceivedDateFilterLabelText = "Дата поступления";
         private const string DefaultTrayStatusText = "Готово";
         private const int TrayIndicatorsRefreshIntervalMs = 15000;
-        private const int TileHoverActivateDelayMs = 1500;
+        private const int TileHoverActivateDelayMs = 500;
         private const long DiskWarningThresholdBytes = 10L * 1024 * 1024 * 1024;
         private const long DiskCriticalThresholdBytes = 5L * 1024 * 1024 * 1024;
 
