@@ -40,6 +40,7 @@ namespace MyManager
         private readonly ContextMenuStrip _printTilesContextMenu = new();
         private readonly Manina.Windows.Forms.ImageListView _lvPrintTiles = new();
         private readonly ImageList _printTilesImageList = new();
+        private PdfAwareFileSystemAdaptor? _pdfThumbnailAdaptor;
         private Font? _printTileOrderFont;
         private OrderProcessor? _processor;
         private System.Windows.Forms.Timer? _trayIndicatorsTimer;

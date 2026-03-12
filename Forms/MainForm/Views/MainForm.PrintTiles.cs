@@ -81,18 +81,21 @@ namespace MyManager
         {
             if (ImageListViewDefaultAdaptorField == null)
             {
+                _pdfThumbnailAdaptor = null;
                 Logger.Warn("TILES | ImageListView default adaptor field not found. PDF preview falls back to shell icons.");
                 return;
             }
 
             try
             {
+                _pdfThumbnailAdaptor = new PdfAwareFileSystemAdaptor(localPdfPreviewCacheDirectory, sharedPdfPreviewCacheDirectory);
                 ImageListViewDefaultAdaptorField.SetValue(
                     _lvPrintTiles,
-                    new PdfAwareFileSystemAdaptor(localPdfPreviewCacheDirectory, sharedPdfPreviewCacheDirectory));
+                    _pdfThumbnailAdaptor);
             }
             catch (Exception ex)
             {
+                _pdfThumbnailAdaptor = null;
                 Logger.Warn($"TILES | Failed to set PDF thumbnail adaptor: {ex.Message}");
             }
         }
@@ -477,64 +480,73 @@ namespace MyManager
             if (string.IsNullOrWhiteSpace(preferredOrderInternalId))
                 preferredOrderInternalId = ExtractOrderInternalIdFromTag(dgvJobs.CurrentRow?.Tag?.ToString());
 
-            _lvPrintTiles.SuspendLayout();
-            _isSyncingTileSelection = true;
-
-            try
+            var nextTiles = new List<PrintTileTag>();
+            foreach (DataGridViewRow row in dgvJobs.Rows)
             {
-                _lvPrintTiles.Items.Clear();
+                if (row.IsNewRow || !row.Visible)
+                    continue;
 
-                foreach (DataGridViewRow row in dgvJobs.Rows)
-                {
-                    if (row.IsNewRow || !row.Visible)
-                        continue;
+                var rowTag = row.Tag?.ToString();
+                if (!IsOrderTag(rowTag))
+                    continue;
 
-                    var rowTag = row.Tag?.ToString();
-                    if (!IsOrderTag(rowTag))
-                        continue;
+                var orderInternalId = ExtractOrderInternalIdFromTag(rowTag);
+                if (string.IsNullOrWhiteSpace(orderInternalId))
+                    continue;
 
-                    var orderInternalId = ExtractOrderInternalIdFromTag(rowTag);
-                    if (string.IsNullOrWhiteSpace(orderInternalId))
-                        continue;
+                var order = FindOrderByInternalId(orderInternalId);
+                if (order == null)
+                    continue;
 
-                    var order = FindOrderByInternalId(orderInternalId);
-                    if (order == null)
-                        continue;
+                var printPath = ResolveSingleOrderDisplayPath(order, 3);
+                if (!HasExistingFile(printPath))
+                    continue;
 
-                    var printPath = ResolveSingleOrderDisplayPath(order, 3);
-                    if (!HasExistingFile(printPath))
-                        continue;
+                var printFileName = row.Cells[colPrint.Index].Value?.ToString();
+                if (string.IsNullOrWhiteSpace(printFileName) || string.Equals(printFileName, "...", StringComparison.Ordinal))
+                    printFileName = Path.GetFileName(printPath);
 
-                    var printFileName = row.Cells[colPrint.Index].Value?.ToString();
-                    if (string.IsNullOrWhiteSpace(printFileName) || string.Equals(printFileName, "...", StringComparison.Ordinal))
-                        printFileName = Path.GetFileName(printPath);
+                if (string.IsNullOrWhiteSpace(printFileName))
+                    continue;
 
-                    if (string.IsNullOrWhiteSpace(printFileName))
-                        continue;
+                var orderNumber = row.Cells[colOrderNumber.Index].Value?.ToString();
+                if (string.IsNullOrWhiteSpace(orderNumber))
+                    orderNumber = GetOrderDisplayId(order);
 
-                    var orderNumber = row.Cells[colOrderNumber.Index].Value?.ToString();
-                    if (string.IsNullOrWhiteSpace(orderNumber))
-                        orderNumber = GetOrderDisplayId(order);
+                var cleanOrderNumber = orderNumber?.Trim();
+                if (string.IsNullOrWhiteSpace(cleanOrderNumber))
+                    cleanOrderNumber = "—";
 
-                    var cleanOrderNumber = orderNumber?.Trim();
-                    if (string.IsNullOrWhiteSpace(cleanOrderNumber))
-                        cleanOrderNumber = "—";
-
-                    var cleanPrintFileName = printFileName.Trim();
-                    var item = new ImageListViewItem(printPath)
-                    {
-                        Text = cleanPrintFileName,
-                        Tag = new PrintTileTag(orderInternalId, cleanOrderNumber, printPath, cleanPrintFileName)
-                    };
-
-                    _lvPrintTiles.Items.Add(item);
-                }
-
+                var cleanPrintFileName = printFileName.Trim();
+                nextTiles.Add(new PrintTileTag(orderInternalId, cleanOrderNumber, printPath, cleanPrintFileName));
             }
-            finally
+
+            var shouldRebuildTiles = !ArePrintTilesItemsUpToDate(nextTiles);
+            if (shouldRebuildTiles)
             {
-                _isSyncingTileSelection = false;
-                _lvPrintTiles.ResumeLayout(false);
+                _lvPrintTiles.SuspendLayout();
+                _isSyncingTileSelection = true;
+
+                try
+                {
+                    _lvPrintTiles.Items.Clear();
+
+                    foreach (var tile in nextTiles)
+                    {
+                        var item = new ImageListViewItem(tile.PrintPath)
+                        {
+                            Text = tile.PrintFileName,
+                            Tag = tile
+                        };
+
+                        _lvPrintTiles.Items.Add(item);
+                    }
+                }
+                finally
+                {
+                    _isSyncingTileSelection = false;
+                    _lvPrintTiles.ResumeLayout(false);
+                }
             }
 
             ApplyTileSelectionByOrderInternalIds(
@@ -544,6 +556,36 @@ namespace MyManager
 
             if (_ordersViewMode == OrdersViewMode.Tiles)
                 SyncGridSelectionWithTiles();
+
+            if (shouldRebuildTiles)
+                StartPdfThumbnailGeneration(nextTiles.Select(tile => tile.PrintPath));
+        }
+
+        private bool ArePrintTilesItemsUpToDate(IReadOnlyList<PrintTileTag> expectedTiles)
+        {
+            if (_lvPrintTiles.Items.Count != expectedTiles.Count)
+                return false;
+
+            for (var i = 0; i < expectedTiles.Count; i++)
+            {
+                var existingItem = _lvPrintTiles.Items[i];
+                if (existingItem == null || existingItem.Tag is not PrintTileTag existingTag)
+                    return false;
+
+                var expectedTag = expectedTiles[i];
+                if (!string.Equals(existingTag.OrderInternalId, expectedTag.OrderInternalId, StringComparison.Ordinal))
+                    return false;
+                if (!string.Equals(existingTag.OrderNumber, expectedTag.OrderNumber, StringComparison.Ordinal))
+                    return false;
+                if (!PathsEqual(existingTag.PrintPath, expectedTag.PrintPath))
+                    return false;
+                if (!string.Equals(existingTag.PrintFileName, expectedTag.PrintFileName, StringComparison.Ordinal))
+                    return false;
+                if (!string.Equals(existingItem.Text, expectedTag.PrintFileName, StringComparison.Ordinal))
+                    return false;
+            }
+
+            return true;
         }
 
         private bool TrySelectTileByOrderInternalId(string? orderInternalId)
@@ -937,6 +979,9 @@ namespace MyManager
             _printTilesThumbnailsCts?.Dispose();
             _printTilesThumbnailsCts = null;
 
+            if (_pdfThumbnailAdaptor == null)
+                return;
+
             var pending = pdfPaths
                 .Select(CleanPath)
                 .Where(path => !string.IsNullOrWhiteSpace(path) && HasExistingFile(path) && IsPdfPath(path) && IsPdfReadyForPreview(path))
@@ -950,6 +995,8 @@ namespace MyManager
             var cts = new CancellationTokenSource();
             _printTilesThumbnailsCts = cts;
             var token = cts.Token;
+            var thumbnailSize = _lvPrintTiles.ThumbnailSize;
+            var adaptor = _pdfThumbnailAdaptor;
 
             _ = Task.Run(() =>
             {
@@ -958,21 +1005,18 @@ namespace MyManager
                     if (token.IsCancellationRequested)
                         return;
 
-                    if (HasPrintTileImageIndex(pdfPath))
-                        continue;
-
-                    var thumbnail = TryRenderPdfThumbnail(pdfPath, _printTilesImageList.ImageSize);
-                    if (thumbnail == null)
-                        continue;
-
-                    if (HasPrintTileImageIndex(pdfPath))
+                    try
                     {
-                        thumbnail.Dispose();
-                        continue;
+                        using var image = adaptor.GetThumbnail(
+                            pdfPath,
+                            thumbnailSize,
+                            UseEmbeddedThumbnails.Never,
+                            useExifOrientation: false);
                     }
-
-                    SavePdfThumbnailToDiskCache(pdfPath, thumbnail);
-                    AttachPdfThumbnailOnUiThread(pdfPath, thumbnail, token);
+                    catch
+                    {
+                        // Ignore warmup errors; UI will lazily request thumbnail again.
+                    }
                 }
             }, token);
         }
