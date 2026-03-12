@@ -881,7 +881,7 @@ namespace MyManager
         private bool TryGetPdfThumbnailCachePath(string pdfPath, out string cachePath)
         {
             cachePath = string.Empty;
-            if (!HasExistingFile(pdfPath))
+            if (!HasExistingFile(pdfPath) || !IsPdfReadyForPreview(pdfPath))
                 return false;
 
             try
@@ -917,7 +917,7 @@ namespace MyManager
 
             var pending = pdfPaths
                 .Select(CleanPath)
-                .Where(path => !string.IsNullOrWhiteSpace(path) && HasExistingFile(path) && IsPdfPath(path))
+                .Where(path => !string.IsNullOrWhiteSpace(path) && HasExistingFile(path) && IsPdfPath(path) && IsPdfReadyForPreview(path))
                 .Select(NormalizePath)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
@@ -1031,7 +1031,7 @@ namespace MyManager
 
         private Bitmap? TryRenderPdfThumbnail(string pdfPath, Size targetSize)
         {
-            if (!HasExistingFile(pdfPath))
+            if (!HasExistingFile(pdfPath) || !IsPdfReadyForPreview(pdfPath))
                 return null;
 
             try
@@ -1106,6 +1106,30 @@ namespace MyManager
         private static bool IsPdfPath(string path)
         {
             return string.Equals(Path.GetExtension(path), ".pdf", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsPdfReadyForPreview(string pdfPath)
+        {
+            if (string.IsNullOrWhiteSpace(pdfPath))
+                return false;
+
+            try
+            {
+                using var stream = new FileStream(pdfPath, FileMode.Open, FileAccess.Read, FileShare.None);
+                return stream.Length > 0;
+            }
+            catch (IOException)
+            {
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return false;
+            }
+            catch (System.Security.SecurityException)
+            {
+                return false;
+            }
         }
 
         private static Bitmap CreatePrintTilePlaceholderImage(Size size, string extension)

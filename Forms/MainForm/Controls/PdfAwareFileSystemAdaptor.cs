@@ -21,6 +21,9 @@ namespace MyManager
                 return base.GetThumbnail(key, size, useEmbeddedThumbnails, useExifOrientation);
 
             var normalizedPath = NormalizePath(path);
+            if (!IsPdfReadyForPreview(normalizedPath))
+                return base.GetThumbnail(key, size, useEmbeddedThumbnails, useExifOrientation);
+
             if (TryGetCachedThumbnail(normalizedPath, size, out var cached))
                 return cached;
 
@@ -204,6 +207,27 @@ namespace MyManager
             return string.IsNullOrWhiteSpace(path)
                 ? string.Empty
                 : Path.GetFullPath(path).Trim().TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        }
+
+        private static bool IsPdfReadyForPreview(string filePath)
+        {
+            try
+            {
+                using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.None);
+                return stream.Length > 0;
+            }
+            catch (IOException)
+            {
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return false;
+            }
+            catch (System.Security.SecurityException)
+            {
+                return false;
+            }
         }
 
         private static bool TryGetFileMetadata(string filePath, out long fileLength, out long lastWriteTicksUtc)
