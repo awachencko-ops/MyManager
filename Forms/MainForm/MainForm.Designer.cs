@@ -177,7 +177,8 @@
             // tbSearch
             // 
             tbSearch.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Right;
-            tbSearch.Location = new Point(1357, 2);
+            tbSearch.Font = new Font("Segoe UI", 9F, FontStyle.Italic, GraphicsUnit.Point, 204);
+            tbSearch.Location = new Point(1343, 5);
             tbSearch.Name = "tbSearch";
             tbSearch.Size = new Size(302, 31);
             tbSearch.TabIndex = 1;
@@ -542,7 +543,6 @@
         private Panel pnlFilters;
         private DataGridView dgvJobs;
         private ComboBox cbQueue;
-        private TextBox tbSearch;
         private Button btnViewTiles;
         private Button btnViewList;
         private FlowLayoutPanel flpFilters;
@@ -578,5 +578,6 @@
         private DataGridViewTextBoxColumn colPrint;
         private DataGridViewTextBoxColumn colReceived;
         private DataGridViewTextBoxColumn colCreated;
+        private TextBox tbSearch;
     }
 }

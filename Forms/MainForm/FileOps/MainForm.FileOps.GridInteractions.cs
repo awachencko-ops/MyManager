@@ -25,6 +25,18 @@ namespace MyManager
         {
             StopGridHoverActivation();
 
+            if (e.Button == MouseButtons.Left)
+            {
+                var hasSelectionModifier = (ModifierKeys & (Keys.Control | Keys.Shift)) != Keys.None;
+                // Disable rubber-band style multi-select by plain mouse drag.
+                // Ctrl/Shift selection remains available (Explorer-like).
+                dgvJobs.MultiSelect = hasSelectionModifier;
+            }
+            else
+            {
+                dgvJobs.MultiSelect = true;
+            }
+
             _dragBoxFromMouseDown = Rectangle.Empty;
             _dragSourceRowIndex = -1;
             _dragSourceColumnIndex = -1;
@@ -108,6 +120,15 @@ namespace MyManager
             dgvJobs.DoDragDrop(dragData, DragDropEffects.Copy | DragDropEffects.Move);
         }
 
+        private void DgvJobs_MouseUp(object? sender, MouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Left)
+                return;
+
+            // Restore multi-select so Ctrl/Shift and keyboard multi-selection continue to work.
+            dgvJobs.MultiSelect = true;
+        }
+
         private void DgvJobs_CellValueChanged(object? sender, DataGridViewCellEventArgs e)
         {
             if (_isRebuildingGrid)
@@ -174,13 +195,23 @@ namespace MyManager
             var rowBackColor = row.Selected
                 ? OrdersRowSelectedBackColor
                 : (e.RowIndex == _hoveredRowIndex ? OrdersRowHoverBackColor : Color.White);
+            var isAttachmentColumn = e.ColumnIndex == colSource.Index
+                || e.ColumnIndex == colPrep.Index
+                || e.ColumnIndex == colPrint.Index;
+            var textValue = e.Value?.ToString();
+            var hasAttachmentText = isAttachmentColumn
+                && !string.IsNullOrWhiteSpace(textValue)
+                && !string.Equals(textValue, "-", StringComparison.Ordinal)
+                && !string.Equals(textValue, "...", StringComparison.Ordinal);
+            var foreColor = hasAttachmentText ? Color.RoyalBlue : Color.Black;
 
             if (e.CellStyle == null)
                 return;
 
             e.CellStyle.BackColor = rowBackColor;
             e.CellStyle.SelectionBackColor = OrdersRowSelectedBackColor;
-            e.CellStyle.SelectionForeColor = Color.Black;
+            e.CellStyle.ForeColor = foreColor;
+            e.CellStyle.SelectionForeColor = foreColor;
         }
 
         private void DgvJobs_CellMouseEnter(object? sender, DataGridViewCellEventArgs e)
@@ -235,6 +266,9 @@ namespace MyManager
         private void DgvJobs_MouseLeave(object? sender, EventArgs e)
         {
             StopGridHoverActivation();
+
+            if ((Control.MouseButtons & MouseButtons.Left) != MouseButtons.Left)
+                dgvJobs.MultiSelect = true;
         }
 
         private void DgvJobs_CellDoubleClick(object? sender, DataGridViewCellEventArgs e)

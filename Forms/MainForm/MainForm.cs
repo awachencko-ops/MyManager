@@ -357,6 +357,7 @@ namespace MyManager
             dgvJobs.MouseLeave += DgvJobs_MouseLeave;
             dgvJobs.MouseDown += DgvJobs_MouseDown;
             dgvJobs.MouseMove += DgvJobs_MouseMove;
+            dgvJobs.MouseUp += DgvJobs_MouseUp;
             dgvJobs.DragEnter += DgvJobs_DragEnter;
             dgvJobs.DragOver += DgvJobs_DragOver;
             dgvJobs.DragDrop += DgvJobs_DragDrop;
