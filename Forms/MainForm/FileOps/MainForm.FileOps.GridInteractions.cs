@@ -271,7 +271,8 @@ namespace MyManager
             if (prevIndex >= 0 && prevIndex < dgvJobs.Rows.Count)
                 dgvJobs.InvalidateRow(prevIndex);
             dgvJobs.InvalidateRow(_hoveredRowIndex);
-            SetGridHoverActivationCandidate(e.RowIndex);
+            // Explorer-like behavior: hovering should not activate or change selection.
+            StopGridHoverActivation();
         }
 
         private void DgvJobs_CellMouseLeave(object? sender, EventArgs e)

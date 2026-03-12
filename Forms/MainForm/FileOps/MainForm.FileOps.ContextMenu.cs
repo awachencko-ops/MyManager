@@ -96,6 +96,9 @@ namespace MyManager
                 return false;
 
             var row = dgvJobs.Rows[_ctxRow];
+            if (!row.Selected)
+                dgvJobs.ClearSelection();
+
             var columnIndex = _ctxCol >= 0 && _ctxCol < dgvJobs.Columns.Count
                 ? _ctxCol
                 : colStatus.Index;

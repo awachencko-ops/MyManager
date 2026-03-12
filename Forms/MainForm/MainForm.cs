@@ -362,12 +362,6 @@ namespace MyManager
             dgvJobs.DragOver += DgvJobs_DragOver;
             dgvJobs.DragDrop += DgvJobs_DragDrop;
 
-            _gridHoverActivateTimer ??= new System.Windows.Forms.Timer
-            {
-                Interval = GridHoverActivateDelayMs
-            };
-            _gridHoverActivateTimer.Tick -= GridHoverActivateTimer_Tick;
-            _gridHoverActivateTimer.Tick += GridHoverActivateTimer_Tick;
         }
 
         private void InitializeActionButtonsState()

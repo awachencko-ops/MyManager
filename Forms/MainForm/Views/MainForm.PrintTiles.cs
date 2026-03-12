@@ -53,13 +53,6 @@ namespace MyManager
             _lvPrintTiles.MouseUp += LvPrintTiles_MouseUp;
             _printTileOrderFont = new Font(_lvPrintTiles.Font, FontStyle.Bold);
 
-            _tileHoverActivateTimer ??= new System.Windows.Forms.Timer
-            {
-                Interval = TileHoverActivateDelayMs
-            };
-            _tileHoverActivateTimer.Tick -= TileHoverActivateTimer_Tick;
-            _tileHoverActivateTimer.Tick += TileHoverActivateTimer_Tick;
-
             tableLayoutPanel1.Controls.Add(_lvPrintTiles, 0, 2);
             _lvPrintTiles.BringToFront();
         }
@@ -158,21 +151,8 @@ namespace MyManager
 
         private void LvPrintTiles_MouseMove(object? sender, MouseEventArgs e)
         {
-            if ((Control.MouseButtons & MouseButtons.Left) == MouseButtons.Left)
-            {
-                StopTileHoverActivation();
-                return;
-            }
-
-            if ((ModifierKeys & (Keys.Control | Keys.Shift)) != Keys.None)
-            {
-                StopTileHoverActivation();
-                return;
-            }
-
-            _lvPrintTiles.HitTest(e.Location, out var hit);
-            var hoveredIndex = hit.ItemHit ? hit.ItemIndex : -1;
-            SetTileHoverActivationCandidate(hoveredIndex);
+            // Explorer-like behavior: hovering should not activate or change selection.
+            StopTileHoverActivation();
         }
 
         private void LvPrintTiles_MouseLeave(object? sender, EventArgs e)
