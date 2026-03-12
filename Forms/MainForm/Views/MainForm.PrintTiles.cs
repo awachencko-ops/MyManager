@@ -12,6 +12,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using Manina.Windows.Forms;
 using PdfiumViewer;
 using Svg;
 
@@ -21,29 +22,26 @@ namespace MyManager
     {
         private void InitializeOrdersTilesView()
         {
-            _printTilesImageList.ColorDepth = ColorDepth.Depth32Bit;
-            _printTilesImageList.ImageSize = new Size(120, 120);
-            _printTilesImageList.TransparentColor = Color.Transparent;
-            _printTilesImageList.Images.Add(CreatePrintTilePlaceholderImage(_printTilesImageList.ImageSize, string.Empty));
-
             _lvPrintTiles.Dock = DockStyle.Fill;
             _lvPrintTiles.Margin = dgvJobs.Margin;
             _lvPrintTiles.BackColor = dgvJobs.BackgroundColor;
             _lvPrintTiles.BorderStyle = BorderStyle.None;
             _lvPrintTiles.MultiSelect = true;
-            _lvPrintTiles.HideSelection = false;
-            _lvPrintTiles.View = View.LargeIcon;
-            _lvPrintTiles.MarqueeColor = OrdersRowSelectedBackColor;
-            _lvPrintTiles.LargeImageList = _printTilesImageList;
-            _lvPrintTiles.SmallImageList = _printTilesImageList;
-            _lvPrintTiles.UseCompatibleStateImageBehavior = false;
-            _lvPrintTiles.OwnerDraw = true;
-            _lvPrintTiles.ShowItemToolTips = true;
+            _lvPrintTiles.ScrollBars = true;
+            _lvPrintTiles.View = Manina.Windows.Forms.View.Thumbnails;
+            _lvPrintTiles.ThumbnailSize = new Size(120, 120);
+            _lvPrintTiles.AllowDrag = false;
+            _lvPrintTiles.ShowFileIcons = false;
+            _lvPrintTiles.UseEmbeddedThumbnails = UseEmbeddedThumbnails.Never;
+            _lvPrintTiles.Colors.SelectedColor1 = OrdersRowSelectedBackColor;
+            _lvPrintTiles.Colors.SelectedColor2 = OrdersRowSelectedBackColor;
+            _lvPrintTiles.Colors.SelectedBorderColor = ControlPaint.Dark(OrdersRowSelectedBackColor, 0.1f);
+            _lvPrintTiles.Colors.SelectionRectangleColor1 = Color.FromArgb(90, OrdersRowSelectedBackColor);
+            _lvPrintTiles.Colors.SelectionRectangleColor2 = Color.FromArgb(90, OrdersRowSelectedBackColor);
+            _lvPrintTiles.Colors.SelectionRectangleBorderColor = ControlPaint.Dark(OrdersRowSelectedBackColor, 0.15f);
             _lvPrintTiles.Visible = false;
-            _lvPrintTiles.DrawItem += LvPrintTiles_DrawItem;
-            _lvPrintTiles.SelectedIndexChanged += LvPrintTiles_SelectedIndexChanged;
-            _lvPrintTiles.MarqueeSelectionCompleted += LvPrintTiles_MarqueeSelectionCompleted;
-            _lvPrintTiles.ItemActivate += LvPrintTiles_ItemActivate;
+            _lvPrintTiles.SelectionChanged += LvPrintTiles_SelectedIndexChanged;
+            _lvPrintTiles.DoubleClick += LvPrintTiles_ItemActivate;
             _lvPrintTiles.MouseUp += LvPrintTiles_MouseUp;
             _printTileOrderFont = new Font(_lvPrintTiles.Font, FontStyle.Bold);
 
@@ -98,16 +96,6 @@ namespace MyManager
             if (_isSyncingTileSelection)
                 return;
 
-            if (_lvPrintTiles.IsMarqueeSelecting)
-                return;
-
-            SyncGridSelectionWithTiles();
-            UpdateActionButtonsState();
-            UpdateTrayStatsIndicator();
-        }
-
-        private void LvPrintTiles_MarqueeSelectionCompleted(object? sender, EventArgs e)
-        {
             SyncGridSelectionWithTiles();
             UpdateActionButtonsState();
             UpdateTrayStatsIndicator();
@@ -127,18 +115,22 @@ namespace MyManager
             if (e.Button != MouseButtons.Right)
                 return;
 
-            var hit = _lvPrintTiles.HitTest(e.Location);
-            if (hit.Item == null || hit.Item.Tag is not PrintTileTag tileTag)
+            _lvPrintTiles.HitTest(e.Location, out var hit);
+            if (!hit.ItemHit || hit.ItemIndex < 0)
                 return;
 
-            if (!hit.Item.Selected)
+            var hitItem = _lvPrintTiles.Items[hit.ItemIndex];
+            if (hitItem == null || hitItem.Tag is not PrintTileTag tileTag)
+                return;
+
+            if (!hitItem.Selected)
             {
                 _isSyncingTileSelection = true;
                 try
                 {
-                    _lvPrintTiles.SelectedItems.Clear();
-                    hit.Item.Selected = true;
-                    hit.Item.Focused = true;
+                    _lvPrintTiles.ClearSelection();
+                    hitItem.Selected = true;
+                    _lvPrintTiles.Items.FocusedItem = hitItem;
                 }
                 finally
                 {
@@ -162,8 +154,8 @@ namespace MyManager
             _isSyncingTileSelection = true;
             try
             {
-                _lvPrintTiles.SelectedItems.Clear();
-                _lvPrintTiles.FocusedItem = null;
+                _lvPrintTiles.ClearSelection();
+                _lvPrintTiles.Items.FocusedItem = null;
             }
             finally
             {
@@ -349,9 +341,7 @@ namespace MyManager
             if (string.IsNullOrWhiteSpace(preferredOrderInternalId))
                 preferredOrderInternalId = ExtractOrderInternalIdFromTag(dgvJobs.CurrentRow?.Tag?.ToString());
 
-            var pendingPdfThumbnailPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            _lvPrintTiles.BeginUpdate();
+            _lvPrintTiles.SuspendLayout();
             _isSyncingTileSelection = true;
 
             try
@@ -395,29 +385,19 @@ namespace MyManager
                         cleanOrderNumber = "—";
 
                     var cleanPrintFileName = printFileName.Trim();
-                    var imageIndex = ResolvePrintTileImageIndex(printPath);
-                    var item = new ListViewItem(cleanPrintFileName, imageIndex)
+                    var item = new ImageListViewItem(printPath, $"{cleanOrderNumber}{Environment.NewLine}{cleanPrintFileName}")
                     {
-                        Tag = new PrintTileTag(orderInternalId, cleanOrderNumber, printPath, cleanPrintFileName),
-                        ToolTipText = $"{cleanOrderNumber}{Environment.NewLine}{cleanPrintFileName}{Environment.NewLine}{printPath}"
+                        Tag = new PrintTileTag(orderInternalId, cleanOrderNumber, printPath, cleanPrintFileName)
                     };
 
                     _lvPrintTiles.Items.Add(item);
-
-                    if (IsPdfPath(printPath) && !HasPrintTileImageIndex(printPath))
-                    {
-                        if (TryLoadPdfThumbnailFromDiskCache(printPath, out var cachedImageIndex))
-                            item.ImageIndex = cachedImageIndex;
-                        else
-                            pendingPdfThumbnailPaths.Add(printPath);
-                    }
                 }
 
             }
             finally
             {
                 _isSyncingTileSelection = false;
-                _lvPrintTiles.EndUpdate();
+                _lvPrintTiles.ResumeLayout(false);
             }
 
             ApplyTileSelectionByOrderInternalIds(
@@ -427,8 +407,6 @@ namespace MyManager
 
             if (_ordersViewMode == OrdersViewMode.Tiles)
                 SyncGridSelectionWithTiles();
-
-            StartPdfThumbnailGeneration(pendingPdfThumbnailPaths);
         }
 
         private bool TrySelectTileByOrderInternalId(string? orderInternalId)
@@ -450,7 +428,7 @@ namespace MyManager
 
         private string? GetFocusedPrintTileOrderInternalId()
         {
-            return _lvPrintTiles.FocusedItem?.Tag is PrintTileTag focusedTileTag
+            return _lvPrintTiles.Items.FocusedItem?.Tag is PrintTileTag focusedTileTag
                 ? focusedTileTag.OrderInternalId
                 : null;
         }
@@ -474,7 +452,7 @@ namespace MyManager
         private HashSet<string> GetSelectedOrderInternalIdsFromTiles()
         {
             var selectedOrderIds = new HashSet<string>(StringComparer.Ordinal);
-            foreach (ListViewItem item in _lvPrintTiles.SelectedItems)
+            foreach (ImageListViewItem item in _lvPrintTiles.SelectedItems)
             {
                 if (item.Tag is not PrintTileTag tileTag)
                     continue;
@@ -515,18 +493,18 @@ namespace MyManager
             bool ensureVisible)
         {
             _isSyncingTileSelection = true;
-            _lvPrintTiles.BeginUpdate();
+            _lvPrintTiles.SuspendLayout();
 
             try
             {
-                _lvPrintTiles.SelectedItems.Clear();
+                _lvPrintTiles.ClearSelection();
                 if (selectedOrderInternalIds.Count == 0)
                     return;
 
-                ListViewItem? firstSelectedItem = null;
-                ListViewItem? preferredSelectedItem = null;
+                ImageListViewItem? firstSelectedItem = null;
+                ImageListViewItem? preferredSelectedItem = null;
 
-                foreach (ListViewItem item in _lvPrintTiles.Items)
+                foreach (ImageListViewItem item in _lvPrintTiles.Items)
                 {
                     if (item.Tag is not PrintTileTag tileTag)
                         continue;
@@ -547,14 +525,14 @@ namespace MyManager
                 var itemToFocus = preferredSelectedItem ?? firstSelectedItem;
                 if (itemToFocus != null)
                 {
-                    itemToFocus.Focused = true;
+                    _lvPrintTiles.Items.FocusedItem = itemToFocus;
                     if (ensureVisible)
-                        itemToFocus.EnsureVisible();
+                        _lvPrintTiles.EnsureVisible(itemToFocus.Index);
                 }
             }
             finally
             {
-                _lvPrintTiles.EndUpdate();
+                _lvPrintTiles.ResumeLayout(false);
                 _isSyncingTileSelection = false;
             }
         }
@@ -895,19 +873,8 @@ namespace MyManager
 
         private void ApplyImageIndexToTileItems(string printPath, int imageIndex)
         {
-            if (_lvPrintTiles.IsDisposed)
-                return;
-
-            foreach (ListViewItem item in _lvPrintTiles.Items)
-            {
-                if (item.Tag is not PrintTileTag tileTag)
-                    continue;
-
-                if (!PathsEqual(tileTag.PrintPath, printPath))
-                    continue;
-
-                item.ImageIndex = imageIndex;
-            }
+            // ImageListViewCore manages thumbnails internally.
+            // Keep method as no-op to avoid breaking existing call sites.
         }
 
         private Image? GetPrintTileImage(ListViewItem item)
