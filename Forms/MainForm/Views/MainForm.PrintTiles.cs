@@ -42,6 +42,7 @@ namespace MyManager
             _lvPrintTiles.DrawItem += LvPrintTiles_DrawItem;
             _lvPrintTiles.SelectedIndexChanged += LvPrintTiles_SelectedIndexChanged;
             _lvPrintTiles.ItemActivate += LvPrintTiles_ItemActivate;
+            _lvPrintTiles.Paint += LvPrintTiles_Paint;
             _lvPrintTiles.MouseDown += LvPrintTiles_MouseDown;
             _lvPrintTiles.MouseMove += LvPrintTiles_MouseMove;
             _lvPrintTiles.MouseUp += LvPrintTiles_MouseUp;
@@ -202,10 +203,11 @@ namespace MyManager
             EndTileMarqueeSelection();
 
             _isTileMarqueeSelecting = true;
-            _tileMarqueeStartPoint = clientPoint;
-            _tileMarqueePreviousScreenRect = Rectangle.Empty;
+            _tileMarqueeStartPoint = ClampTilePointToClientBounds(clientPoint);
+            _tileMarqueeCurrentClientRect = Rectangle.Empty;
             _lvPrintTiles.Capture = true;
             ClearTilesSelectionAndSync();
+            _lvPrintTiles.Invalidate();
         }
 
         private void UpdateTileMarqueeSelection(Point clientPoint)
@@ -213,12 +215,14 @@ namespace MyManager
             if (!_isTileMarqueeSelecting)
                 return;
 
-            DrawTileMarqueeFrame(_tileMarqueePreviousScreenRect);
+            var clampedPoint = ClampTilePointToClientBounds(clientPoint);
+            var clientRect = GetNormalizedSelectionRect(_tileMarqueeStartPoint, clampedPoint);
+            if (clientRect == _tileMarqueeCurrentClientRect)
+                return;
 
-            var clientRect = GetNormalizedSelectionRect(_tileMarqueeStartPoint, clientPoint);
-            var screenRect = _lvPrintTiles.RectangleToScreen(clientRect);
-            _tileMarqueePreviousScreenRect = screenRect;
-            DrawTileMarqueeFrame(_tileMarqueePreviousScreenRect);
+            InvalidateTileMarqueeRect(_tileMarqueeCurrentClientRect);
+            _tileMarqueeCurrentClientRect = clientRect;
+            InvalidateTileMarqueeRect(_tileMarqueeCurrentClientRect);
 
             ApplyTileMarqueeSelection(clientRect);
         }
@@ -228,10 +232,11 @@ namespace MyManager
             if (!_isTileMarqueeSelecting)
                 return;
 
-            DrawTileMarqueeFrame(_tileMarqueePreviousScreenRect);
-            _tileMarqueePreviousScreenRect = Rectangle.Empty;
+            var rectToInvalidate = _tileMarqueeCurrentClientRect;
+            _tileMarqueeCurrentClientRect = Rectangle.Empty;
             _isTileMarqueeSelecting = false;
             _lvPrintTiles.Capture = false;
+            InvalidateTileMarqueeRect(rectToInvalidate);
         }
 
         private void ApplyTileMarqueeSelection(Rectangle clientRect)
@@ -265,12 +270,51 @@ namespace MyManager
             UpdateTrayStatsIndicator();
         }
 
-        private static void DrawTileMarqueeFrame(Rectangle screenRect)
+        private void LvPrintTiles_Paint(object? sender, PaintEventArgs e)
         {
-            if (screenRect.Width <= 0 || screenRect.Height <= 0)
+            if (!_isTileMarqueeSelecting)
                 return;
 
-            ControlPaint.DrawReversibleFrame(screenRect, Color.FromArgb(120, 160, 215), FrameStyle.Dashed);
+            if (_tileMarqueeCurrentClientRect.Width <= 0 || _tileMarqueeCurrentClientRect.Height <= 0)
+                return;
+
+            var marqueeFillColor = Color.FromArgb(140, OrdersRowSelectedBackColor);
+            var marqueeBorderColor = Color.FromArgb(220, ControlPaint.Dark(OrdersRowSelectedBackColor, 0.15f));
+
+            using var fillBrush = new SolidBrush(marqueeFillColor);
+            using var borderPen = new Pen(marqueeBorderColor);
+            e.Graphics.FillRectangle(fillBrush, _tileMarqueeCurrentClientRect);
+            e.Graphics.DrawRectangle(borderPen, GetBorderRect(_tileMarqueeCurrentClientRect));
+        }
+
+        private void InvalidateTileMarqueeRect(Rectangle rect)
+        {
+            if (rect.Width <= 0 || rect.Height <= 0)
+                return;
+
+            var invalidateRect = Rectangle.Inflate(rect, 2, 2);
+            invalidateRect.Intersect(_lvPrintTiles.ClientRectangle);
+            if (invalidateRect.Width <= 0 || invalidateRect.Height <= 0)
+                return;
+
+            _lvPrintTiles.Invalidate(invalidateRect);
+        }
+
+        private Point ClampTilePointToClientBounds(Point point)
+        {
+            var maxX = Math.Max(0, _lvPrintTiles.ClientSize.Width - 1);
+            var maxY = Math.Max(0, _lvPrintTiles.ClientSize.Height - 1);
+            var x = Math.Min(maxX, Math.Max(0, point.X));
+            var y = Math.Min(maxY, Math.Max(0, point.Y));
+            return new Point(x, y);
+        }
+
+        private static Rectangle GetBorderRect(Rectangle rect)
+        {
+            if (rect.Width <= 1 || rect.Height <= 1)
+                return rect;
+
+            return new Rectangle(rect.X, rect.Y, rect.Width - 1, rect.Height - 1);
         }
 
         private static Rectangle GetNormalizedSelectionRect(Point start, Point end)
