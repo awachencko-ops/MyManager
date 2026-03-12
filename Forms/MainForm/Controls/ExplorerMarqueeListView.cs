@@ -115,7 +115,6 @@ namespace MyManager
             InvalidateMarqueeRect(_marqueeClientRect);
             _marqueeClientRect = clientRect;
             InvalidateMarqueeRect(_marqueeClientRect);
-            ApplyMarqueeSelection(clientRect);
         }
 
         private void EndMarqueeSelection()
@@ -124,10 +123,15 @@ namespace MyManager
                 return;
 
             var rectToInvalidate = _marqueeClientRect;
+            var finalSelectionRect = _marqueeClientRect;
             _marqueeClientRect = Rectangle.Empty;
             _isMarqueeSelecting = false;
             Capture = false;
             InvalidateMarqueeRect(rectToInvalidate);
+
+            if (finalSelectionRect.Width > 0 && finalSelectionRect.Height > 0)
+                ApplyMarqueeSelection(finalSelectionRect);
+
             MarqueeSelectionCompleted?.Invoke(this, EventArgs.Empty);
         }
 
