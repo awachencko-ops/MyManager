@@ -139,7 +139,7 @@ namespace MyManager
             if (string.IsNullOrWhiteSpace(order.InternalId))
                 order.InternalId = Guid.NewGuid().ToString("N");
             if (order.OrderDate == default)
-                order.OrderDate = DateTime.Now;
+                order.OrderDate = OrderData.PlaceholderOrderDate;
             if (order.ArrivalDate == default)
                 order.ArrivalDate = DateTime.Now;
 

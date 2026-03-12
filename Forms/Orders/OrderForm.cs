@@ -36,7 +36,9 @@ namespace MyManager
                 label2.Text = _infoOnly ? "Данные заказа" : "Редактирование заказа";
                 textBoxNumberOrder.Text = data.Id;
                 textKey.Text = data.Keyword;
-                dateTimeOrder.Value = data.OrderDate;
+                dateTimeOrder.Value = data.OrderDate == default
+                    ? OrderData.PlaceholderOrderDate
+                    : data.OrderDate;
                 textFolder.Text = string.IsNullOrWhiteSpace(data.FolderName)
                     ? ""
                     : Path.Combine(ordersRootPath, data.FolderName);
@@ -57,7 +59,7 @@ namespace MyManager
             else // СОЗДАНИЕ
             {
                 label2.Text = "Новый заказ";
-                dateTimeOrder.Value = DateTime.Now;
+                dateTimeOrder.Value = OrderData.PlaceholderOrderDate;
                 ToggleFields(false);
                 buttonCreateFolder.Enabled = false; // Выключена, пока нет текста
             }

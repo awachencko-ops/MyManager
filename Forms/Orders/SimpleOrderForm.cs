@@ -6,7 +6,7 @@ namespace MyManager
     public partial class SimpleOrderForm : Form
     {
         public string OrderNumber { get; set; } = "";
-        public DateTime OrderDate { get; set; } = DateTime.Now;
+        public DateTime OrderDate { get; set; } = OrderData.PlaceholderOrderDate;
 
         public SimpleOrderForm(OrderData? data = null)
         {
@@ -14,7 +14,13 @@ namespace MyManager
             if (data != null)
             {
                 _textNumber.Text = data.Id;
-                if (data.OrderDate != default) _datePicker.Value = data.OrderDate;
+                _datePicker.Value = data.OrderDate == default
+                    ? OrderData.PlaceholderOrderDate
+                    : data.OrderDate;
+            }
+            else
+            {
+                _datePicker.Value = OrderData.PlaceholderOrderDate;
             }
             _textNumber.TextChanged += (s, e) => ValidateForm();
             ValidateForm();

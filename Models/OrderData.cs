@@ -22,6 +22,8 @@ namespace MyManager
 
     public class OrderData
     {
+        public static readonly DateTime PlaceholderOrderDate = new DateTime(2000, 1, 1);
+
         public string InternalId { get; set; } = Guid.NewGuid().ToString("N");
         public string Id { get; set; } = "";
         public OrderStartMode StartMode { get; set; } = OrderStartMode.Unknown;
@@ -29,7 +31,7 @@ namespace MyManager
 
         public string Keyword { get; set; } = ""; // Новое поле
         public DateTime ArrivalDate { get; set; } = DateTime.Now; // Дата поступления заказа в препресс-менеджер
-        public DateTime OrderDate { get; set; } = DateTime.Now; // Дата формирования заказа (ДелаемДело)
+        public DateTime OrderDate { get; set; } = PlaceholderOrderDate; // Дата формирования заказа (ДелаемДело)
         public string FolderName { get; set; } = ""; // Например: "23_10_25 №123"
         public string Status { get; set; } = "Ожидание";
 
