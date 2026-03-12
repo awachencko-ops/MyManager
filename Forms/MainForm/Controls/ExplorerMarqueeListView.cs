@@ -133,28 +133,20 @@ namespace MyManager
 
         private void ApplyMarqueeSelection(Rectangle clientRect)
         {
-            BeginUpdate();
-            try
+            ListViewItem? firstSelected = null;
+
+            foreach (ListViewItem item in Items)
             {
-                ListViewItem? firstSelected = null;
+                var isSelected = item.Bounds.IntersectsWith(clientRect);
+                if (item.Selected != isSelected)
+                    item.Selected = isSelected;
 
-                foreach (ListViewItem item in Items)
-                {
-                    var isSelected = item.Bounds.IntersectsWith(clientRect);
-                    if (item.Selected != isSelected)
-                        item.Selected = isSelected;
-
-                    if (isSelected && firstSelected == null)
-                        firstSelected = item;
-                }
-
-                if (firstSelected != null)
-                    firstSelected.Focused = true;
+                if (isSelected && firstSelected == null)
+                    firstSelected = item;
             }
-            finally
-            {
-                EndUpdate();
-            }
+
+            if (firstSelected != null && !ReferenceEquals(FocusedItem, firstSelected))
+                firstSelected.Focused = true;
         }
 
         private void DrawMarqueeOverlay()
