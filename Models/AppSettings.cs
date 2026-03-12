@@ -11,10 +11,19 @@ namespace MyManager
         public const string DefaultGrandpaPath = @"\\NAS\work\Temp\!!!Дедушка";
         public const string DefaultTempFolderName = "TempMyManager";
 
-        public const string LegacyOrdersRootPath = @"C:\MyManager\Orders";
-        public const string LegacyGrandpaPath = @"C:\MyManager\Archive";
-        public const string LegacyPitStopHotfoldersRootPath = @"C:\PitStop";
-        public const string LegacyImposingHotfoldersRootPath = @"C:\HotImposing";
+        private static string SystemDriveRoot
+        {
+            get
+            {
+                var root = Path.GetPathRoot(Environment.SystemDirectory);
+                return string.IsNullOrWhiteSpace(root) ? Path.DirectorySeparatorChar.ToString() : root;
+            }
+        }
+
+        public static string LegacyOrdersRootPath => Path.Combine(SystemDriveRoot, "MyManager", "Orders");
+        public static string LegacyGrandpaPath => Path.Combine(SystemDriveRoot, "MyManager", "Archive");
+        public static string LegacyPitStopHotfoldersRootPath => Path.Combine(SystemDriveRoot, "PitStop");
+        public static string LegacyImposingHotfoldersRootPath => Path.Combine(SystemDriveRoot, "HotImposing");
 
         public static string DefaultOrdersRootPath => Path.Combine(DefaultBaseFolderPath, "Orders");
         public static string DefaultTempFolderPath => Path.Combine(DefaultOrdersRootPath, DefaultTempFolderName);

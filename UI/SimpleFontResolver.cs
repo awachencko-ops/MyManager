@@ -4,7 +4,12 @@ namespace MyManager
 {
     public class SimpleFontResolver : IFontResolver
     {
-        public byte[] GetFont(string faceName) => File.ReadAllBytes($@"C:\Windows\Fonts\{faceName}.ttf");
+        public byte[] GetFont(string faceName)
+        {
+            var fontsFolder = Environment.GetFolderPath(Environment.SpecialFolder.Fonts);
+            var fontPath = Path.Combine(fontsFolder, $"{faceName}.ttf");
+            return File.ReadAllBytes(fontPath);
+        }
 
         public FontResolverInfo ResolveTypeface(string familyName, bool isBold, bool isItalic)
         {

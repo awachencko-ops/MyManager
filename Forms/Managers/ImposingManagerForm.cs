@@ -222,7 +222,7 @@ namespace MyManager
 
                 var settings = AppSettings.Load();
                 string rootPath = string.IsNullOrWhiteSpace(settings.ImposingHotfoldersRootPath)
-                    ? @"C:\HotImposing"
+                    ? AppSettings.DefaultImposingHotfoldersRootPath
                     : settings.ImposingHotfoldersRootPath;
                 int added = 0;
 
