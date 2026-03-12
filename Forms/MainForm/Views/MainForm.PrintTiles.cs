@@ -33,6 +33,7 @@ namespace MyManager
             _lvPrintTiles.MultiSelect = true;
             _lvPrintTiles.HideSelection = false;
             _lvPrintTiles.View = View.LargeIcon;
+            _lvPrintTiles.MarqueeColor = OrdersRowSelectedBackColor;
             _lvPrintTiles.LargeImageList = _printTilesImageList;
             _lvPrintTiles.SmallImageList = _printTilesImageList;
             _lvPrintTiles.UseCompatibleStateImageBehavior = false;
@@ -42,7 +43,6 @@ namespace MyManager
             _lvPrintTiles.DrawItem += LvPrintTiles_DrawItem;
             _lvPrintTiles.SelectedIndexChanged += LvPrintTiles_SelectedIndexChanged;
             _lvPrintTiles.ItemActivate += LvPrintTiles_ItemActivate;
-            _lvPrintTiles.MouseDown += LvPrintTiles_MouseDown;
             _lvPrintTiles.MouseUp += LvPrintTiles_MouseUp;
             _printTileOrderFont = new Font(_lvPrintTiles.Font, FontStyle.Bold);
 
@@ -100,22 +100,6 @@ namespace MyManager
             SyncGridSelectionWithTiles();
             UpdateActionButtonsState();
             UpdateTrayStatsIndicator();
-        }
-
-        private void LvPrintTiles_MouseDown(object? sender, MouseEventArgs e)
-        {
-            if (e.Button != MouseButtons.Left)
-                return;
-
-            var hasSelectionModifiers = (ModifierKeys & (Keys.Control | Keys.Shift)) != Keys.None;
-            var hit = _lvPrintTiles.HitTest(e.Location);
-
-            // Оставляем нативное прямоугольное выделение ListView как в Проводнике.
-            // Здесь только сбрасываем текущее выделение по клику в пустую область без модификаторов.
-            if (hit.Item != null || hasSelectionModifiers || _lvPrintTiles.SelectedItems.Count == 0)
-                return;
-
-            ClearTilesSelectionAndSync();
         }
 
         private void LvPrintTiles_ItemActivate(object? sender, EventArgs e)

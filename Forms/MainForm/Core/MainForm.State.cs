@@ -40,7 +40,7 @@ namespace MyManager
             "ThumbnailCache");
         private readonly OrderGridContextMenu _gridMenu = new();
         private readonly ContextMenuStrip _printTilesContextMenu = new();
-        private readonly ListView _lvPrintTiles = new();
+        private readonly ExplorerMarqueeListView _lvPrintTiles = new();
         private readonly ImageList _printTilesImageList = new();
         private Font? _printTileOrderFont;
         private OrderProcessor? _processor;
