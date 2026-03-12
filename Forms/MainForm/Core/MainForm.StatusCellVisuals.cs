@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace MyManager
@@ -31,16 +32,67 @@ namespace MyManager
         {
             DisposeStatusCellVisuals();
 
+            var iconBackCompleted = Color.FromArgb(198, 234, 198);
+            var iconBackProcessed = Color.FromArgb(255, 232, 205);
+            var iconBackArchive = Color.FromArgb(255, 255, 255);
+            var iconBackBuilding = Color.FromArgb(255, 255, 255);
+            var iconBackProcessing = Color.FromArgb(255, 248, 205);
+            var iconBackWaiting = Color.FromArgb(255, 255, 255);
+            var iconBackCancelled = Color.FromArgb(255, 255, 255);
+            var iconBackError = Color.FromArgb(255, 204, 204);
+
+            RegisterStatusCellVisual(
+                status: "Обработано",
+                icon: LoadStatusCellIcon("file export", "file_export"),
+                iconBackgroundColor: iconBackProcessed,
+                textColor: Color.Black);
+
+            RegisterStatusCellVisual(
+                status: "В архиве",
+                icon: LoadStatusCellIcon("archive", "archive"),
+                iconBackgroundColor: iconBackArchive,
+                textColor: Color.Black);
+
+            RegisterStatusCellVisual(
+                status: "Выполняется сборка",
+                icon: LoadStatusCellIcon("cards", "cards"),
+                iconBackgroundColor: iconBackBuilding,
+                textColor: Color.Black);
+
+            RegisterStatusCellVisual(
+                status: "Обрабатывается",
+                icon: LoadStatusCellIcon("upload", "upload"),
+                iconBackgroundColor: iconBackProcessing,
+                textColor: Color.Black);
+
+            RegisterStatusCellVisual(
+                status: "Ожидание",
+                icon: LoadStatusCellIcon("file export", "file_export"),
+                iconBackgroundColor: iconBackWaiting,
+                textColor: Color.Black);
+
+            RegisterStatusCellVisual(
+                status: "Отменено",
+                icon: LoadStatusCellIcon("file export", "cancel", ("stop", "stop")),
+                iconBackgroundColor: iconBackCancelled,
+                textColor: Color.Black);
+
+            RegisterStatusCellVisual(
+                status: "Ошибка",
+                icon: LoadStatusCellIcon("error", "error"),
+                iconBackgroundColor: iconBackError,
+                textColor: Color.Black);
+
             RegisterStatusCellVisual(
                 status: "Завершено",
-                icon: LoadStatusCellIcon("check_24dp_1F1F1F_FILL1_wght400_GRAD0_opsz24.png"),
-                iconBackgroundColor: Color.FromArgb(198, 234, 198),
+                icon: LoadStatusCellIcon("check", "check"),
+                iconBackgroundColor: iconBackCompleted,
                 textColor: Color.Black);
 
             RegisterStatusCellVisual(
                 status: "Напечатано",
-                icon: LoadStatusCellIcon("check_24dp_1F1F1F_FILL1_wght400_GRAD0_opsz24.png"),
-                iconBackgroundColor: Color.FromArgb(198, 234, 198),
+                icon: LoadStatusCellIcon("check", "check"),
+                iconBackgroundColor: iconBackCompleted,
                 textColor: Color.Black);
         }
 
@@ -52,10 +104,11 @@ namespace MyManager
                 return;
             }
 
-            if (_statusCellVisuals.TryGetValue(status, out var existing))
+            var normalizedStatus = status.Trim();
+            if (_statusCellVisuals.TryGetValue(normalizedStatus, out var existing))
                 existing.Icon?.Dispose();
 
-            _statusCellVisuals[status] = new StatusCellVisual(status.Trim(), icon, iconBackgroundColor, textColor);
+            _statusCellVisuals[normalizedStatus] = new StatusCellVisual(normalizedStatus, icon, iconBackgroundColor, textColor);
         }
 
         private void DisposeStatusCellVisuals()
@@ -66,32 +119,76 @@ namespace MyManager
             _statusCellVisuals.Clear();
         }
 
-        private static Image? LoadStatusCellIcon(string fileName)
+        private static Image? LoadStatusCellIcon(string iconFolder, string fileNameHint, params (string Folder, string FileNameHint)[] fallbacks)
         {
-            var candidates = new[]
+            var iconSources = new List<(string Folder, string FileNameHint)> { (iconFolder, fileNameHint) };
+            if (fallbacks != null && fallbacks.Length > 0)
+                iconSources.AddRange(fallbacks);
+
+            foreach (var source in iconSources)
             {
-                Path.Combine(AppContext.BaseDirectory, "Icons", "check", fileName),
-                Path.Combine(AppContext.BaseDirectory, "check", fileName),
-                Path.Combine(Environment.CurrentDirectory, "Icons", "check", fileName),
-                Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "Icons", "check", fileName)
+                if (string.IsNullOrWhiteSpace(source.Folder))
+                    continue;
+
+                var icon = LoadStatusCellIconFromFolder(source.Folder, source.FileNameHint);
+                if (icon != null)
+                    return icon;
+            }
+
+            return null;
+        }
+
+        private static Image? LoadStatusCellIconFromFolder(string iconFolder, string fileNameHint)
+        {
+            var searchFolders = new[]
+            {
+                Path.Combine(AppContext.BaseDirectory, "Icons", iconFolder),
+                Path.Combine(AppContext.BaseDirectory, iconFolder),
+                Path.Combine(Environment.CurrentDirectory, "Icons", iconFolder),
+                Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "Icons", iconFolder)
             };
 
-            foreach (var candidate in candidates)
+            foreach (var searchFolder in searchFolders.Distinct(StringComparer.OrdinalIgnoreCase))
             {
                 try
                 {
-                    var fullPath = Path.GetFullPath(candidate);
-                    if (!File.Exists(fullPath))
+                    var fullFolderPath = Path.GetFullPath(searchFolder);
+                    if (!Directory.Exists(fullFolderPath))
                         continue;
 
-                    using var memory = new MemoryStream(File.ReadAllBytes(fullPath));
+                    var iconPath = ResolveIconPath(fullFolderPath, fileNameHint);
+                    if (string.IsNullOrWhiteSpace(iconPath))
+                        continue;
+
+                    using var memory = new MemoryStream(File.ReadAllBytes(iconPath));
                     using var loaded = Image.FromStream(memory);
                     return new Bitmap(loaded);
                 }
                 catch
                 {
-                    // Игнорируем невалидные/недоступные кандидаты.
+                    // Ignore invalid or inaccessible candidates.
                 }
+            }
+
+            return null;
+        }
+
+        private static string? ResolveIconPath(string folderPath, string? fileNameHint)
+        {
+            var pngFiles = Directory.GetFiles(folderPath, "*.png", SearchOption.TopDirectoryOnly)
+                .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            if (pngFiles.Length == 0)
+                return null;
+
+            if (string.IsNullOrWhiteSpace(fileNameHint))
+                return pngFiles[0];
+
+            foreach (var pngFile in pngFiles)
+            {
+                var fileName = Path.GetFileName(pngFile);
+                if (fileName.Contains(fileNameHint, StringComparison.OrdinalIgnoreCase))
+                    return pngFile;
             }
 
             return null;

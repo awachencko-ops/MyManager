@@ -46,7 +46,7 @@
     <None Update="Icons\arrow_drop_down.svg">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="Icons\check\*.png">
+    <None Update="Icons\**\*.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
