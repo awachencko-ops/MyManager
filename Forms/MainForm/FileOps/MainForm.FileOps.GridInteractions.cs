@@ -24,36 +24,33 @@ namespace MyManager
         private void DgvJobs_MouseDown(object? sender, MouseEventArgs e)
         {
             StopGridHoverActivation();
-            EndGridRubberSelection(applySelectionSync: false);
 
             _dragBoxFromMouseDown = Rectangle.Empty;
             _dragSourceRowIndex = -1;
             _dragSourceColumnIndex = -1;
 
             var hit = dgvJobs.HitTest(e.X, e.Y);
+            if (e.Button == MouseButtons.Left && hit.Type == DataGridViewHitTestType.None)
+            {
+                ClearGridSelection();
+                SyncTilesSelectionWithGrid();
+                UpdateActionButtonsState();
+                UpdateTrayStatsIndicator();
+                return;
+            }
+
             if (e.Button != MouseButtons.Left)
                 return;
 
             if ((ModifierKeys & (Keys.Control | Keys.Shift)) != Keys.None)
                 return;
 
-            var canStartRubberSelection = hit.Type != DataGridViewHitTestType.ColumnHeader
-                && hit.Type != DataGridViewHitTestType.TopLeftHeader;
-
             if (hit.RowIndex < 0 || hit.ColumnIndex < 0)
-            {
-                if (canStartRubberSelection)
-                    BeginGridRubberSelectionPending(e.Location);
                 return;
-            }
 
             var stage = GetStageByColumnIndex(hit.ColumnIndex);
             if (stage == 0)
-            {
-                if (canStartRubberSelection)
-                    BeginGridRubberSelectionPending(e.Location);
                 return;
-            }
 
             var row = dgvJobs.Rows[hit.RowIndex];
             var canStartFileDrag =
@@ -62,26 +59,14 @@ namespace MyManager
                 && dgvJobs.CurrentCell != null
                 && dgvJobs.CurrentCell.RowIndex == hit.RowIndex;
             if (!canStartFileDrag)
-            {
-                if (canStartRubberSelection)
-                    BeginGridRubberSelectionPending(e.Location);
                 return;
-            }
 
             var rowTag = dgvJobs.Rows[hit.RowIndex].Tag?.ToString();
             if (string.IsNullOrWhiteSpace(rowTag))
-            {
-                if (canStartRubberSelection)
-                    BeginGridRubberSelectionPending(e.Location);
                 return;
-            }
 
             if (!IsOrderTag(rowTag))
-            {
-                if (canStartRubberSelection)
-                    BeginGridRubberSelectionPending(e.Location);
                 return;
-            }
 
             _dragSourceRowIndex = hit.RowIndex;
             _dragSourceColumnIndex = hit.ColumnIndex;
@@ -96,41 +81,6 @@ namespace MyManager
         {
             if ((e.Button & MouseButtons.Left) == MouseButtons.Left)
                 StopGridHoverActivation();
-
-            if (_isGridRubberSelectionPending || _isGridRubberSelecting)
-            {
-                if ((e.Button & MouseButtons.Left) != MouseButtons.Left)
-                {
-                    EndGridRubberSelection(applySelectionSync: true);
-                    return;
-                }
-
-                if ((ModifierKeys & (Keys.Control | Keys.Shift)) != Keys.None)
-                {
-                    EndGridRubberSelection(applySelectionSync: false);
-                    return;
-                }
-
-                if (_isGridRubberSelectionPending)
-                {
-                    var dragSize = SystemInformation.DragSize;
-                    var thresholdRect = new Rectangle(
-                        _gridRubberSelectionStartPoint.X - (dragSize.Width / 2),
-                        _gridRubberSelectionStartPoint.Y - (dragSize.Height / 2),
-                        dragSize.Width,
-                        dragSize.Height);
-                    if (thresholdRect.Contains(e.Location))
-                        return;
-
-                    _isGridRubberSelectionPending = false;
-                    _isGridRubberSelecting = true;
-                    _dragBoxFromMouseDown = Rectangle.Empty;
-                    dgvJobs.Capture = true;
-                }
-
-                UpdateGridRubberSelection(e.Location);
-                return;
-            }
 
             if ((e.Button & MouseButtons.Left) != MouseButtons.Left)
                 return;
@@ -156,39 +106,6 @@ namespace MyManager
 
             _dragBoxFromMouseDown = Rectangle.Empty;
             dgvJobs.DoDragDrop(dragData, DragDropEffects.Copy | DragDropEffects.Move);
-        }
-
-        private void DgvJobs_MouseUp(object? sender, MouseEventArgs e)
-        {
-            _dragBoxFromMouseDown = Rectangle.Empty;
-
-            if (e.Button != MouseButtons.Left)
-                return;
-
-            if (_isGridRubberSelecting)
-            {
-                _suppressNextGridCellClick = true;
-                EndGridRubberSelection(applySelectionSync: true);
-                return;
-            }
-
-            if (!_isGridRubberSelectionPending)
-                return;
-
-            _isGridRubberSelectionPending = false;
-            _gridRubberSelectionStartPoint = Point.Empty;
-
-            if ((ModifierKeys & (Keys.Control | Keys.Shift)) != Keys.None)
-                return;
-
-            var hit = dgvJobs.HitTest(e.X, e.Y);
-            if (hit.Type != DataGridViewHitTestType.None)
-                return;
-
-            ClearGridSelection();
-            SyncTilesSelectionWithGrid();
-            UpdateActionButtonsState();
-            UpdateTrayStatsIndicator();
         }
 
         private void DgvJobs_CellValueChanged(object? sender, DataGridViewCellEventArgs e)
@@ -268,12 +185,6 @@ namespace MyManager
 
         private void DgvJobs_CellMouseEnter(object? sender, DataGridViewCellEventArgs e)
         {
-            if (_isGridRubberSelecting || _isGridRubberSelectionPending)
-            {
-                dgvJobs.Cursor = Cursors.Default;
-                return;
-            }
-
             if (e.RowIndex < 0)
                 return;
 
@@ -324,12 +235,6 @@ namespace MyManager
         private void DgvJobs_MouseLeave(object? sender, EventArgs e)
         {
             StopGridHoverActivation();
-
-            if ((Control.MouseButtons & MouseButtons.Left) != MouseButtons.Left
-                && _isGridRubberSelectionPending)
-            {
-                EndGridRubberSelection(applySelectionSync: false);
-            }
         }
 
         private void DgvJobs_CellDoubleClick(object? sender, DataGridViewCellEventArgs e)
@@ -430,12 +335,6 @@ namespace MyManager
 
         private async void DgvJobs_CellClick(object? sender, DataGridViewCellEventArgs e)
         {
-            if (_suppressNextGridCellClick)
-            {
-                _suppressNextGridCellClick = false;
-                return;
-            }
-
             StopGridHoverActivation();
 
             if (e.RowIndex < 0 || e.ColumnIndex < 0)
@@ -473,134 +372,6 @@ namespace MyManager
                 SetBottomStatus($"Не удалось обработать действие по файлу: {ex.Message}");
                 MessageBox.Show(this, $"Не удалось обработать действие по файлу: {ex.Message}", "Файловая операция", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
-        }
-
-        private void DgvJobs_Paint(object? sender, PaintEventArgs e)
-        {
-            if (!_isGridRubberSelecting || _gridRubberSelectionRect.IsEmpty || e.Graphics == null)
-                return;
-
-            using var fillBrush = new SolidBrush(Color.FromArgb(90, 103, 163, 216));
-            using var borderPen = new Pen(Color.FromArgb(76, 133, 196), 1f);
-            e.Graphics.FillRectangle(fillBrush, _gridRubberSelectionRect);
-
-            var borderRect = new Rectangle(
-                _gridRubberSelectionRect.X,
-                _gridRubberSelectionRect.Y,
-                Math.Max(0, _gridRubberSelectionRect.Width - 1),
-                Math.Max(0, _gridRubberSelectionRect.Height - 1));
-            e.Graphics.DrawRectangle(borderPen, borderRect);
-        }
-
-        private void BeginGridRubberSelectionPending(Point startPoint)
-        {
-            _isGridRubberSelectionPending = true;
-            _isGridRubberSelecting = false;
-            _gridRubberSelectionStartPoint = startPoint;
-            _gridRubberSelectionRect = Rectangle.Empty;
-            _suppressNextGridCellClick = false;
-        }
-
-        private void UpdateGridRubberSelection(Point currentPoint)
-        {
-            var nextRect = BuildNormalizedRectangle(_gridRubberSelectionStartPoint, currentPoint);
-            if (nextRect == _gridRubberSelectionRect)
-                return;
-
-            var oldRect = _gridRubberSelectionRect;
-            _gridRubberSelectionRect = nextRect;
-            ApplyGridRubberSelectionByRectangle(_gridRubberSelectionRect);
-
-            if (!oldRect.IsEmpty)
-                dgvJobs.Invalidate(Rectangle.Inflate(oldRect, 2, 2));
-            if (!_gridRubberSelectionRect.IsEmpty)
-                dgvJobs.Invalidate(Rectangle.Inflate(_gridRubberSelectionRect, 2, 2));
-        }
-
-        private void ApplyGridRubberSelectionByRectangle(Rectangle selectionRect)
-        {
-            var targetColumnIndex = colPrint.Index >= 0 ? colPrint.Index : colStatus.Index;
-            DataGridViewRow? firstSelectedRow = null;
-
-            _isSyncingGridSelection = true;
-            try
-            {
-                foreach (DataGridViewRow row in dgvJobs.Rows)
-                {
-                    if (row.IsNewRow || !row.Visible || !IsOrderTag(row.Tag?.ToString()))
-                    {
-                        if (row.Selected)
-                            row.Selected = false;
-                        continue;
-                    }
-
-                    var rowBounds = GetGridRowSelectionBounds(row.Index);
-                    var shouldSelect = !rowBounds.IsEmpty && selectionRect.IntersectsWith(rowBounds);
-                    if (row.Selected != shouldSelect)
-                        row.Selected = shouldSelect;
-
-                    if (shouldSelect && firstSelectedRow == null)
-                        firstSelectedRow = row;
-                }
-
-                dgvJobs.CurrentCell = firstSelectedRow != null
-                    ? firstSelectedRow.Cells[targetColumnIndex]
-                    : null;
-            }
-            finally
-            {
-                _isSyncingGridSelection = false;
-            }
-        }
-
-        private Rectangle GetGridRowSelectionBounds(int rowIndex)
-        {
-            if (rowIndex < 0 || rowIndex >= dgvJobs.Rows.Count)
-                return Rectangle.Empty;
-
-            var rowRect = dgvJobs.GetRowDisplayRectangle(rowIndex, cutOverflow: false);
-            if (rowRect.Width <= 0 || rowRect.Height <= 0)
-                return Rectangle.Empty;
-
-            return new Rectangle(0, rowRect.Top, dgvJobs.ClientSize.Width, rowRect.Height);
-        }
-
-        private static Rectangle BuildNormalizedRectangle(Point startPoint, Point endPoint)
-        {
-            var left = Math.Min(startPoint.X, endPoint.X);
-            var top = Math.Min(startPoint.Y, endPoint.Y);
-            var right = Math.Max(startPoint.X, endPoint.X);
-            var bottom = Math.Max(startPoint.Y, endPoint.Y);
-            if (right == left)
-                right++;
-            if (bottom == top)
-                bottom++;
-
-            return Rectangle.FromLTRB(left, top, right, bottom);
-        }
-
-        private void EndGridRubberSelection(bool applySelectionSync)
-        {
-            var hadActiveRubberSelection = _isGridRubberSelecting;
-            var oldRect = _gridRubberSelectionRect;
-
-            _isGridRubberSelectionPending = false;
-            _isGridRubberSelecting = false;
-            _gridRubberSelectionStartPoint = Point.Empty;
-            _gridRubberSelectionRect = Rectangle.Empty;
-
-            if (dgvJobs.Capture)
-                dgvJobs.Capture = false;
-
-            if (!oldRect.IsEmpty)
-                dgvJobs.Invalidate(Rectangle.Inflate(oldRect, 2, 2));
-
-            if (!hadActiveRubberSelection || !applySelectionSync)
-                return;
-
-            SyncTilesSelectionWithGrid();
-            UpdateActionButtonsState();
-            UpdateTrayStatsIndicator();
         }
 
         private void SetGridHoverActivationCandidate(int rowIndex)

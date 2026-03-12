@@ -103,7 +103,6 @@ namespace MyManager
             if (isTilesMode)
             {
                 StopGridHoverActivation();
-                EndGridRubberSelection(applySelectionSync: false);
                 SyncGridSelectionWithTiles();
             }
             else
