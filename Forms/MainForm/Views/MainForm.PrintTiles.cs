@@ -248,8 +248,7 @@ namespace MyManager
                 return;
 
             var isSelected = e.Item.Selected;
-            var isFocused = (e.State & ListViewItemStates.Focused) != 0;
-            var itemBackColor = _lvPrintTiles.BackColor;
+            var itemBackColor = isSelected ? OrdersRowSelectedBackColor : _lvPrintTiles.BackColor;
             var textColor = Color.FromArgb(24, 28, 36);
 
             using (var backBrush = new SolidBrush(itemBackColor))
@@ -305,16 +304,6 @@ namespace MyManager
 
             TextRenderer.DrawText(e.Graphics, orderNumber, orderFont, orderRect, textColor, textFlags);
             TextRenderer.DrawText(e.Graphics, fileName, fileFont, fileRect, textColor, textFlags);
-
-            if (isSelected)
-            {
-                var selectionBorder = Rectangle.Inflate(bounds, -1, -1);
-                using var selectedBorderPen = new Pen(Color.FromArgb(88, 124, 184));
-                e.Graphics.DrawRectangle(selectedBorderPen, selectionBorder);
-            }
-
-            if (isFocused && isSelected)
-                e.DrawFocusRectangle();
         }
 
         private void RefreshPrintTilesFromVisibleRows()

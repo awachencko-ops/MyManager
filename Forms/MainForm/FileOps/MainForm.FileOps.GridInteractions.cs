@@ -93,8 +93,16 @@ namespace MyManager
 
         private void DgvJobs_CellPainting(object? sender, DataGridViewCellPaintingEventArgs e)
         {
-            if (e.RowIndex != -1 || e.ColumnIndex < 0)
+            if (e.ColumnIndex < 0)
                 return;
+
+            if (e.RowIndex >= 0)
+            {
+                // Suppress dotted focus rectangle ("marching ants") on current cell.
+                e.Paint(e.CellBounds, e.PaintParts & ~DataGridViewPaintParts.Focus);
+                e.Handled = true;
+                return;
+            }
 
             if (e.Graphics == null)
                 return;
