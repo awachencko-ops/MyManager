@@ -58,6 +58,8 @@ namespace MyManager
             _ordersViewWarmupCoordinator?.Dispose();
             _ordersViewWarmupCoordinator = null;
 
+            DisposeStatusCellVisuals();
+
             _printTileOrderFont?.Dispose();
             _printTileOrderFont = null;
             _printTilesContextMenu.Dispose();

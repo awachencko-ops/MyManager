@@ -24,6 +24,7 @@ namespace MyManager
         public MainForm()
         {
             InitializeComponent();
+            InitializeStatusCellVisuals();
             LoadSettings();
             InitializeProcessor();
             ApplyQueueVisualStyle();

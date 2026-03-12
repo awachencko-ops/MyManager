@@ -165,6 +165,12 @@ namespace MyManager
 
             if (e.RowIndex >= 0)
             {
+                if (TryPaintStatusCell(e))
+                {
+                    e.Handled = true;
+                    return;
+                }
+
                 // Suppress dotted focus rectangle ("marching ants") on current cell.
                 e.Paint(e.CellBounds, e.PaintParts & ~DataGridViewPaintParts.Focus);
                 e.Handled = true;
