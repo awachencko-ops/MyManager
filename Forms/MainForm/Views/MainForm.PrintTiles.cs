@@ -8,6 +8,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -20,6 +21,10 @@ namespace MyManager
 {
     public partial class MainForm
     {
+        private static readonly FieldInfo? ImageListViewDefaultAdaptorField = typeof(ImageListView).GetField(
+            "defaultAdaptor",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+
         private void InitializeOrdersTilesView()
         {
             _lvPrintTiles.Dock = DockStyle.Fill;
@@ -39,6 +44,7 @@ namespace MyManager
             _lvPrintTiles.Colors.SelectionRectangleColor1 = Color.FromArgb(90, OrdersRowSelectedBackColor);
             _lvPrintTiles.Colors.SelectionRectangleColor2 = Color.FromArgb(90, OrdersRowSelectedBackColor);
             _lvPrintTiles.Colors.SelectionRectangleBorderColor = ControlPaint.Dark(OrdersRowSelectedBackColor, 0.15f);
+            TryEnablePdfThumbnailAdaptor();
             _lvPrintTiles.Visible = false;
             _lvPrintTiles.SelectionChanged += LvPrintTiles_SelectedIndexChanged;
             _lvPrintTiles.DoubleClick += LvPrintTiles_ItemActivate;
@@ -47,6 +53,24 @@ namespace MyManager
 
             tableLayoutPanel1.Controls.Add(_lvPrintTiles, 0, 2);
             _lvPrintTiles.BringToFront();
+        }
+
+        private void TryEnablePdfThumbnailAdaptor()
+        {
+            if (ImageListViewDefaultAdaptorField == null)
+            {
+                Logger.Warn("TILES | ImageListView default adaptor field not found. PDF preview falls back to shell icons.");
+                return;
+            }
+
+            try
+            {
+                ImageListViewDefaultAdaptorField.SetValue(_lvPrintTiles, new PdfAwareFileSystemAdaptor());
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn($"TILES | Failed to set PDF thumbnail adaptor: {ex.Message}");
+            }
         }
 
         private void InitializeViewModeSwitches()
@@ -385,8 +409,9 @@ namespace MyManager
                         cleanOrderNumber = "—";
 
                     var cleanPrintFileName = printFileName.Trim();
-                    var item = new ImageListViewItem(printPath, $"{cleanOrderNumber}{Environment.NewLine}{cleanPrintFileName}")
+                    var item = new ImageListViewItem(printPath)
                     {
+                        Text = $"{cleanOrderNumber} {cleanPrintFileName}",
                         Tag = new PrintTileTag(orderInternalId, cleanOrderNumber, printPath, cleanPrintFileName)
                     };
 
