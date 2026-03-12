@@ -143,6 +143,8 @@ namespace MyManager
                     _lvPrintTiles.BringToFront();
                 else
                     dgvJobs.BringToFront();
+
+                UpdateClassicGridScrollBar();
             }
             finally
             {
