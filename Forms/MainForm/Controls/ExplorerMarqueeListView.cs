@@ -6,50 +6,58 @@ namespace MyManager
 {
     internal sealed class ExplorerMarqueeListView : ListView
     {
+        private const int WmPaint = 0x000F;
+        private const int WmLButtonDown = 0x0201;
+        private const int WmLButtonUp = 0x0202;
+        private const int WmMouseMove = 0x0200;
+        private const int WmCaptureChanged = 0x0215;
+
         private bool _isMarqueeSelecting;
         private Point _marqueeStartPoint;
         private Rectangle _marqueeClientRect = Rectangle.Empty;
-        private Rectangle _marqueeScreenRect = Rectangle.Empty;
 
         public Color MarqueeColor { get; set; } = Color.FromArgb(235, 240, 250);
 
-        protected override void OnMouseDown(MouseEventArgs e)
+        protected override void WndProc(ref Message m)
         {
-            if (e.Button == MouseButtons.Left && !HasSelectionModifiers() && HitTest(e.Location).Item == null)
+            if (m.Msg == WmLButtonDown)
             {
-                BeginMarqueeSelection(e.Location);
+                var point = GetPointFromLParam(m.LParam);
+                if (ShouldStartMarqueeSelection(point))
+                {
+                    BeginMarqueeSelection(point);
+                    return;
+                }
+            }
+
+            if (m.Msg == WmMouseMove && _isMarqueeSelecting)
+            {
+                if ((Control.MouseButtons & MouseButtons.Left) == MouseButtons.Left)
+                {
+                    var point = GetPointFromLParam(m.LParam);
+                    UpdateMarqueeSelection(point);
+                }
+                else
+                {
+                    EndMarqueeSelection();
+                }
+
                 return;
             }
 
-            base.OnMouseDown(e);
-        }
-
-        protected override void OnMouseMove(MouseEventArgs e)
-        {
-            if (!_isMarqueeSelecting)
-            {
-                base.OnMouseMove(e);
-                return;
-            }
-
-            if ((Control.MouseButtons & MouseButtons.Left) != MouseButtons.Left)
+            if (m.Msg == WmLButtonUp && _isMarqueeSelecting)
             {
                 EndMarqueeSelection();
                 return;
             }
 
-            UpdateMarqueeSelection(e.Location);
-        }
+            base.WndProc(ref m);
 
-        protected override void OnMouseUp(MouseEventArgs e)
-        {
-            if (_isMarqueeSelecting && e.Button == MouseButtons.Left)
-            {
+            if (m.Msg == WmCaptureChanged)
                 EndMarqueeSelection();
-                return;
-            }
 
-            base.OnMouseUp(e);
+            if (m.Msg == WmPaint && _isMarqueeSelecting)
+                DrawMarqueeOverlay();
         }
 
         protected override void OnLostFocus(EventArgs e)
@@ -71,8 +79,8 @@ namespace MyManager
             _isMarqueeSelecting = true;
             _marqueeStartPoint = ClampToClient(clientPoint);
             _marqueeClientRect = Rectangle.Empty;
-            _marqueeScreenRect = Rectangle.Empty;
             Capture = true;
+            Focus();
 
             BeginUpdate();
             try
@@ -91,14 +99,14 @@ namespace MyManager
             if (!_isMarqueeSelecting)
                 return;
 
-            DrawReversibleMarquee(_marqueeScreenRect);
-
             var clampedPoint = ClampToClient(clientPoint);
             var clientRect = GetNormalizedRect(_marqueeStartPoint, clampedPoint);
-            _marqueeClientRect = clientRect;
-            _marqueeScreenRect = RectangleToScreen(clientRect);
+            if (clientRect == _marqueeClientRect)
+                return;
 
-            DrawReversibleMarquee(_marqueeScreenRect);
+            InvalidateMarqueeRect(_marqueeClientRect);
+            _marqueeClientRect = clientRect;
+            InvalidateMarqueeRect(_marqueeClientRect);
             ApplyMarqueeSelection(clientRect);
         }
 
@@ -107,11 +115,11 @@ namespace MyManager
             if (!_isMarqueeSelecting)
                 return;
 
-            DrawReversibleMarquee(_marqueeScreenRect);
-            _marqueeScreenRect = Rectangle.Empty;
+            var rectToInvalidate = _marqueeClientRect;
             _marqueeClientRect = Rectangle.Empty;
             _isMarqueeSelecting = false;
             Capture = false;
+            InvalidateMarqueeRect(rectToInvalidate);
         }
 
         private void ApplyMarqueeSelection(Rectangle clientRect)
@@ -140,15 +148,40 @@ namespace MyManager
             }
         }
 
-        private void DrawReversibleMarquee(Rectangle screenRect)
+        private void DrawMarqueeOverlay()
         {
-            if (screenRect.Width <= 0 || screenRect.Height <= 0)
+            if (_marqueeClientRect.Width <= 0 || _marqueeClientRect.Height <= 0 || !IsHandleCreated)
                 return;
 
-            var fillColor = Color.FromArgb(160, MarqueeColor);
-            var borderColor = ControlPaint.Dark(MarqueeColor, 0.2f);
-            ControlPaint.FillReversibleRectangle(screenRect, fillColor);
-            ControlPaint.DrawReversibleFrame(screenRect, borderColor, FrameStyle.Thick);
+            using var graphics = CreateGraphics();
+            var fillColor = Color.FromArgb(96, MarqueeColor);
+            var borderColor = Color.FromArgb(210, ControlPaint.Dark(MarqueeColor, 0.18f));
+            using var fillBrush = new SolidBrush(fillColor);
+            using var borderPen = new Pen(borderColor, 1f);
+
+            graphics.FillRectangle(fillBrush, _marqueeClientRect);
+            graphics.DrawRectangle(borderPen, GetBorderRect(_marqueeClientRect));
+        }
+
+        private void InvalidateMarqueeRect(Rectangle rect)
+        {
+            if (rect.Width <= 0 || rect.Height <= 0)
+                return;
+
+            var invalidateRect = Rectangle.Inflate(rect, 2, 2);
+            invalidateRect.Intersect(ClientRectangle);
+            if (invalidateRect.Width <= 0 || invalidateRect.Height <= 0)
+                return;
+
+            Invalidate(invalidateRect);
+        }
+
+        private bool ShouldStartMarqueeSelection(Point point)
+        {
+            if (HasSelectionModifiers())
+                return false;
+
+            return HitTest(point).Item == null;
         }
 
         private Point ClampToClient(Point point)
@@ -163,6 +196,22 @@ namespace MyManager
         private static bool HasSelectionModifiers()
         {
             return (ModifierKeys & (Keys.Control | Keys.Shift)) != Keys.None;
+        }
+
+        private static Point GetPointFromLParam(IntPtr lParam)
+        {
+            var value = unchecked((int)(long)lParam);
+            var x = (short)(value & 0xFFFF);
+            var y = (short)((value >> 16) & 0xFFFF);
+            return new Point(x, y);
+        }
+
+        private static Rectangle GetBorderRect(Rectangle rect)
+        {
+            if (rect.Width <= 1 || rect.Height <= 1)
+                return rect;
+
+            return new Rectangle(rect.X, rect.Y, rect.Width - 1, rect.Height - 1);
         }
 
         private static Rectangle GetNormalizedRect(Point start, Point end)
