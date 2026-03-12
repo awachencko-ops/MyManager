@@ -34,7 +34,7 @@ namespace MyManager
             _lvPrintTiles.MultiSelect = true;
             _lvPrintTiles.ScrollBars = true;
             _lvPrintTiles.View = Manina.Windows.Forms.View.Thumbnails;
-            _lvPrintTiles.ThumbnailSize = new Size(136, 136);
+            _lvPrintTiles.ThumbnailSize = new Size(152, 152);
             _lvPrintTiles.AllowDrag = false;
             _lvPrintTiles.ShowFileIcons = false;
             _lvPrintTiles.UseEmbeddedThumbnails = UseEmbeddedThumbnails.Never;
@@ -47,8 +47,18 @@ namespace MyManager
             _lvPrintTiles.Visible = false;
             _lvPrintTiles.SelectionChanged += LvPrintTiles_SelectedIndexChanged;
             _lvPrintTiles.DoubleClick += LvPrintTiles_ItemActivate;
+            _lvPrintTiles.MouseMove += LvPrintTiles_MouseMove;
+            _lvPrintTiles.MouseLeave += LvPrintTiles_MouseLeave;
+            _lvPrintTiles.MouseDown += LvPrintTiles_MouseDown;
             _lvPrintTiles.MouseUp += LvPrintTiles_MouseUp;
             _printTileOrderFont = new Font(_lvPrintTiles.Font, FontStyle.Bold);
+
+            _tileHoverActivateTimer ??= new System.Windows.Forms.Timer
+            {
+                Interval = TileHoverActivateDelayMs
+            };
+            _tileHoverActivateTimer.Tick -= TileHoverActivateTimer_Tick;
+            _tileHoverActivateTimer.Tick += TileHoverActivateTimer_Tick;
 
             tableLayoutPanel1.Controls.Add(_lvPrintTiles, 0, 2);
             _lvPrintTiles.BringToFront();
@@ -93,7 +103,10 @@ namespace MyManager
             if (isTilesMode)
                 SyncGridSelectionWithTiles();
             else
+            {
+                StopTileHoverActivation();
                 SyncTilesSelectionWithGrid();
+            }
 
             UpdateViewModeSwitchesVisuals();
             UpdateActionButtonsState();
@@ -126,11 +139,42 @@ namespace MyManager
 
         private void LvPrintTiles_ItemActivate(object? sender, EventArgs e)
         {
+            StopTileHoverActivation();
+
             var selectedTile = GetSelectedPrintTileTag();
             if (selectedTile == null || !HasExistingFile(selectedTile.PrintPath))
                 return;
 
             OpenFileDefault(selectedTile.PrintPath);
+        }
+
+        private void LvPrintTiles_MouseDown(object? sender, MouseEventArgs e)
+        {
+            StopTileHoverActivation();
+        }
+
+        private void LvPrintTiles_MouseMove(object? sender, MouseEventArgs e)
+        {
+            if ((Control.MouseButtons & MouseButtons.Left) == MouseButtons.Left)
+            {
+                StopTileHoverActivation();
+                return;
+            }
+
+            if ((ModifierKeys & (Keys.Control | Keys.Shift)) != Keys.None)
+            {
+                StopTileHoverActivation();
+                return;
+            }
+
+            _lvPrintTiles.HitTest(e.Location, out var hit);
+            var hoveredIndex = hit.ItemHit ? hit.ItemIndex : -1;
+            SetTileHoverActivationCandidate(hoveredIndex);
+        }
+
+        private void LvPrintTiles_MouseLeave(object? sender, EventArgs e)
+        {
+            StopTileHoverActivation();
         }
 
         private void LvPrintTiles_MouseUp(object? sender, MouseEventArgs e)
@@ -172,8 +216,69 @@ namespace MyManager
             ShowPrintTileContextMenu(order, tileTag, e.Location);
         }
 
+        private void SetTileHoverActivationCandidate(int itemIndex)
+        {
+            if (itemIndex == _tileHoverCandidateIndex)
+                return;
+
+            _tileHoverCandidateIndex = itemIndex;
+            if (_tileHoverCandidateIndex < 0)
+            {
+                _tileHoverActivateTimer?.Stop();
+                return;
+            }
+
+            _tileHoverActivateTimer?.Stop();
+            _tileHoverActivateTimer?.Start();
+        }
+
+        private void StopTileHoverActivation()
+        {
+            _tileHoverActivateTimer?.Stop();
+            _tileHoverCandidateIndex = -1;
+        }
+
+        private void TileHoverActivateTimer_Tick(object? sender, EventArgs e)
+        {
+            _tileHoverActivateTimer?.Stop();
+
+            if ((Control.MouseButtons & MouseButtons.Left) == MouseButtons.Left)
+                return;
+
+            if ((ModifierKeys & (Keys.Control | Keys.Shift)) != Keys.None)
+                return;
+
+            if (_tileHoverCandidateIndex < 0 || _tileHoverCandidateIndex >= _lvPrintTiles.Items.Count)
+                return;
+
+            var item = _lvPrintTiles.Items[_tileHoverCandidateIndex];
+            if (item == null)
+                return;
+
+            if (_lvPrintTiles.SelectedItems.Count == 1 && item.Selected)
+                return;
+
+            _isSyncingTileSelection = true;
+            try
+            {
+                _lvPrintTiles.ClearSelection();
+                item.Selected = true;
+                _lvPrintTiles.Items.FocusedItem = item;
+            }
+            finally
+            {
+                _isSyncingTileSelection = false;
+            }
+
+            SyncGridSelectionWithTiles();
+            UpdateActionButtonsState();
+            UpdateTrayStatsIndicator();
+        }
+
         private void ClearTilesSelectionAndSync()
         {
+            StopTileHoverActivation();
+
             _isSyncingTileSelection = true;
             try
             {
