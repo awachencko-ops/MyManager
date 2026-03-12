@@ -44,7 +44,7 @@ namespace MyManager
                 ? null
                 : new HashSet<string>(selectedItemIds.Where(x => !string.IsNullOrWhiteSpace(x)), StringComparer.Ordinal);
 
-            if (order.Items != null && order.Items.Count > 0)
+            if (OrderTopologyService.IsMultiOrder(order))
             {
                 ReportProgress(order, 0, "Запуск мульти-заказа");
                 await RunMultiOrderAsync(order, settings, timeout, tempRoot, selectedSet, ct);

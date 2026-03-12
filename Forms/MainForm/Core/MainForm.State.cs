@@ -49,6 +49,7 @@ namespace MyManager
         private bool _isRebuildingGrid;
         private bool _isSyncingTileSelection;
         private bool _isSyncingGridSelection;
+        private string _baseBottomStatusText = DefaultTrayStatusText;
         private int _hoveredRowIndex = -1;
         private int _ctxRow = -1;
         private int _ctxCol = -1;

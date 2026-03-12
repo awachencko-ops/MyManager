@@ -371,64 +371,178 @@ namespace MyManager
             return FindOrderByInternalId(orderInternalId);
         }
 
+        private List<OrderData> GetSelectedOrders()
+        {
+            var selectedOrders = new List<OrderData>();
+            var uniqueOrderIds = new HashSet<string>(StringComparer.Ordinal);
+
+            var selectedRows = dgvJobs.SelectedRows
+                .Cast<DataGridViewRow>()
+                .Where(row => !row.IsNewRow)
+                .OrderBy(row => row.Index);
+
+            foreach (var row in selectedRows)
+            {
+                var orderInternalId = ExtractOrderInternalIdFromTag(row.Tag?.ToString());
+                if (string.IsNullOrWhiteSpace(orderInternalId) || !uniqueOrderIds.Add(orderInternalId))
+                    continue;
+
+                var order = FindOrderByInternalId(orderInternalId);
+                if (order != null)
+                    selectedOrders.Add(order);
+            }
+
+            if (selectedOrders.Count > 0)
+                return selectedOrders;
+
+            var singleOrder = GetSelectedOrder();
+            if (singleOrder != null && uniqueOrderIds.Add(singleOrder.InternalId))
+                selectedOrders.Add(singleOrder);
+
+            return selectedOrders;
+        }
+
         private async Task RunSelectedOrderAsync()
         {
-            var order = GetSelectedOrder();
-            if (order == null)
+            var selectedOrders = GetSelectedOrders();
+            if (selectedOrders.Count == 0)
             {
                 SetBottomStatus("Выберите строку заказа для запуска");
                 MessageBox.Show(this, "Выберите строку заказа для запуска.", "Запуск", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
-            if (string.IsNullOrWhiteSpace(order.Id))
-            {
-                SetBottomStatus("У заказа не указан номер");
-                MessageBox.Show(this, "У заказа не указан № заказа. Перед запуском заполните карточку заказа.", "Запуск", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
+            var ordersWithoutNumber = selectedOrders
+                .Where(order => string.IsNullOrWhiteSpace(order.Id))
+                .ToList();
+            var alreadyRunningOrders = selectedOrders
+                .Where(order => _runTokensByOrder.ContainsKey(order.InternalId))
+                .ToList();
 
-            if (_runTokensByOrder.ContainsKey(order.InternalId))
+            var runnableOrders = selectedOrders
+                .Except(ordersWithoutNumber)
+                .Except(alreadyRunningOrders)
+                .ToList();
+
+            if (runnableOrders.Count == 0)
             {
-                SetBottomStatus($"Заказ {GetOrderDisplayId(order)} уже запущен");
-                MessageBox.Show(this, $"Заказ {GetOrderDisplayId(order)} уже запущен.", "Запуск", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                var reasons = new List<string>();
+                if (ordersWithoutNumber.Count > 0)
+                    reasons.Add($"без номера: {ordersWithoutNumber.Count}");
+                if (alreadyRunningOrders.Count > 0)
+                    reasons.Add($"уже запущены: {alreadyRunningOrders.Count}");
+
+                var details = reasons.Count == 0 ? "не удалось определить причину" : string.Join(", ", reasons);
+                SetBottomStatus($"Нет заказов для запуска ({details})");
+                MessageBox.Show(
+                    this,
+                    $"Нет заказов для запуска ({details}).",
+                    "Запуск",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
                 return;
             }
 
             if (_processor == null)
                 InitializeProcessor();
 
-            var cts = new CancellationTokenSource();
-            _runTokensByOrder[order.InternalId] = cts;
-            _runProgressByOrderInternalId[order.InternalId] = 0;
+            var runSessions = new List<(OrderData Order, CancellationTokenSource Cts)>();
+            foreach (var order in runnableOrders)
+            {
+                var cts = new CancellationTokenSource();
+                _runTokensByOrder[order.InternalId] = cts;
+                _runProgressByOrderInternalId[order.InternalId] = 0;
+                runSessions.Add((order, cts));
+
+                SetOrderStatus(
+                    order,
+                    "Обрабатывается",
+                    "ui",
+                    runnableOrders.Count > 1 ? "Пакетный запуск из MainForm" : "Запуск из MainForm",
+                    persistHistory: false,
+                    rebuildGrid: false);
+            }
+
             UpdateTrayProgressIndicator();
+            SaveHistory();
+            RebuildOrdersGrid();
 
-            SetOrderStatus(order, "Обрабатывается", "ui", "Запуск из MainForm", persistHistory: true, rebuildGrid: true);
-            SetBottomStatus($"Запущен заказ {GetOrderDisplayId(order)}");
+            if (runnableOrders.Count == 1)
+                SetBottomStatus($"Запущен заказ {GetOrderDisplayId(runnableOrders[0])}");
+            else
+                SetBottomStatus($"Запущено заказов: {runnableOrders.Count}");
 
-            try
+            if (ordersWithoutNumber.Count > 0 || alreadyRunningOrders.Count > 0)
             {
-                await _processor!.RunAsync(order, cts.Token, selectedItemIds: null);
+                var skippedReasons = new List<string>();
+                if (ordersWithoutNumber.Count > 0)
+                    skippedReasons.Add($"без номера: {ordersWithoutNumber.Count}");
+                if (alreadyRunningOrders.Count > 0)
+                    skippedReasons.Add($"уже запущены: {alreadyRunningOrders.Count}");
+
+                SetBottomStatus($"Часть заказов пропущена ({string.Join(", ", skippedReasons)})");
             }
-            catch (OperationCanceledException)
+
+            var runErrors = new ConcurrentQueue<string>();
+            var runTasks = runSessions.Select(async session =>
             {
-                SetOrderStatus(order, "Отменено", "ui", "Остановлено пользователем", persistHistory: true, rebuildGrid: true);
-                SetBottomStatus($"Заказ {GetOrderDisplayId(order)} остановлен");
+                try
+                {
+                    await _processor!.RunAsync(session.Order, session.Cts.Token, selectedItemIds: null);
+                }
+                catch (OperationCanceledException)
+                {
+                    SetOrderStatus(
+                        session.Order,
+                        "Отменено",
+                        "ui",
+                        "Остановлено пользователем",
+                        persistHistory: false,
+                        rebuildGrid: false);
+                }
+                catch (Exception ex)
+                {
+                    SetOrderStatus(
+                        session.Order,
+                        "Ошибка",
+                        "ui",
+                        ex.Message,
+                        persistHistory: false,
+                        rebuildGrid: false);
+                    runErrors.Enqueue($"{GetOrderDisplayId(session.Order)}: {ex.Message}");
+                }
+                finally
+                {
+                    _runTokensByOrder.Remove(session.Order.InternalId);
+                    _runProgressByOrderInternalId.Remove(session.Order.InternalId);
+                    UpdateTrayProgressIndicator();
+                }
+            }).ToList();
+
+            await Task.WhenAll(runTasks);
+
+            SaveHistory();
+            RebuildOrdersGrid();
+            UpdateActionButtonsState();
+
+            if (!runErrors.IsEmpty)
+            {
+                var errors = runErrors.ToArray();
+                var errorsPreview = string.Join(Environment.NewLine, errors.Take(5));
+                if (errors.Length > 5)
+                    errorsPreview += $"{Environment.NewLine}... ещё: {errors.Length - 5}";
+
+                SetBottomStatus($"Ошибок запуска: {errors.Length}");
+                MessageBox.Show(
+                    this,
+                    $"Некоторые заказы завершились с ошибкой:{Environment.NewLine}{errorsPreview}",
+                    "Запуск",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
             }
-            catch (Exception ex)
+            else if (runnableOrders.Count > 1)
             {
-                SetOrderStatus(order, "Ошибка", "ui", ex.Message, persistHistory: true, rebuildGrid: true);
-                SetBottomStatus($"Ошибка запуска заказа {GetOrderDisplayId(order)}: {ex.Message}");
-                MessageBox.Show(this, $"Не удалось запустить заказ: {ex.Message}", "Запуск", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-            finally
-            {
-                _runTokensByOrder.Remove(order.InternalId);
-                _runProgressByOrderInternalId.Remove(order.InternalId);
-                UpdateTrayProgressIndicator();
-                SaveHistory();
-                RebuildOrdersGrid();
-                UpdateActionButtonsState();
+                SetBottomStatus($"Пакетная обработка завершена: {runnableOrders.Count}");
             }
         }
 

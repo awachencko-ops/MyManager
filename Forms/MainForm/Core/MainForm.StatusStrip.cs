@@ -232,6 +232,7 @@ namespace MyManager
                 toolProgress.Visible = false;
                 toolProgress.Value = 0;
                 toolProgress.ToolTipText = "Нет активной обработки.";
+                RefreshBottomStatusLabel();
                 return;
             }
 
@@ -242,6 +243,7 @@ namespace MyManager
             toolProgress.ToolTipText = _runProgressByOrderInternalId.Count == 1
                 ? $"Прогресс обработки: {boundedProgress}%."
                 : $"Средний прогресс по {_runProgressByOrderInternalId.Count} заказам: {boundedProgress}%.";
+            RefreshBottomStatusLabel();
         }
 
         private void AcknowledgeErrorNotifications()
@@ -346,18 +348,75 @@ namespace MyManager
                 ? DefaultTrayStatusText
                 : text.Trim();
 
+            _baseBottomStatusText = nextText;
+            RefreshBottomStatusLabel();
+        }
+
+        private void RefreshBottomStatusLabel()
+        {
+            if (Disposing || IsDisposed)
+                return;
+
             void Apply()
             {
                 if (toolStatus.IsDisposed)
                     return;
 
-                toolStatus.Text = nextText;
+                toolStatus.Text = ComposeBottomStatusText();
             }
 
             if (InvokeRequired)
                 BeginInvoke((Action)Apply);
             else
                 Apply();
+        }
+
+        private string ComposeBottomStatusText()
+        {
+            var baseText = string.IsNullOrWhiteSpace(_baseBottomStatusText)
+                ? DefaultTrayStatusText
+                : _baseBottomStatusText.Trim();
+
+            var runningOrdersCaption = BuildRunningOrdersCaption();
+            if (string.IsNullOrWhiteSpace(runningOrdersCaption))
+                return baseText;
+
+            return $"{baseText} | {runningOrdersCaption}";
+        }
+
+        private string BuildRunningOrdersCaption()
+        {
+            if (_runTokensByOrder.Count == 0)
+                return string.Empty;
+
+            var runningOrderIds = new List<string>();
+            foreach (var internalId in _runTokensByOrder.Keys)
+            {
+                var order = FindOrderByInternalId(internalId);
+                if (order == null)
+                    continue;
+
+                var displayId = GetOrderDisplayId(order);
+                if (!string.IsNullOrWhiteSpace(displayId))
+                    runningOrderIds.Add(displayId);
+            }
+
+            if (runningOrderIds.Count == 0)
+                return $"В работе: {_runTokensByOrder.Count}";
+
+            var distinctIds = runningOrderIds
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
+            if (distinctIds.Count == 1)
+                return $"Обработка: {distinctIds[0]}";
+
+            const int maxShownOrders = 3;
+            if (distinctIds.Count <= maxShownOrders)
+                return $"Обработка: {string.Join(", ", distinctIds)}";
+
+            var shownIds = string.Join(", ", distinctIds.Take(maxShownOrders));
+            return $"Обработка: {shownIds} (+{distinctIds.Count - maxShownOrders})";
         }
 
         private string GetOrderLogFilePath(OrderData order)
