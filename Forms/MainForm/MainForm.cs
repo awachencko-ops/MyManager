@@ -329,6 +329,7 @@ namespace MyManager
 
             dgvJobs.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             dgvJobs.MultiSelect = true;
+            dgvJobs.ScrollBars = ScrollBars.Vertical;
             dgvJobs.AllowUserToResizeRows = false;
             dgvJobs.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None;
             dgvJobs.RowTemplate.Resizable = DataGridViewTriState.False;
