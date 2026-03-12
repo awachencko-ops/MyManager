@@ -52,6 +52,11 @@ namespace MyManager
         private bool _isSyncingTileSelection;
         private bool _isSyncingGridSelection;
         private string? _gridHoverCandidateOrderInternalId;
+        private bool _isGridRubberSelectionPending;
+        private bool _isGridRubberSelecting;
+        private bool _suppressNextGridCellClick;
+        private Point _gridRubberSelectionStartPoint = Point.Empty;
+        private Rectangle _gridRubberSelectionRect = Rectangle.Empty;
         private int _tileHoverCandidateIndex = -1;
         private string _baseBottomStatusText = DefaultTrayStatusText;
         private int _hoveredRowIndex = -1;
