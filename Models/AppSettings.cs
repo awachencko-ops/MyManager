@@ -48,6 +48,7 @@ namespace MyManager
         public string HistoryFilePath { get; set; } = DefaultHistoryFilePath;
         public string ManagerLogFilePath { get; set; } = DefaultManagerLogFilePath;
         public string OrderLogsFolderPath { get; set; } = DefaultOrderLogsFolderPath;
+        public string FontsFolderPath { get; set; } = string.Empty;
         public string PitStopConfigFilePath { get; set; } = DefaultPitStopConfigFilePath;
         public string ImposingConfigFilePath { get; set; } = DefaultImposingConfigFilePath;
         public string PitStopHotfoldersRootPath { get; set; } = DefaultPitStopHotfoldersRootPath;
@@ -136,6 +137,9 @@ namespace MyManager
             if (PathEquals(normalizedOrderLogsFolderPath, "order-logs"))
                 normalizedOrderLogsFolderPath = DefaultOrderLogsFolderPath;
             changed |= SetPathIfDifferent(OrderLogsFolderPath, normalizedOrderLogsFolderPath, value => OrderLogsFolderPath = value);
+
+            var normalizedFontsFolderPath = NormalizePathValue(FontsFolderPath, string.Empty);
+            changed |= SetPathIfDifferent(FontsFolderPath, normalizedFontsFolderPath, value => FontsFolderPath = value);
 
             var normalizedPitStopConfigFilePath = NormalizePathValue(PitStopConfigFilePath, DefaultPitStopConfigFilePath);
             if (PathEquals(normalizedPitStopConfigFilePath, "pitstop_actions.json"))

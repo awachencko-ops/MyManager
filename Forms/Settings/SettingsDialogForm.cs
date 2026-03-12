@@ -15,6 +15,7 @@ namespace MyManager
         private readonly TextBox _txtHistoryFilePath = new TextBox();
         private readonly TextBox _txtManagerLogFilePath = new TextBox();
         private readonly TextBox _txtOrderLogsFolderPath = new TextBox();
+        private readonly TextBox _txtFontsFolderPath = new TextBox();
         private readonly NumericUpDown _numMaxParallelism = new NumericUpDown();
         private readonly CheckBox _chkUseExtendedMode = new CheckBox();
 
@@ -28,6 +29,7 @@ namespace MyManager
         public string HistoryFilePath => _txtHistoryFilePath.Text.Trim();
         public string ManagerLogFilePath => _txtManagerLogFilePath.Text.Trim();
         public string OrderLogsFolderPath => _txtOrderLogsFolderPath.Text.Trim();
+        public string FontsFolderPath => _txtFontsFolderPath.Text.Trim();
         public int MaxParallelism => (int)_numMaxParallelism.Value;
         public bool UseExtendedMode => _chkUseExtendedMode.Checked;
 
@@ -39,6 +41,7 @@ namespace MyManager
             string historyFilePath,
             string managerLogFilePath,
             string orderLogsFolderPath,
+            string fontsFolderPath,
             int maxParallelism,
             bool useExtendedMode = false)
         {
@@ -76,6 +79,7 @@ namespace MyManager
                 historyFilePath,
                 managerLogFilePath,
                 orderLogsFolderPath,
+                fontsFolderPath,
                 maxParallelism,
                 useExtendedMode));
             _tabs.TabPages.Add(CreateEmbeddedManagerTab("Диспетчер PitStop", _pitStopForm));
@@ -131,6 +135,7 @@ namespace MyManager
             string historyFilePath,
             string managerLogFilePath,
             string orderLogsFolderPath,
+            string fontsFolderPath,
             int maxParallelism,
             bool useExtendedMode)
         {
@@ -141,14 +146,14 @@ namespace MyManager
                 Dock = DockStyle.Top,
                 AutoSize = true,
                 ColumnCount = 3,
-                RowCount = 9,
+                RowCount = 10,
                 Padding = new Padding(18, 18, 18, 0)
             };
 
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 270));
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140));
-            for (int i = 0; i < 9; i++)
+            for (int i = 0; i < 10; i++)
                 panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
 
             AddRow(panel, 0, "Папка хранения заказов", _txtOrdersRoot, ordersRootPath, true);
@@ -158,9 +163,10 @@ namespace MyManager
             AddRow(panel, 4, "Файл истории заказов", _txtHistoryFilePath, historyFilePath, false);
             AddRow(panel, 5, "Файл общего лога", _txtManagerLogFilePath, managerLogFilePath, false);
             AddRow(panel, 6, "Папка логов заказов (опц.)", _txtOrderLogsFolderPath, orderLogsFolderPath, true, optional: true);
+            AddRow(panel, 7, "Папка шрифтов PDF (опц.)", _txtFontsFolderPath, fontsFolderPath, true, optional: true);
 
-            AddNumericRow(panel, 7, "Параллельных файлов (мульти-заказ)", _numMaxParallelism, maxParallelism);
-            AddCheckboxRow(panel, 8, "Форма заказа", _chkUseExtendedMode, useExtendedMode, "Вкл. — расширенная форма; выкл. — простая.");
+            AddNumericRow(panel, 8, "Параллельных файлов (мульти-заказ)", _numMaxParallelism, maxParallelism);
+            AddCheckboxRow(panel, 9, "Форма заказа", _chkUseExtendedMode, useExtendedMode, "Вкл. — расширенная форма; выкл. — простая.");
 
             var hint = new Label
             {
@@ -168,7 +174,7 @@ namespace MyManager
                 AutoSize = true,
                 Padding = new Padding(22, 8, 22, 8),
                 ForeColor = Color.DimGray,
-                Text = "Если \"Папка логов заказов\" пустая, будет использоваться ./order-logs рядом с приложением."
+                Text = "Если \"Папка шрифтов PDF\" пустая, используется системная Windows Fonts. Папка логов по умолчанию: ./order-logs рядом с приложением. Путь шрифтов применяется после перезапуска приложения."
             };
 
             page.Controls.Add(hint);

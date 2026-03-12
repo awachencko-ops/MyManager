@@ -425,6 +425,7 @@ namespace MyManager
                 _jsonHistoryFile,
                 _managerLogFilePath,
                 _orderLogsFolderPath,
+                currentSettings.FontsFolderPath,
                 currentSettings.MaxParallelism,
                 useExtendedMode: currentSettings.UseExtendedMode);
 
@@ -447,6 +448,7 @@ namespace MyManager
             settings.HistoryFilePath = _jsonHistoryFile;
             settings.ManagerLogFilePath = _managerLogFilePath;
             settings.OrderLogsFolderPath = _orderLogsFolderPath;
+            settings.FontsFolderPath = settingsForm.FontsFolderPath;
             settings.MaxParallelism = settingsForm.MaxParallelism;
             settings.UseExtendedMode = settingsForm.UseExtendedMode;
             settings.Save();
