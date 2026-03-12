@@ -65,6 +65,13 @@ namespace MyManager
             _printTileOrderFont?.Dispose();
             _printTileOrderFont = null;
             _printTilesContextMenu.Dispose();
+            _gridHoverActivateTimer?.Stop();
+            if (_gridHoverActivateTimer != null)
+            {
+                _gridHoverActivateTimer.Tick -= GridHoverActivateTimer_Tick;
+                _gridHoverActivateTimer.Dispose();
+                _gridHoverActivateTimer = null;
+            }
             _tileHoverActivateTimer?.Stop();
             if (_tileHoverActivateTimer != null)
             {

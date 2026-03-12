@@ -354,11 +354,19 @@ namespace MyManager
             dgvJobs.CellToolTipTextNeeded += DgvJobs_CellToolTipTextNeeded;
             dgvJobs.CellMouseEnter += DgvJobs_CellMouseEnter;
             dgvJobs.CellMouseLeave += DgvJobs_CellMouseLeave;
+            dgvJobs.MouseLeave += DgvJobs_MouseLeave;
             dgvJobs.MouseDown += DgvJobs_MouseDown;
             dgvJobs.MouseMove += DgvJobs_MouseMove;
             dgvJobs.DragEnter += DgvJobs_DragEnter;
             dgvJobs.DragOver += DgvJobs_DragOver;
             dgvJobs.DragDrop += DgvJobs_DragDrop;
+
+            _gridHoverActivateTimer ??= new System.Windows.Forms.Timer
+            {
+                Interval = GridHoverActivateDelayMs
+            };
+            _gridHoverActivateTimer.Tick -= GridHoverActivateTimer_Tick;
+            _gridHoverActivateTimer.Tick += GridHoverActivateTimer_Tick;
         }
 
         private void InitializeActionButtonsState()

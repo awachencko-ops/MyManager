@@ -23,6 +23,8 @@ namespace MyManager
     {
         private void DgvJobs_MouseDown(object? sender, MouseEventArgs e)
         {
+            StopGridHoverActivation();
+
             _dragBoxFromMouseDown = Rectangle.Empty;
             _dragSourceRowIndex = -1;
             _dragSourceColumnIndex = -1;
@@ -77,6 +79,9 @@ namespace MyManager
 
         private void DgvJobs_MouseMove(object? sender, MouseEventArgs e)
         {
+            if ((e.Button & MouseButtons.Left) == MouseButtons.Left)
+                StopGridHoverActivation();
+
             if ((e.Button & MouseButtons.Left) != MouseButtons.Left)
                 return;
 
@@ -191,6 +196,8 @@ namespace MyManager
             var rowTag = dgvJobs.Rows[e.RowIndex].Tag?.ToString();
             if (!IsOrderTag(rowTag))
             {
+                StopGridHoverActivation();
+
                 if (_hoveredRowIndex != -1)
                 {
                     var oldIndex = _hoveredRowIndex;
@@ -209,6 +216,7 @@ namespace MyManager
             if (prevIndex >= 0 && prevIndex < dgvJobs.Rows.Count)
                 dgvJobs.InvalidateRow(prevIndex);
             dgvJobs.InvalidateRow(_hoveredRowIndex);
+            SetGridHoverActivationCandidate(e.RowIndex);
         }
 
         private void DgvJobs_CellMouseLeave(object? sender, EventArgs e)
@@ -222,6 +230,11 @@ namespace MyManager
             _hoveredRowIndex = -1;
             if (oldIndex >= 0 && oldIndex < dgvJobs.Rows.Count)
                 dgvJobs.InvalidateRow(oldIndex);
+        }
+
+        private void DgvJobs_MouseLeave(object? sender, EventArgs e)
+        {
+            StopGridHoverActivation();
         }
 
         private void DgvJobs_CellDoubleClick(object? sender, DataGridViewCellEventArgs e)
@@ -322,6 +335,8 @@ namespace MyManager
 
         private async void DgvJobs_CellClick(object? sender, DataGridViewCellEventArgs e)
         {
+            StopGridHoverActivation();
+
             if (e.RowIndex < 0 || e.ColumnIndex < 0)
                 return;
 
@@ -357,6 +372,83 @@ namespace MyManager
                 SetBottomStatus($"Не удалось обработать действие по файлу: {ex.Message}");
                 MessageBox.Show(this, $"Не удалось обработать действие по файлу: {ex.Message}", "Файловая операция", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        private void SetGridHoverActivationCandidate(int rowIndex)
+        {
+            if (!dgvJobs.Visible || rowIndex < 0 || rowIndex >= dgvJobs.Rows.Count)
+            {
+                StopGridHoverActivation();
+                return;
+            }
+
+            if ((Control.MouseButtons & MouseButtons.Left) == MouseButtons.Left)
+            {
+                StopGridHoverActivation();
+                return;
+            }
+
+            if ((ModifierKeys & (Keys.Control | Keys.Shift)) != Keys.None)
+            {
+                StopGridHoverActivation();
+                return;
+            }
+
+            var row = dgvJobs.Rows[rowIndex];
+            if (row.IsNewRow || !row.Visible)
+            {
+                StopGridHoverActivation();
+                return;
+            }
+
+            var orderInternalId = ExtractOrderInternalIdFromTag(row.Tag?.ToString());
+            if (string.IsNullOrWhiteSpace(orderInternalId))
+            {
+                StopGridHoverActivation();
+                return;
+            }
+
+            if (string.Equals(_gridHoverCandidateOrderInternalId, orderInternalId, StringComparison.Ordinal))
+                return;
+
+            _gridHoverCandidateOrderInternalId = orderInternalId;
+            _gridHoverActivateTimer?.Stop();
+            _gridHoverActivateTimer?.Start();
+        }
+
+        private void StopGridHoverActivation()
+        {
+            _gridHoverActivateTimer?.Stop();
+            _gridHoverCandidateOrderInternalId = null;
+        }
+
+        private void GridHoverActivateTimer_Tick(object? sender, EventArgs e)
+        {
+            _gridHoverActivateTimer?.Stop();
+
+            if (!dgvJobs.Visible)
+                return;
+
+            if ((Control.MouseButtons & MouseButtons.Left) == MouseButtons.Left)
+                return;
+
+            if ((ModifierKeys & (Keys.Control | Keys.Shift)) != Keys.None)
+                return;
+
+            var orderInternalId = _gridHoverCandidateOrderInternalId;
+            if (string.IsNullOrWhiteSpace(orderInternalId))
+                return;
+
+            var selectedOrderIds = GetSelectedOrderInternalIdsFromGrid();
+            if (selectedOrderIds.Count == 1 && selectedOrderIds.Contains(orderInternalId))
+                return;
+
+            if (!TrySelectGridRowByOrderInternalId(orderInternalId))
+                return;
+
+            SyncTilesSelectionWithGrid();
+            UpdateActionButtonsState();
+            UpdateTrayStatsIndicator();
         }
 
         private void DgvJobs_DragEnter(object? sender, DragEventArgs e)

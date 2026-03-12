@@ -45,11 +45,13 @@ namespace MyManager
         private Font? _printTileOrderFont;
         private OrderProcessor? _processor;
         private System.Windows.Forms.Timer? _trayIndicatorsTimer;
+        private System.Windows.Forms.Timer? _gridHoverActivateTimer;
         private System.Windows.Forms.Timer? _tileHoverActivateTimer;
         private CancellationTokenSource? _printTilesThumbnailsCts;
         private bool _isRebuildingGrid;
         private bool _isSyncingTileSelection;
         private bool _isSyncingGridSelection;
+        private string? _gridHoverCandidateOrderInternalId;
         private int _tileHoverCandidateIndex = -1;
         private string _baseBottomStatusText = DefaultTrayStatusText;
         private int _hoveredRowIndex = -1;
@@ -103,6 +105,7 @@ namespace MyManager
         private const string ReceivedDateFilterLabelText = "Дата поступления";
         private const string DefaultTrayStatusText = "Готово";
         private const int TrayIndicatorsRefreshIntervalMs = 15000;
+        private const int GridHoverActivateDelayMs = 500;
         private const int TileHoverActivateDelayMs = 500;
         private const long DiskWarningThresholdBytes = 10L * 1024 * 1024 * 1024;
         private const long DiskCriticalThresholdBytes = 5L * 1024 * 1024 * 1024;

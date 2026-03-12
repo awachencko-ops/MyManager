@@ -34,7 +34,7 @@ namespace MyManager
             _lvPrintTiles.MultiSelect = true;
             _lvPrintTiles.ScrollBars = true;
             _lvPrintTiles.View = Manina.Windows.Forms.View.Thumbnails;
-            _lvPrintTiles.ThumbnailSize = new Size(152, 152);
+            _lvPrintTiles.ThumbnailSize = new Size(168, 168);
             _lvPrintTiles.AllowDrag = false;
             _lvPrintTiles.ShowFileIcons = false;
             _lvPrintTiles.UseEmbeddedThumbnails = UseEmbeddedThumbnails.Never;
@@ -101,7 +101,10 @@ namespace MyManager
             _lvPrintTiles.Visible = isTilesMode;
 
             if (isTilesMode)
+            {
+                StopGridHoverActivation();
                 SyncGridSelectionWithTiles();
+            }
             else
             {
                 StopTileHoverActivation();
