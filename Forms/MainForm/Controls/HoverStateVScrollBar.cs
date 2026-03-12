@@ -49,7 +49,7 @@ namespace MyManager
         public int SmallChange => _smallChange;
         public int Value => _value;
 
-        private bool CanScroll => _maximum > _minimum;
+        private bool HasScrollableRange => _maximum > _minimum;
 
         public void SetState(int minimum, int maximum, int largeChange, int smallChange, int value)
         {
@@ -109,11 +109,8 @@ namespace MyManager
                 graphics.FillPath(thumbBrush, thumbPath);
             }
 
-            if (CanScroll)
-            {
-                DrawArrowGlyph(graphics, _upArrowRect, isUpDirection: true);
-                DrawArrowGlyph(graphics, _downArrowRect, isUpDirection: false);
-            }
+            DrawArrowGlyph(graphics, _upArrowRect, isUpDirection: true);
+            DrawArrowGlyph(graphics, _downArrowRect, isUpDirection: false);
         }
 
         protected override void OnMouseEnter(EventArgs e)
@@ -144,7 +141,7 @@ namespace MyManager
             if (e.Button != MouseButtons.Left)
                 return;
 
-            if (!CanScroll)
+            if (!HasScrollableRange)
             {
                 Invalidate();
                 return;
@@ -188,7 +185,7 @@ namespace MyManager
         {
             base.OnMouseMove(e);
 
-            if (!_isDraggingThumb || !CanScroll)
+            if (!_isDraggingThumb || !HasScrollableRange)
                 return;
 
             RecalculateGeometry();
@@ -219,7 +216,7 @@ namespace MyManager
         {
             base.OnMouseWheel(e);
 
-            if (!CanScroll)
+            if (!HasScrollableRange)
                 return;
 
             var wheelStep = Math.Max(_smallChange * 3, 1);
@@ -271,9 +268,18 @@ namespace MyManager
                 return;
             }
 
-            if (!CanScroll)
+            if (!HasScrollableRange)
             {
-                _thumbRect = Rectangle.Empty;
+                // Keep a visible static thumb even when scrolling is not required.
+                var staticThumbHeight = Math.Max(
+                    MinThumbHeight,
+                    Math.Min(Math.Max(0, _trackRect.Height - 2), _trackRect.Height / 3));
+                staticThumbHeight = Math.Min(_trackRect.Height, staticThumbHeight);
+                var staticThumbTop = _trackRect.Top + 1;
+                if (staticThumbTop + staticThumbHeight > _trackRect.Bottom)
+                    staticThumbTop = _trackRect.Bottom - staticThumbHeight;
+                var staticThumbLeft = _trackRect.Left + ((_trackRect.Width - ThumbWidth) / 2);
+                _thumbRect = new Rectangle(staticThumbLeft, staticThumbTop, ThumbWidth, staticThumbHeight);
                 return;
             }
 
