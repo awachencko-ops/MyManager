@@ -1,8 +1,12 @@
 using System;
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
 using System.IO;
+using System.Security.Cryptography;
+using System.Text;
 using Manina.Windows.Forms;
 using Manina.Windows.Forms.ImageListViewItemAdaptors;
 using PdfiumViewer;
@@ -13,6 +17,20 @@ namespace MyManager
     {
         private readonly ConcurrentDictionary<string, CachedThumbnail> _pdfCache = new(StringComparer.OrdinalIgnoreCase);
         private readonly object _cacheSync = new();
+        private readonly string _diskCacheDirectory;
+
+        public PdfAwareFileSystemAdaptor(string diskCacheDirectory)
+        {
+            _diskCacheDirectory = string.IsNullOrWhiteSpace(diskCacheDirectory)
+                ? Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "MyManager",
+                    "ThumbnailCache",
+                    "PdfPreviewCache")
+                : diskCacheDirectory;
+
+            Directory.CreateDirectory(_diskCacheDirectory);
+        }
 
         public override Image GetThumbnail(object key, Size size, UseEmbeddedThumbnails useEmbeddedThumbnails, bool useExifOrientation)
         {
@@ -24,31 +42,34 @@ namespace MyManager
             if (!IsPdfReadyForPreview(normalizedPath))
                 return base.GetThumbnail(key, size, useEmbeddedThumbnails, useExifOrientation);
 
-            if (TryGetCachedThumbnail(normalizedPath, size, out var cached))
+            if (!TryGetFileMetadata(normalizedPath, out var fileLength, out var lastWriteTicksUtc) || fileLength <= 0)
+                return base.GetThumbnail(key, size, useEmbeddedThumbnails, useExifOrientation);
+
+            if (TryGetCachedThumbnail(normalizedPath, size, fileLength, lastWriteTicksUtc, out var cached))
                 return cached;
+
+            if (TryLoadCachedThumbnailFromDisk(normalizedPath, size, fileLength, lastWriteTicksUtc, out var diskCached))
+            {
+                StoreCachedThumbnail(normalizedPath, diskCached, size, fileLength, lastWriteTicksUtc);
+                return diskCached;
+            }
 
             var rendered = TryRenderPdfThumbnail(normalizedPath, size);
             if (rendered == null)
                 return base.GetThumbnail(key, size, useEmbeddedThumbnails, useExifOrientation);
 
-            StoreCachedThumbnail(normalizedPath, rendered, size);
+            StoreCachedThumbnail(normalizedPath, rendered, size, fileLength, lastWriteTicksUtc);
+            SaveCachedThumbnailToDisk(normalizedPath, rendered, size, fileLength, lastWriteTicksUtc);
             return rendered;
         }
 
-        private bool TryGetCachedThumbnail(string filePath, Size size, out Image image)
+        private bool TryGetCachedThumbnail(string filePath, Size size, long fileLength, long lastWriteTicksUtc, out Image image)
         {
             image = null!;
             lock (_cacheSync)
             {
                 if (!_pdfCache.TryGetValue(filePath, out var cached))
                     return false;
-
-                if (!TryGetFileMetadata(filePath, out var fileLength, out var lastWriteTicksUtc))
-                {
-                    if (_pdfCache.TryRemove(filePath, out var removedByMissingMetadata))
-                        removedByMissingMetadata.Bitmap.Dispose();
-                    return false;
-                }
 
                 var isValid =
                     cached.FileLength == fileLength
@@ -77,11 +98,8 @@ namespace MyManager
             }
         }
 
-        private void StoreCachedThumbnail(string filePath, Bitmap thumbnail, Size size)
+        private void StoreCachedThumbnail(string filePath, Bitmap thumbnail, Size size, long fileLength, long lastWriteTicksUtc)
         {
-            if (!TryGetFileMetadata(filePath, out var fileLength, out var lastWriteTicksUtc))
-                return;
-
             var cachedBitmap = (Bitmap)thumbnail.Clone();
             var cacheValue = new CachedThumbnail(
                 fileLength,
@@ -98,6 +116,94 @@ namespace MyManager
             }
         }
 
+        private bool TryLoadCachedThumbnailFromDisk(
+            string filePath,
+            Size size,
+            long fileLength,
+            long lastWriteTicksUtc,
+            out Bitmap thumbnail)
+        {
+            thumbnail = null!;
+            if (!TryGetDiskCachePath(filePath, size, fileLength, lastWriteTicksUtc, out var cachePath))
+                return false;
+
+            if (!File.Exists(cachePath))
+                return false;
+
+            try
+            {
+                using var stream = new FileStream(cachePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+                using var image = Image.FromStream(stream, useEmbeddedColorManagement: false, validateImageData: false);
+                thumbnail = new Bitmap(image);
+                return true;
+            }
+            catch
+            {
+                try
+                {
+                    File.Delete(cachePath);
+                }
+                catch
+                {
+                    // Ignore cache cleanup failures.
+                }
+
+                return false;
+            }
+        }
+
+        private void SaveCachedThumbnailToDisk(
+            string filePath,
+            Bitmap thumbnail,
+            Size size,
+            long fileLength,
+            long lastWriteTicksUtc)
+        {
+            if (!TryGetDiskCachePath(filePath, size, fileLength, lastWriteTicksUtc, out var cachePath))
+                return;
+
+            try
+            {
+                var cacheFolder = Path.GetDirectoryName(cachePath);
+                if (!string.IsNullOrWhiteSpace(cacheFolder))
+                    Directory.CreateDirectory(cacheFolder);
+
+                using var stream = new FileStream(cachePath, FileMode.Create, FileAccess.Write, FileShare.Read);
+                thumbnail.Save(stream, ImageFormat.Png);
+            }
+            catch
+            {
+                // Ignore cache write failures.
+            }
+        }
+
+        private bool TryGetDiskCachePath(string filePath, Size size, long fileLength, long lastWriteTicksUtc, out string cachePath)
+        {
+            cachePath = string.Empty;
+            if (string.IsNullOrWhiteSpace(filePath) || string.IsNullOrWhiteSpace(_diskCacheDirectory))
+                return false;
+
+            try
+            {
+                var source = string.Join(
+                    "|",
+                    filePath,
+                    fileLength.ToString(CultureInfo.InvariantCulture),
+                    lastWriteTicksUtc.ToString(CultureInfo.InvariantCulture),
+                    size.Width.ToString(CultureInfo.InvariantCulture),
+                    size.Height.ToString(CultureInfo.InvariantCulture),
+                    "pdf-preview-v2");
+                var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(source));
+                var hash = Convert.ToHexString(hashBytes);
+                cachePath = Path.Combine(_diskCacheDirectory, $"{hash}.png");
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         private static Bitmap? TryRenderPdfThumbnail(string pdfPath, Size targetSize)
         {
             try
@@ -109,7 +215,8 @@ namespace MyManager
                 var pageSize = document.PageSizes.Count > 0 ? document.PageSizes[0] : new SizeF(1f, 1f);
                 var pageWidth = Math.Max(1f, pageSize.Width);
                 var pageHeight = Math.Max(1f, pageSize.Height);
-                const int renderBasePixels = 1200;
+                var targetMaxSide = Math.Max(Math.Max(targetSize.Width, targetSize.Height), 1);
+                var renderBasePixels = Math.Clamp(targetMaxSide * 3, 360, 900);
                 int renderWidth;
                 int renderHeight;
 
@@ -124,7 +231,7 @@ namespace MyManager
                     renderWidth = Math.Max(200, (int)Math.Round(renderBasePixels * (pageWidth / pageHeight)));
                 }
 
-                const int renderDpi = 150;
+                const int renderDpi = 110;
                 using var rendered = document.Render(
                     page: 0,
                     width: renderWidth,
@@ -211,23 +318,7 @@ namespace MyManager
 
         private static bool IsPdfReadyForPreview(string filePath)
         {
-            try
-            {
-                using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.None);
-                return stream.Length > 0;
-            }
-            catch (IOException)
-            {
-                return false;
-            }
-            catch (UnauthorizedAccessException)
-            {
-                return false;
-            }
-            catch (System.Security.SecurityException)
-            {
-                return false;
-            }
+            return TryGetFileMetadata(filePath, out var fileLength, out _) && fileLength > 0;
         }
 
         private static bool TryGetFileMetadata(string filePath, out long fileLength, out long lastWriteTicksUtc)

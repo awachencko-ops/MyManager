@@ -27,6 +27,9 @@ namespace MyManager
 
         private void InitializeOrdersTilesView()
         {
+            var persistentCacheDirectory = Path.Combine(_printTilesCacheFolderPath, "ImageListView");
+            var pdfPreviewCacheDirectory = Path.Combine(_printTilesCacheFolderPath, "PdfPreviewCache");
+
             _lvPrintTiles.Dock = DockStyle.Fill;
             _lvPrintTiles.Margin = dgvJobs.Margin;
             _lvPrintTiles.BackColor = dgvJobs.BackgroundColor;
@@ -39,10 +42,12 @@ namespace MyManager
             _lvPrintTiles.ShowFileIcons = false;
             _lvPrintTiles.UseEmbeddedThumbnails = UseEmbeddedThumbnails.Never;
             _lvPrintTiles.CacheMode = CacheMode.Continuous;
-            _lvPrintTiles.PersistentCacheDirectory = _printTilesCacheFolderPath;
+            _lvPrintTiles.PersistentCacheDirectory = persistentCacheDirectory;
             _lvPrintTiles.PersistentCacheSize = 512L * 1024 * 1024;
             Directory.CreateDirectory(_printTilesCacheFolderPath);
-            TryEnablePdfThumbnailAdaptor();
+            Directory.CreateDirectory(persistentCacheDirectory);
+            Directory.CreateDirectory(pdfPreviewCacheDirectory);
+            TryEnablePdfThumbnailAdaptor(pdfPreviewCacheDirectory);
             _lvPrintTiles.SetRenderer(new SimpleTilesRenderer(OrdersRowSelectedBackColor, OrdersRowHoverBackColor));
             _lvPrintTiles.Visible = false;
             _lvPrintTiles.SelectionChanged += LvPrintTiles_SelectedIndexChanged;
@@ -57,7 +62,7 @@ namespace MyManager
             _lvPrintTiles.BringToFront();
         }
 
-        private void TryEnablePdfThumbnailAdaptor()
+        private void TryEnablePdfThumbnailAdaptor(string pdfPreviewCacheDirectory)
         {
             if (ImageListViewDefaultAdaptorField == null)
             {
@@ -67,7 +72,7 @@ namespace MyManager
 
             try
             {
-                ImageListViewDefaultAdaptorField.SetValue(_lvPrintTiles, new PdfAwareFileSystemAdaptor());
+                ImageListViewDefaultAdaptorField.SetValue(_lvPrintTiles, new PdfAwareFileSystemAdaptor(pdfPreviewCacheDirectory));
             }
             catch (Exception ex)
             {
