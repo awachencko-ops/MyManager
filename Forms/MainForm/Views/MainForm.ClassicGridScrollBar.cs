@@ -5,9 +5,6 @@ namespace MyManager
 {
     public partial class MainForm
     {
-        private const int ClassicGridScrollBarGap = 1;
-        private const int ClassicGridScrollBarRightMargin = 3;
-
         private VScrollBar? _classicGridScrollBar;
         private bool _isSyncingClassicGridScrollBar;
 
@@ -16,22 +13,20 @@ namespace MyManager
             if (_classicGridScrollBar != null)
                 return;
 
-            ReserveRightSideForClassicGridScrollBar();
-
-            // Use dedicated standard WinForms scrollbar, always visible beside the grid.
+            // Use dedicated standard WinForms scrollbar as a child of the grid itself.
+            // This avoids putting multiple controls into one TableLayoutPanel cell.
             dgvJobs.ScrollBars = ScrollBars.None;
 
             _classicGridScrollBar = new VScrollBar
             {
                 Name = "dgvJobsClassicVScrollBar",
                 Width = SystemInformation.VerticalScrollBarWidth,
-                Margin = new Padding(0, dgvJobs.Margin.Top, ClassicGridScrollBarRightMargin, dgvJobs.Margin.Bottom),
-                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Right,
+                Dock = DockStyle.Right,
                 TabStop = false
             };
 
+            dgvJobs.Controls.Add(_classicGridScrollBar);
             _classicGridScrollBar.ValueChanged += ClassicGridScrollBar_ValueChanged;
-            tableLayoutPanel1.Controls.Add(_classicGridScrollBar, 0, 2);
 
             dgvJobs.Scroll += DgvJobs_ScrollForClassicBar;
             dgvJobs.RowsAdded += (_, _) => UpdateClassicGridScrollBar();
@@ -41,16 +36,6 @@ namespace MyManager
             dgvJobs.VisibleChanged += (_, _) => UpdateClassicGridScrollBar();
 
             UpdateClassicGridScrollBar();
-        }
-
-        private void ReserveRightSideForClassicGridScrollBar()
-        {
-            var requiredRightMargin = SystemInformation.VerticalScrollBarWidth + ClassicGridScrollBarGap + ClassicGridScrollBarRightMargin;
-            var currentMargin = dgvJobs.Margin;
-            if (currentMargin.Right >= requiredRightMargin)
-                return;
-
-            dgvJobs.Margin = new Padding(currentMargin.Left, currentMargin.Top, requiredRightMargin, currentMargin.Bottom);
         }
 
         private void DgvJobs_ScrollForClassicBar(object? sender, ScrollEventArgs e)
