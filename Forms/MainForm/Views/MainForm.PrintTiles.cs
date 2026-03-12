@@ -1062,7 +1062,7 @@ namespace MyManager
                     renderWidth = Math.Max(200, (int)Math.Round(renderBasePixels * (pageWidth / pageHeight)));
                 }
 
-                const int renderDpi = 150;
+                const int renderDpi = 72;
                 using var rendered = document.Render(
                     page: 0,
                     width: renderWidth,
