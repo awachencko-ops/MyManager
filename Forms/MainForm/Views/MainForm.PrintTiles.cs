@@ -96,8 +96,10 @@ namespace MyManager
             _ordersViewMode = mode;
 
             var isTilesMode = _ordersViewMode == OrdersViewMode.Tiles;
+            RefreshOrdersTableFromVisibleRows();
             RefreshPrintTilesFromVisibleRows();
-            dgvJobs.Visible = !isTilesMode;
+            dgvJobs.Visible = false;
+            _olvOrdersTable.Visible = !isTilesMode;
             _lvPrintTiles.Visible = isTilesMode;
 
             if (isTilesMode)
@@ -108,6 +110,7 @@ namespace MyManager
             else
             {
                 StopTileHoverActivation();
+                SyncOrdersTableSelectionWithGrid();
                 SyncTilesSelectionWithGrid();
             }
 
