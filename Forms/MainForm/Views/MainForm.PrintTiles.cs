@@ -34,7 +34,7 @@ namespace MyManager
             _lvPrintTiles.MultiSelect = true;
             _lvPrintTiles.ScrollBars = true;
             _lvPrintTiles.View = Manina.Windows.Forms.View.Thumbnails;
-            _lvPrintTiles.ThumbnailSize = new Size(120, 120);
+            _lvPrintTiles.ThumbnailSize = new Size(136, 136);
             _lvPrintTiles.AllowDrag = false;
             _lvPrintTiles.ShowFileIcons = false;
             _lvPrintTiles.UseEmbeddedThumbnails = UseEmbeddedThumbnails.Never;
@@ -43,7 +43,7 @@ namespace MyManager
             _lvPrintTiles.PersistentCacheSize = 512L * 1024 * 1024;
             Directory.CreateDirectory(_printTilesCacheFolderPath);
             TryEnablePdfThumbnailAdaptor();
-            _lvPrintTiles.SetRenderer(new SimpleTilesRenderer(OrdersRowSelectedBackColor));
+            _lvPrintTiles.SetRenderer(new SimpleTilesRenderer(OrdersRowSelectedBackColor, OrdersRowHoverBackColor));
             _lvPrintTiles.Visible = false;
             _lvPrintTiles.SelectionChanged += LvPrintTiles_SelectedIndexChanged;
             _lvPrintTiles.DoubleClick += LvPrintTiles_ItemActivate;

@@ -10,14 +10,18 @@ namespace MyManager
     {
         private readonly Color _selectedBackColor;
         private readonly Color _selectedBorderColor;
+        private readonly Color _hoverBackColor;
+        private readonly Color _hoverBorderColor;
         private readonly Color _selectionRectFillColor;
         private readonly Color _selectionRectBorderColor;
         private readonly Color _textColor = Color.FromArgb(24, 28, 36);
 
-        public SimpleTilesRenderer(Color selectedBackColor)
+        public SimpleTilesRenderer(Color selectedBackColor, Color hoverBackColor)
         {
             _selectedBackColor = selectedBackColor;
             _selectedBorderColor = ControlPaint.Dark(selectedBackColor, 0.12f);
+            _hoverBackColor = hoverBackColor;
+            _hoverBorderColor = ControlPaint.Dark(hoverBackColor, 0.08f);
             _selectionRectFillColor = Color.FromArgb(90, selectedBackColor);
             _selectionRectBorderColor = ControlPaint.Dark(selectedBackColor, 0.2f);
         }
@@ -50,7 +54,10 @@ namespace MyManager
                 return;
 
             var isSelected = (state & ItemState.Selected) == ItemState.Selected;
-            var itemBackColor = isSelected ? _selectedBackColor : (ImageListView?.BackColor ?? Color.White);
+            var isHovered = (state & ItemState.Hovered) == ItemState.Hovered;
+            var itemBackColor = isSelected
+                ? _selectedBackColor
+                : (isHovered ? _hoverBackColor : (ImageListView?.BackColor ?? Color.White));
             using (var backBrush = new SolidBrush(itemBackColor))
                 graphics.FillRectangle(backBrush, bounds);
 
@@ -106,6 +113,11 @@ namespace MyManager
             if (isSelected)
             {
                 using var borderPen = new Pen(_selectedBorderColor);
+                graphics.DrawRectangle(borderPen, GetBorderRect(bounds));
+            }
+            else if (isHovered)
+            {
+                using var borderPen = new Pen(_hoverBorderColor);
                 graphics.DrawRectangle(borderPen, GetBorderRect(bounds));
             }
         }
