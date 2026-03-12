@@ -1006,9 +1006,11 @@ namespace MyManager
 
         private void StartPdfThumbnailGeneration(IEnumerable<string> pdfPaths)
         {
-            if (_ordersViewWarmupCoordinator == null || _pdfThumbnailAdaptor == null)
+            var pdfThumbnailAdaptor = _pdfThumbnailAdaptor;
+            if (_ordersViewWarmupCoordinator == null || pdfThumbnailAdaptor == null)
                 return;
 
+            var thumbnailSize = _lvPrintTiles.ThumbnailSize;
             var pending = pdfPaths
                 .Select(CleanPath)
                 .Where(path => !string.IsNullOrWhiteSpace(path) && HasExistingFile(path) && IsPdfPath(path) && IsPdfReadyForPreview(path))
@@ -1019,17 +1021,19 @@ namespace MyManager
             if (pending.Count == 0)
                 return;
 
-            _ordersViewWarmupCoordinator.WarmupPdfThumbnails(pending, WarmupPdfThumbnailPath);
+            _ordersViewWarmupCoordinator.WarmupPdfThumbnails(
+                pending,
+                (pdfPath, token) => WarmupPdfThumbnailPath(pdfThumbnailAdaptor, thumbnailSize, pdfPath, token));
         }
 
-        private void WarmupPdfThumbnailPath(string pdfPath, CancellationToken token)
+        private void WarmupPdfThumbnailPath(PdfAwareFileSystemAdaptor pdfThumbnailAdaptor, Size thumbnailSize, string pdfPath, CancellationToken token)
         {
-            if (token.IsCancellationRequested || _pdfThumbnailAdaptor == null)
+            if (token.IsCancellationRequested)
                 return;
 
-            using var image = _pdfThumbnailAdaptor.GetThumbnail(
+            using var image = pdfThumbnailAdaptor.GetThumbnail(
                 pdfPath,
-                _lvPrintTiles.ThumbnailSize,
+                thumbnailSize,
                 UseEmbeddedThumbnails.Never,
                 useExifOrientation: false);
         }
