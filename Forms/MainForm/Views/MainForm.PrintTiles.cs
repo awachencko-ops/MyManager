@@ -42,6 +42,7 @@ namespace MyManager
             _lvPrintTiles.Visible = false;
             _lvPrintTiles.DrawItem += LvPrintTiles_DrawItem;
             _lvPrintTiles.SelectedIndexChanged += LvPrintTiles_SelectedIndexChanged;
+            _lvPrintTiles.MarqueeSelectionCompleted += LvPrintTiles_MarqueeSelectionCompleted;
             _lvPrintTiles.ItemActivate += LvPrintTiles_ItemActivate;
             _lvPrintTiles.MouseUp += LvPrintTiles_MouseUp;
             _printTileOrderFont = new Font(_lvPrintTiles.Font, FontStyle.Bold);
@@ -97,6 +98,16 @@ namespace MyManager
             if (_isSyncingTileSelection)
                 return;
 
+            if (_lvPrintTiles.IsMarqueeSelecting)
+                return;
+
+            SyncGridSelectionWithTiles();
+            UpdateActionButtonsState();
+            UpdateTrayStatsIndicator();
+        }
+
+        private void LvPrintTiles_MarqueeSelectionCompleted(object? sender, EventArgs e)
+        {
             SyncGridSelectionWithTiles();
             UpdateActionButtonsState();
             UpdateTrayStatsIndicator();

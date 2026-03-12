@@ -16,7 +16,15 @@ namespace MyManager
         private Point _marqueeStartPoint;
         private Rectangle _marqueeClientRect = Rectangle.Empty;
 
+        public event EventHandler? MarqueeSelectionCompleted;
         public Color MarqueeColor { get; set; } = Color.FromArgb(235, 240, 250);
+        public bool IsMarqueeSelecting => _isMarqueeSelecting;
+
+        public ExplorerMarqueeListView()
+        {
+            SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint, true);
+            DoubleBuffered = true;
+        }
 
         protected override void WndProc(ref Message m)
         {
@@ -120,6 +128,7 @@ namespace MyManager
             _isMarqueeSelecting = false;
             Capture = false;
             InvalidateMarqueeRect(rectToInvalidate);
+            MarqueeSelectionCompleted?.Invoke(this, EventArgs.Empty);
         }
 
         private void ApplyMarqueeSelection(Rectangle clientRect)
