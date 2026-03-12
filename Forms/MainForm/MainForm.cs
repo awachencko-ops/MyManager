@@ -223,7 +223,8 @@ namespace MyManager
             _jsonHistoryFile = settings.HistoryFilePath;
             _managerLogFilePath = settings.ManagerLogFilePath;
             _orderLogsFolderPath = settings.OrderLogsFolderPath;
-            _printTilesCacheFolderPath = ResolveThumbnailCacheFolderPath(settings.SharedThumbnailCachePath);
+            _printTilesCacheFolderPath = ResolveLocalThumbnailCacheFolderPath();
+            _sharedPrintTilesCacheFolderPath = ResolveOptionalSharedThumbnailCacheFolderPath(settings.SharedThumbnailCachePath);
             Logger.LogFilePath = _managerLogFilePath;
         }
 
@@ -444,12 +445,12 @@ namespace MyManager
             _jsonHistoryFile = StoragePaths.ResolveFilePath(settingsForm.HistoryFilePath, "history.json");
             _managerLogFilePath = StoragePaths.ResolveFilePath(settingsForm.ManagerLogFilePath, "manager.log");
             _orderLogsFolderPath = StoragePaths.ResolveFolderPath(settingsForm.OrderLogsFolderPath, "order-logs");
-            var nextCacheRootPath = ResolveThumbnailCacheFolderPath(settingsForm.SharedThumbnailCachePath);
+            var nextSharedCacheRootPath = ResolveOptionalSharedThumbnailCacheFolderPath(settingsForm.SharedThumbnailCachePath);
             var cacheRootChanged = !string.Equals(
-                _printTilesCacheFolderPath,
-                nextCacheRootPath,
+                _sharedPrintTilesCacheFolderPath,
+                nextSharedCacheRootPath,
                 StringComparison.OrdinalIgnoreCase);
-            _printTilesCacheFolderPath = nextCacheRootPath;
+            _sharedPrintTilesCacheFolderPath = nextSharedCacheRootPath;
 
             var settings = AppSettings.Load();
             settings.OrdersRootPath = _ordersRootPath;
@@ -469,20 +470,27 @@ namespace MyManager
             InitializeProcessor();
             RefreshTrayIndicators();
             var settingsSavedMessage = cacheRootChanged
-                ? "Настройки сохранены. Путь кэша превью изменен и будет полностью применен после перезапуска приложения."
+                ? "Настройки сохранены. Путь общего кэша превью изменен и будет полностью применен после перезапуска приложения."
                 : "Настройки сохранены";
             SetBottomStatus(settingsSavedMessage);
             MessageBox.Show(this, settingsSavedMessage, "MainForm", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
-        private static string ResolveThumbnailCacheFolderPath(string configuredPath)
+        private static string ResolveLocalThumbnailCacheFolderPath()
         {
             var fallbackPath = AppSettings.DefaultThumbnailCacheFolderPath;
-            var candidatePath = string.IsNullOrWhiteSpace(configuredPath)
-                ? fallbackPath
-                : (Path.IsPathRooted(configuredPath)
-                    ? configuredPath.Trim()
-                    : Path.Combine(StoragePaths.AppBaseDirectory, configuredPath.Trim()));
+            Directory.CreateDirectory(fallbackPath);
+            return fallbackPath;
+        }
+
+        private static string ResolveOptionalSharedThumbnailCacheFolderPath(string configuredPath)
+        {
+            if (string.IsNullOrWhiteSpace(configuredPath))
+                return string.Empty;
+
+            var candidatePath = Path.IsPathRooted(configuredPath)
+                ? configuredPath.Trim()
+                : Path.Combine(StoragePaths.AppBaseDirectory, configuredPath.Trim());
 
             try
             {
@@ -491,8 +499,7 @@ namespace MyManager
             }
             catch
             {
-                Directory.CreateDirectory(fallbackPath);
-                return fallbackPath;
+                return string.Empty;
             }
         }
 

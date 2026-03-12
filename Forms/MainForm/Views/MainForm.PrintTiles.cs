@@ -28,7 +28,10 @@ namespace MyManager
         private void InitializeOrdersTilesView()
         {
             var persistentCacheDirectory = Path.Combine(_printTilesCacheFolderPath, "ImageListView");
-            var pdfPreviewCacheDirectory = Path.Combine(_printTilesCacheFolderPath, "PdfPreviewCache");
+            var localPdfPreviewCacheDirectory = Path.Combine(_printTilesCacheFolderPath, "PdfPreviewCache");
+            var sharedPdfPreviewCacheDirectory = string.IsNullOrWhiteSpace(_sharedPrintTilesCacheFolderPath)
+                ? string.Empty
+                : Path.Combine(_sharedPrintTilesCacheFolderPath, "PdfPreviewCache");
 
             _lvPrintTiles.Dock = DockStyle.Fill;
             _lvPrintTiles.Margin = dgvJobs.Margin;
@@ -44,10 +47,22 @@ namespace MyManager
             _lvPrintTiles.CacheMode = CacheMode.Continuous;
             Directory.CreateDirectory(_printTilesCacheFolderPath);
             Directory.CreateDirectory(persistentCacheDirectory);
-            Directory.CreateDirectory(pdfPreviewCacheDirectory);
+            Directory.CreateDirectory(localPdfPreviewCacheDirectory);
+            if (!string.IsNullOrWhiteSpace(sharedPdfPreviewCacheDirectory))
+            {
+                try
+                {
+                    Directory.CreateDirectory(sharedPdfPreviewCacheDirectory);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn($"TILES | Shared PDF preview cache unavailable. Sync disabled: {ex.Message}");
+                    sharedPdfPreviewCacheDirectory = string.Empty;
+                }
+            }
             _lvPrintTiles.PersistentCacheDirectory = persistentCacheDirectory;
             _lvPrintTiles.PersistentCacheSize = 512L * 1024 * 1024;
-            TryEnablePdfThumbnailAdaptor(pdfPreviewCacheDirectory);
+            TryEnablePdfThumbnailAdaptor(localPdfPreviewCacheDirectory, sharedPdfPreviewCacheDirectory);
             _lvPrintTiles.SetRenderer(new SimpleTilesRenderer(OrdersRowSelectedBackColor, OrdersRowHoverBackColor));
             _lvPrintTiles.Visible = false;
             _lvPrintTiles.SelectionChanged += LvPrintTiles_SelectedIndexChanged;
@@ -62,7 +77,7 @@ namespace MyManager
             _lvPrintTiles.BringToFront();
         }
 
-        private void TryEnablePdfThumbnailAdaptor(string pdfPreviewCacheDirectory)
+        private void TryEnablePdfThumbnailAdaptor(string localPdfPreviewCacheDirectory, string sharedPdfPreviewCacheDirectory)
         {
             if (ImageListViewDefaultAdaptorField == null)
             {
@@ -72,7 +87,9 @@ namespace MyManager
 
             try
             {
-                ImageListViewDefaultAdaptorField.SetValue(_lvPrintTiles, new PdfAwareFileSystemAdaptor(pdfPreviewCacheDirectory));
+                ImageListViewDefaultAdaptorField.SetValue(
+                    _lvPrintTiles,
+                    new PdfAwareFileSystemAdaptor(localPdfPreviewCacheDirectory, sharedPdfPreviewCacheDirectory));
             }
             catch (Exception ex)
             {

@@ -1,12 +1,16 @@
 using System;
 using System.Collections.Concurrent;
-using System.Globalization;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
+using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
+using System.Threading.Tasks;
 using Manina.Windows.Forms;
 using Manina.Windows.Forms.ImageListViewItemAdaptors;
 using PdfiumViewer;
@@ -15,23 +19,59 @@ namespace MyManager
 {
     internal sealed class PdfAwareFileSystemAdaptor : FileSystemAdaptor
     {
+        private static readonly JsonSerializerOptions SyncStateJsonOptions = new() { WriteIndented = true };
+        private const int MaxSyncedFileEntries = 20000;
+        private const int SyncStateFlushThreshold = 25;
+        private static readonly TimeSpan SyncStateMaxFlushDelay = TimeSpan.FromSeconds(10);
+
         private readonly ConcurrentDictionary<string, CachedThumbnail> _pdfCache = new(StringComparer.OrdinalIgnoreCase);
         private readonly object _cacheSync = new();
-        private readonly string _diskCacheDirectory;
-        private readonly ThumbnailCacheIndex _cacheIndex;
 
-        public PdfAwareFileSystemAdaptor(string diskCacheDirectory)
+        private readonly string _localDiskCacheDirectory;
+        private readonly ThumbnailCacheIndex _localCacheIndex;
+        private readonly string _sharedDiskCacheDirectory;
+        private readonly ThumbnailCacheIndex? _sharedCacheIndex;
+        private readonly bool _hasSharedCache;
+
+        private readonly ConcurrentDictionary<string, byte> _mirrorInFlight = new(StringComparer.OrdinalIgnoreCase);
+        private readonly string _syncStateFilePath;
+        private readonly object _syncStateLock = new();
+        private CacheSyncState _syncState;
+        private int _syncStatePendingChanges;
+        private DateTime _lastSyncStateSaveUtc = DateTime.MinValue;
+
+        public PdfAwareFileSystemAdaptor(string localDiskCacheDirectory, string sharedDiskCacheDirectory = "")
         {
-            _diskCacheDirectory = string.IsNullOrWhiteSpace(diskCacheDirectory)
-                ? Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "MyManager",
-                    "ThumbnailCache",
-                    "PdfPreviewCache")
-                : diskCacheDirectory;
+            _localDiskCacheDirectory = ResolveLocalCacheDirectory(localDiskCacheDirectory);
+            Directory.CreateDirectory(_localDiskCacheDirectory);
+            _localCacheIndex = new ThumbnailCacheIndex(Path.Combine(_localDiskCacheDirectory, "thumb-index.db"));
 
-            Directory.CreateDirectory(_diskCacheDirectory);
-            _cacheIndex = new ThumbnailCacheIndex(Path.Combine(_diskCacheDirectory, "thumb-index.db"));
+            var normalizedSharedPath = NormalizeCacheDirectory(sharedDiskCacheDirectory);
+            if (!string.IsNullOrWhiteSpace(normalizedSharedPath) && !ArePathsEqual(normalizedSharedPath, _localDiskCacheDirectory))
+            {
+                try
+                {
+                    Directory.CreateDirectory(normalizedSharedPath);
+                    _sharedDiskCacheDirectory = normalizedSharedPath;
+                    _sharedCacheIndex = new ThumbnailCacheIndex(Path.Combine(_sharedDiskCacheDirectory, "thumb-index.db"));
+                    _hasSharedCache = true;
+                }
+                catch
+                {
+                    _sharedDiskCacheDirectory = string.Empty;
+                    _sharedCacheIndex = null;
+                    _hasSharedCache = false;
+                }
+            }
+            else
+            {
+                _sharedDiskCacheDirectory = string.Empty;
+                _sharedCacheIndex = null;
+                _hasSharedCache = false;
+            }
+
+            _syncStateFilePath = Path.Combine(_localDiskCacheDirectory, "sync-state.json");
+            _syncState = LoadSyncState(_sharedDiskCacheDirectory);
         }
 
         public override Image GetThumbnail(object key, Size size, UseEmbeddedThumbnails useEmbeddedThumbnails, bool useExifOrientation)
@@ -50,18 +90,33 @@ namespace MyManager
             if (TryGetCachedThumbnail(normalizedPath, size, fileLength, lastWriteTicksUtc, out var cached))
                 return cached;
 
-            if (TryLoadCachedThumbnailFromDisk(normalizedPath, size, fileLength, lastWriteTicksUtc, out var diskCached))
+            if (TryLoadCachedThumbnailFromLocalDisk(normalizedPath, size, fileLength, lastWriteTicksUtc, out var localCached, out _))
             {
-                StoreCachedThumbnail(normalizedPath, diskCached, size, fileLength, lastWriteTicksUtc);
-                return diskCached;
+                StoreCachedThumbnail(normalizedPath, localCached, size, fileLength, lastWriteTicksUtc);
+                return localCached;
+            }
+
+            if (TryLoadCachedThumbnailFromSharedDisk(normalizedPath, size, fileLength, lastWriteTicksUtc, out var sharedCached, out var sharedCacheFileName))
+            {
+                var importedCacheFileName = SaveCachedThumbnailToLocalDisk(normalizedPath, sharedCached, size, fileLength, lastWriteTicksUtc);
+                StoreCachedThumbnail(normalizedPath, sharedCached, size, fileLength, lastWriteTicksUtc);
+                if (!string.IsNullOrWhiteSpace(importedCacheFileName))
+                    MarkCacheFileSynced(importedCacheFileName, pulled: true, pushed: false);
+                else if (!string.IsNullOrWhiteSpace(sharedCacheFileName))
+                    MarkCacheFileSynced(sharedCacheFileName, pulled: true, pushed: false);
+
+                return sharedCached;
             }
 
             var rendered = TryRenderPdfThumbnail(normalizedPath, size);
             if (rendered == null)
                 return base.GetThumbnail(key, size, useEmbeddedThumbnails, useExifOrientation);
 
+            var localCacheFileName = SaveCachedThumbnailToLocalDisk(normalizedPath, rendered, size, fileLength, lastWriteTicksUtc);
             StoreCachedThumbnail(normalizedPath, rendered, size, fileLength, lastWriteTicksUtc);
-            SaveCachedThumbnailToDisk(normalizedPath, rendered, size, fileLength, lastWriteTicksUtc);
+            if (!string.IsNullOrWhiteSpace(localCacheFileName))
+                MirrorThumbnailToSharedAsync(localCacheFileName, normalizedPath, size, fileLength, lastWriteTicksUtc);
+
             return rendered;
         }
 
@@ -92,7 +147,6 @@ namespace MyManager
                 }
                 catch (InvalidOperationException)
                 {
-                    // GDI+ bitmaps are not thread-safe; if a cached object becomes unusable, evict it and re-render.
                     if (_pdfCache.TryRemove(filePath, out var removedByCloneFailure))
                         removedByCloneFailure.Bitmap.Dispose();
                     return false;
@@ -118,75 +172,100 @@ namespace MyManager
             }
         }
 
-        private bool TryLoadCachedThumbnailFromDisk(
+        private bool TryLoadCachedThumbnailFromLocalDisk(
             string filePath,
             Size size,
             long fileLength,
             long lastWriteTicksUtc,
-            out Bitmap thumbnail)
+            out Bitmap thumbnail,
+            out string cacheFileName)
+        {
+            return TryLoadCachedThumbnailFromDisk(
+                _localCacheIndex,
+                _localDiskCacheDirectory,
+                filePath,
+                size,
+                fileLength,
+                lastWriteTicksUtc,
+                out thumbnail,
+                out cacheFileName);
+        }
+
+        private bool TryLoadCachedThumbnailFromSharedDisk(
+            string filePath,
+            Size size,
+            long fileLength,
+            long lastWriteTicksUtc,
+            out Bitmap thumbnail,
+            out string cacheFileName)
         {
             thumbnail = null!;
-            if (TryGetIndexedCachePath(filePath, size, fileLength, lastWriteTicksUtc, out var indexedPath)
-                && TryLoadBitmapFromPath(indexedPath, out thumbnail))
-                return true;
+            cacheFileName = string.Empty;
 
-            if (!TryGetDeterministicCachePath(filePath, size, fileLength, lastWriteTicksUtc, out var deterministicPath))
+            if (!_hasSharedCache || _sharedCacheIndex == null)
                 return false;
 
-            if (!File.Exists(deterministicPath))
-                return false;
+            return TryLoadCachedThumbnailFromDisk(
+                _sharedCacheIndex,
+                _sharedDiskCacheDirectory,
+                filePath,
+                size,
+                fileLength,
+                lastWriteTicksUtc,
+                out thumbnail,
+                out cacheFileName);
+        }
 
-            if (!TryLoadBitmapFromPath(deterministicPath, out thumbnail))
+        private static bool TryLoadCachedThumbnailFromDisk(
+            ThumbnailCacheIndex cacheIndex,
+            string cacheDirectory,
+            string filePath,
+            Size size,
+            long fileLength,
+            long lastWriteTicksUtc,
+            out Bitmap thumbnail,
+            out string cacheFileName)
+        {
+            thumbnail = null!;
+            cacheFileName = string.Empty;
+
+            if (cacheIndex.TryGetCacheFileName(filePath, fileLength, lastWriteTicksUtc, size, out var indexedCacheFileName))
             {
-                TryDeleteFile(deterministicPath);
-                return false;
+                if (TryLoadBitmapFromCacheFile(cacheDirectory, indexedCacheFileName, out thumbnail))
+                {
+                    cacheFileName = indexedCacheFileName;
+                    return true;
+                }
+
+                cacheIndex.Remove(filePath, fileLength, lastWriteTicksUtc, size);
+                TryDeleteFile(Path.Combine(cacheDirectory, indexedCacheFileName));
             }
 
-            var cacheFileName = Path.GetFileName(deterministicPath);
-            if (!string.IsNullOrWhiteSpace(cacheFileName))
-                _cacheIndex.Upsert(filePath, fileLength, lastWriteTicksUtc, size, cacheFileName);
+            if (!TryBuildCacheFileName(filePath, size, fileLength, lastWriteTicksUtc, out var deterministicCacheFileName))
+                return false;
 
+            if (!TryLoadBitmapFromCacheFile(cacheDirectory, deterministicCacheFileName, out thumbnail))
+                return false;
+
+            cacheIndex.Upsert(filePath, fileLength, lastWriteTicksUtc, size, deterministicCacheFileName);
+            cacheFileName = deterministicCacheFileName;
             return true;
         }
 
-        private void SaveCachedThumbnailToDisk(
-            string filePath,
-            Bitmap thumbnail,
-            Size size,
-            long fileLength,
-            long lastWriteTicksUtc)
+        private static bool TryLoadBitmapFromCacheFile(string cacheDirectory, string cacheFileName, out Bitmap thumbnail)
         {
-            if (!TryBuildCacheFileName(filePath, size, fileLength, lastWriteTicksUtc, out var cacheFileName))
-                return;
-
-            try
-            {
-                var cachePath = Path.Combine(_diskCacheDirectory, cacheFileName);
-                var cacheFolder = Path.GetDirectoryName(cachePath);
-                if (!string.IsNullOrWhiteSpace(cacheFolder))
-                    Directory.CreateDirectory(cacheFolder);
-
-                using var stream = new FileStream(cachePath, FileMode.Create, FileAccess.Write, FileShare.Read);
-                thumbnail.Save(stream, ImageFormat.Png);
-                _cacheIndex.Upsert(filePath, fileLength, lastWriteTicksUtc, size, cacheFileName);
-            }
-            catch
-            {
-                // Ignore cache write failures.
-            }
-        }
-
-        private bool TryGetIndexedCachePath(string filePath, Size size, long fileLength, long lastWriteTicksUtc, out string cachePath)
-        {
-            cachePath = string.Empty;
-            if (!_cacheIndex.TryGetCacheFileName(filePath, fileLength, lastWriteTicksUtc, size, out var cacheFileName))
+            thumbnail = null!;
+            if (string.IsNullOrWhiteSpace(cacheFileName) || string.IsNullOrWhiteSpace(cacheDirectory))
                 return false;
 
-            cachePath = Path.Combine(_diskCacheDirectory, cacheFileName);
-            if (File.Exists(cachePath))
+            var cachePath = Path.Combine(cacheDirectory, cacheFileName);
+            if (!File.Exists(cachePath))
+                return false;
+
+            if (TryLoadBitmapFromPath(cachePath, out thumbnail))
                 return true;
 
-            _cacheIndex.Remove(filePath, fileLength, lastWriteTicksUtc, size);
+            TryDeleteFile(cachePath);
             return false;
         }
 
@@ -221,14 +300,229 @@ namespace MyManager
             }
         }
 
-        private bool TryGetDeterministicCachePath(string filePath, Size size, long fileLength, long lastWriteTicksUtc, out string cachePath)
+        private string SaveCachedThumbnailToLocalDisk(
+            string filePath,
+            Bitmap thumbnail,
+            Size size,
+            long fileLength,
+            long lastWriteTicksUtc)
         {
-            cachePath = string.Empty;
             if (!TryBuildCacheFileName(filePath, size, fileLength, lastWriteTicksUtc, out var cacheFileName))
-                return false;
+                return string.Empty;
 
-            cachePath = Path.Combine(_diskCacheDirectory, cacheFileName);
-            return true;
+            try
+            {
+                var cachePath = Path.Combine(_localDiskCacheDirectory, cacheFileName);
+                var cacheFolder = Path.GetDirectoryName(cachePath);
+                if (!string.IsNullOrWhiteSpace(cacheFolder))
+                    Directory.CreateDirectory(cacheFolder);
+
+                using var stream = new FileStream(cachePath, FileMode.Create, FileAccess.Write, FileShare.Read);
+                thumbnail.Save(stream, ImageFormat.Png);
+                _localCacheIndex.Upsert(filePath, fileLength, lastWriteTicksUtc, size, cacheFileName);
+                return cacheFileName;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private void MirrorThumbnailToSharedAsync(
+            string cacheFileName,
+            string filePath,
+            Size size,
+            long fileLength,
+            long lastWriteTicksUtc)
+        {
+            if (!_hasSharedCache || _sharedCacheIndex == null || string.IsNullOrWhiteSpace(cacheFileName))
+                return;
+
+            if (!_mirrorInFlight.TryAdd(cacheFileName, 0))
+                return;
+
+            _ = Task.Run(() =>
+            {
+                try
+                {
+                    var localPath = Path.Combine(_localDiskCacheDirectory, cacheFileName);
+                    if (!File.Exists(localPath))
+                        return;
+
+                    var sharedPath = Path.Combine(_sharedDiskCacheDirectory, cacheFileName);
+                    if (!IsCacheFileMarkedSynced(cacheFileName) || !File.Exists(sharedPath))
+                    {
+                        var sharedFolder = Path.GetDirectoryName(sharedPath);
+                        if (!string.IsNullOrWhiteSpace(sharedFolder))
+                            Directory.CreateDirectory(sharedFolder);
+
+                        File.Copy(localPath, sharedPath, overwrite: true);
+                    }
+
+                    _sharedCacheIndex.Upsert(filePath, fileLength, lastWriteTicksUtc, size, cacheFileName);
+                    MarkCacheFileSynced(cacheFileName, pulled: false, pushed: true);
+                }
+                catch
+                {
+                    // Ignore shared cache mirror failures.
+                }
+                finally
+                {
+                    _mirrorInFlight.TryRemove(cacheFileName, out _);
+                }
+            });
+        }
+
+        private bool IsCacheFileMarkedSynced(string cacheFileName)
+        {
+            lock (_syncStateLock)
+                return _syncState.SyncedFiles.ContainsKey(cacheFileName);
+        }
+
+        private void MarkCacheFileSynced(string cacheFileName, bool pulled, bool pushed)
+        {
+            if (string.IsNullOrWhiteSpace(cacheFileName))
+                return;
+
+            lock (_syncStateLock)
+            {
+                _syncState.SyncedFiles[cacheFileName] = DateTime.UtcNow.Ticks;
+                if (pulled)
+                    _syncState.LastPullUtc = DateTime.UtcNow.ToString("O");
+                if (pushed)
+                    _syncState.LastPushUtc = DateTime.UtcNow.ToString("O");
+
+                TrimSyncStateUnsafe();
+                _syncStatePendingChanges++;
+
+                if (_syncStatePendingChanges >= SyncStateFlushThreshold
+                    || DateTime.UtcNow - _lastSyncStateSaveUtc >= SyncStateMaxFlushDelay)
+                {
+                    SaveSyncStateUnsafe();
+                }
+            }
+        }
+
+        private CacheSyncState LoadSyncState(string sharedCachePath)
+        {
+            var normalizedSharedPath = NormalizeForComparison(sharedCachePath);
+            try
+            {
+                if (!File.Exists(_syncStateFilePath))
+                    return CreateAndPersistInitialSyncState(sharedCachePath);
+
+                var json = File.ReadAllText(_syncStateFilePath);
+                var loaded = JsonSerializer.Deserialize<CacheSyncState>(json) ?? new CacheSyncState();
+                loaded.SyncedFiles = loaded.SyncedFiles == null
+                    ? new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase)
+                    : new Dictionary<string, long>(loaded.SyncedFiles, StringComparer.OrdinalIgnoreCase);
+
+                if (!string.Equals(NormalizeForComparison(loaded.SharedCachePath), normalizedSharedPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    loaded.SharedCachePath = sharedCachePath ?? string.Empty;
+                    loaded.LastPullUtc = string.Empty;
+                    loaded.LastPushUtc = string.Empty;
+                    loaded.SyncedFiles.Clear();
+                    PersistSyncStateToDisk(loaded);
+                }
+
+                return loaded;
+            }
+            catch
+            {
+                return CreateAndPersistInitialSyncState(sharedCachePath);
+            }
+        }
+
+        private CacheSyncState CreateAndPersistInitialSyncState(string sharedCachePath)
+        {
+            var state = new CacheSyncState
+            {
+                SharedCachePath = sharedCachePath ?? string.Empty,
+                LastPullUtc = string.Empty,
+                LastPushUtc = string.Empty,
+                SyncedFiles = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase)
+            };
+            PersistSyncStateToDisk(state);
+            return state;
+        }
+
+        private void TrimSyncStateUnsafe()
+        {
+            if (_syncState.SyncedFiles.Count <= MaxSyncedFileEntries)
+                return;
+
+            var removeCount = _syncState.SyncedFiles.Count - MaxSyncedFileEntries;
+            foreach (var key in _syncState.SyncedFiles
+                         .OrderBy(pair => pair.Value)
+                         .Take(removeCount)
+                         .Select(pair => pair.Key)
+                         .ToList())
+            {
+                _syncState.SyncedFiles.Remove(key);
+            }
+        }
+
+        private void SaveSyncStateUnsafe()
+        {
+            PersistSyncStateToDisk(_syncState);
+            _syncStatePendingChanges = 0;
+            _lastSyncStateSaveUtc = DateTime.UtcNow;
+        }
+
+        private void PersistSyncStateToDisk(CacheSyncState state)
+        {
+            try
+            {
+                var folder = Path.GetDirectoryName(_syncStateFilePath);
+                if (!string.IsNullOrWhiteSpace(folder))
+                    Directory.CreateDirectory(folder);
+
+                var json = JsonSerializer.Serialize(state, SyncStateJsonOptions);
+                File.WriteAllText(_syncStateFilePath, json, Encoding.UTF8);
+            }
+            catch
+            {
+                // Ignore sync-state write failures.
+            }
+        }
+
+        private static string ResolveLocalCacheDirectory(string configuredDirectory)
+        {
+            if (!string.IsNullOrWhiteSpace(configuredDirectory))
+                return NormalizeCacheDirectory(configuredDirectory);
+
+            return Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "MyManager",
+                "ThumbnailCache",
+                "PdfPreviewCache");
+        }
+
+        private static string NormalizeCacheDirectory(string path)
+        {
+            return string.IsNullOrWhiteSpace(path)
+                ? string.Empty
+                : Path.GetFullPath(path.Trim())
+                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        }
+
+        private static bool ArePathsEqual(string leftPath, string rightPath)
+        {
+            return string.Equals(
+                NormalizeForComparison(leftPath),
+                NormalizeForComparison(rightPath),
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string NormalizeForComparison(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return string.Empty;
+
+            return path.Trim()
+                .Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar)
+                .TrimEnd(Path.DirectorySeparatorChar);
         }
 
         private static bool TryBuildCacheFileName(string filePath, Size size, long fileLength, long lastWriteTicksUtc, out string cacheFileName)
@@ -246,7 +540,7 @@ namespace MyManager
                     lastWriteTicksUtc.ToString(CultureInfo.InvariantCulture),
                     size.Width.ToString(CultureInfo.InvariantCulture),
                     size.Height.ToString(CultureInfo.InvariantCulture),
-                    "pdf-preview-v2");
+                    "pdf-preview-v3");
                 var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(source));
                 var hash = Convert.ToHexString(hashBytes);
                 cacheFileName = $"{hash}.png";
@@ -405,5 +699,13 @@ namespace MyManager
         }
 
         private sealed record CachedThumbnail(long FileLength, long LastWriteTicksUtc, Size Size, Bitmap Bitmap);
+
+        private sealed class CacheSyncState
+        {
+            public string SharedCachePath { get; set; } = string.Empty;
+            public string LastPullUtc { get; set; } = string.Empty;
+            public string LastPushUtc { get; set; } = string.Empty;
+            public Dictionary<string, long> SyncedFiles { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+        }
     }
 }
