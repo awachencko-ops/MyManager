@@ -175,8 +175,20 @@ namespace MyManager
             if (dgvJobs.Rows.Count == 0)
                 return 0;
 
-            var visibleRows = Math.Max(1, dgvJobs.DisplayedRowCount(false));
+            var visibleRows = GetOrdersGridVisibleRowCapacity();
             return Math.Max(0, dgvJobs.Rows.Count - visibleRows);
+        }
+
+        private int GetOrdersGridVisibleRowCapacity()
+        {
+            var displayHeight = dgvJobs.DisplayRectangle.Height;
+            var fallback = Math.Max(1, dgvJobs.DisplayedRowCount(false));
+            if (displayHeight <= 0)
+                return fallback;
+
+            var rowHeight = Math.Max(1, dgvJobs.RowTemplate.Height);
+            var estimatedCapacity = Math.Max(1, displayHeight / rowHeight);
+            return Math.Max(fallback, estimatedCapacity);
         }
 
         private static int GetVScrollBarMaxScrollableValue(VScrollBar vScrollBar)
@@ -217,7 +229,7 @@ namespace MyManager
                 return;
 
             var rowCount = dgvJobs.Rows.Count;
-            var largeChange = Math.Max(1, dgvJobs.DisplayedRowCount(false));
+            var largeChange = GetOrdersGridVisibleRowCapacity();
             var maximum = Math.Max(0, rowCount - largeChange);
             var value = 0;
 
@@ -225,6 +237,9 @@ namespace MyManager
             {
                 try
                 {
+                    if (maximum == 0 && dgvJobs.FirstDisplayedScrollingRowIndex != 0)
+                        dgvJobs.FirstDisplayedScrollingRowIndex = 0;
+
                     value = Math.Clamp(dgvJobs.FirstDisplayedScrollingRowIndex, 0, maximum);
                 }
                 catch
