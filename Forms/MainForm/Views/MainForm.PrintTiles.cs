@@ -98,13 +98,6 @@ namespace MyManager
             if (_isSyncingTileSelection)
                 return;
 
-            if (_suppressTilesDragSelection && (Control.MouseButtons & MouseButtons.Left) == MouseButtons.Left)
-            {
-                ClearTilesSelectionAndSync();
-                return;
-            }
-
-            EnforceSingleTileSelectionForMouseDrag();
             SyncGridSelectionWithTiles();
             UpdateActionButtonsState();
             UpdateTrayStatsIndicator();
@@ -115,49 +108,25 @@ namespace MyManager
             if (e.Button != MouseButtons.Left)
                 return;
 
-            _suppressTilesDragSelection = false;
             var hasSelectionModifiers = (ModifierKeys & (Keys.Control | Keys.Shift)) != Keys.None;
             var hit = _lvPrintTiles.HitTest(e.Location);
 
             if (hit.Item == null)
             {
-                ClearTilesSelectionAndSync();
-                _suppressTilesDragSelection = !hasSelectionModifiers;
+                if (!hasSelectionModifiers)
+                    BeginTileMarqueeSelection(e.Location);
                 return;
             }
 
-            if (hasSelectionModifiers)
-                return;
-
-            _isSyncingTileSelection = true;
-            try
-            {
-                _lvPrintTiles.SelectedItems.Clear();
-                hit.Item.Selected = true;
-                hit.Item.Focused = true;
-            }
-            finally
-            {
-                _isSyncingTileSelection = false;
-            }
-
-            SyncGridSelectionWithTiles();
-            UpdateActionButtonsState();
-            UpdateTrayStatsIndicator();
+            EndTileMarqueeSelection();
         }
 
         private void LvPrintTiles_MouseMove(object? sender, MouseEventArgs e)
         {
-            if (!_suppressTilesDragSelection)
+            if (!_isTileMarqueeSelecting || (e.Button & MouseButtons.Left) != MouseButtons.Left)
                 return;
 
-            if ((e.Button & MouseButtons.Left) != MouseButtons.Left)
-                return;
-
-            if (_lvPrintTiles.SelectedItems.Count == 0)
-                return;
-
-            ClearTilesSelectionAndSync();
+            UpdateTileMarqueeSelection(e.Location);
         }
 
         private void LvPrintTiles_ItemActivate(object? sender, EventArgs e)
@@ -173,7 +142,7 @@ namespace MyManager
         {
             if (e.Button == MouseButtons.Left)
             {
-                _suppressTilesDragSelection = false;
+                EndTileMarqueeSelection();
                 return;
             }
 
@@ -228,33 +197,89 @@ namespace MyManager
             UpdateTrayStatsIndicator();
         }
 
-        private void EnforceSingleTileSelectionForMouseDrag()
+        private void BeginTileMarqueeSelection(Point clientPoint)
         {
-            if ((Control.MouseButtons & MouseButtons.Left) != MouseButtons.Left)
+            EndTileMarqueeSelection();
+
+            _isTileMarqueeSelecting = true;
+            _tileMarqueeStartPoint = clientPoint;
+            _tileMarqueePreviousScreenRect = Rectangle.Empty;
+            _lvPrintTiles.Capture = true;
+            ClearTilesSelectionAndSync();
+        }
+
+        private void UpdateTileMarqueeSelection(Point clientPoint)
+        {
+            if (!_isTileMarqueeSelecting)
                 return;
 
-            if ((ModifierKeys & (Keys.Control | Keys.Shift)) != Keys.None)
+            DrawTileMarqueeFrame(_tileMarqueePreviousScreenRect);
+
+            var clientRect = GetNormalizedSelectionRect(_tileMarqueeStartPoint, clientPoint);
+            var screenRect = _lvPrintTiles.RectangleToScreen(clientRect);
+            _tileMarqueePreviousScreenRect = screenRect;
+            DrawTileMarqueeFrame(_tileMarqueePreviousScreenRect);
+
+            ApplyTileMarqueeSelection(clientRect);
+        }
+
+        private void EndTileMarqueeSelection()
+        {
+            if (!_isTileMarqueeSelecting)
                 return;
 
-            if (_lvPrintTiles.SelectedItems.Count <= 1)
-                return;
+            DrawTileMarqueeFrame(_tileMarqueePreviousScreenRect);
+            _tileMarqueePreviousScreenRect = Rectangle.Empty;
+            _isTileMarqueeSelecting = false;
+            _lvPrintTiles.Capture = false;
+        }
 
-            var keepItem = _lvPrintTiles.FocusedItem ?? _lvPrintTiles.SelectedItems[0];
-
+        private void ApplyTileMarqueeSelection(Rectangle clientRect)
+        {
             _isSyncingTileSelection = true;
             try
             {
+                _lvPrintTiles.BeginUpdate();
                 _lvPrintTiles.SelectedItems.Clear();
-                if (keepItem != null)
+
+                ListViewItem? firstSelected = null;
+                foreach (ListViewItem item in _lvPrintTiles.Items)
                 {
-                    keepItem.Selected = true;
-                    keepItem.Focused = true;
+                    var isHit = item.Bounds.IntersectsWith(clientRect);
+                    item.Selected = isHit;
+                    if (isHit && firstSelected == null)
+                        firstSelected = item;
                 }
+
+                if (firstSelected != null)
+                    firstSelected.Focused = true;
             }
             finally
             {
+                _lvPrintTiles.EndUpdate();
                 _isSyncingTileSelection = false;
             }
+
+            SyncGridSelectionWithTiles();
+            UpdateActionButtonsState();
+            UpdateTrayStatsIndicator();
+        }
+
+        private static void DrawTileMarqueeFrame(Rectangle screenRect)
+        {
+            if (screenRect.Width <= 0 || screenRect.Height <= 0)
+                return;
+
+            ControlPaint.DrawReversibleFrame(screenRect, Color.FromArgb(120, 160, 215), FrameStyle.Dashed);
+        }
+
+        private static Rectangle GetNormalizedSelectionRect(Point start, Point end)
+        {
+            var left = Math.Min(start.X, end.X);
+            var top = Math.Min(start.Y, end.Y);
+            var width = Math.Abs(end.X - start.X);
+            var height = Math.Abs(end.Y - start.Y);
+            return new Rectangle(left, top, width, height);
         }
 
         private void ShowPrintTileContextMenu(OrderData order, PrintTileTag tileTag, Point location)

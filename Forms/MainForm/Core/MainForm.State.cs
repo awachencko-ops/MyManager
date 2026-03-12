@@ -49,7 +49,9 @@ namespace MyManager
         private bool _isRebuildingGrid;
         private bool _isSyncingTileSelection;
         private bool _isSyncingGridSelection;
-        private bool _suppressTilesDragSelection;
+        private bool _isTileMarqueeSelecting;
+        private Point _tileMarqueeStartPoint;
+        private Rectangle _tileMarqueePreviousScreenRect = Rectangle.Empty;
         private string _baseBottomStatusText = DefaultTrayStatusText;
         private int _hoveredRowIndex = -1;
         private int _ctxRow = -1;
