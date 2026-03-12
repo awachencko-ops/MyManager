@@ -134,19 +134,19 @@ namespace MyManager
 
             var isTilesMode = _ordersViewMode == OrdersViewMode.Tiles;
             tableLayoutPanel1.SuspendLayout();
-            dgvJobs.SuspendLayout();
-            _lvPrintTiles.SuspendLayout();
             try
             {
                 RefreshPrintTilesFromVisibleRows();
                 dgvJobs.Visible = !isTilesMode;
                 _lvPrintTiles.Visible = isTilesMode;
+                if (isTilesMode)
+                    _lvPrintTiles.BringToFront();
+                else
+                    dgvJobs.BringToFront();
             }
             finally
             {
-                _lvPrintTiles.ResumeLayout(false);
-                dgvJobs.ResumeLayout(false);
-                tableLayoutPanel1.ResumeLayout(performLayout: false);
+                tableLayoutPanel1.ResumeLayout(performLayout: true);
             }
 
             if (isTilesMode)
