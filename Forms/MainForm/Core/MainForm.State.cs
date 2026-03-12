@@ -199,7 +199,7 @@ namespace MyManager
             Tiles
         }
 
-        private sealed class PrintTileTag
+        internal sealed class PrintTileTag
         {
             public PrintTileTag(string orderInternalId, string orderNumber, string printPath, string printFileName)
             {

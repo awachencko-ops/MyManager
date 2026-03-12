@@ -38,13 +38,12 @@ namespace MyManager
             _lvPrintTiles.AllowDrag = false;
             _lvPrintTiles.ShowFileIcons = false;
             _lvPrintTiles.UseEmbeddedThumbnails = UseEmbeddedThumbnails.Never;
-            _lvPrintTiles.Colors.SelectedColor1 = OrdersRowSelectedBackColor;
-            _lvPrintTiles.Colors.SelectedColor2 = OrdersRowSelectedBackColor;
-            _lvPrintTiles.Colors.SelectedBorderColor = ControlPaint.Dark(OrdersRowSelectedBackColor, 0.1f);
-            _lvPrintTiles.Colors.SelectionRectangleColor1 = Color.FromArgb(90, OrdersRowSelectedBackColor);
-            _lvPrintTiles.Colors.SelectionRectangleColor2 = Color.FromArgb(90, OrdersRowSelectedBackColor);
-            _lvPrintTiles.Colors.SelectionRectangleBorderColor = ControlPaint.Dark(OrdersRowSelectedBackColor, 0.15f);
+            _lvPrintTiles.CacheMode = CacheMode.Continuous;
+            _lvPrintTiles.PersistentCacheDirectory = _printTilesCacheFolderPath;
+            _lvPrintTiles.PersistentCacheSize = 512L * 1024 * 1024;
+            Directory.CreateDirectory(_printTilesCacheFolderPath);
             TryEnablePdfThumbnailAdaptor();
+            _lvPrintTiles.SetRenderer(new SimpleTilesRenderer(OrdersRowSelectedBackColor));
             _lvPrintTiles.Visible = false;
             _lvPrintTiles.SelectionChanged += LvPrintTiles_SelectedIndexChanged;
             _lvPrintTiles.DoubleClick += LvPrintTiles_ItemActivate;
@@ -411,7 +410,7 @@ namespace MyManager
                     var cleanPrintFileName = printFileName.Trim();
                     var item = new ImageListViewItem(printPath)
                     {
-                        Text = $"{cleanOrderNumber} {cleanPrintFileName}",
+                        Text = cleanPrintFileName,
                         Tag = new PrintTileTag(orderInternalId, cleanOrderNumber, printPath, cleanPrintFileName)
                     };
 

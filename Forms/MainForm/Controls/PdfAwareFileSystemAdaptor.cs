@@ -15,7 +15,8 @@ namespace MyManager
 
         public override Image GetThumbnail(object key, Size size, UseEmbeddedThumbnails useEmbeddedThumbnails, bool useExifOrientation)
         {
-            if (key is not string path || !IsPdfPath(path) || !File.Exists(path))
+            var path = ResolvePath(key);
+            if (string.IsNullOrWhiteSpace(path) || !IsPdfPath(path) || !File.Exists(path))
                 return base.GetThumbnail(key, size, useEmbeddedThumbnails, useExifOrientation);
 
             var normalizedPath = NormalizePath(path);
@@ -159,6 +160,17 @@ namespace MyManager
         private static bool IsPdfPath(string path)
         {
             return string.Equals(Path.GetExtension(path), ".pdf", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string ResolvePath(object key)
+        {
+            if (key is string path)
+                return path;
+
+            if (key is ImageListViewItem item && !string.IsNullOrWhiteSpace(item.FilePath))
+                return item.FilePath;
+
+            return string.Empty;
         }
 
         private static string NormalizePath(string path)
