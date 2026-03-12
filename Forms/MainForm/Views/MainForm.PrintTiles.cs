@@ -33,6 +33,10 @@ namespace MyManager
                 ? string.Empty
                 : Path.Combine(_sharedPrintTilesCacheFolderPath, "PdfPreviewCache");
 
+            EnableDoubleBufferedControl(tableLayoutPanel1);
+            EnableDoubleBufferedControl(dgvJobs);
+            EnableDoubleBufferedControl(_lvPrintTiles);
+
             _lvPrintTiles.Dock = DockStyle.Fill;
             _lvPrintTiles.Margin = dgvJobs.Margin;
             _lvPrintTiles.BackColor = dgvJobs.BackgroundColor;
@@ -100,6 +104,21 @@ namespace MyManager
             }
         }
 
+        private static void EnableDoubleBufferedControl(Control control)
+        {
+            try
+            {
+                var doubleBufferedProperty = control.GetType().GetProperty(
+                    "DoubleBuffered",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                doubleBufferedProperty?.SetValue(control, true);
+            }
+            catch
+            {
+                // Some controls can block reflective access; flicker optimization is best-effort.
+            }
+        }
+
         private void InitializeViewModeSwitches()
         {
             btnViewList.Anchor = AnchorStyles.Top | AnchorStyles.Right;
@@ -114,9 +133,21 @@ namespace MyManager
             _ordersViewMode = mode;
 
             var isTilesMode = _ordersViewMode == OrdersViewMode.Tiles;
-            RefreshPrintTilesFromVisibleRows();
-            dgvJobs.Visible = !isTilesMode;
-            _lvPrintTiles.Visible = isTilesMode;
+            tableLayoutPanel1.SuspendLayout();
+            dgvJobs.SuspendLayout();
+            _lvPrintTiles.SuspendLayout();
+            try
+            {
+                RefreshPrintTilesFromVisibleRows();
+                dgvJobs.Visible = !isTilesMode;
+                _lvPrintTiles.Visible = isTilesMode;
+            }
+            finally
+            {
+                _lvPrintTiles.ResumeLayout(false);
+                dgvJobs.ResumeLayout(false);
+                tableLayoutPanel1.ResumeLayout(performLayout: false);
+            }
 
             if (isTilesMode)
             {
