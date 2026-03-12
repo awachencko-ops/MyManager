@@ -42,6 +42,8 @@ namespace MyManager
             _lvPrintTiles.DrawItem += LvPrintTiles_DrawItem;
             _lvPrintTiles.SelectedIndexChanged += LvPrintTiles_SelectedIndexChanged;
             _lvPrintTiles.ItemActivate += LvPrintTiles_ItemActivate;
+            _lvPrintTiles.MouseDown += LvPrintTiles_MouseDown;
+            _lvPrintTiles.MouseMove += LvPrintTiles_MouseMove;
             _lvPrintTiles.MouseUp += LvPrintTiles_MouseUp;
             _printTileOrderFont = new Font(_lvPrintTiles.Font, FontStyle.Bold);
 
@@ -96,9 +98,66 @@ namespace MyManager
             if (_isSyncingTileSelection)
                 return;
 
+            if (_suppressTilesDragSelection && (Control.MouseButtons & MouseButtons.Left) == MouseButtons.Left)
+            {
+                ClearTilesSelectionAndSync();
+                return;
+            }
+
+            EnforceSingleTileSelectionForMouseDrag();
             SyncGridSelectionWithTiles();
             UpdateActionButtonsState();
             UpdateTrayStatsIndicator();
+        }
+
+        private void LvPrintTiles_MouseDown(object? sender, MouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Left)
+                return;
+
+            _suppressTilesDragSelection = false;
+            var hasSelectionModifiers = (ModifierKeys & (Keys.Control | Keys.Shift)) != Keys.None;
+            var hit = _lvPrintTiles.HitTest(e.Location);
+
+            if (hit.Item == null)
+            {
+                ClearTilesSelectionAndSync();
+                _suppressTilesDragSelection = !hasSelectionModifiers;
+                return;
+            }
+
+            if (hasSelectionModifiers)
+                return;
+
+            _isSyncingTileSelection = true;
+            try
+            {
+                _lvPrintTiles.SelectedItems.Clear();
+                hit.Item.Selected = true;
+                hit.Item.Focused = true;
+            }
+            finally
+            {
+                _isSyncingTileSelection = false;
+            }
+
+            SyncGridSelectionWithTiles();
+            UpdateActionButtonsState();
+            UpdateTrayStatsIndicator();
+        }
+
+        private void LvPrintTiles_MouseMove(object? sender, MouseEventArgs e)
+        {
+            if (!_suppressTilesDragSelection)
+                return;
+
+            if ((e.Button & MouseButtons.Left) != MouseButtons.Left)
+                return;
+
+            if (_lvPrintTiles.SelectedItems.Count == 0)
+                return;
+
+            ClearTilesSelectionAndSync();
         }
 
         private void LvPrintTiles_ItemActivate(object? sender, EventArgs e)
@@ -112,6 +171,12 @@ namespace MyManager
 
         private void LvPrintTiles_MouseUp(object? sender, MouseEventArgs e)
         {
+            if (e.Button == MouseButtons.Left)
+            {
+                _suppressTilesDragSelection = false;
+                return;
+            }
+
             if (e.Button != MouseButtons.Right)
                 return;
 
@@ -143,6 +208,53 @@ namespace MyManager
                 return;
 
             ShowPrintTileContextMenu(order, tileTag, e.Location);
+        }
+
+        private void ClearTilesSelectionAndSync()
+        {
+            _isSyncingTileSelection = true;
+            try
+            {
+                _lvPrintTiles.SelectedItems.Clear();
+                _lvPrintTiles.FocusedItem = null;
+            }
+            finally
+            {
+                _isSyncingTileSelection = false;
+            }
+
+            ClearGridSelection();
+            UpdateActionButtonsState();
+            UpdateTrayStatsIndicator();
+        }
+
+        private void EnforceSingleTileSelectionForMouseDrag()
+        {
+            if ((Control.MouseButtons & MouseButtons.Left) != MouseButtons.Left)
+                return;
+
+            if ((ModifierKeys & (Keys.Control | Keys.Shift)) != Keys.None)
+                return;
+
+            if (_lvPrintTiles.SelectedItems.Count <= 1)
+                return;
+
+            var keepItem = _lvPrintTiles.FocusedItem ?? _lvPrintTiles.SelectedItems[0];
+
+            _isSyncingTileSelection = true;
+            try
+            {
+                _lvPrintTiles.SelectedItems.Clear();
+                if (keepItem != null)
+                {
+                    keepItem.Selected = true;
+                    keepItem.Focused = true;
+                }
+            }
+            finally
+            {
+                _isSyncingTileSelection = false;
+            }
         }
 
         private void ShowPrintTileContextMenu(OrderData order, PrintTileTag tileTag, Point location)

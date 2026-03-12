@@ -574,26 +574,32 @@ namespace MyManager
 
         private void RemoveSelectedOrder()
         {
-            var order = GetSelectedOrder();
-            if (order == null)
+            var selectedOrders = GetSelectedOrders();
+            if (selectedOrders.Count == 0)
             {
                 SetBottomStatus("Выберите заказ для удаления");
                 MessageBox.Show(this, "Выберите заказ для удаления.", "Удаление", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
-            var orderFolder = string.IsNullOrWhiteSpace(order.FolderName)
-                ? string.Empty
-                : Path.Combine(_ordersRootPath, order.FolderName);
+            var isBatchDelete = selectedOrders.Count > 1;
+            var firstOrder = selectedOrders[0];
+            var confirmationText = isBatchDelete
+                ? $"Выбрано заказов: {selectedOrders.Count}\n\n" +
+                  "Удалить папки заказов с диска?\n\n" +
+                  "[Да] — удалить с диска и из списка.\n" +
+                  "[Нет] — только удалить из списка.\n" +
+                  "[Отмена] — ничего не менять."
+                : $"Заказ №{GetOrderDisplayId(firstOrder)}\n\n" +
+                  "Удалить папку заказа с диска?\n\n" +
+                  "[Да] — удалить с диска и из списка.\n" +
+                  "[Нет] — только удалить из списка.\n" +
+                  "[Отмена] — ничего не менять.";
 
             var decision = MessageBox.Show(
                 this,
-                $"Заказ №{GetOrderDisplayId(order)}\n\n" +
-                "Удалить папку заказа с диска?\n\n" +
-                "[Да] — удалить с диска и из списка.\n" +
-                "[Нет] — только удалить из списка.\n" +
-                "[Отмена] — ничего не менять.",
-                "Удаление заказа",
+                confirmationText,
+                isBatchDelete ? "Удаление заказов" : "Удаление заказа",
                 MessageBoxButtons.YesNoCancel,
                 MessageBoxIcon.Warning);
 
@@ -603,37 +609,72 @@ namespace MyManager
                 return;
             }
 
-            if (decision == DialogResult.Yes)
+            var removeFilesFromDisk = decision == DialogResult.Yes;
+            var removedOrdersCount = 0;
+            var failedOrders = new List<string>();
+
+            foreach (var order in selectedOrders)
             {
                 try
                 {
-                    if (!string.IsNullOrWhiteSpace(orderFolder) && Directory.Exists(orderFolder))
-                        Directory.Delete(orderFolder, true);
-                    else
-                        DeleteOrderFiles(order);
+                    if (removeFilesFromDisk)
+                    {
+                        var orderFolder = string.IsNullOrWhiteSpace(order.FolderName)
+                            ? string.Empty
+                            : Path.Combine(_ordersRootPath, order.FolderName);
+
+                        if (!string.IsNullOrWhiteSpace(orderFolder) && Directory.Exists(orderFolder))
+                            Directory.Delete(orderFolder, true);
+                        else
+                            DeleteOrderFiles(order);
+                    }
+
+                    if (_runTokensByOrder.TryGetValue(order.InternalId, out var cts))
+                    {
+                        cts.Cancel();
+                        _runTokensByOrder.Remove(order.InternalId);
+                        _runProgressByOrderInternalId.Remove(order.InternalId);
+                    }
+
+                    _expandedOrderIds.Remove(order.InternalId);
+                    _orderHistory.Remove(order);
+                    removedOrdersCount++;
                 }
                 catch (Exception ex)
                 {
-                    SetBottomStatus($"Не удалось удалить файлы заказа: {ex.Message}");
-                    MessageBox.Show(this, $"Не удалось удалить файлы заказа: {ex.Message}", "Удаление заказа", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    return;
+                    failedOrders.Add($"{GetOrderDisplayId(order)}: {ex.Message}");
                 }
             }
 
-            if (_runTokensByOrder.TryGetValue(order.InternalId, out var cts))
+            UpdateTrayProgressIndicator();
+
+            if (removedOrdersCount > 0)
             {
-                cts.Cancel();
-                _runTokensByOrder.Remove(order.InternalId);
-                _runProgressByOrderInternalId.Remove(order.InternalId);
-                UpdateTrayProgressIndicator();
+                SaveHistory();
+                RebuildOrdersGrid();
+                UpdateActionButtonsState();
+                SetBottomStatus(isBatchDelete
+                    ? $"Удалено заказов: {removedOrdersCount}"
+                    : $"Заказ {GetOrderDisplayId(firstOrder)} удален");
+            }
+            else
+            {
+                SetBottomStatus("Удаление не выполнено");
             }
 
-            _expandedOrderIds.Remove(order.InternalId);
-            _orderHistory.Remove(order);
-            SaveHistory();
-            RebuildOrdersGrid();
-            UpdateActionButtonsState();
-            SetBottomStatus($"Заказ {GetOrderDisplayId(order)} удален");
+            if (failedOrders.Count == 0)
+                return;
+
+            var failedPreview = string.Join(Environment.NewLine, failedOrders.Take(5));
+            if (failedOrders.Count > 5)
+                failedPreview += $"{Environment.NewLine}... ещё: {failedOrders.Count - 5}";
+
+            MessageBox.Show(
+                this,
+                $"Не удалось удалить некоторые заказы:{Environment.NewLine}{failedPreview}",
+                isBatchDelete ? "Удаление заказов" : "Удаление заказа",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
         }
 
         private void DeleteOrderFiles(OrderData order)

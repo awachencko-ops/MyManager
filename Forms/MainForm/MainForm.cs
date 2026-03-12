@@ -39,6 +39,7 @@ namespace MyManager
             InitializeOrdersDataFlow();
             InitializeOrderRowContextMenu();
             InitializeActionButtonsState();
+            InitializeOrdersKeyboardShortcuts();
             InitializeTrayIndicators();
             FormClosed += MainForm_FormClosed;
             SetOrdersViewMode(OrdersViewMode.List);
@@ -364,6 +365,8 @@ namespace MyManager
         {
             dgvJobs.SelectionChanged += (_, _) =>
             {
+                EnforceSingleRowSelectionForMouseDrag();
+
                 if (!_isSyncingGridSelection)
                     SyncTilesSelectionWithGrid();
 
@@ -380,6 +383,70 @@ namespace MyManager
             };
             UpdateActionButtonsState();
             UpdateTrayStatsIndicator();
+        }
+
+        private void InitializeOrdersKeyboardShortcuts()
+        {
+            KeyPreview = true;
+            KeyDown += MainForm_KeyDown;
+        }
+
+        private void MainForm_KeyDown(object? sender, KeyEventArgs e)
+        {
+            if (e.KeyCode != Keys.Delete && e.KeyCode != Keys.Back)
+                return;
+
+            if (!dgvJobs.ContainsFocus && !_lvPrintTiles.ContainsFocus)
+                return;
+
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+            RemoveSelectedOrder();
+        }
+
+        private void EnforceSingleRowSelectionForMouseDrag()
+        {
+            if (_isSyncingGridSelection)
+                return;
+
+            if ((Control.MouseButtons & MouseButtons.Left) != MouseButtons.Left)
+                return;
+
+            if ((ModifierKeys & (Keys.Control | Keys.Shift)) != Keys.None)
+                return;
+
+            if (dgvJobs.SelectedRows.Count <= 1)
+                return;
+
+            var keepRow = dgvJobs.CurrentRow;
+            if (keepRow == null || keepRow.IsNewRow)
+            {
+                keepRow = dgvJobs.SelectedRows
+                    .Cast<DataGridViewRow>()
+                    .Where(row => !row.IsNewRow)
+                    .OrderBy(row => row.Index)
+                    .FirstOrDefault();
+            }
+
+            _isSyncingGridSelection = true;
+            try
+            {
+                dgvJobs.ClearSelection();
+                if (keepRow != null && !keepRow.IsNewRow)
+                {
+                    keepRow.Selected = true;
+                    var focusColumnIndex = colStatus.Index >= 0 ? colStatus.Index : 0;
+                    dgvJobs.CurrentCell = keepRow.Cells[focusColumnIndex];
+                }
+                else
+                {
+                    dgvJobs.CurrentCell = null;
+                }
+            }
+            finally
+            {
+                _isSyncingGridSelection = false;
+            }
         }
 
         private void UpdateActionButtonsState()

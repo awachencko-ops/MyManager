@@ -27,10 +27,19 @@ namespace MyManager
             _dragSourceRowIndex = -1;
             _dragSourceColumnIndex = -1;
 
+            var hit = dgvJobs.HitTest(e.X, e.Y);
+            if (e.Button == MouseButtons.Left && hit.Type == DataGridViewHitTestType.None)
+            {
+                ClearGridSelection();
+                SyncTilesSelectionWithGrid();
+                UpdateActionButtonsState();
+                UpdateTrayStatsIndicator();
+                return;
+            }
+
             if (e.Button != MouseButtons.Left)
                 return;
 
-            var hit = dgvJobs.HitTest(e.X, e.Y);
             if (hit.RowIndex < 0 || hit.ColumnIndex < 0)
                 return;
 
