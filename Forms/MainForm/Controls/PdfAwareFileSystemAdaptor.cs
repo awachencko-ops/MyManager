@@ -12,6 +12,7 @@ namespace MyManager
     internal sealed class PdfAwareFileSystemAdaptor : FileSystemAdaptor
     {
         private readonly ConcurrentDictionary<string, CachedThumbnail> _pdfCache = new(StringComparer.OrdinalIgnoreCase);
+        private readonly object _cacheSync = new();
 
         public override Image GetThumbnail(object key, Size size, UseEmbeddedThumbnails useEmbeddedThumbnails, bool useExifOrientation)
         {
@@ -34,39 +35,64 @@ namespace MyManager
         private bool TryGetCachedThumbnail(string filePath, Size size, out Image image)
         {
             image = null!;
-            if (!_pdfCache.TryGetValue(filePath, out var cached))
-                return false;
-
-            var fileInfo = new FileInfo(filePath);
-            var isValid =
-                cached.FileLength == fileInfo.Length
-                && cached.LastWriteTicksUtc == fileInfo.LastWriteTimeUtc.Ticks
-                && cached.Size == size;
-
-            if (!isValid)
+            lock (_cacheSync)
             {
-                if (_pdfCache.TryRemove(filePath, out var removed))
-                    removed.Bitmap.Dispose();
-                return false;
-            }
+                if (!_pdfCache.TryGetValue(filePath, out var cached))
+                    return false;
 
-            image = (Image)cached.Bitmap.Clone();
-            return true;
+                if (!TryGetFileMetadata(filePath, out var fileLength, out var lastWriteTicksUtc))
+                {
+                    if (_pdfCache.TryRemove(filePath, out var removedByMissingMetadata))
+                        removedByMissingMetadata.Bitmap.Dispose();
+                    return false;
+                }
+
+                var isValid =
+                    cached.FileLength == fileLength
+                    && cached.LastWriteTicksUtc == lastWriteTicksUtc
+                    && cached.Size == size;
+
+                if (!isValid)
+                {
+                    if (_pdfCache.TryRemove(filePath, out var removedByMismatch))
+                        removedByMismatch.Bitmap.Dispose();
+                    return false;
+                }
+
+                try
+                {
+                    image = (Image)cached.Bitmap.Clone();
+                    return true;
+                }
+                catch (InvalidOperationException)
+                {
+                    // GDI+ bitmaps are not thread-safe; if a cached object becomes unusable, evict it and re-render.
+                    if (_pdfCache.TryRemove(filePath, out var removedByCloneFailure))
+                        removedByCloneFailure.Bitmap.Dispose();
+                    return false;
+                }
+            }
         }
 
         private void StoreCachedThumbnail(string filePath, Bitmap thumbnail, Size size)
         {
-            var fileInfo = new FileInfo(filePath);
+            if (!TryGetFileMetadata(filePath, out var fileLength, out var lastWriteTicksUtc))
+                return;
+
+            var cachedBitmap = (Bitmap)thumbnail.Clone();
             var cacheValue = new CachedThumbnail(
-                fileInfo.Length,
-                fileInfo.LastWriteTimeUtc.Ticks,
+                fileLength,
+                lastWriteTicksUtc,
                 size,
-                (Bitmap)thumbnail.Clone());
+                cachedBitmap);
 
-            if (_pdfCache.TryGetValue(filePath, out var existing))
-                existing.Bitmap.Dispose();
+            lock (_cacheSync)
+            {
+                if (_pdfCache.TryGetValue(filePath, out var existing))
+                    existing.Bitmap.Dispose();
 
-            _pdfCache[filePath] = cacheValue;
+                _pdfCache[filePath] = cacheValue;
+            }
         }
 
         private static Bitmap? TryRenderPdfThumbnail(string pdfPath, Size targetSize)
@@ -178,6 +204,35 @@ namespace MyManager
             return string.IsNullOrWhiteSpace(path)
                 ? string.Empty
                 : Path.GetFullPath(path).Trim().TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        }
+
+        private static bool TryGetFileMetadata(string filePath, out long fileLength, out long lastWriteTicksUtc)
+        {
+            fileLength = 0;
+            lastWriteTicksUtc = 0;
+
+            try
+            {
+                var fileInfo = new FileInfo(filePath);
+                if (!fileInfo.Exists)
+                    return false;
+
+                fileLength = fileInfo.Length;
+                lastWriteTicksUtc = fileInfo.LastWriteTimeUtc.Ticks;
+                return true;
+            }
+            catch (IOException)
+            {
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return false;
+            }
+            catch (System.Security.SecurityException)
+            {
+                return false;
+            }
         }
 
         private sealed record CachedThumbnail(long FileLength, long LastWriteTicksUtc, Size Size, Bitmap Bitmap);

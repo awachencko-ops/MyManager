@@ -54,6 +54,10 @@ namespace MyManager
         private string? _gridHoverCandidateOrderInternalId;
         private int _tileHoverCandidateIndex = -1;
         private string _baseBottomStatusText = DefaultTrayStatusText;
+        private int _activeFileTransfers;
+        private int _fileTransferProgressPercent = -1;
+        private bool _fileTransferIsIndeterminate;
+        private string _fileTransferStatusText = string.Empty;
         private int _hoveredRowIndex = -1;
         private int _ctxRow = -1;
         private int _ctxCol = -1;
