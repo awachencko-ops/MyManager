@@ -1,12 +1,21 @@
 using System;
+using System.Reflection;
 using System.Windows.Forms;
+using Manina.Windows.Forms;
 
 namespace MyManager
 {
     public partial class MainForm
     {
+        private static readonly FieldInfo? ClassicTilesInnerVScrollBarField = typeof(ImageListView).GetField(
+            "vScrollBar",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+
         private HoverStateVScrollBar? _classicGridScrollBar;
         private bool _isSyncingClassicGridScrollBar;
+        private HoverStateVScrollBar? _classicTilesScrollBar;
+        private VScrollBar? _classicTilesInnerVScrollBar;
+        private bool _isSyncingClassicTilesScrollBar;
 
         private void InitializeClassicGridScrollBar()
         {
@@ -134,6 +143,151 @@ namespace MyManager
             }
 
             _classicGridScrollBar.BringToFront();
+        }
+
+        private void InitializeClassicTilesScrollBar()
+        {
+            if (_classicTilesScrollBar != null)
+                return;
+
+            // Hide native scrollbar and render a custom one with the same style as the grid.
+            _lvPrintTiles.ScrollBars = false;
+
+            _classicTilesScrollBar = new HoverStateVScrollBar
+            {
+                Name = "lvPrintTilesClassicVScrollBar",
+                Width = SystemInformation.VerticalScrollBarWidth,
+                Dock = DockStyle.Right,
+                TabStop = false
+            };
+
+            _lvPrintTiles.Controls.Add(_classicTilesScrollBar);
+            _classicTilesScrollBar.ValueChanged += ClassicTilesScrollBar_ValueChanged;
+
+            _lvPrintTiles.SizeChanged += (_, _) => UpdateClassicTilesScrollBar();
+            _lvPrintTiles.Layout += (_, _) => UpdateClassicTilesScrollBar();
+            _lvPrintTiles.VisibleChanged += (_, _) => UpdateClassicTilesScrollBar();
+            _lvPrintTiles.MouseWheel += (_, _) => UpdateClassicTilesScrollBar();
+            _lvPrintTiles.HandleCreated += (_, _) =>
+            {
+                AttachClassicTilesInnerVScrollBar();
+                UpdateClassicTilesScrollBar();
+            };
+
+            AttachClassicTilesInnerVScrollBar();
+            UpdateClassicTilesScrollBar();
+        }
+
+        private void AttachClassicTilesInnerVScrollBar()
+        {
+            var currentVScrollBar = ClassicTilesInnerVScrollBarField?.GetValue(_lvPrintTiles) as VScrollBar;
+            if (ReferenceEquals(_classicTilesInnerVScrollBar, currentVScrollBar))
+                return;
+
+            if (_classicTilesInnerVScrollBar != null)
+            {
+                _classicTilesInnerVScrollBar.Scroll -= ClassicTilesInnerVScrollBar_Scroll;
+                _classicTilesInnerVScrollBar.ValueChanged -= ClassicTilesInnerVScrollBar_ValueChanged;
+                _classicTilesInnerVScrollBar.VisibleChanged -= ClassicTilesInnerVScrollBar_VisibleChanged;
+            }
+
+            _classicTilesInnerVScrollBar = currentVScrollBar;
+            if (_classicTilesInnerVScrollBar != null)
+            {
+                _classicTilesInnerVScrollBar.Scroll += ClassicTilesInnerVScrollBar_Scroll;
+                _classicTilesInnerVScrollBar.ValueChanged += ClassicTilesInnerVScrollBar_ValueChanged;
+                _classicTilesInnerVScrollBar.VisibleChanged += ClassicTilesInnerVScrollBar_VisibleChanged;
+            }
+        }
+
+        private void ClassicTilesInnerVScrollBar_Scroll(object? sender, ScrollEventArgs e)
+        {
+            UpdateClassicTilesScrollBar();
+        }
+
+        private void ClassicTilesInnerVScrollBar_ValueChanged(object? sender, EventArgs e)
+        {
+            UpdateClassicTilesScrollBar();
+        }
+
+        private void ClassicTilesInnerVScrollBar_VisibleChanged(object? sender, EventArgs e)
+        {
+            UpdateClassicTilesScrollBar();
+        }
+
+        private void ClassicTilesScrollBar_ValueChanged(object? sender, EventArgs e)
+        {
+            if (_classicTilesScrollBar == null || _isSyncingClassicTilesScrollBar)
+                return;
+
+            if (!_lvPrintTiles.Visible)
+                return;
+
+            AttachClassicTilesInnerVScrollBar();
+            if (_classicTilesInnerVScrollBar == null)
+                return;
+
+            var minimum = _classicTilesInnerVScrollBar.Minimum;
+            var maximum = GetClassicVScrollBarMaxScrollableValue(_classicTilesInnerVScrollBar);
+            var nextValue = Math.Clamp(_classicTilesScrollBar.Value, minimum, maximum);
+
+            if (_classicTilesInnerVScrollBar.Value != nextValue)
+                _classicTilesInnerVScrollBar.Value = nextValue;
+
+            UpdateClassicTilesScrollBar();
+        }
+
+        private static int GetClassicVScrollBarMaxScrollableValue(VScrollBar vScrollBar)
+        {
+            var largeChange = Math.Max(1, vScrollBar.LargeChange);
+            return Math.Max(vScrollBar.Minimum, vScrollBar.Maximum - largeChange + 1);
+        }
+
+        private void UpdateClassicTilesScrollBar()
+        {
+            if (_classicTilesScrollBar == null || IsDisposed)
+                return;
+
+            _classicTilesScrollBar.Visible = _lvPrintTiles.Visible;
+            if (!_lvPrintTiles.Visible)
+                return;
+
+            AttachClassicTilesInnerVScrollBar();
+            if (_classicTilesInnerVScrollBar == null)
+            {
+                _isSyncingClassicTilesScrollBar = true;
+                try
+                {
+                    _classicTilesScrollBar.SetState(0, 0, 1, 1, 0);
+                    _classicTilesScrollBar.Enabled = false;
+                }
+                finally
+                {
+                    _isSyncingClassicTilesScrollBar = false;
+                }
+
+                _classicTilesScrollBar.BringToFront();
+                return;
+            }
+
+            var minimum = _classicTilesInnerVScrollBar.Minimum;
+            var largeChange = Math.Max(1, _classicTilesInnerVScrollBar.LargeChange);
+            var smallChange = Math.Max(1, _classicTilesInnerVScrollBar.SmallChange);
+            var maximum = GetClassicVScrollBarMaxScrollableValue(_classicTilesInnerVScrollBar);
+            var value = Math.Clamp(_classicTilesInnerVScrollBar.Value, minimum, maximum);
+
+            _isSyncingClassicTilesScrollBar = true;
+            try
+            {
+                _classicTilesScrollBar.SetState(minimum, maximum, largeChange, smallChange, value);
+                _classicTilesScrollBar.Enabled = maximum > minimum;
+            }
+            finally
+            {
+                _isSyncingClassicTilesScrollBar = false;
+            }
+
+            _classicTilesScrollBar.BringToFront();
         }
     }
 }

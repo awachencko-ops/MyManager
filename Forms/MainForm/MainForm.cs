@@ -37,6 +37,7 @@ namespace MyManager
             InitializeOrdersGridVisuals();
             InitializeOrdersTilesView();
             InitializeClassicGridScrollBar();
+            InitializeClassicTilesScrollBar();
             InitializeViewModeSwitches();
             InitializeOrdersDataFlow();
             InitializeOrderRowContextMenu();

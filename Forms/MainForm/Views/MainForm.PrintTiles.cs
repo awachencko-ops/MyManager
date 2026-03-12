@@ -145,6 +145,7 @@ namespace MyManager
                     dgvJobs.BringToFront();
 
                 UpdateClassicGridScrollBar();
+                UpdateClassicTilesScrollBar();
             }
             finally
             {
@@ -592,6 +593,8 @@ namespace MyManager
 
             if (shouldRebuildTiles)
                 StartPdfThumbnailGeneration(nextTiles.Select(tile => tile.PrintPath));
+
+            UpdateClassicTilesScrollBar();
         }
 
         private bool ArePrintTilesItemsUpToDate(IReadOnlyList<PrintTileTag> expectedTiles)
