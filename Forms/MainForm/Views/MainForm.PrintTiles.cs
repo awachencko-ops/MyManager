@@ -143,8 +143,6 @@ namespace MyManager
                     _lvPrintTiles.BringToFront();
                 else
                     dgvJobs.BringToFront();
-
-                UpdateOrdersViewScrollBarFromActiveView();
             }
             finally
             {
@@ -592,8 +590,6 @@ namespace MyManager
 
             if (shouldRebuildTiles)
                 StartPdfThumbnailGeneration(nextTiles.Select(tile => tile.PrintPath));
-
-            UpdateOrdersViewScrollBarFromActiveView();
         }
 
         private bool ArePrintTilesItemsUpToDate(IReadOnlyList<PrintTileTag> expectedTiles)

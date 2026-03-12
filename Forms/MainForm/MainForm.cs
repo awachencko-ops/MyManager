@@ -36,7 +36,6 @@ namespace MyManager
             InitializeQueueNavigation();
             InitializeOrdersGridVisuals();
             InitializeOrdersTilesView();
-            InitializeOrdersViewScrollBar();
             InitializeViewModeSwitches();
             InitializeOrdersDataFlow();
             InitializeOrderRowContextMenu();
