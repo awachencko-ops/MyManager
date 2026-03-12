@@ -21,13 +21,13 @@ namespace MyManager
 {
     public partial class MainForm : Form
     {
-        private string _ordersRootPath = @"C:\MyManager\Orders";
-        private string _tempRootPath = string.Empty;
-        private string _grandpaFolder = @"C:\MyManager\Archive";
+        private string _ordersRootPath = AppSettings.DefaultOrdersRootPath;
+        private string _tempRootPath = AppSettings.DefaultTempFolderPath;
+        private string _grandpaFolder = AppSettings.DefaultGrandpaPath;
         private string _archiveDoneSubfolder = "Готово";
-        private string _jsonHistoryFile = "history.json";
-        private string _managerLogFilePath = "manager.log";
-        private string _orderLogsFolderPath = string.Empty;
+        private string _jsonHistoryFile = AppSettings.DefaultHistoryFilePath;
+        private string _managerLogFilePath = AppSettings.DefaultManagerLogFilePath;
+        private string _orderLogsFolderPath = AppSettings.DefaultOrderLogsFolderPath;
         private readonly List<OrderData> _orderHistory = [];
         private readonly HashSet<string> _expandedOrderIds = new(StringComparer.Ordinal);
         private readonly Dictionary<string, CancellationTokenSource> _runTokensByOrder = new(StringComparer.Ordinal);
