@@ -8,8 +8,7 @@ namespace MyManager
     internal sealed class HoverStateVScrollBar : Control
     {
         private const int MinThumbHeight = 40;
-        private const int InactiveThumbWidth = 4;
-        private const int ActiveThumbWidth = 8;
+        private const int ThumbWidth = 8;
         private const int ArrowZoneHeight = 18;
         private const int ArrowGlyphHalfSize = 4;
 
@@ -19,7 +18,7 @@ namespace MyManager
         private int _smallChange = 1;
         private int _value;
 
-        private bool _isActiveVisualState;
+        private bool _isHovered;
         private bool _isDraggingThumb;
         private int _dragStartY;
         private int _dragStartValue;
@@ -84,14 +83,12 @@ namespace MyManager
             var graphics = e.Graphics;
             graphics.SmoothingMode = SmoothingMode.AntiAlias;
 
-            var trackBackColor = _isActiveVisualState
-                ? Color.FromArgb(242, 242, 242)
-                : Color.FromArgb(237, 237, 237);
+            var trackBackColor = Color.FromArgb(242, 242, 242);
             var borderColor = Color.FromArgb(215, 215, 215);
             var thumbColor =
                 _isDraggingThumb
-                    ? Color.FromArgb(136, 136, 136)
-                    : (_isActiveVisualState ? Color.FromArgb(157, 157, 157) : Color.FromArgb(173, 173, 173));
+                    ? Color.FromArgb(132, 132, 132)
+                    : (_isHovered ? Color.FromArgb(153, 153, 153) : Color.FromArgb(170, 170, 170));
 
             using (var backBrush = new SolidBrush(trackBackColor))
             {
@@ -112,7 +109,7 @@ namespace MyManager
                 graphics.FillPath(thumbBrush, thumbPath);
             }
 
-            if (_isActiveVisualState && CanScroll)
+            if (CanScroll)
             {
                 DrawArrowGlyph(graphics, _upArrowRect, isUpDirection: true);
                 DrawArrowGlyph(graphics, _downArrowRect, isUpDirection: false);
@@ -122,7 +119,7 @@ namespace MyManager
         protected override void OnMouseEnter(EventArgs e)
         {
             base.OnMouseEnter(e);
-            _isActiveVisualState = true;
+            _isHovered = true;
             Invalidate();
         }
 
@@ -136,7 +133,7 @@ namespace MyManager
             if (ClientRectangle.Contains(PointToClient(Cursor.Position)))
                 return;
 
-            _isActiveVisualState = false;
+            _isHovered = false;
             Invalidate();
         }
 
@@ -146,8 +143,6 @@ namespace MyManager
 
             if (e.Button != MouseButtons.Left)
                 return;
-
-            _isActiveVisualState = true;
 
             if (!CanScroll)
             {
@@ -167,13 +162,13 @@ namespace MyManager
                 return;
             }
 
-            if (_isActiveVisualState && _upArrowRect.Contains(e.Location))
+            if (_upArrowRect.Contains(e.Location))
             {
                 ChangeValueBy(-_smallChange, raiseEvent: true);
                 return;
             }
 
-            if (_isActiveVisualState && _downArrowRect.Contains(e.Location))
+            if (_downArrowRect.Contains(e.Location))
             {
                 ChangeValueBy(_smallChange, raiseEvent: true);
                 return;
@@ -261,7 +256,7 @@ namespace MyManager
                 return;
             }
 
-            var arrowHeight = _isActiveVisualState ? Math.Min(ArrowZoneHeight, Math.Max(0, inner.Height / 5)) : 0;
+            var arrowHeight = Math.Min(ArrowZoneHeight, Math.Max(0, inner.Height / 5));
             _upArrowRect = arrowHeight > 0
                 ? new Rectangle(inner.Left, inner.Top, inner.Width, arrowHeight)
                 : Rectangle.Empty;
@@ -282,7 +277,6 @@ namespace MyManager
                 return;
             }
 
-            var thumbWidth = _isActiveVisualState ? ActiveThumbWidth : InactiveThumbWidth;
             var totalRange = Math.Max(1, _maximum - _minimum + _largeChange);
             var thumbHeight = Math.Max(
                 MinThumbHeight,
@@ -294,9 +288,9 @@ namespace MyManager
                 ? 0d
                 : (double)(_value - _minimum) / (_maximum - _minimum);
             var thumbTop = _trackRect.Top + (int)Math.Round(thumbTravel * progress);
-            var thumbLeft = _trackRect.Left + ((_trackRect.Width - thumbWidth) / 2);
+            var thumbLeft = _trackRect.Left + ((_trackRect.Width - ThumbWidth) / 2);
 
-            _thumbRect = new Rectangle(thumbLeft, thumbTop, thumbWidth, thumbHeight);
+            _thumbRect = new Rectangle(thumbLeft, thumbTop, ThumbWidth, thumbHeight);
         }
 
         private static GraphicsPath CreateRoundedRectanglePath(Rectangle bounds, int radius)

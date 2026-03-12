@@ -5,7 +5,7 @@ namespace MyManager
 {
     public partial class MainForm
     {
-        private VScrollBar? _classicGridScrollBar;
+        private HoverStateVScrollBar? _classicGridScrollBar;
         private bool _isSyncingClassicGridScrollBar;
 
         private void InitializeClassicGridScrollBar()
@@ -17,7 +17,7 @@ namespace MyManager
             // This avoids putting multiple controls into one TableLayoutPanel cell.
             dgvJobs.ScrollBars = ScrollBars.None;
 
-            _classicGridScrollBar = new VScrollBar
+            _classicGridScrollBar = new HoverStateVScrollBar
             {
                 Name = "dgvJobsClassicVScrollBar",
                 Width = SystemInformation.VerticalScrollBarWidth,
@@ -120,11 +120,12 @@ namespace MyManager
             _isSyncingClassicGridScrollBar = true;
             try
             {
-                _classicGridScrollBar.Minimum = 0;
-                _classicGridScrollBar.SmallChange = 1;
-                _classicGridScrollBar.LargeChange = largeChange;
-                _classicGridScrollBar.Maximum = maximum;
-                _classicGridScrollBar.Value = Math.Clamp(value, 0, Math.Max(0, maximum - largeChange + 1));
+                _classicGridScrollBar.SetState(
+                    minimum: 0,
+                    maximum: Math.Max(0, maximum - largeChange + 1),
+                    largeChange: largeChange,
+                    smallChange: 1,
+                    value: Math.Clamp(value, 0, Math.Max(0, maximum - largeChange + 1)));
                 _classicGridScrollBar.Enabled = maxFirstRowIndex > 0;
             }
             finally
