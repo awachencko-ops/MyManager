@@ -332,7 +332,7 @@ namespace MyManager
             dgvJobs.AllowUserToResizeRows = false;
             dgvJobs.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None;
             dgvJobs.RowTemplate.Resizable = DataGridViewTriState.False;
-            dgvJobs.RowTemplate.Height = 34;
+            dgvJobs.RowTemplate.Height = 42;
             dgvJobs.AllowDrop = true;
             dgvJobs.CellBorderStyle = DataGridViewCellBorderStyle.Single;
             dgvJobs.GridColor = Color.FromArgb(218, 218, 218);
