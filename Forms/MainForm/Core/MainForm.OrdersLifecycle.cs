@@ -33,6 +33,84 @@ namespace MyManager
             FillQueueCombo(preferredStatus);
         }
 
+        private void InitializeOrdersGridWarmup()
+        {
+            _ordersGridWarmupSignature = BuildOrdersGridWarmupSignature();
+
+            _ordersGridWarmupTimer ??= new System.Windows.Forms.Timer
+            {
+                Interval = OrdersGridWarmupIntervalMs
+            };
+            _ordersGridWarmupTimer.Tick -= OrdersGridWarmupTimer_Tick;
+            _ordersGridWarmupTimer.Tick += OrdersGridWarmupTimer_Tick;
+            _ordersGridWarmupTimer.Start();
+        }
+
+        private void OrdersGridWarmupTimer_Tick(object? sender, EventArgs e)
+        {
+            if (_ordersGridWarmupTickBusy || _isRebuildingGrid || IsDisposed || !IsHandleCreated)
+                return;
+
+            // Keep the hidden table pre-built while user works in tiles mode.
+            if (_ordersViewMode != OrdersViewMode.Tiles)
+                return;
+
+            _ordersGridWarmupTickBusy = true;
+            try
+            {
+                var nextSignature = BuildOrdersGridWarmupSignature();
+                if (string.Equals(nextSignature, _ordersGridWarmupSignature, StringComparison.Ordinal))
+                    return;
+
+                RebuildOrdersGrid();
+            }
+            finally
+            {
+                _ordersGridWarmupTickBusy = false;
+            }
+        }
+
+        private string BuildOrdersGridWarmupSignature()
+        {
+            if (_orderHistory.Count == 0)
+                return string.Empty;
+
+            var builder = new StringBuilder(_orderHistory.Count * 128);
+            foreach (var order in _orderHistory.OrderBy(x => x.InternalId, StringComparer.Ordinal))
+            {
+                if (order == null)
+                    continue;
+
+                builder.Append(order.InternalId ?? string.Empty).Append('|');
+                builder.Append(order.Status ?? string.Empty).Append('|');
+                builder.Append(order.SourcePath ?? string.Empty).Append('|');
+                builder.Append(order.PreparedPath ?? string.Empty).Append('|');
+                builder.Append(order.PrintPath ?? string.Empty).Append('|');
+                builder.Append(order.PitStopAction ?? string.Empty).Append('|');
+                builder.Append(order.ImposingAction ?? string.Empty).Append('|');
+                builder.Append(order.OrderDate.Ticks).Append('|');
+                builder.Append(order.ArrivalDate.Ticks).Append('|');
+
+                if (order.Items != null)
+                {
+                    foreach (var item in order.Items.Where(item => item != null).OrderBy(item => item.SequenceNo))
+                    {
+                        builder.Append(item.ItemId ?? string.Empty).Append('|');
+                        builder.Append(item.SourcePath ?? string.Empty).Append('|');
+                        builder.Append(item.PreparedPath ?? string.Empty).Append('|');
+                        builder.Append(item.PrintPath ?? string.Empty).Append('|');
+                        builder.Append(item.FileStatus ?? string.Empty).Append('|');
+                        builder.Append(item.UpdatedAt.Ticks).Append('|');
+                    }
+                }
+
+                builder.Append(';');
+            }
+
+            var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(builder.ToString()));
+            return Convert.ToHexString(hashBytes);
+        }
+
         private void HandleOrdersGridChanged()
         {
             if (_isRebuildingGrid)
@@ -159,6 +237,8 @@ namespace MyManager
                 dgvJobs.ResumeLayout();
                 _isRebuildingGrid = false;
             }
+
+            _ordersGridWarmupSignature = BuildOrdersGridWarmupSignature();
 
             HandleOrdersGridChanged();
         }

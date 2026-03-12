@@ -62,6 +62,14 @@ namespace MyManager
                 _printTilesThumbnailsCts = null;
             }
 
+            if (_ordersGridWarmupTimer != null)
+            {
+                _ordersGridWarmupTimer.Stop();
+                _ordersGridWarmupTimer.Tick -= OrdersGridWarmupTimer_Tick;
+                _ordersGridWarmupTimer.Dispose();
+                _ordersGridWarmupTimer = null;
+            }
+
             _printTileOrderFont?.Dispose();
             _printTileOrderFont = null;
             _printTilesContextMenu.Dispose();

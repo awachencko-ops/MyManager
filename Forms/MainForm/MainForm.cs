@@ -319,6 +319,7 @@ namespace MyManager
             tbSearch.TextChanged += (_, _) => RebuildOrdersGrid();
             LoadHistory();
             RebuildOrdersGrid();
+            InitializeOrdersGridWarmup();
         }
 
         private void InitializeOrdersGridVisuals()
