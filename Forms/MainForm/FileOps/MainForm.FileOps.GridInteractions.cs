@@ -25,9 +25,10 @@ namespace MyManager
         {
             StopGridHoverActivation();
 
+            var hasSelectionModifier = (ModifierKeys & (Keys.Control | Keys.Shift)) != Keys.None;
+
             if (e.Button == MouseButtons.Left)
             {
-                var hasSelectionModifier = (ModifierKeys & (Keys.Control | Keys.Shift)) != Keys.None;
                 // Disable rubber-band style multi-select by plain mouse drag.
                 // Ctrl/Shift selection remains available (Explorer-like).
                 dgvJobs.MultiSelect = hasSelectionModifier;
@@ -54,30 +55,53 @@ namespace MyManager
             if (e.Button != MouseButtons.Left)
                 return;
 
-            if ((ModifierKeys & (Keys.Control | Keys.Shift)) != Keys.None)
+            if (hasSelectionModifier)
                 return;
 
             if (hit.RowIndex < 0 || hit.ColumnIndex < 0)
                 return;
 
+            var clickedRow = dgvJobs.Rows[hit.RowIndex];
+            var clickedRowTag = clickedRow.Tag?.ToString();
+            if (IsOrderTag(clickedRowTag))
+            {
+                // Plain left click should always activate direct selection on the clicked order.
+                if (!clickedRow.Selected || dgvJobs.SelectedRows.Count != 1 || dgvJobs.CurrentCell?.RowIndex != hit.RowIndex)
+                {
+                    _isSyncingGridSelection = true;
+                    try
+                    {
+                        dgvJobs.ClearSelection();
+                        clickedRow.Selected = true;
+                        dgvJobs.CurrentCell = clickedRow.Cells[hit.ColumnIndex];
+                    }
+                    finally
+                    {
+                        _isSyncingGridSelection = false;
+                    }
+
+                    SyncTilesSelectionWithGrid();
+                    UpdateActionButtonsState();
+                    UpdateTrayStatsIndicator();
+                }
+            }
+
             var stage = GetStageByColumnIndex(hit.ColumnIndex);
             if (stage == 0)
                 return;
 
-            var row = dgvJobs.Rows[hit.RowIndex];
             var canStartFileDrag =
-                row.Selected
+                clickedRow.Selected
                 && dgvJobs.SelectedRows.Count <= 1
                 && dgvJobs.CurrentCell != null
                 && dgvJobs.CurrentCell.RowIndex == hit.RowIndex;
             if (!canStartFileDrag)
                 return;
 
-            var rowTag = dgvJobs.Rows[hit.RowIndex].Tag?.ToString();
-            if (string.IsNullOrWhiteSpace(rowTag))
+            if (string.IsNullOrWhiteSpace(clickedRowTag))
                 return;
 
-            if (!IsOrderTag(rowTag))
+            if (!IsOrderTag(clickedRowTag))
                 return;
 
             _dragSourceRowIndex = hit.RowIndex;
