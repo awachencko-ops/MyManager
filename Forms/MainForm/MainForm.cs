@@ -324,7 +324,7 @@ namespace MyManager
             var unifiedPadding = new Padding(8, 0, 0, 0);
 
             dgvJobs.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            dgvJobs.MultiSelect = false;
+            dgvJobs.MultiSelect = true;
             dgvJobs.AllowUserToResizeRows = false;
             dgvJobs.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None;
             dgvJobs.RowTemplate.Resizable = DataGridViewTriState.False;

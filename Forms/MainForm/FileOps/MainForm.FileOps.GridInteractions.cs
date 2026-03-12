@@ -82,7 +82,10 @@ namespace MyManager
         private void DgvJobs_MouseMove(object? sender, MouseEventArgs e)
         {
             if ((e.Button & MouseButtons.Left) == MouseButtons.Left)
+            {
                 StopGridHoverActivation();
+                CollapseDragSelectionToSingleRow(e.X, e.Y);
+            }
 
             if ((e.Button & MouseButtons.Left) != MouseButtons.Left)
                 return;
@@ -112,7 +115,38 @@ namespace MyManager
 
         private void DgvJobs_MouseUp(object? sender, MouseEventArgs e)
         {
-            // Selection behavior is handled by DataGridView defaults.
+            if (e.Button == MouseButtons.Left)
+                CollapseDragSelectionToSingleRow(e.X, e.Y);
+        }
+
+        private void CollapseDragSelectionToSingleRow(int mouseX, int mouseY)
+        {
+            if (dgvJobs.SelectedRows.Count <= 1)
+                return;
+
+            if ((ModifierKeys & (Keys.Control | Keys.Shift)) != Keys.None)
+                return;
+
+            var hit = dgvJobs.HitTest(mouseX, mouseY);
+            var rowIndex = hit.RowIndex >= 0 ? hit.RowIndex : dgvJobs.CurrentCell?.RowIndex ?? -1;
+            if (rowIndex < 0 || rowIndex >= dgvJobs.Rows.Count)
+                return;
+
+            var row = dgvJobs.Rows[rowIndex];
+            if (row.IsNewRow)
+                return;
+
+            var columnIndex = hit.ColumnIndex >= 0 ? hit.ColumnIndex : dgvJobs.CurrentCell?.ColumnIndex ?? colStatus.Index;
+            if (columnIndex < 0 || columnIndex >= dgvJobs.Columns.Count || columnIndex >= row.Cells.Count)
+                columnIndex = colStatus.Index >= 0 && colStatus.Index < row.Cells.Count ? colStatus.Index : 0;
+
+            var targetCell = row.Cells[columnIndex];
+            if (dgvJobs.CurrentCell != targetCell || !row.Selected || dgvJobs.SelectedRows.Count > 1)
+            {
+                dgvJobs.ClearSelection();
+                dgvJobs.CurrentCell = targetCell;
+                row.Selected = true;
+            }
         }
 
         private void DgvJobs_CellValueChanged(object? sender, DataGridViewCellEventArgs e)
