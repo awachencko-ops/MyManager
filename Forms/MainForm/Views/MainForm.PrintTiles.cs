@@ -125,6 +125,9 @@ namespace MyManager
 
         private void LvPrintTiles_SelectedIndexChanged(object? sender, EventArgs e)
         {
+            if (_ordersViewMode != OrdersViewMode.Tiles)
+                return;
+
             if (_isSyncingTileSelection)
                 return;
 
@@ -578,6 +581,9 @@ namespace MyManager
 
         private void SyncTilesSelectionWithGrid()
         {
+            if (_ordersViewMode != OrdersViewMode.List)
+                return;
+
             if (_isSyncingGridSelection)
                 return;
 
@@ -588,6 +594,9 @@ namespace MyManager
 
         private void SyncGridSelectionWithTiles()
         {
+            if (_ordersViewMode != OrdersViewMode.Tiles)
+                return;
+
             if (_isSyncingTileSelection)
                 return;
 

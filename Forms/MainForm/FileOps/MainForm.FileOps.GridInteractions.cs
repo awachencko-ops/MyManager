@@ -25,19 +25,6 @@ namespace MyManager
         {
             StopGridHoverActivation();
 
-            var hasSelectionModifier = (ModifierKeys & (Keys.Control | Keys.Shift)) != Keys.None;
-
-            if (e.Button == MouseButtons.Left)
-            {
-                // Disable rubber-band style multi-select by plain mouse drag.
-                // Ctrl/Shift selection remains available (Explorer-like).
-                dgvJobs.MultiSelect = hasSelectionModifier;
-            }
-            else
-            {
-                dgvJobs.MultiSelect = true;
-            }
-
             _dragBoxFromMouseDown = Rectangle.Empty;
             _dragSourceRowIndex = -1;
             _dragSourceColumnIndex = -1;
@@ -55,6 +42,7 @@ namespace MyManager
             if (e.Button != MouseButtons.Left)
                 return;
 
+            var hasSelectionModifier = (ModifierKeys & (Keys.Control | Keys.Shift)) != Keys.None;
             if (hasSelectionModifier)
                 return;
 
@@ -63,28 +51,6 @@ namespace MyManager
 
             var clickedRow = dgvJobs.Rows[hit.RowIndex];
             var clickedRowTag = clickedRow.Tag?.ToString();
-            if (IsOrderTag(clickedRowTag))
-            {
-                // Plain left click should always activate direct selection on the clicked order.
-                if (!clickedRow.Selected || dgvJobs.SelectedRows.Count != 1 || dgvJobs.CurrentCell?.RowIndex != hit.RowIndex)
-                {
-                    _isSyncingGridSelection = true;
-                    try
-                    {
-                        dgvJobs.ClearSelection();
-                        clickedRow.Selected = true;
-                        dgvJobs.CurrentCell = clickedRow.Cells[hit.ColumnIndex];
-                    }
-                    finally
-                    {
-                        _isSyncingGridSelection = false;
-                    }
-
-                    SyncTilesSelectionWithGrid();
-                    UpdateActionButtonsState();
-                    UpdateTrayStatsIndicator();
-                }
-            }
 
             var stage = GetStageByColumnIndex(hit.ColumnIndex);
             if (stage == 0)
@@ -146,11 +112,7 @@ namespace MyManager
 
         private void DgvJobs_MouseUp(object? sender, MouseEventArgs e)
         {
-            if (e.Button != MouseButtons.Left)
-                return;
-
-            // Restore multi-select so Ctrl/Shift and keyboard multi-selection continue to work.
-            dgvJobs.MultiSelect = true;
+            // Selection behavior is handled by DataGridView defaults.
         }
 
         private void DgvJobs_CellValueChanged(object? sender, DataGridViewCellEventArgs e)
@@ -291,9 +253,6 @@ namespace MyManager
         private void DgvJobs_MouseLeave(object? sender, EventArgs e)
         {
             StopGridHoverActivation();
-
-            if ((Control.MouseButtons & MouseButtons.Left) != MouseButtons.Left)
-                dgvJobs.MultiSelect = true;
         }
 
         private void DgvJobs_CellDoubleClick(object? sender, DataGridViewCellEventArgs e)
