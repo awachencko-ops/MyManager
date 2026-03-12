@@ -81,11 +81,11 @@ namespace MyManager
                 targetName = EnsureUniqueStageFileName(order, stage, Path.GetFileName(cleanSource));
 
             var newPath = stage == 3
-                ? CopyPrintFile(order, cleanSource, targetName)
-                : CopyIntoStage(order, stage, cleanSource, targetName);
+                ? await CopyPrintFileAsync(order, cleanSource, targetName)
+                : await CopyIntoStageAsync(order, stage, cleanSource, targetName);
 
             if (stage == 2)
-                EnsureSourceCopy(order, cleanSource);
+                await EnsureSourceCopyAsync(order, cleanSource);
 
             UpdateOrderFilePath(order, stage, newPath);
             return true;
@@ -107,12 +107,12 @@ namespace MyManager
             if (stage == 3)
             {
                 var printName = EnsureUniqueStageFileName(order, 3, BuildItemPrintFileName(order, item, cleanSource));
-                newPath = CopyPrintFile(order, cleanSource, printName);
+                newPath = await CopyPrintFileAsync(order, cleanSource, printName);
             }
             else
             {
                 var targetName = EnsureUniqueStageFileName(order, stage, Path.GetFileName(cleanSource));
-                newPath = CopyIntoStage(order, stage, cleanSource, targetName);
+                newPath = await CopyIntoStageAsync(order, stage, cleanSource, targetName);
             }
 
             UpdateItemFilePath(order, item, stage, newPath);
@@ -497,7 +497,7 @@ namespace MyManager
             return path;
         }
 
-        private string CopyIntoStage(OrderData order, int stage, string sourceFile, string? targetName = null)
+        private async Task<string> CopyIntoStageAsync(OrderData order, int stage, string sourceFile, string? targetName = null)
         {
             var cleanSource = CleanPath(sourceFile);
             if (string.IsNullOrWhiteSpace(cleanSource) || !File.Exists(cleanSource))
@@ -506,8 +506,8 @@ namespace MyManager
             var stageFolder = GetStageFolder(order, stage);
             Directory.CreateDirectory(stageFolder);
 
-            var fileName = string.IsNullOrWhiteSpace(targetName) ? Path.GetFileName(cleanSource) : targetName;
-            var destination = Path.Combine(stageFolder, fileName);
+            var destinationFileName = string.IsNullOrWhiteSpace(targetName) ? Path.GetFileName(cleanSource) : targetName;
+            var destination = Path.Combine(stageFolder, destinationFileName);
 
             if (PathsEqual(cleanSource, destination))
                 return destination;
@@ -515,16 +515,21 @@ namespace MyManager
             if (File.Exists(destination))
                 return destination;
 
-            File.Copy(cleanSource, destination, true);
+            var stageName = GetStageDisplayName(stage);
+            var sourceFileName = Path.GetFileName(cleanSource);
+            await CopyFileWithTrayProgressAsync(
+                cleanSource,
+                destination,
+                $"Копирование в {stageName}: {sourceFileName}");
             return destination;
         }
 
-        private string CopyPrintFile(OrderData order, string sourceFile, string targetName)
+        private async Task<string> CopyPrintFileAsync(OrderData order, string sourceFile, string targetName)
         {
             if (!UsesOrderFolderStorage(order))
-                return CopyToGrandpaFromSource(sourceFile, targetName);
+                return await CopyToGrandpaFromSourceAsync(sourceFile, targetName);
 
-            return CopyIntoStage(order, 3, sourceFile, targetName);
+            return await CopyIntoStageAsync(order, 3, sourceFile, targetName);
         }
 
         private static bool UsesOrderFolderStorage(OrderData order)
@@ -532,7 +537,7 @@ namespace MyManager
             return !string.IsNullOrWhiteSpace(order.FolderName);
         }
 
-        private string CopyToGrandpaFromSource(string sourceFile, string targetName)
+        private async Task<string> CopyToGrandpaFromSourceAsync(string sourceFile, string targetName)
         {
             var cleanSource = CleanPath(sourceFile);
             if (string.IsNullOrWhiteSpace(cleanSource) || !File.Exists(cleanSource))
@@ -559,7 +564,10 @@ namespace MyManager
                 return destination;
             }
 
-            File.Copy(cleanSource, destination, true);
+            await CopyFileWithTrayProgressAsync(
+                cleanSource,
+                destination,
+                $"Копирование в Дедушку: {Path.GetFileName(cleanSource)}");
             TrySetClipboardText(destination);
             SetBottomStatus("Скопировано в Дедушку");
             return destination;
@@ -594,13 +602,82 @@ namespace MyManager
             return $"{orderNo}_{itemIndex}{ext}";
         }
 
-        private void EnsureSourceCopy(OrderData order, string sourceFile)
+        private async Task EnsureSourceCopyAsync(OrderData order, string sourceFile)
         {
             if (!string.IsNullOrWhiteSpace(order.SourcePath) && HasExistingFile(order.SourcePath))
                 return;
 
-            var newPath = CopyIntoStage(order, 1, sourceFile);
+            var newPath = await CopyIntoStageAsync(order, 1, sourceFile);
             UpdateOrderFilePath(order, 1, newPath);
+        }
+
+        private async Task CopyFileWithTrayProgressAsync(string sourcePath, string destinationPath, string statusText)
+        {
+            const int bufferSize = 1024 * 1024;
+            BeginFileTransferStatus(statusText);
+
+            try
+            {
+                using var sourceStream = new FileStream(
+                    sourcePath,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.Read,
+                    bufferSize,
+                    FileOptions.Asynchronous | FileOptions.SequentialScan);
+                using var destinationStream = new FileStream(
+                    destinationPath,
+                    FileMode.Create,
+                    FileAccess.Write,
+                    FileShare.None,
+                    bufferSize,
+                    FileOptions.Asynchronous | FileOptions.SequentialScan);
+
+                var totalBytes = sourceStream.Length;
+                var copiedBytes = 0L;
+                var lastReportedPercent = -1;
+                var buffer = new byte[bufferSize];
+
+                ReportFileTransferStatus(statusText, 0, totalBytes);
+
+                int readBytes;
+                while ((readBytes = await sourceStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                {
+                    await destinationStream.WriteAsync(buffer, 0, readBytes);
+                    copiedBytes += readBytes;
+
+                    if (totalBytes <= 0)
+                    {
+                        ReportFileTransferStatus(statusText, copiedBytes, totalBytes);
+                        continue;
+                    }
+
+                    var nextPercent = Math.Clamp((int)Math.Round((double)copiedBytes * 100d / totalBytes), 0, 100);
+                    if (nextPercent <= lastReportedPercent)
+                        continue;
+
+                    lastReportedPercent = nextPercent;
+                    ReportFileTransferStatus(statusText, copiedBytes, totalBytes);
+                }
+
+                await destinationStream.FlushAsync();
+                ReportFileTransferStatus(statusText, totalBytes, totalBytes);
+            }
+            finally
+            {
+                EndFileTransferStatus();
+            }
+        }
+
+        private static string GetStageDisplayName(int stage)
+        {
+            return stage switch
+            {
+                1 => "\"1. исходные\"",
+                2 => "\"2. подготовка\"",
+                3 => "\"3. печать\"",
+                _ => "этап"
+            };
         }
 
         private async Task<bool> EnsureSimpleOrderInfoForPrintAsync(OrderData order)

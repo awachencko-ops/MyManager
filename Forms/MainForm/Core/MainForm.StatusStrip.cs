@@ -236,10 +236,93 @@ namespace MyManager
             UpdateTrayProgressIndicator();
         }
 
+        private void BeginFileTransferStatus(string operationText)
+        {
+            var nextText = string.IsNullOrWhiteSpace(operationText)
+                ? "Копирование файла"
+                : operationText.Trim();
+
+            RunOnUiThread(() =>
+            {
+                _activeFileTransfers++;
+                _fileTransferStatusText = nextText;
+                _fileTransferProgressPercent = 0;
+                _fileTransferIsIndeterminate = true;
+                UpdateTrayProgressIndicator();
+            });
+        }
+
+        private void ReportFileTransferStatus(string operationText, long copiedBytes, long totalBytes)
+        {
+            var nextText = string.IsNullOrWhiteSpace(operationText)
+                ? "Копирование файла"
+                : operationText.Trim();
+
+            var hasKnownSize = totalBytes > 0;
+            var nextProgress = hasKnownSize
+                ? Math.Clamp((int)Math.Round((double)copiedBytes * 100d / totalBytes), 0, 100)
+                : 0;
+
+            RunOnUiThread(() =>
+            {
+                if (_activeFileTransfers <= 0)
+                    return;
+
+                _fileTransferStatusText = nextText;
+                _fileTransferIsIndeterminate = !hasKnownSize;
+                _fileTransferProgressPercent = nextProgress;
+                UpdateTrayProgressIndicator();
+            });
+        }
+
+        private void EndFileTransferStatus()
+        {
+            RunOnUiThread(() =>
+            {
+                if (_activeFileTransfers > 0)
+                    _activeFileTransfers--;
+
+                if (_activeFileTransfers == 0)
+                {
+                    _fileTransferStatusText = string.Empty;
+                    _fileTransferProgressPercent = -1;
+                    _fileTransferIsIndeterminate = false;
+                }
+
+                UpdateTrayProgressIndicator();
+            });
+        }
+
         private void UpdateTrayProgressIndicator()
         {
             if (toolProgress.IsDisposed)
                 return;
+
+            if (_activeFileTransfers > 0)
+            {
+                var progressValue = Math.Clamp(_fileTransferProgressPercent, 0, 100);
+                if (_fileTransferIsIndeterminate)
+                {
+                    toolProgress.Style = ProgressBarStyle.Marquee;
+                    toolProgress.MarqueeAnimationSpeed = 30;
+                }
+                else
+                {
+                    toolProgress.Style = ProgressBarStyle.Continuous;
+                    toolProgress.MarqueeAnimationSpeed = 0;
+                    toolProgress.Value = progressValue;
+                }
+
+                toolProgress.Visible = true;
+                toolProgress.ToolTipText = _fileTransferIsIndeterminate
+                    ? $"{_fileTransferStatusText}: выполняется."
+                    : $"{_fileTransferStatusText}: {progressValue}%.";
+                RefreshBottomStatusLabel();
+                return;
+            }
+
+            toolProgress.Style = ProgressBarStyle.Continuous;
+            toolProgress.MarqueeAnimationSpeed = 0;
 
             if (_runProgressByOrderInternalId.Count == 0)
             {
@@ -391,11 +474,38 @@ namespace MyManager
                 ? DefaultTrayStatusText
                 : _baseBottomStatusText.Trim();
 
+            var fileTransferCaption = BuildFileTransferCaption();
             var runningOrdersCaption = BuildRunningOrdersCaption();
-            if (string.IsNullOrWhiteSpace(runningOrdersCaption))
+
+            if (string.IsNullOrWhiteSpace(fileTransferCaption) && string.IsNullOrWhiteSpace(runningOrdersCaption))
                 return baseText;
 
-            return $"{baseText} | {runningOrdersCaption}";
+            if (string.IsNullOrWhiteSpace(fileTransferCaption))
+                return $"{baseText} | {runningOrdersCaption}";
+
+            if (string.IsNullOrWhiteSpace(runningOrdersCaption))
+                return $"{baseText} | {fileTransferCaption}";
+
+            return $"{baseText} | {fileTransferCaption} | {runningOrdersCaption}";
+        }
+
+        private string BuildFileTransferCaption()
+        {
+            if (_activeFileTransfers <= 0)
+                return string.Empty;
+
+            var statusText = string.IsNullOrWhiteSpace(_fileTransferStatusText)
+                ? "Копирование файла"
+                : _fileTransferStatusText;
+
+            var progressCaption = _fileTransferIsIndeterminate
+                ? "выполняется"
+                : $"{Math.Clamp(_fileTransferProgressPercent, 0, 100)}%";
+
+            if (_activeFileTransfers <= 1)
+                return $"{statusText}: {progressCaption}";
+
+            return $"{statusText}: {progressCaption} (+{_activeFileTransfers - 1})";
         }
 
         private string BuildRunningOrdersCaption()
@@ -459,6 +569,20 @@ namespace MyManager
             {
                 // Лог не должен ломать основной поток.
             }
+        }
+
+        private void RunOnUiThread(Action action)
+        {
+            if (action == null || Disposing || IsDisposed)
+                return;
+
+            if (InvokeRequired)
+            {
+                BeginInvoke(action);
+                return;
+            }
+
+            action();
         }
 
     }

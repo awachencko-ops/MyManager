@@ -203,13 +203,21 @@ namespace MyManager
             ProcessWatermark(order, isVertical);
         }
 
-        private void CopyPrintFromContextToGrandpa()
+        private async void CopyPrintFromContextToGrandpa()
         {
-            var order = GetContextOrder();
-            if (order == null)
-                return;
+            try
+            {
+                var order = GetContextOrder();
+                if (order == null)
+                    return;
 
-            CopyToGrandpa(order);
+                await CopyToGrandpaAsync(order);
+            }
+            catch (Exception ex)
+            {
+                SetBottomStatus($"Ошибка копирования: {ex.Message}");
+                MessageBox.Show(this, $"Не удалось скопировать файл: {ex.Message}", "Копирование", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void RemovePitStopActionFromContext()
@@ -347,7 +355,7 @@ namespace MyManager
             SetBottomStatus($"Imposing очищен для item {item.ClientFileLabel}");
         }
 
-        private string CopyToGrandpa(OrderData order)
+        private async Task<string> CopyToGrandpaAsync(OrderData order)
         {
             if (!HasExistingFile(order.PrintPath))
             {
@@ -358,10 +366,10 @@ namespace MyManager
 
             var sourcePath = order.PrintPath ?? string.Empty;
             var targetName = Path.GetFileName(sourcePath);
-            return CopyToGrandpaFromSource(sourcePath, targetName);
+            return await CopyToGrandpaFromSourceAsync(sourcePath, targetName);
         }
 
-        private string CopyToGrandpa(OrderData order, OrderFileItem item)
+        private async Task<string> CopyToGrandpaAsync(OrderData order, OrderFileItem item)
         {
             if (!HasExistingFile(item.PrintPath))
             {
@@ -372,7 +380,7 @@ namespace MyManager
 
             var sourcePath = item.PrintPath ?? string.Empty;
             var targetName = Path.GetFileName(sourcePath);
-            return CopyToGrandpaFromSource(sourcePath, targetName);
+            return await CopyToGrandpaFromSourceAsync(sourcePath, targetName);
         }
 
     }
