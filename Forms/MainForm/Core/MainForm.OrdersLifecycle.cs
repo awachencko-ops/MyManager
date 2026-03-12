@@ -47,7 +47,6 @@ namespace MyManager
             RefreshStatusFilterChecklist();
             RefreshUserFilterChecklist();
             RefreshQueuePresentation();
-            RefreshOrdersTableFromVisibleRows();
             RefreshPrintTilesFromVisibleRows();
             UpdateActionButtonsState();
             RefreshTrayIndicators();

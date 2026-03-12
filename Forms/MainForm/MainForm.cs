@@ -35,7 +35,6 @@ namespace MyManager
             InitializeQueueNavigation();
             InitializeOrdersGridVisuals();
             InitializeOrdersTilesView();
-            InitializeOrdersTableListView();
             InitializeViewModeSwitches();
             InitializeOrdersDataFlow();
             InitializeOrderRowContextMenu();
@@ -375,10 +374,7 @@ namespace MyManager
             dgvJobs.SelectionChanged += (_, _) =>
             {
                 if (!_isSyncingGridSelection)
-                {
-                    SyncOrdersTableSelectionWithGrid();
                     SyncTilesSelectionWithGrid();
-                }
 
                 UpdateActionButtonsState();
                 UpdateTrayStatsIndicator();
@@ -386,10 +382,7 @@ namespace MyManager
             dgvJobs.CurrentCellChanged += (_, _) =>
             {
                 if (!_isSyncingGridSelection)
-                {
-                    SyncOrdersTableSelectionWithGrid();
                     SyncTilesSelectionWithGrid();
-                }
 
                 UpdateActionButtonsState();
                 UpdateTrayStatsIndicator();
@@ -409,7 +402,7 @@ namespace MyManager
             if (e.KeyCode != Keys.Delete && e.KeyCode != Keys.Back)
                 return;
 
-            if (!dgvJobs.ContainsFocus && !_lvPrintTiles.ContainsFocus && !_olvOrdersTable.ContainsFocus)
+            if (!dgvJobs.ContainsFocus && !_lvPrintTiles.ContainsFocus)
                 return;
 
             e.Handled = true;
