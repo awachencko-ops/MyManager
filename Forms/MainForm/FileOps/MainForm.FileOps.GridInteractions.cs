@@ -40,11 +40,23 @@ namespace MyManager
             if (e.Button != MouseButtons.Left)
                 return;
 
+            if ((ModifierKeys & (Keys.Control | Keys.Shift)) != Keys.None)
+                return;
+
             if (hit.RowIndex < 0 || hit.ColumnIndex < 0)
                 return;
 
             var stage = GetStageByColumnIndex(hit.ColumnIndex);
             if (stage == 0)
+                return;
+
+            var row = dgvJobs.Rows[hit.RowIndex];
+            var canStartFileDrag =
+                row.Selected
+                && dgvJobs.SelectedRows.Count <= 1
+                && dgvJobs.CurrentCell != null
+                && dgvJobs.CurrentCell.RowIndex == hit.RowIndex;
+            if (!canStartFileDrag)
                 return;
 
             var rowTag = dgvJobs.Rows[hit.RowIndex].Tag?.ToString();
