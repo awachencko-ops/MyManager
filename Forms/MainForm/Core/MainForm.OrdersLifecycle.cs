@@ -33,41 +33,19 @@ namespace MyManager
             FillQueueCombo(preferredStatus);
         }
 
-        private void InitializeOrdersGridWarmup()
+        private void InitializeOrdersViewsWarmupCoordinator()
         {
-            _ordersGridWarmupSignature = BuildOrdersGridWarmupSignature();
+            _ordersViewWarmupCoordinator ??= new OrdersViewWarmupCoordinator(
+                gridWarmupIntervalMs: OrdersGridWarmupIntervalMs,
+                shouldWarmupGrid: () =>
+                    !_isRebuildingGrid
+                    && !IsDisposed
+                    && IsHandleCreated
+                    && _ordersViewMode == OrdersViewMode.Tiles,
+                buildGridSignature: BuildOrdersGridWarmupSignature,
+                rebuildGrid: RebuildOrdersGrid);
 
-            _ordersGridWarmupTimer ??= new System.Windows.Forms.Timer
-            {
-                Interval = OrdersGridWarmupIntervalMs
-            };
-            _ordersGridWarmupTimer.Tick -= OrdersGridWarmupTimer_Tick;
-            _ordersGridWarmupTimer.Tick += OrdersGridWarmupTimer_Tick;
-            _ordersGridWarmupTimer.Start();
-        }
-
-        private void OrdersGridWarmupTimer_Tick(object? sender, EventArgs e)
-        {
-            if (_ordersGridWarmupTickBusy || _isRebuildingGrid || IsDisposed || !IsHandleCreated)
-                return;
-
-            // Keep the hidden table pre-built while user works in tiles mode.
-            if (_ordersViewMode != OrdersViewMode.Tiles)
-                return;
-
-            _ordersGridWarmupTickBusy = true;
-            try
-            {
-                var nextSignature = BuildOrdersGridWarmupSignature();
-                if (string.Equals(nextSignature, _ordersGridWarmupSignature, StringComparison.Ordinal))
-                    return;
-
-                RebuildOrdersGrid();
-            }
-            finally
-            {
-                _ordersGridWarmupTickBusy = false;
-            }
+            _ordersViewWarmupCoordinator.Start();
         }
 
         private string BuildOrdersGridWarmupSignature()
@@ -238,7 +216,7 @@ namespace MyManager
                 _isRebuildingGrid = false;
             }
 
-            _ordersGridWarmupSignature = BuildOrdersGridWarmupSignature();
+            _ordersViewWarmupCoordinator?.SyncGridSignature();
 
             HandleOrdersGridChanged();
         }

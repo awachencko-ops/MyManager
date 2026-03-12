@@ -1006,11 +1006,7 @@ namespace MyManager
 
         private void StartPdfThumbnailGeneration(IEnumerable<string> pdfPaths)
         {
-            _printTilesThumbnailsCts?.Cancel();
-            _printTilesThumbnailsCts?.Dispose();
-            _printTilesThumbnailsCts = null;
-
-            if (_pdfThumbnailAdaptor == null)
+            if (_ordersViewWarmupCoordinator == null || _pdfThumbnailAdaptor == null)
                 return;
 
             var pending = pdfPaths
@@ -1023,33 +1019,19 @@ namespace MyManager
             if (pending.Count == 0)
                 return;
 
-            var cts = new CancellationTokenSource();
-            _printTilesThumbnailsCts = cts;
-            var token = cts.Token;
-            var thumbnailSize = _lvPrintTiles.ThumbnailSize;
-            var adaptor = _pdfThumbnailAdaptor;
+            _ordersViewWarmupCoordinator.WarmupPdfThumbnails(pending, WarmupPdfThumbnailPath);
+        }
 
-            _ = Task.Run(() =>
-            {
-                foreach (var pdfPath in pending)
-                {
-                    if (token.IsCancellationRequested)
-                        return;
+        private void WarmupPdfThumbnailPath(string pdfPath, CancellationToken token)
+        {
+            if (token.IsCancellationRequested || _pdfThumbnailAdaptor == null)
+                return;
 
-                    try
-                    {
-                        using var image = adaptor.GetThumbnail(
-                            pdfPath,
-                            thumbnailSize,
-                            UseEmbeddedThumbnails.Never,
-                            useExifOrientation: false);
-                    }
-                    catch
-                    {
-                        // Ignore warmup errors; UI will lazily request thumbnail again.
-                    }
-                }
-            }, token);
+            using var image = _pdfThumbnailAdaptor.GetThumbnail(
+                pdfPath,
+                _lvPrintTiles.ThumbnailSize,
+                UseEmbeddedThumbnails.Never,
+                useExifOrientation: false);
         }
 
         private void AttachPdfThumbnailOnUiThread(string pdfPath, Bitmap thumbnail, CancellationToken token)

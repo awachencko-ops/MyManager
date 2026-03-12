@@ -41,15 +41,12 @@ namespace MyManager
         private readonly Manina.Windows.Forms.ImageListView _lvPrintTiles = new();
         private readonly ImageList _printTilesImageList = new();
         private PdfAwareFileSystemAdaptor? _pdfThumbnailAdaptor;
+        private OrdersViewWarmupCoordinator? _ordersViewWarmupCoordinator;
         private Font? _printTileOrderFont;
         private OrderProcessor? _processor;
         private System.Windows.Forms.Timer? _trayIndicatorsTimer;
-        private System.Windows.Forms.Timer? _ordersGridWarmupTimer;
         private System.Windows.Forms.Timer? _gridHoverActivateTimer;
         private System.Windows.Forms.Timer? _tileHoverActivateTimer;
-        private CancellationTokenSource? _printTilesThumbnailsCts;
-        private string _ordersGridWarmupSignature = string.Empty;
-        private bool _ordersGridWarmupTickBusy;
         private bool _isRebuildingGrid;
         private bool _isSyncingTileSelection;
         private bool _isSyncingGridSelection;

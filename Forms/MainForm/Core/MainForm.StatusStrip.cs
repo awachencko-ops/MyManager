@@ -55,20 +55,8 @@ namespace MyManager
 
         private void MainForm_FormClosed(object? sender, FormClosedEventArgs e)
         {
-            if (_printTilesThumbnailsCts != null)
-            {
-                _printTilesThumbnailsCts.Cancel();
-                _printTilesThumbnailsCts.Dispose();
-                _printTilesThumbnailsCts = null;
-            }
-
-            if (_ordersGridWarmupTimer != null)
-            {
-                _ordersGridWarmupTimer.Stop();
-                _ordersGridWarmupTimer.Tick -= OrdersGridWarmupTimer_Tick;
-                _ordersGridWarmupTimer.Dispose();
-                _ordersGridWarmupTimer = null;
-            }
+            _ordersViewWarmupCoordinator?.Dispose();
+            _ordersViewWarmupCoordinator = null;
 
             _printTileOrderFont?.Dispose();
             _printTileOrderFont = null;
