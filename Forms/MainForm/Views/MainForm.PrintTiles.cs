@@ -30,7 +30,7 @@ namespace MyManager
             _lvPrintTiles.Margin = dgvJobs.Margin;
             _lvPrintTiles.BackColor = dgvJobs.BackgroundColor;
             _lvPrintTiles.BorderStyle = BorderStyle.None;
-            _lvPrintTiles.MultiSelect = false;
+            _lvPrintTiles.MultiSelect = true;
             _lvPrintTiles.HideSelection = false;
             _lvPrintTiles.View = View.LargeIcon;
             _lvPrintTiles.LargeImageList = _printTilesImageList;
@@ -68,13 +68,9 @@ namespace MyManager
             _lvPrintTiles.Visible = isTilesMode;
 
             if (isTilesMode)
-            {
-                var selectedTile = GetSelectedPrintTileTag();
-                if (selectedTile == null)
-                    ClearGridSelection();
-                else
-                    TrySelectGridRowByOrderInternalId(selectedTile.OrderInternalId);
-            }
+                SyncGridSelectionWithTiles();
+            else
+                SyncTilesSelectionWithGrid();
 
             UpdateViewModeSwitchesVisuals();
             UpdateActionButtonsState();
@@ -100,18 +96,7 @@ namespace MyManager
             if (_isSyncingTileSelection)
                 return;
 
-            var selectedTile = GetSelectedPrintTileTag();
-            if (selectedTile == null)
-            {
-                if (_ordersViewMode == OrdersViewMode.Tiles)
-                    ClearGridSelection();
-
-                UpdateActionButtonsState();
-                UpdateTrayStatsIndicator();
-                return;
-            }
-
-            TrySelectGridRowByOrderInternalId(selectedTile.OrderInternalId);
+            SyncGridSelectionWithTiles();
             UpdateActionButtonsState();
             UpdateTrayStatsIndicator();
         }
@@ -148,7 +133,7 @@ namespace MyManager
                     _isSyncingTileSelection = false;
                 }
 
-                TrySelectGridRowByOrderInternalId(tileTag.OrderInternalId);
+                SyncGridSelectionWithTiles();
                 UpdateActionButtonsState();
                 UpdateTrayStatsIndicator();
             }
@@ -262,9 +247,9 @@ namespace MyManager
             if (bounds.Width <= 0 || bounds.Height <= 0)
                 return;
 
-            var isSelected = (e.State & ListViewItemStates.Selected) != 0;
+            var isSelected = e.Item.Selected;
             var isFocused = (e.State & ListViewItemStates.Focused) != 0;
-            var itemBackColor = isSelected ? Color.FromArgb(219, 233, 253) : _lvPrintTiles.BackColor;
+            var itemBackColor = _lvPrintTiles.BackColor;
             var textColor = Color.FromArgb(24, 28, 36);
 
             using (var backBrush = new SolidBrush(itemBackColor))
@@ -321,13 +306,27 @@ namespace MyManager
             TextRenderer.DrawText(e.Graphics, orderNumber, orderFont, orderRect, textColor, textFlags);
             TextRenderer.DrawText(e.Graphics, fileName, fileFont, fileRect, textColor, textFlags);
 
+            if (isSelected)
+            {
+                var selectionBorder = Rectangle.Inflate(bounds, -1, -1);
+                using var selectedBorderPen = new Pen(Color.FromArgb(88, 124, 184));
+                e.Graphics.DrawRectangle(selectedBorderPen, selectionBorder);
+            }
+
             if (isFocused && isSelected)
                 e.DrawFocusRectangle();
         }
 
         private void RefreshPrintTilesFromVisibleRows()
         {
-            var preferredOrderInternalId = GetSelectedPrintTileTag()?.OrderInternalId;
+            var selectedOrderInternalIds = _ordersViewMode == OrdersViewMode.Tiles
+                ? GetSelectedOrderInternalIdsFromTiles()
+                : GetSelectedOrderInternalIdsFromGrid();
+
+            if (selectedOrderInternalIds.Count == 0)
+                selectedOrderInternalIds = GetSelectedOrderInternalIdsFromGrid();
+
+            var preferredOrderInternalId = GetFocusedPrintTileOrderInternalId();
             if (string.IsNullOrWhiteSpace(preferredOrderInternalId))
                 preferredOrderInternalId = ExtractOrderInternalIdFromTag(dgvJobs.CurrentRow?.Tag?.ToString());
 
@@ -395,29 +394,6 @@ namespace MyManager
                     }
                 }
 
-                if (_ordersViewMode == OrdersViewMode.Tiles)
-                {
-                    if (!TrySelectTileByOrderInternalId(preferredOrderInternalId) && _lvPrintTiles.Items.Count > 0)
-                    {
-                        _lvPrintTiles.Items[0].Selected = true;
-                    }
-
-                    if (_lvPrintTiles.SelectedItems.Count > 0)
-                    {
-                        _lvPrintTiles.SelectedItems[0].Focused = true;
-                        _lvPrintTiles.SelectedItems[0].EnsureVisible();
-                        if (_lvPrintTiles.SelectedItems[0].Tag is PrintTileTag selectedTileTag)
-                            TrySelectGridRowByOrderInternalId(selectedTileTag.OrderInternalId);
-                    }
-                    else
-                    {
-                        ClearGridSelection();
-                    }
-                }
-                else
-                {
-                    TrySelectTileByOrderInternalId(preferredOrderInternalId);
-                }
             }
             finally
             {
@@ -425,31 +401,25 @@ namespace MyManager
                 _lvPrintTiles.EndUpdate();
             }
 
+            ApplyTileSelectionByOrderInternalIds(
+                selectedOrderInternalIds,
+                preferredOrderInternalId,
+                ensureVisible: _ordersViewMode == OrdersViewMode.Tiles);
+
+            if (_ordersViewMode == OrdersViewMode.Tiles)
+                SyncGridSelectionWithTiles();
+
             StartPdfThumbnailGeneration(pendingPdfThumbnailPaths);
         }
 
         private bool TrySelectTileByOrderInternalId(string? orderInternalId)
         {
-            _lvPrintTiles.SelectedItems.Clear();
+            var selectedOrderIds = new HashSet<string>(StringComparer.Ordinal);
+            if (!string.IsNullOrWhiteSpace(orderInternalId))
+                selectedOrderIds.Add(orderInternalId);
 
-            if (string.IsNullOrWhiteSpace(orderInternalId))
-                return false;
-
-            foreach (ListViewItem item in _lvPrintTiles.Items)
-            {
-                if (item.Tag is not PrintTileTag tileTag)
-                    continue;
-
-                if (!string.Equals(tileTag.OrderInternalId, orderInternalId, StringComparison.Ordinal))
-                    continue;
-
-                item.Selected = true;
-                item.Focused = true;
-                item.EnsureVisible();
-                return true;
-            }
-
-            return false;
+            ApplyTileSelectionByOrderInternalIds(selectedOrderIds, orderInternalId, ensureVisible: true);
+            return _lvPrintTiles.SelectedItems.Count > 0;
         }
 
         private PrintTileTag? GetSelectedPrintTileTag()
@@ -459,39 +429,196 @@ namespace MyManager
                 : null;
         }
 
+        private string? GetFocusedPrintTileOrderInternalId()
+        {
+            return _lvPrintTiles.FocusedItem?.Tag is PrintTileTag focusedTileTag
+                ? focusedTileTag.OrderInternalId
+                : null;
+        }
+
+        private HashSet<string> GetSelectedOrderInternalIdsFromGrid()
+        {
+            var selectedOrderIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (DataGridViewRow row in dgvJobs.SelectedRows)
+            {
+                if (row.IsNewRow)
+                    continue;
+
+                var orderInternalId = ExtractOrderInternalIdFromTag(row.Tag?.ToString());
+                if (!string.IsNullOrWhiteSpace(orderInternalId))
+                    selectedOrderIds.Add(orderInternalId);
+            }
+
+            return selectedOrderIds;
+        }
+
+        private HashSet<string> GetSelectedOrderInternalIdsFromTiles()
+        {
+            var selectedOrderIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (ListViewItem item in _lvPrintTiles.SelectedItems)
+            {
+                if (item.Tag is not PrintTileTag tileTag)
+                    continue;
+
+                if (!string.IsNullOrWhiteSpace(tileTag.OrderInternalId))
+                    selectedOrderIds.Add(tileTag.OrderInternalId);
+            }
+
+            return selectedOrderIds;
+        }
+
+        private void SyncTilesSelectionWithGrid()
+        {
+            if (_isSyncingGridSelection)
+                return;
+
+            var selectedOrderIds = GetSelectedOrderInternalIdsFromGrid();
+            var preferredOrderInternalId = ExtractOrderInternalIdFromTag(dgvJobs.CurrentRow?.Tag?.ToString());
+            ApplyTileSelectionByOrderInternalIds(selectedOrderIds, preferredOrderInternalId, ensureVisible: false);
+        }
+
+        private void SyncGridSelectionWithTiles()
+        {
+            if (_isSyncingTileSelection)
+                return;
+
+            var selectedOrderIds = GetSelectedOrderInternalIdsFromTiles();
+            var preferredOrderInternalId = GetFocusedPrintTileOrderInternalId();
+            if (string.IsNullOrWhiteSpace(preferredOrderInternalId))
+                preferredOrderInternalId = selectedOrderIds.FirstOrDefault();
+
+            ApplyGridSelectionByOrderInternalIds(selectedOrderIds, preferredOrderInternalId);
+        }
+
+        private void ApplyTileSelectionByOrderInternalIds(
+            ISet<string> selectedOrderInternalIds,
+            string? preferredOrderInternalId,
+            bool ensureVisible)
+        {
+            _isSyncingTileSelection = true;
+            _lvPrintTiles.BeginUpdate();
+
+            try
+            {
+                _lvPrintTiles.SelectedItems.Clear();
+                if (selectedOrderInternalIds.Count == 0)
+                    return;
+
+                ListViewItem? firstSelectedItem = null;
+                ListViewItem? preferredSelectedItem = null;
+
+                foreach (ListViewItem item in _lvPrintTiles.Items)
+                {
+                    if (item.Tag is not PrintTileTag tileTag)
+                        continue;
+
+                    if (!selectedOrderInternalIds.Contains(tileTag.OrderInternalId))
+                        continue;
+
+                    item.Selected = true;
+                    firstSelectedItem ??= item;
+
+                    if (!string.IsNullOrWhiteSpace(preferredOrderInternalId)
+                        && string.Equals(tileTag.OrderInternalId, preferredOrderInternalId, StringComparison.Ordinal))
+                    {
+                        preferredSelectedItem = item;
+                    }
+                }
+
+                var itemToFocus = preferredSelectedItem ?? firstSelectedItem;
+                if (itemToFocus != null)
+                {
+                    itemToFocus.Focused = true;
+                    if (ensureVisible)
+                        itemToFocus.EnsureVisible();
+                }
+            }
+            finally
+            {
+                _lvPrintTiles.EndUpdate();
+                _isSyncingTileSelection = false;
+            }
+        }
+
+        private bool ApplyGridSelectionByOrderInternalIds(
+            ISet<string> selectedOrderInternalIds,
+            string? preferredOrderInternalId)
+        {
+            _isSyncingGridSelection = true;
+
+            try
+            {
+                dgvJobs.ClearSelection();
+
+                if (selectedOrderInternalIds.Count == 0)
+                {
+                    dgvJobs.CurrentCell = null;
+                    return false;
+                }
+
+                var targetColumnIndex = colPrint.Index >= 0 ? colPrint.Index : colStatus.Index;
+                DataGridViewRow? firstSelectedRow = null;
+                DataGridViewRow? preferredSelectedRow = null;
+
+                foreach (DataGridViewRow row in dgvJobs.Rows)
+                {
+                    if (row.IsNewRow || !row.Visible)
+                        continue;
+
+                    var rowOrderInternalId = ExtractOrderInternalIdFromTag(row.Tag?.ToString());
+                    if (string.IsNullOrWhiteSpace(rowOrderInternalId))
+                        continue;
+
+                    if (!selectedOrderInternalIds.Contains(rowOrderInternalId))
+                        continue;
+
+                    row.Selected = true;
+                    firstSelectedRow ??= row;
+
+                    if (!string.IsNullOrWhiteSpace(preferredOrderInternalId)
+                        && string.Equals(rowOrderInternalId, preferredOrderInternalId, StringComparison.Ordinal))
+                    {
+                        preferredSelectedRow = row;
+                    }
+                }
+
+                var rowToFocus = preferredSelectedRow ?? firstSelectedRow;
+                if (rowToFocus == null)
+                {
+                    dgvJobs.CurrentCell = null;
+                    return false;
+                }
+
+                dgvJobs.CurrentCell = rowToFocus.Cells[targetColumnIndex];
+                return true;
+            }
+            finally
+            {
+                _isSyncingGridSelection = false;
+            }
+        }
+
         private bool TrySelectGridRowByOrderInternalId(string? orderInternalId)
         {
             if (string.IsNullOrWhiteSpace(orderInternalId))
                 return false;
 
-            var targetColumnIndex = colPrint.Index >= 0 ? colPrint.Index : colStatus.Index;
-
-            foreach (DataGridViewRow row in dgvJobs.Rows)
-            {
-                if (row.IsNewRow || !row.Visible)
-                    continue;
-
-                var rowTag = row.Tag?.ToString();
-                if (!IsOrderTag(rowTag))
-                    continue;
-
-                var rowOrderInternalId = ExtractOrderInternalIdFromTag(rowTag);
-                if (!string.Equals(rowOrderInternalId, orderInternalId, StringComparison.Ordinal))
-                    continue;
-
-                dgvJobs.ClearSelection();
-                dgvJobs.CurrentCell = row.Cells[targetColumnIndex];
-                row.Selected = true;
-                return true;
-            }
-
-            return false;
+            var selectedOrderIds = new HashSet<string>(StringComparer.Ordinal) { orderInternalId };
+            return ApplyGridSelectionByOrderInternalIds(selectedOrderIds, orderInternalId);
         }
 
         private void ClearGridSelection()
         {
-            dgvJobs.ClearSelection();
-            dgvJobs.CurrentCell = null;
+            _isSyncingGridSelection = true;
+            try
+            {
+                dgvJobs.ClearSelection();
+                dgvJobs.CurrentCell = null;
+            }
+            finally
+            {
+                _isSyncingGridSelection = false;
+            }
         }
 
         private int GetOrCreatePrintTileImageIndex(string printPath)

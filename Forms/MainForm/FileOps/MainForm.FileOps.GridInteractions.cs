@@ -296,6 +296,10 @@ namespace MyManager
             if (e.RowIndex < 0 || e.ColumnIndex < 0)
                 return;
 
+            // Ctrl/Shift clicks are used for multi-selection (Explorer-like behavior).
+            if ((ModifierKeys & (Keys.Control | Keys.Shift)) != Keys.None)
+                return;
+
             var stage = GetStageByColumnIndex(e.ColumnIndex);
             if (stage == 0)
                 return;

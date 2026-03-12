@@ -350,10 +350,20 @@ namespace MyManager
 
         private OrderData? GetSelectedOrder()
         {
-            if (dgvJobs.CurrentRow == null)
+            var selectedRow = dgvJobs.CurrentRow;
+            if (selectedRow == null || selectedRow.IsNewRow)
+            {
+                selectedRow = dgvJobs.SelectedRows
+                    .Cast<DataGridViewRow>()
+                    .Where(row => !row.IsNewRow)
+                    .OrderBy(row => row.Index)
+                    .FirstOrDefault();
+            }
+
+            if (selectedRow == null)
                 return null;
 
-            var rowTag = dgvJobs.CurrentRow.Tag?.ToString();
+            var rowTag = selectedRow.Tag?.ToString();
             var orderInternalId = ExtractOrderInternalIdFromTag(rowTag);
             if (string.IsNullOrWhiteSpace(orderInternalId))
                 return null;
