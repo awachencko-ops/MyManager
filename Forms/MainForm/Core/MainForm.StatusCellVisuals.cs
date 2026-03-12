@@ -73,7 +73,7 @@ namespace MyManager
 
             RegisterStatusCellVisual(
                 status: "Отменено",
-                icon: LoadStatusCellIcon("file export", "cancel", ("stop", "stop")),
+                icon: LoadStatusCellIcon("cancel", "cancel", ("file export", "cancel"), ("stop", "stop")),
                 iconBackgroundColor: iconBackCancelled,
                 textColor: Color.Black);
 
