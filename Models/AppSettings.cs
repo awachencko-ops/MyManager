@@ -34,6 +34,10 @@ namespace MyManager
         public static string DefaultImposingConfigFilePath => Path.Combine(DefaultBaseFolderPath, "Config", "imposing_configs.json");
         public static string DefaultPitStopHotfoldersRootPath => Path.Combine(DefaultBaseFolderPath, "WARNING NOT DELETE", "PitStop");
         public static string DefaultImposingHotfoldersRootPath => Path.Combine(DefaultBaseFolderPath, "WARNING NOT DELETE", "HotImposing");
+        public static string DefaultThumbnailCacheFolderPath => Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "MyManager",
+            "ThumbnailCache");
 
         public string OrdersRootPath { get; set; } = DefaultOrdersRootPath;
         public string GrandpaPath { get; set; } = DefaultGrandpaPath;
@@ -49,6 +53,7 @@ namespace MyManager
         public string ManagerLogFilePath { get; set; } = DefaultManagerLogFilePath;
         public string OrderLogsFolderPath { get; set; } = DefaultOrderLogsFolderPath;
         public string FontsFolderPath { get; set; } = string.Empty;
+        public string SharedThumbnailCachePath { get; set; } = string.Empty;
         public string PitStopConfigFilePath { get; set; } = DefaultPitStopConfigFilePath;
         public string ImposingConfigFilePath { get; set; } = DefaultImposingConfigFilePath;
         public string PitStopHotfoldersRootPath { get; set; } = DefaultPitStopHotfoldersRootPath;
@@ -140,6 +145,9 @@ namespace MyManager
 
             var normalizedFontsFolderPath = NormalizePathValue(FontsFolderPath, string.Empty);
             changed |= SetPathIfDifferent(FontsFolderPath, normalizedFontsFolderPath, value => FontsFolderPath = value);
+
+            var normalizedSharedThumbnailCachePath = NormalizePathValue(SharedThumbnailCachePath, string.Empty);
+            changed |= SetPathIfDifferent(SharedThumbnailCachePath, normalizedSharedThumbnailCachePath, value => SharedThumbnailCachePath = value);
 
             var normalizedPitStopConfigFilePath = NormalizePathValue(PitStopConfigFilePath, DefaultPitStopConfigFilePath);
             if (PathEquals(normalizedPitStopConfigFilePath, "pitstop_actions.json"))

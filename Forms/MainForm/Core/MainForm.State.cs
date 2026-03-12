@@ -34,10 +34,7 @@ namespace MyManager
         private readonly Dictionary<string, int> _runProgressByOrderInternalId = new(StringComparer.Ordinal);
         private readonly Dictionary<string, int> _printTileImageIndexesByExtension = new(StringComparer.OrdinalIgnoreCase);
         private readonly ConcurrentDictionary<string, int> _printTileImageIndexesByPath = new(StringComparer.OrdinalIgnoreCase);
-        private readonly string _printTilesCacheFolderPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "MyManager",
-            "ThumbnailCache");
+        private string _printTilesCacheFolderPath = AppSettings.DefaultThumbnailCacheFolderPath;
         private readonly OrderGridContextMenu _gridMenu = new();
         private readonly ContextMenuStrip _printTilesContextMenu = new();
         private readonly Manina.Windows.Forms.ImageListView _lvPrintTiles = new();

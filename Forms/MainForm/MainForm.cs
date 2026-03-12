@@ -223,6 +223,7 @@ namespace MyManager
             _jsonHistoryFile = settings.HistoryFilePath;
             _managerLogFilePath = settings.ManagerLogFilePath;
             _orderLogsFolderPath = settings.OrderLogsFolderPath;
+            _printTilesCacheFolderPath = ResolveThumbnailCacheFolderPath(settings.SharedThumbnailCachePath);
             Logger.LogFilePath = _managerLogFilePath;
         }
 
@@ -428,6 +429,7 @@ namespace MyManager
                 _jsonHistoryFile,
                 _managerLogFilePath,
                 _orderLogsFolderPath,
+                currentSettings.SharedThumbnailCachePath,
                 currentSettings.FontsFolderPath,
                 currentSettings.MaxParallelism,
                 useExtendedMode: currentSettings.UseExtendedMode);
@@ -442,6 +444,12 @@ namespace MyManager
             _jsonHistoryFile = StoragePaths.ResolveFilePath(settingsForm.HistoryFilePath, "history.json");
             _managerLogFilePath = StoragePaths.ResolveFilePath(settingsForm.ManagerLogFilePath, "manager.log");
             _orderLogsFolderPath = StoragePaths.ResolveFolderPath(settingsForm.OrderLogsFolderPath, "order-logs");
+            var nextCacheRootPath = ResolveThumbnailCacheFolderPath(settingsForm.SharedThumbnailCachePath);
+            var cacheRootChanged = !string.Equals(
+                _printTilesCacheFolderPath,
+                nextCacheRootPath,
+                StringComparison.OrdinalIgnoreCase);
+            _printTilesCacheFolderPath = nextCacheRootPath;
 
             var settings = AppSettings.Load();
             settings.OrdersRootPath = _ordersRootPath;
@@ -451,6 +459,7 @@ namespace MyManager
             settings.HistoryFilePath = _jsonHistoryFile;
             settings.ManagerLogFilePath = _managerLogFilePath;
             settings.OrderLogsFolderPath = _orderLogsFolderPath;
+            settings.SharedThumbnailCachePath = settingsForm.SharedThumbnailCachePath;
             settings.FontsFolderPath = settingsForm.FontsFolderPath;
             settings.MaxParallelism = settingsForm.MaxParallelism;
             settings.UseExtendedMode = settingsForm.UseExtendedMode;
@@ -459,8 +468,32 @@ namespace MyManager
             Logger.LogFilePath = _managerLogFilePath;
             InitializeProcessor();
             RefreshTrayIndicators();
-            SetBottomStatus("Настройки сохранены");
-            MessageBox.Show(this, "Настройки сохранены", "MainForm", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            var settingsSavedMessage = cacheRootChanged
+                ? "Настройки сохранены. Путь кэша превью изменен и будет полностью применен после перезапуска приложения."
+                : "Настройки сохранены";
+            SetBottomStatus(settingsSavedMessage);
+            MessageBox.Show(this, settingsSavedMessage, "MainForm", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private static string ResolveThumbnailCacheFolderPath(string configuredPath)
+        {
+            var fallbackPath = AppSettings.DefaultThumbnailCacheFolderPath;
+            var candidatePath = string.IsNullOrWhiteSpace(configuredPath)
+                ? fallbackPath
+                : (Path.IsPathRooted(configuredPath)
+                    ? configuredPath.Trim()
+                    : Path.Combine(StoragePaths.AppBaseDirectory, configuredPath.Trim()));
+
+            try
+            {
+                Directory.CreateDirectory(candidatePath);
+                return candidatePath;
+            }
+            catch
+            {
+                Directory.CreateDirectory(fallbackPath);
+                return fallbackPath;
+            }
         }
 
     }

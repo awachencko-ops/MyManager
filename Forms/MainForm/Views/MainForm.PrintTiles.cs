@@ -42,11 +42,11 @@ namespace MyManager
             _lvPrintTiles.ShowFileIcons = false;
             _lvPrintTiles.UseEmbeddedThumbnails = UseEmbeddedThumbnails.Never;
             _lvPrintTiles.CacheMode = CacheMode.Continuous;
-            _lvPrintTiles.PersistentCacheDirectory = persistentCacheDirectory;
-            _lvPrintTiles.PersistentCacheSize = 512L * 1024 * 1024;
             Directory.CreateDirectory(_printTilesCacheFolderPath);
             Directory.CreateDirectory(persistentCacheDirectory);
             Directory.CreateDirectory(pdfPreviewCacheDirectory);
+            _lvPrintTiles.PersistentCacheDirectory = persistentCacheDirectory;
+            _lvPrintTiles.PersistentCacheSize = 512L * 1024 * 1024;
             TryEnablePdfThumbnailAdaptor(pdfPreviewCacheDirectory);
             _lvPrintTiles.SetRenderer(new SimpleTilesRenderer(OrdersRowSelectedBackColor, OrdersRowHoverBackColor));
             _lvPrintTiles.Visible = false;

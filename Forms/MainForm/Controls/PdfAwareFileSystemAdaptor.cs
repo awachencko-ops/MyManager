@@ -18,6 +18,7 @@ namespace MyManager
         private readonly ConcurrentDictionary<string, CachedThumbnail> _pdfCache = new(StringComparer.OrdinalIgnoreCase);
         private readonly object _cacheSync = new();
         private readonly string _diskCacheDirectory;
+        private readonly ThumbnailCacheIndex _cacheIndex;
 
         public PdfAwareFileSystemAdaptor(string diskCacheDirectory)
         {
@@ -30,6 +31,7 @@ namespace MyManager
                 : diskCacheDirectory;
 
             Directory.CreateDirectory(_diskCacheDirectory);
+            _cacheIndex = new ThumbnailCacheIndex(Path.Combine(_diskCacheDirectory, "thumb-index.db"));
         }
 
         public override Image GetThumbnail(object key, Size size, UseEmbeddedThumbnails useEmbeddedThumbnails, bool useExifOrientation)
@@ -124,32 +126,27 @@ namespace MyManager
             out Bitmap thumbnail)
         {
             thumbnail = null!;
-            if (!TryGetDiskCachePath(filePath, size, fileLength, lastWriteTicksUtc, out var cachePath))
-                return false;
-
-            if (!File.Exists(cachePath))
-                return false;
-
-            try
-            {
-                using var stream = new FileStream(cachePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-                using var image = Image.FromStream(stream, useEmbeddedColorManagement: false, validateImageData: false);
-                thumbnail = new Bitmap(image);
+            if (TryGetIndexedCachePath(filePath, size, fileLength, lastWriteTicksUtc, out var indexedPath)
+                && TryLoadBitmapFromPath(indexedPath, out thumbnail))
                 return true;
-            }
-            catch
-            {
-                try
-                {
-                    File.Delete(cachePath);
-                }
-                catch
-                {
-                    // Ignore cache cleanup failures.
-                }
 
+            if (!TryGetDeterministicCachePath(filePath, size, fileLength, lastWriteTicksUtc, out var deterministicPath))
+                return false;
+
+            if (!File.Exists(deterministicPath))
+                return false;
+
+            if (!TryLoadBitmapFromPath(deterministicPath, out thumbnail))
+            {
+                TryDeleteFile(deterministicPath);
                 return false;
             }
+
+            var cacheFileName = Path.GetFileName(deterministicPath);
+            if (!string.IsNullOrWhiteSpace(cacheFileName))
+                _cacheIndex.Upsert(filePath, fileLength, lastWriteTicksUtc, size, cacheFileName);
+
+            return true;
         }
 
         private void SaveCachedThumbnailToDisk(
@@ -159,17 +156,19 @@ namespace MyManager
             long fileLength,
             long lastWriteTicksUtc)
         {
-            if (!TryGetDiskCachePath(filePath, size, fileLength, lastWriteTicksUtc, out var cachePath))
+            if (!TryBuildCacheFileName(filePath, size, fileLength, lastWriteTicksUtc, out var cacheFileName))
                 return;
 
             try
             {
+                var cachePath = Path.Combine(_diskCacheDirectory, cacheFileName);
                 var cacheFolder = Path.GetDirectoryName(cachePath);
                 if (!string.IsNullOrWhiteSpace(cacheFolder))
                     Directory.CreateDirectory(cacheFolder);
 
                 using var stream = new FileStream(cachePath, FileMode.Create, FileAccess.Write, FileShare.Read);
                 thumbnail.Save(stream, ImageFormat.Png);
+                _cacheIndex.Upsert(filePath, fileLength, lastWriteTicksUtc, size, cacheFileName);
             }
             catch
             {
@@ -177,10 +176,65 @@ namespace MyManager
             }
         }
 
-        private bool TryGetDiskCachePath(string filePath, Size size, long fileLength, long lastWriteTicksUtc, out string cachePath)
+        private bool TryGetIndexedCachePath(string filePath, Size size, long fileLength, long lastWriteTicksUtc, out string cachePath)
         {
             cachePath = string.Empty;
-            if (string.IsNullOrWhiteSpace(filePath) || string.IsNullOrWhiteSpace(_diskCacheDirectory))
+            if (!_cacheIndex.TryGetCacheFileName(filePath, fileLength, lastWriteTicksUtc, size, out var cacheFileName))
+                return false;
+
+            cachePath = Path.Combine(_diskCacheDirectory, cacheFileName);
+            if (File.Exists(cachePath))
+                return true;
+
+            _cacheIndex.Remove(filePath, fileLength, lastWriteTicksUtc, size);
+            return false;
+        }
+
+        private static bool TryLoadBitmapFromPath(string cachePath, out Bitmap thumbnail)
+        {
+            thumbnail = null!;
+            try
+            {
+                using var stream = new FileStream(cachePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                using var image = Image.FromStream(stream, useEmbeddedColorManagement: false, validateImageData: false);
+                thumbnail = new Bitmap(image);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static void TryDeleteFile(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return;
+
+            try
+            {
+                File.Delete(path);
+            }
+            catch
+            {
+                // Ignore cleanup failures.
+            }
+        }
+
+        private bool TryGetDeterministicCachePath(string filePath, Size size, long fileLength, long lastWriteTicksUtc, out string cachePath)
+        {
+            cachePath = string.Empty;
+            if (!TryBuildCacheFileName(filePath, size, fileLength, lastWriteTicksUtc, out var cacheFileName))
+                return false;
+
+            cachePath = Path.Combine(_diskCacheDirectory, cacheFileName);
+            return true;
+        }
+
+        private static bool TryBuildCacheFileName(string filePath, Size size, long fileLength, long lastWriteTicksUtc, out string cacheFileName)
+        {
+            cacheFileName = string.Empty;
+            if (string.IsNullOrWhiteSpace(filePath))
                 return false;
 
             try
@@ -195,7 +249,7 @@ namespace MyManager
                     "pdf-preview-v2");
                 var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(source));
                 var hash = Convert.ToHexString(hashBytes);
-                cachePath = Path.Combine(_diskCacheDirectory, $"{hash}.png");
+                cacheFileName = $"{hash}.png";
                 return true;
             }
             catch
