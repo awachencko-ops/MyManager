@@ -199,8 +199,8 @@
             // 
             // scMain.Panel1
             // 
-            scMain.Panel1.Controls.Add(pnlServerHeader);
             scMain.Panel1.Controls.Add(treeView1);
+            scMain.Panel1.Controls.Add(pnlServerHeader);
             // 
             // scMain.Panel2
             // 

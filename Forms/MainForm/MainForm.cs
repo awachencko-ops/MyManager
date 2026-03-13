@@ -308,9 +308,10 @@ namespace MyManager
             if (!panel1Controls.Contains(pnlServerHeader) || !panel1Controls.Contains(treeView1))
                 return;
 
-            // Keep header above and tree below; otherwise tree can slide under header.
-            panel1Controls.SetChildIndex(pnlServerHeader, 0);
-            panel1Controls.SetChildIndex(treeView1, 1);
+            // For WinForms docking, Fill should be earlier in z-order than Top.
+            // This guarantees that Top reserves space instead of overlaying Fill.
+            panel1Controls.SetChildIndex(treeView1, 0);
+            panel1Controls.SetChildIndex(pnlServerHeader, 1);
             scMain.Panel1.PerformLayout();
         }
 
