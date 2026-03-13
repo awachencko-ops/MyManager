@@ -33,16 +33,16 @@ namespace MyManager
         private Panel? _workspaceStubPanel;
         private Label? _workspaceStubLabel;
 
-        private static readonly Color DockSidebarBackColor = Color.FromArgb(43, 53, 68); // darker rail
-        private static readonly Color DockSidebarDividerColor = Color.FromArgb(70, 82, 99); // subtle border
-        private static readonly Color DockButtonBackColor = Color.FromArgb(43, 53, 68);
-        private static readonly Color DockButtonHoverBackColor = Color.FromArgb(52, 64, 80); // near-invisible hover
-        private static readonly Color DockButtonActiveBackColor = Color.FromArgb(63, 77, 95); // calmer active bg
-        private static readonly Color DockButtonActiveMarkerColor = Color.FromArgb(96, 165, 250); // #60A5FA
-        private static readonly Color DockLockedButtonBackColor = Color.FromArgb(43, 53, 68);
-        private static readonly Color DockButtonIconColor = Color.FromArgb(156, 163, 175); // #9CA3AF
-        private static readonly Color DockButtonHoverIconColor = Color.FromArgb(209, 213, 219); // #D1D5DB
-        private static readonly Color DockButtonActiveIconColor = Color.FromArgb(243, 246, 251);
+        private static readonly Color DockSidebarBackColor = Color.FromArgb(231, 237, 246); // #E7EDF6
+        private static readonly Color DockSidebarDividerColor = Color.FromArgb(214, 224, 240); // #D6E0F0
+        private static readonly Color DockButtonBackColor = Color.FromArgb(231, 237, 246); // #E7EDF6
+        private static readonly Color DockButtonHoverBackColor = Color.FromArgb(226, 234, 245); // #E2EAF5
+        private static readonly Color DockButtonActiveBackColor = Color.FromArgb(212, 225, 243); // #D4E1F3
+        private static readonly Color DockButtonActiveMarkerColor = Color.FromArgb(47, 111, 237); // #2F6FED
+        private static readonly Color DockLockedButtonBackColor = Color.FromArgb(231, 237, 246); // #E7EDF6
+        private static readonly Color DockButtonIconColor = Color.FromArgb(96, 112, 137); // #607089
+        private static readonly Color DockButtonHoverIconColor = Color.FromArgb(62, 83, 110); // #3E536E
+        private static readonly Color DockButtonActiveIconColor = Color.FromArgb(33, 48, 68); // #213044
 
         private void InitializeDockSidebar()
         {
