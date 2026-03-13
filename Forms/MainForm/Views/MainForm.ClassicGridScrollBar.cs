@@ -287,7 +287,8 @@ namespace MyManager
                 try
                 {
                     _classicTilesScrollBar.SetState(0, 0, 1, 1, 0);
-                    _classicTilesScrollBar.Enabled = false;
+                    // Keep the overlay control enabled so it always consumes mouse hit-testing.
+                    _classicTilesScrollBar.Enabled = true;
                 }
                 finally
                 {
@@ -308,7 +309,8 @@ namespace MyManager
             try
             {
                 _classicTilesScrollBar.SetState(minimum, maximum, largeChange, smallChange, value);
-                _classicTilesScrollBar.Enabled = maximum > minimum;
+                // Keep the overlay control enabled so it always consumes mouse hit-testing.
+                _classicTilesScrollBar.Enabled = true;
             }
             finally
             {
