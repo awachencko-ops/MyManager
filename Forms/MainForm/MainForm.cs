@@ -344,8 +344,15 @@ namespace MyManager
             dgvJobs.AllowDrop = true;
             dgvJobs.CellBorderStyle = DataGridViewCellBorderStyle.Single;
             dgvJobs.GridColor = Color.FromArgb(218, 218, 218);
+            dgvJobs.DefaultCellStyle.BackColor = OrdersRowBaseBackColor;
+            dgvJobs.RowsDefaultCellStyle.BackColor = OrdersRowBaseBackColor;
+            dgvJobs.AlternatingRowsDefaultCellStyle.BackColor = OrdersRowZebraBackColor;
             dgvJobs.DefaultCellStyle.SelectionBackColor = OrdersRowSelectedBackColor;
+            dgvJobs.RowsDefaultCellStyle.SelectionBackColor = OrdersRowSelectedBackColor;
+            dgvJobs.AlternatingRowsDefaultCellStyle.SelectionBackColor = OrdersRowSelectedBackColor;
             dgvJobs.DefaultCellStyle.SelectionForeColor = Color.Black;
+            dgvJobs.RowsDefaultCellStyle.SelectionForeColor = Color.Black;
+            dgvJobs.AlternatingRowsDefaultCellStyle.SelectionForeColor = Color.Black;
             dgvJobs.DefaultCellStyle.Padding = unifiedPadding;
             dgvJobs.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
             dgvJobs.DefaultCellStyle.WrapMode = DataGridViewTriState.False;

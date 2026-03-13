@@ -237,7 +237,9 @@ namespace MyManager
             var row = dgvJobs.Rows[e.RowIndex];
             var rowBackColor = row.Selected
                 ? OrdersRowSelectedBackColor
-                : (e.RowIndex == _hoveredRowIndex ? OrdersRowHoverBackColor : Color.White);
+                : (e.RowIndex == _hoveredRowIndex
+                    ? OrdersRowHoverBackColor
+                    : (e.RowIndex % 2 == 0 ? OrdersRowBaseBackColor : OrdersRowZebraBackColor));
             var isAttachmentColumn = e.ColumnIndex == colSource.Index
                 || e.ColumnIndex == colPrep.Index
                 || e.ColumnIndex == colPrint.Index;
