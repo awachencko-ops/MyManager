@@ -317,13 +317,15 @@ namespace MyManager
                 return;
 
             var columnName = dgvJobs.Columns[e.ColumnIndex].Name;
-            if (string.Equals(columnName, "colPitstop", StringComparison.Ordinal))
+            if (string.Equals(columnName, OrderGridColumnNames.PitStop, StringComparison.Ordinal)
+                || string.Equals(columnName, OrderGridColumnNames.PitStopLegacy, StringComparison.Ordinal))
             {
                 SelectPitStopActionFromGrid(e.RowIndex);
                 return;
             }
 
-            if (string.Equals(columnName, "colHotimposing", StringComparison.Ordinal))
+            if (string.Equals(columnName, OrderGridColumnNames.HotImposing, StringComparison.Ordinal)
+                || string.Equals(columnName, OrderGridColumnNames.ImposingLegacy, StringComparison.Ordinal))
             {
                 SelectImposingActionFromGrid(e.RowIndex);
                 return;
@@ -383,7 +385,7 @@ namespace MyManager
             if (e.RowIndex < 0 || e.ColumnIndex < 0)
                 return;
 
-            if (!string.Equals(dgvJobs.Columns[e.ColumnIndex].Name, "colStatus", StringComparison.Ordinal))
+            if (!string.Equals(dgvJobs.Columns[e.ColumnIndex].Name, OrderGridColumnNames.Status, StringComparison.Ordinal))
                 return;
 
             var rowTag = dgvJobs.Rows[e.RowIndex].Tag?.ToString();
@@ -395,7 +397,7 @@ namespace MyManager
                 return;
 
             var statusText = order.Status ?? string.Empty;
-            if (!statusText.Contains("Ошибка", StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(NormalizeStatus(statusText), WorkflowStatusNames.Error, StringComparison.Ordinal))
                 return;
 
             var reason = string.IsNullOrWhiteSpace(order.LastStatusReason) ? "Причина не указана" : order.LastStatusReason;

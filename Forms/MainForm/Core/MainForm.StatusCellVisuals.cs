@@ -42,55 +42,55 @@ namespace MyManager
             var iconBackError = Color.FromArgb(255, 204, 204);
 
             RegisterStatusCellVisual(
-                status: "Обработано",
+                status: WorkflowStatusNames.Processed,
                 icon: LoadStatusCellIcon("file export", "file_export"),
                 iconBackgroundColor: iconBackProcessed,
                 textColor: Color.Black);
 
             RegisterStatusCellVisual(
-                status: "В архиве",
+                status: WorkflowStatusNames.Archived,
                 icon: LoadStatusCellIcon("archive", "archive"),
                 iconBackgroundColor: iconBackArchive,
                 textColor: Color.Black);
 
             RegisterStatusCellVisual(
-                status: "Выполняется сборка",
+                status: WorkflowStatusNames.Building,
                 icon: LoadStatusCellIcon("cards", "cards"),
                 iconBackgroundColor: iconBackBuilding,
                 textColor: Color.Black);
 
             RegisterStatusCellVisual(
-                status: "Обрабатывается",
+                status: WorkflowStatusNames.Processing,
                 icon: LoadStatusCellIcon("upload", "upload"),
                 iconBackgroundColor: iconBackProcessing,
                 textColor: Color.Black);
 
             RegisterStatusCellVisual(
-                status: "Ожидание",
+                status: WorkflowStatusNames.Waiting,
                 icon: LoadStatusCellIcon("file export", "file_export"),
                 iconBackgroundColor: iconBackWaiting,
                 textColor: Color.Black);
 
             RegisterStatusCellVisual(
-                status: "Отменено",
+                status: WorkflowStatusNames.Cancelled,
                 icon: LoadStatusCellIcon("cancel", "cancel", ("file export", "cancel"), ("stop", "stop")),
                 iconBackgroundColor: iconBackCancelled,
                 textColor: Color.Black);
 
             RegisterStatusCellVisual(
-                status: "Ошибка",
+                status: WorkflowStatusNames.Error,
                 icon: LoadStatusCellIcon("error", "error"),
                 iconBackgroundColor: iconBackError,
                 textColor: Color.Black);
 
             RegisterStatusCellVisual(
-                status: "Завершено",
+                status: WorkflowStatusNames.Completed,
                 icon: LoadStatusCellIcon("check", "check"),
                 iconBackgroundColor: iconBackCompleted,
                 textColor: Color.Black);
 
             RegisterStatusCellVisual(
-                status: "Напечатано",
+                status: WorkflowStatusNames.Printed,
                 icon: LoadStatusCellIcon("check", "check"),
                 iconBackgroundColor: iconBackCompleted,
                 textColor: Color.Black);

@@ -77,15 +77,7 @@ namespace MyManager
         private string _usersDirectoryStatusText = "Пользователи: fallback";
         private DateTime _usersDirectoryLastRefreshAt = DateTime.MinValue;
 
-        private static readonly string[] QueueStatuses =
-        {
-            "Все задания",
-            "Обработанные",
-            "В архиве",
-            "Обрабатывается",
-            "Задержанные",
-            "Завершено"
-        };
+        private static readonly string[] QueueStatuses = QueueStatusNames.All;
 
         // Сопоставление рабочих статусов с группами очереди (treeView1/cbQueue):
         // Обработанные: Обработано
@@ -93,17 +85,7 @@ namespace MyManager
         // Обрабатывается: Выполняется сборка, Обрабатывается, Ожидание
         // Задержанные: Отменено, Ошибка
         // Завершено: Завершено
-        private static readonly string[] FilterStatuses =
-        {
-            "Обработано",
-            "В архиве",
-            "Выполняется сборка",
-            "Обрабатывается",
-            "Ожидание",
-            "Отменено",
-            "Ошибка",
-            "Завершено"
-        };
+        private static readonly string[] FilterStatuses = WorkflowStatusNames.Filterable;
         private const string StatusFilterLabelText = "Состояние задания";
         private const string OrderNoSearchLabelText = "Номер заказа";
         private const string UserFilterLabelText = "Пользователь";
@@ -119,14 +101,7 @@ namespace MyManager
         private const long DiskWarningThresholdBytes = 10L * 1024 * 1024 * 1024;
         private const long DiskCriticalThresholdBytes = 5L * 1024 * 1024 * 1024;
 
-        private static readonly Dictionary<string, string[]> QueueStatusMappings = new(StringComparer.Ordinal)
-        {
-            ["Обработанные"] = ["Обработано"],
-            ["В архиве"] = ["В архиве"],
-            ["Обрабатывается"] = ["Выполняется сборка", "Обрабатывается", "Ожидание"],
-            ["Задержанные"] = ["Отменено", "Ошибка"],
-            ["Завершено"] = ["Завершено"]
-        };
+        private static readonly IReadOnlyDictionary<string, string[]> QueueStatusMappings = WorkflowStatusNames.QueueMappings;
 
         private bool _isSyncingQueueSelection;
         private TreeNode? _hoveredQueueNode;

@@ -26,7 +26,7 @@ namespace MyManager
             _internalId = data?.InternalId ?? Guid.NewGuid().ToString("N");
             _startMode = data?.StartMode ?? OrderStartMode.Extended;
             _arrivalDate = data?.ArrivalDate ?? DateTime.Now;
-            _currentStatus = string.IsNullOrWhiteSpace(data?.Status) ? "Ожидание" : data.Status;
+            _currentStatus = string.IsNullOrWhiteSpace(data?.Status) ? WorkflowStatusNames.Waiting : data.Status;
 
             LoadConfigLists();
             SetupValidation();

@@ -120,7 +120,7 @@ namespace MyManager
 
         private async Task PickFileFromContextAsync(int stage)
         {
-            if (stage is < 1 or > 3)
+            if (!OrderStages.IsFileStage(stage))
                 return;
 
             try
@@ -140,7 +140,7 @@ namespace MyManager
 
         private void RemoveFileFromContext(int stage)
         {
-            if (stage is < 1 or > 3)
+            if (!OrderStages.IsFileStage(stage))
                 return;
 
             var order = GetContextOrder();
@@ -152,7 +152,7 @@ namespace MyManager
 
         private void RenameFileFromContext(int stage)
         {
-            if (stage is < 1 or > 3)
+            if (!OrderStages.IsFileStage(stage))
                 return;
 
             var order = GetContextOrder();
@@ -164,7 +164,7 @@ namespace MyManager
 
         private void CopyPathFromContextToClipboard(int stage)
         {
-            if (stage is < 1 or > 3)
+            if (!OrderStages.IsFileStage(stage))
                 return;
 
             var order = GetContextOrder();
@@ -176,7 +176,7 @@ namespace MyManager
 
         private async Task PastePathFromClipboardToContextAsync(int stage)
         {
-            if (stage is < 1 or > 3)
+            if (!OrderStages.IsFileStage(stage))
                 return;
 
             try

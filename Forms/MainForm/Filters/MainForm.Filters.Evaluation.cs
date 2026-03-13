@@ -321,7 +321,7 @@ namespace MyManager
 
         private int GetQueueStatusCount(string queueStatusName)
         {
-            if (string.Equals(queueStatusName, "Все задания", StringComparison.Ordinal))
+            if (string.Equals(queueStatusName, QueueStatusNames.AllJobs, StringComparison.Ordinal))
                 return GetOrdersTotalCount();
 
             if (!QueueStatusMappings.TryGetValue(queueStatusName, out var mappedStatuses))
@@ -483,55 +483,13 @@ namespace MyManager
 
         private static string? NormalizeStatus(string? rawStatus)
         {
-            if (string.IsNullOrWhiteSpace(rawStatus))
-                return null;
-
-            var value = rawStatus.Trim();
-            foreach (var status in FilterStatuses)
-            {
-                if (string.Equals(value, status, StringComparison.OrdinalIgnoreCase))
-                    return status;
-
-                if (value.Contains(status, StringComparison.OrdinalIgnoreCase))
-                    return status;
-            }
-
-            if (value.Contains("архив", StringComparison.OrdinalIgnoreCase))
-                return "В архиве";
-
-            if (value.Contains("отмен", StringComparison.OrdinalIgnoreCase))
-                return "Отменено";
-
-            if (value.Contains("ошиб", StringComparison.OrdinalIgnoreCase))
-                return "Ошибка";
-
-            if (value.Contains("сборк", StringComparison.OrdinalIgnoreCase)
-                || value.Contains("imposing", StringComparison.OrdinalIgnoreCase)
-                || value.Contains("pitstop", StringComparison.OrdinalIgnoreCase))
-                return "Выполняется сборка";
-
-            if (value.Contains("обрабатыва", StringComparison.OrdinalIgnoreCase)
-                || value.Contains("в работе", StringComparison.OrdinalIgnoreCase)
-                || value.Contains("запуск", StringComparison.OrdinalIgnoreCase))
-                return "Обрабатывается";
-
-            if (value.Contains("ожид", StringComparison.OrdinalIgnoreCase))
-                return "Ожидание";
-
-            if (value.Contains("обработано", StringComparison.OrdinalIgnoreCase))
-                return "Обработано";
-
-            if (value.Contains("Готово", StringComparison.OrdinalIgnoreCase)
-                || value.Contains("Заверш", StringComparison.OrdinalIgnoreCase))
-                return "Завершено";
-
-            return null;
+            return WorkflowStatusNames.Normalize(rawStatus);
         }
 
         private static bool MatchesQueueStatus(string? queueStatusName, string? normalizedWorkflowStatus)
         {
             if (string.IsNullOrWhiteSpace(queueStatusName)
-                || string.Equals(queueStatusName, "Все задания", StringComparison.Ordinal))
+                || string.Equals(queueStatusName, QueueStatusNames.AllJobs, StringComparison.Ordinal))
             {
                 return true;
             }

@@ -119,7 +119,7 @@ namespace MyManager
                 ArrivalDate = DateTime.Now,
                 OrderDate = form.OrderDate,
                 FolderName = string.Empty,
-                Status = "Ожидание",
+                Status = WorkflowStatusNames.Waiting,
                 PitStopAction = "-",
                 ImposingAction = "-"
             };

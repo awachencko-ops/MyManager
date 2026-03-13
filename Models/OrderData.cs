@@ -34,7 +34,7 @@ namespace MyManager
         public DateTime ArrivalDate { get; set; } = DateTime.Now; // Дата поступления заказа в препресс-менеджер
         public DateTime OrderDate { get; set; } = PlaceholderOrderDate; // Дата формирования заказа (ДелаемДело)
         public string FolderName { get; set; } = ""; // Например: "23_10_25 №123"
-        public string Status { get; set; } = "Ожидание";
+        public string Status { get; set; } = WorkflowStatusNames.Waiting;
 
         // Новый контейнер файлов заказа
         public List<OrderFileItem> Items { get; set; } = new();
@@ -67,21 +67,29 @@ namespace MyManager
                 return;
 
             int total = normalizedItems.Count;
-            int successCount = normalizedItems.Count(x => x.FileStatus == "✅ Готово");
-            int errorCount = normalizedItems.Count(x => x.FileStatus == "🔴 Ошибка");
-            int inProgressCount = normalizedItems.Count(x => x.FileStatus == "🟡 В работе");
+            int successCount = normalizedItems.Count(x =>
+                string.Equals(x.FileStatus, WorkflowStatusNames.LegacyReady, StringComparison.Ordinal)
+                || string.Equals(x.FileStatus, WorkflowStatusNames.Completed, StringComparison.Ordinal)
+                || string.Equals(x.FileStatus, WorkflowStatusNames.Printed, StringComparison.Ordinal));
+            int errorCount = normalizedItems.Count(x =>
+                string.Equals(x.FileStatus, WorkflowStatusNames.LegacyError, StringComparison.Ordinal)
+                || string.Equals(x.FileStatus, WorkflowStatusNames.Error, StringComparison.Ordinal));
+            int inProgressCount = normalizedItems.Count(x =>
+                (!string.IsNullOrWhiteSpace(x.FileStatus)
+                 && x.FileStatus.Contains(WorkflowStatusNames.LegacyInWork, StringComparison.OrdinalIgnoreCase))
+                || string.Equals(x.FileStatus, WorkflowStatusNames.Processing, StringComparison.Ordinal));
             int waitingCount = normalizedItems.Count(x =>
                 !string.IsNullOrWhiteSpace(x.FileStatus) &&
                 x.FileStatus.Contains("ожид", StringComparison.OrdinalIgnoreCase));
 
             if (errorCount == total)
-                Status = "🔴 Ошибка";
+                Status = WorkflowStatusNames.Error;
             else if (successCount == total)
-                Status = "✅ Готово";
+                Status = WorkflowStatusNames.Completed;
             else if (waitingCount == total)
-                Status = "Ожидание";
+                Status = WorkflowStatusNames.Waiting;
             else if (inProgressCount > 0)
-                Status = $"🟡 В работе ({successCount + inProgressCount}/{total})";
+                Status = $"{WorkflowStatusNames.Processing} ({successCount + inProgressCount}/{total})";
             else
                 Status = $"⚠ Частично готово ({successCount}/{total})";
         }

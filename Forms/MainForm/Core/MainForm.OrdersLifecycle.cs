@@ -233,7 +233,7 @@ namespace MyManager
 
             var normalizedStatus = NormalizeStatus(order.Status) ?? (order.Status ?? string.Empty).Trim();
             if (string.IsNullOrWhiteSpace(normalizedStatus))
-                normalizedStatus = "Обрабатывается";
+                normalizedStatus = WorkflowStatusNames.Processing;
 
             var sourcePath = ResolveSingleOrderDisplayPath(order, 1);
             var preparedPath = ResolveSingleOrderDisplayPath(order, 2);
@@ -267,7 +267,7 @@ namespace MyManager
             if (HasExistingFile(orderPath))
                 return orderPath;
 
-            if (stage == 3 && TryResolveArchivedPrintPath(order, out var archivedPrintPath))
+            if (stage == OrderStages.Print && TryResolveArchivedPrintPath(order, out var archivedPrintPath))
                 return archivedPrintPath;
 
             if (!string.IsNullOrWhiteSpace(orderPath))
@@ -522,7 +522,7 @@ namespace MyManager
 
                 SetOrderStatus(
                     order,
-                    "Обрабатывается",
+                    WorkflowStatusNames.Processing,
                     "ui",
                     runnableOrders.Count > 1 ? "Пакетный запуск из MainForm" : "Запуск из MainForm",
                     persistHistory: false,
@@ -560,7 +560,7 @@ namespace MyManager
                 {
                     SetOrderStatus(
                         session.Order,
-                        "Отменено",
+                        WorkflowStatusNames.Cancelled,
                         "ui",
                         "Остановлено пользователем",
                         persistHistory: false,
@@ -570,7 +570,7 @@ namespace MyManager
                 {
                     SetOrderStatus(
                         session.Order,
-                        "Ошибка",
+                        WorkflowStatusNames.Error,
                         "ui",
                         ex.Message,
                         persistHistory: false,
@@ -633,7 +633,7 @@ namespace MyManager
             _runTokensByOrder.Remove(order.InternalId);
             _runProgressByOrderInternalId.Remove(order.InternalId);
             UpdateTrayProgressIndicator();
-            SetOrderStatus(order, "Отменено", "ui", "Остановлено пользователем", persistHistory: true, rebuildGrid: true);
+            SetOrderStatus(order, WorkflowStatusNames.Cancelled, "ui", "Остановлено пользователем", persistHistory: true, rebuildGrid: true);
             UpdateActionButtonsState();
             SetBottomStatus($"Остановлен заказ {GetOrderDisplayId(order)}");
         }
@@ -854,7 +854,7 @@ namespace MyManager
                 return;
 
             string targetPath;
-            if (stage is >= 1 and <= 3)
+            if (OrderStages.IsFileStage(stage))
             {
                 var stageFilePath = ResolveSingleOrderDisplayPath(order, stage);
                 if (HasExistingFile(stageFilePath))

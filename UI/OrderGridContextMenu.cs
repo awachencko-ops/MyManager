@@ -37,15 +37,8 @@ namespace MyManager
         {
             _menu.Items.Clear();
 
-            // Определяем стадию в зависимости от колонки, на которую нажали
-            int currentStage = colName switch
-            {
-                "colSource" => 1,
-                "colPrep" => 2,
-                "colReady" => 2,
-                "colPrint" => 3,
-                _ => 0 // 0 означает корень заказа
-            };
+            // Определяем стадию в зависимости от колонки, на которую нажали.
+            int currentStage = OrderGridColumnNames.ResolveStage(colName);
 
             // 1. ГЛАВНЫЕ КНОПКИ (Всегда сверху)
             AddItem("🚀 Запустить обработку", Run);
@@ -61,49 +54,49 @@ namespace MyManager
             // 3. СПЕЦИФИЧЕСКИЕ ПУНКТЫ ДЛЯ КОЛОНОК
             switch (colName)
             {
-                case "colSource":
-                    AddItem("📋 Вставить путь из буфера", () => PastePathFromClipboard?.Invoke(1));
-                    AddItem("✏️ Переименовать файл", () => RenameFile?.Invoke(1));
-                    AddItem("Указать файл...", () => PickFile?.Invoke(1, "source"));
-                    AddItem("Удалить файл", () => RemoveFile?.Invoke(1));
+                case OrderGridColumnNames.Source:
+                    AddItem("📋 Вставить путь из буфера", () => PastePathFromClipboard?.Invoke(OrderStages.Source));
+                    AddItem("✏️ Переименовать файл", () => RenameFile?.Invoke(OrderStages.Source));
+                    AddItem("Указать файл...", () => PickFile?.Invoke(OrderStages.Source, "source"));
+                    AddItem("Удалить файл", () => RemoveFile?.Invoke(OrderStages.Source));
                     break;
 
-                case "colPrep":
-                case "colReady":
-                    AddItem("📋 Вставить путь из буфера", () => PastePathFromClipboard?.Invoke(2));
-                    AddItem("✏️ Переименовать файл", () => RenameFile?.Invoke(2));
-                    AddItem("Указать файл...", () => PickFile?.Invoke(2, "prepared"));
-                    AddItem("Удалить файл", () => RemoveFile?.Invoke(2));
+                case OrderGridColumnNames.Prepared:
+                case OrderGridColumnNames.PreparedLegacy:
+                    AddItem("📋 Вставить путь из буфера", () => PastePathFromClipboard?.Invoke(OrderStages.Prepared));
+                    AddItem("✏️ Переименовать файл", () => RenameFile?.Invoke(OrderStages.Prepared));
+                    AddItem("Указать файл...", () => PickFile?.Invoke(OrderStages.Prepared, "prepared"));
+                    AddItem("Удалить файл", () => RemoveFile?.Invoke(OrderStages.Prepared));
                     break;
 
-                case "colPrint":
+                case OrderGridColumnNames.Print:
                     AddItem("⏺️ Водяной знак (сверху)", ApplyWatermark);
                     AddItem("⏺️ Водяной знак (слева)", ApplyWatermarkLeft);
-                    AddItem("✏️ Переименовать файл", () => RenameFile?.Invoke(3));
-                    AddItem("📋 Копировать путь в буфер", () => CopyPathToClipboard?.Invoke(3));
+                    AddItem("✏️ Переименовать файл", () => RenameFile?.Invoke(OrderStages.Print));
+                    AddItem("📋 Копировать путь в буфер", () => CopyPathToClipboard?.Invoke(OrderStages.Print));
                     if (allowCopyToGrandpa)
                     {
                         _menu.Items.Add(new ToolStripSeparator());
                         AddItem("Копировать в Дедушку", CopyToGrandpa);
                     }
-                    AddItem("Указать файл...", () => PickFile?.Invoke(3, "print"));
-                    AddItem("Удалить файл", () => RemoveFile?.Invoke(3));
+                    AddItem("Указать файл...", () => PickFile?.Invoke(OrderStages.Print, "print"));
+                    AddItem("Удалить файл", () => RemoveFile?.Invoke(OrderStages.Print));
                     break;
 
-                case "colPitStop":
-                case "colPitstop":
+                case OrderGridColumnNames.PitStopLegacy:
+                case OrderGridColumnNames.PitStop:
                     AddItem("Открыть диспетчер PitStop", OpenPitStopMan);
                     AddItem("Очистить операцию", RemovePitStopAction);
                     break;
 
-                case "colImposing":
-                case "colHotimposing":
+                case OrderGridColumnNames.ImposingLegacy:
+                case OrderGridColumnNames.HotImposing:
                     AddItem("Открыть диспетчер Imposing", OpenImpMan);
                     AddItem("Очистить операцию", RemoveImposingAction);
                     break;
 
-                case "colState":
-                case "colStatus":
+                case OrderGridColumnNames.StateLegacy:
+                case OrderGridColumnNames.Status:
                     AddItem("📜 Открыть лог заказа", OpenOrderLog);
                     break;
             }

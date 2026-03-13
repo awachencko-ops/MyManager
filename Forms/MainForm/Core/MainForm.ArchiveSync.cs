@@ -25,14 +25,14 @@ namespace MyManager
 
                     var archived = IsOrderInArchive(order);
 
-                    if (string.Equals(NormalizeStatus(order.Status), "Ошибка", StringComparison.Ordinal))
+                    if (string.Equals(NormalizeStatus(order.Status), WorkflowStatusNames.Error, StringComparison.Ordinal))
                         continue;
 
                     if (archived)
                     {
                         changed |= SetOrderStatus(
                             order,
-                            "В архиве",
+                            WorkflowStatusNames.Archived,
                             "archive-sync",
                             "Файл найден в архиве",
                             persistHistory: false,
@@ -40,7 +40,7 @@ namespace MyManager
                         continue;
                     }
 
-                    if (!string.Equals(NormalizeStatus(order.Status), "В архиве", StringComparison.Ordinal))
+                    if (!string.Equals(NormalizeStatus(order.Status), WorkflowStatusNames.Archived, StringComparison.Ordinal))
                         continue;
 
                     var fallbackStatus = ResolveStatusWithoutArchive(order);
@@ -147,16 +147,16 @@ namespace MyManager
 
             var items = order.Items.Where(x => x != null).ToList();
             if (items.Count == 0)
-                return "Ожидание";
+                return WorkflowStatusNames.Waiting;
 
             var total = items.Count;
             var done = items.Count(x => HasExistingFile(x.PrintPath));
             var active = items.Count(x => HasExistingFile(x.SourcePath) || HasExistingFile(x.PreparedPath) || HasExistingFile(x.PrintPath));
 
             if (done == total)
-                return "Завершено";
+                return WorkflowStatusNames.Completed;
 
-            return active > 0 ? "Обрабатывается" : "Ожидание";
+            return active > 0 ? WorkflowStatusNames.Processing : WorkflowStatusNames.Waiting;
         }
 
         private void RefreshArchiveIndexIfNeeded(bool force = false)

@@ -71,20 +71,20 @@ namespace MyManager
             if (string.IsNullOrWhiteSpace(cleanSource) || !File.Exists(cleanSource))
                 return false;
 
-            if (stage == 3 && !await EnsureSimpleOrderInfoForPrintAsync(order))
+            if (stage == OrderStages.Print && !await EnsureSimpleOrderInfoForPrintAsync(order))
                 return false;
 
             string targetName;
-            if (stage == 3 && !string.IsNullOrWhiteSpace(order.Id))
+            if (stage == OrderStages.Print && !string.IsNullOrWhiteSpace(order.Id))
                 targetName = $"{order.Id}{Path.GetExtension(cleanSource)}";
             else
                 targetName = EnsureUniqueStageFileName(order, stage, Path.GetFileName(cleanSource));
 
-            var newPath = stage == 3
+            var newPath = stage == OrderStages.Print
                 ? await CopyPrintFileAsync(order, cleanSource, targetName)
                 : await CopyIntoStageAsync(order, stage, cleanSource, targetName);
 
-            if (stage == 2)
+            if (stage == OrderStages.Prepared)
                 await EnsureSourceCopyAsync(order, cleanSource);
 
             UpdateOrderFilePath(order, stage, newPath);
@@ -97,16 +97,16 @@ namespace MyManager
             if (string.IsNullOrWhiteSpace(cleanSource) || !File.Exists(cleanSource))
                 return false;
 
-            if (stage == 3 && !await EnsureSimpleOrderInfoForPrintAsync(order))
+            if (stage == OrderStages.Print && !await EnsureSimpleOrderInfoForPrintAsync(order))
                 return false;
 
             if (string.IsNullOrWhiteSpace(item.ClientFileLabel))
                 item.ClientFileLabel = Path.GetFileNameWithoutExtension(cleanSource);
 
             string newPath;
-            if (stage == 3)
+            if (stage == OrderStages.Print)
             {
-                var printName = EnsureUniqueStageFileName(order, 3, BuildItemPrintFileName(order, item, cleanSource));
+                var printName = EnsureUniqueStageFileName(order, OrderStages.Print, BuildItemPrintFileName(order, item, cleanSource));
                 newPath = await CopyPrintFileAsync(order, cleanSource, printName);
             }
             else
@@ -129,14 +129,8 @@ namespace MyManager
 
         private int GetStageByColumnIndex(int columnIndex)
         {
-            var colName = dgvJobs.Columns[columnIndex].Name;
-            return colName switch
-            {
-                "colSource" => 1,
-                "colPrep" => 2,
-                "colPrint" => 3,
-                _ => 0
-            };
+            var columnName = dgvJobs.Columns[columnIndex].Name;
+            return OrderGridColumnNames.ResolveStage(columnName);
         }
 
         private OrderData? GetOrderByRowIndex(int rowIndex)
@@ -156,9 +150,9 @@ namespace MyManager
         {
             return stage switch
             {
-                1 => order.SourcePath ?? string.Empty,
-                2 => order.PreparedPath ?? string.Empty,
-                3 => order.PrintPath ?? string.Empty,
+                OrderStages.Source => order.SourcePath ?? string.Empty,
+                OrderStages.Prepared => order.PreparedPath ?? string.Empty,
+                OrderStages.Print => order.PrintPath ?? string.Empty,
                 _ => string.Empty
             };
         }
@@ -167,9 +161,9 @@ namespace MyManager
         {
             return stage switch
             {
-                1 => item.SourcePath ?? string.Empty,
-                2 => item.PreparedPath ?? string.Empty,
-                3 => item.PrintPath ?? string.Empty,
+                OrderStages.Source => item.SourcePath ?? string.Empty,
+                OrderStages.Prepared => item.PreparedPath ?? string.Empty,
+                OrderStages.Print => item.PrintPath ?? string.Empty,
                 _ => string.Empty
             };
         }
@@ -367,21 +361,21 @@ namespace MyManager
 
         private static void SetItemStagePath(OrderFileItem item, int stage, string path)
         {
-            if (stage == 1)
+            if (stage == OrderStages.Source)
                 item.SourcePath = path;
-            else if (stage == 2)
+            else if (stage == OrderStages.Prepared)
                 item.PreparedPath = path;
-            else if (stage == 3)
+            else if (stage == OrderStages.Print)
                 item.PrintPath = path;
         }
 
         private void UpdateOrderFilePath(OrderData order, int stage, string path)
         {
-            if (stage == 1)
+            if (stage == OrderStages.Source)
                 order.SourcePath = path;
-            else if (stage == 2)
+            else if (stage == OrderStages.Prepared)
                 order.PreparedPath = path;
-            else if (stage == 3)
+            else if (stage == OrderStages.Print)
                 order.PrintPath = path;
 
             var status = ResolveWorkflowStatus(order.SourcePath, order.PreparedPath, order.PrintPath);
@@ -404,11 +398,11 @@ namespace MyManager
 
             if (order.Items != null && order.Items.Count == 1 && string.Equals(order.Items[0].ItemId, item.ItemId, StringComparison.Ordinal))
             {
-                if (stage == 1)
+                if (stage == OrderStages.Source)
                     order.SourcePath = item.SourcePath;
-                else if (stage == 2)
+                else if (stage == OrderStages.Prepared)
                     order.PreparedPath = item.PreparedPath;
-                else if (stage == 3)
+                else if (stage == OrderStages.Print)
                     order.PrintPath = item.PrintPath;
 
                 SetOrderStatus(order, item.FileStatus, "file-sync", $"item-stage-{stage}", persistHistory: false, rebuildGrid: false);
@@ -430,7 +424,7 @@ namespace MyManager
             var items = order.Items.Where(x => x != null).ToList();
             if (items.Count == 0)
             {
-                SetOrderStatus(order, "Ожидание", "file-sync", "empty-items", persistHistory: false, rebuildGrid: false);
+                SetOrderStatus(order, WorkflowStatusNames.Waiting, "file-sync", "empty-items", persistHistory: false, rebuildGrid: false);
                 return;
             }
 
@@ -439,10 +433,10 @@ namespace MyManager
             var active = items.Count(x => HasExistingFile(x.SourcePath) || HasExistingFile(x.PreparedPath) || HasExistingFile(x.PrintPath));
 
             var statusValue = done == total
-                ? "Завершено"
+                ? WorkflowStatusNames.Completed
                 : active > 0
-                    ? "Обрабатывается"
-                    : "Ожидание";
+                    ? WorkflowStatusNames.Processing
+                    : WorkflowStatusNames.Waiting;
 
             SetOrderStatus(order, statusValue, "file-sync", "aggregate", persistHistory: false, rebuildGrid: false);
         }
@@ -450,17 +444,17 @@ namespace MyManager
         private static string ResolveWorkflowStatus(string? sourcePath, string? preparedPath, string? printPath)
         {
             if (HasExistingFile(printPath))
-                return "Завершено";
+                return WorkflowStatusNames.Completed;
 
             if (HasExistingFile(preparedPath) || HasExistingFile(sourcePath))
-                return "Обрабатывается";
+                return WorkflowStatusNames.Processing;
 
-            return "Ожидание";
+            return WorkflowStatusNames.Waiting;
         }
 
         private string GetStageFolder(OrderData order, int stage)
         {
-            if (stage == 3 && HasExistingFile(order.PrintPath))
+            if (stage == OrderStages.Print && HasExistingFile(order.PrintPath))
                 return Path.GetDirectoryName(order.PrintPath) ?? GetTempStageFolder(stage);
 
             if (string.IsNullOrWhiteSpace(order.FolderName))
@@ -468,9 +462,9 @@ namespace MyManager
 
             var sub = stage switch
             {
-                1 => "1. исходные",
-                2 => "2. подготовка",
-                3 => "3. печать",
+                OrderStages.Source => "1. исходные",
+                OrderStages.Prepared => "2. подготовка",
+                OrderStages.Print => "3. печать",
                 _ => string.Empty
             };
 
@@ -483,9 +477,9 @@ namespace MyManager
         {
             var sub = stage switch
             {
-                1 => "in",
-                2 => "prepress",
-                3 => "print",
+                OrderStages.Source => "in",
+                OrderStages.Prepared => "prepress",
+                OrderStages.Print => "print",
                 _ => string.Empty
             };
 
@@ -529,7 +523,7 @@ namespace MyManager
             if (!UsesOrderFolderStorage(order))
                 return await CopyToGrandpaFromSourceAsync(sourceFile, targetName);
 
-            return await CopyIntoStageAsync(order, 3, sourceFile, targetName);
+            return await CopyIntoStageAsync(order, OrderStages.Print, sourceFile, targetName);
         }
 
         private static bool UsesOrderFolderStorage(OrderData order)
@@ -544,7 +538,7 @@ namespace MyManager
                 throw new FileNotFoundException("Файл для копирования не найден.", cleanSource);
 
             var destinationRoot = string.IsNullOrWhiteSpace(_grandpaFolder)
-                ? GetTempStageFolder(3)
+                ? GetTempStageFolder(OrderStages.Print)
                 : _grandpaFolder;
             Directory.CreateDirectory(destinationRoot);
 
@@ -607,8 +601,8 @@ namespace MyManager
             if (!string.IsNullOrWhiteSpace(order.SourcePath) && HasExistingFile(order.SourcePath))
                 return;
 
-            var newPath = await CopyIntoStageAsync(order, 1, sourceFile);
-            UpdateOrderFilePath(order, 1, newPath);
+            var newPath = await CopyIntoStageAsync(order, OrderStages.Source, sourceFile);
+            UpdateOrderFilePath(order, OrderStages.Source, newPath);
         }
 
         private async Task CopyFileWithTrayProgressAsync(string sourcePath, string destinationPath, string statusText)
@@ -673,9 +667,9 @@ namespace MyManager
         {
             return stage switch
             {
-                1 => "\"1. исходные\"",
-                2 => "\"2. подготовка\"",
-                3 => "\"3. печать\"",
+                OrderStages.Source => "\"1. исходные\"",
+                OrderStages.Prepared => "\"2. подготовка\"",
+                OrderStages.Print => "\"3. печать\"",
                 _ => "этап"
             };
         }

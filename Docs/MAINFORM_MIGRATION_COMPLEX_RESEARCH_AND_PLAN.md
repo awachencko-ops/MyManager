@@ -22,12 +22,12 @@
 8. `qihot4.xml` экспортирован с NAS-путями, backup сделан.
 9. Ошибка `Duplicate ... Attribute` устранена исключением `artifacts/**` из компиляции.
 10. Сборка: `0 warnings`, `0 errors`.
+11. Реальный user-filter подключен к `users.json` (source + cache + offline fallback + индикатор состояния в UI).
+12. Введены typed-контракты `status/stage/column IDs` и убраны string-магии в `MainForm`/`UI`/core-сервисах.
 
 ### 2.2 В работе
 
-1. Подключение реального user-filter из сетевого источника (`users.json`) + кеш + offline fallback.
-2. Дочистка string-контрактов в typed-контур (статусы, stage, column IDs).
-3. Финальный single-regression по чеклисту.
+1. Финальный single-regression по чеклисту.
 
 ### 2.3 Не начато
 
@@ -53,18 +53,17 @@
 
 | ID | Задача | Статус | Результат на выходе | Критерий закрытия |
 |---|---|---|---|---|
-| P1 | Реальный user-filter из `users.json` + кеш + offline fallback | In Progress | Пользовательский фильтр из сети с безопасной деградацией | При отключении NAS фильтр продолжает работу из кеша, UI показывает offline |
-| P2 | Typed-контракты для `status/stage/column IDs` | In Progress | Убраны критичные string-магии в core потоке | Основные сценарии используют централизованные константы/enum |
+| P1 | Реальный user-filter из `users.json` + кеш + offline fallback | Completed | Пользовательский фильтр из сети с безопасной деградацией | При отключении NAS фильтр продолжает работу из кеша, UI показывает offline |
+| P2 | Typed-контракты для `status/stage/column IDs` | Completed | Убраны критичные string-магии в core потоке | Основные сценарии используют централизованные константы/enum |
 | P3 | Финальный single-regression | In Progress | Закрыт ручной чеклист single-сценариев | Нет блокирующих дефектов (`P0/P1`) |
 | P4 | Минимум автотестов (`Verify` + `FlaUI`) | Not Started | Snapshot + UI smoke база | Есть 5+ snapshot и 3-5 UI smoke, проходят стабильно |
 | P5 | Фиксация релизного baseline по single-first | Not Started | Release note + known issues + актуальная документация | Этап single-first formally closed |
 
 ## 5. Приоритет на ближайший цикл
 
-1. Закрыть `P1` (user-filter с сетевым источником и кешем).
-2. Закрыть `P2` (typed-контракты в core).
-3. Закрыть `P3` (single-regression).
-4. После стабилизации запустить `P4` (автотест-минимум).
+1. Закрыть `P3` (single-regression).
+2. Зафиксировать `P5` (релизный baseline и документацию по single-first).
+3. После фиксации baseline запустить `P4` (автотест-минимум).
 
 ## 6. Зафиксированные решения
 

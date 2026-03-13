@@ -20,7 +20,7 @@ namespace MyManager
         public List<string> TechnicalFiles { get; set; } = new();
 
         // Состояния
-        public string FileStatus { get; set; } = "Ожидание";
+        public string FileStatus { get; set; } = WorkflowStatusNames.Waiting;
         public string LastReason { get; set; } = "";
         public DateTime UpdatedAt { get; set; } = DateTime.Now;
 

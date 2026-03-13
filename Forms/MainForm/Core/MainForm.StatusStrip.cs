@@ -361,7 +361,7 @@ namespace MyManager
                     continue;
 
                 var normalizedStatus = NormalizeStatus(order.Status);
-                if (string.Equals(normalizedStatus, "Ошибка", StringComparison.Ordinal))
+                if (string.Equals(normalizedStatus, WorkflowStatusNames.Error, StringComparison.Ordinal))
                     count++;
             }
 

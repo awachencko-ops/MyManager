@@ -63,7 +63,7 @@ namespace MyManager
 
                 if (pitCfg == null && impCfg == null)
                 {
-                    Notify(order, "Ожидание", "Сценарии не выбраны.");
+                    Notify(order, WorkflowStatusNames.Waiting, "Сценарии не выбраны.");
                     ReportProgress(order, 100, "Сценарии не выбраны");
                     return;
                 }
@@ -156,20 +156,20 @@ namespace MyManager
                         MovePrintToGrandpa(order, settings.GrandpaPath);
                 }
 
-                Notify(order, "✅ Готово", "Заказ успешно выполнен.");
-                ReportProgress(order, 100, "Завершено");
+                Notify(order, WorkflowStatusNames.Completed, "Заказ успешно выполнен.");
+                ReportProgress(order, 100, WorkflowStatusNames.Completed);
             }
             catch (OperationCanceledException)
             {
                 Logger.Warn($"Остановлено пользователем: {order.Id}");
-                Notify(order, "Отменено", "Остановлено пользователем");
+                Notify(order, WorkflowStatusNames.Cancelled, "Остановлено пользователем");
                 ReportProgress(order, 100, "Остановлено");
             }
             catch (Exception ex)
             {
                 Logger.Error($"Ошибка в {order.Id}: {ex.Message}");
-                Notify(order, "🔴 Ошибка", ex.Message);
-                ReportProgress(order, 100, "Ошибка");
+                Notify(order, WorkflowStatusNames.Error, ex.Message);
+                ReportProgress(order, 100, WorkflowStatusNames.Error);
             }
         }
 
@@ -185,7 +185,7 @@ namespace MyManager
 
             if (runItems.Count == 0)
             {
-                Notify(order, "Ожидание", "Нет выбранных файлов для обработки");
+                Notify(order, WorkflowStatusNames.Waiting, "Нет выбранных файлов для обработки");
                 ReportProgress(order, 100, "Нет выбранных файлов");
                 return;
             }
@@ -221,7 +221,7 @@ namespace MyManager
                 try
                 {
                     SetItemProgress(itemKey, 5);
-                    item.FileStatus = "🟡 В работе";
+                    item.FileStatus = WorkflowStatusNames.Processing;
                     item.UpdatedAt = DateTime.Now;
                     order.RefreshAggregatedStatus();
                     Notify(order, order.Status, $"Обработка {item.ClientFileLabel}");
@@ -237,13 +237,13 @@ namespace MyManager
                 }
                 catch (OperationCanceledException)
                 {
-                    item.FileStatus = "Отменено";
+                    item.FileStatus = WorkflowStatusNames.Cancelled;
                     item.LastReason = "Остановлено пользователем";
                     item.UpdatedAt = DateTime.Now;
                 }
                 catch (Exception ex)
                 {
-                    item.FileStatus = "🔴 Ошибка";
+                    item.FileStatus = WorkflowStatusNames.Error;
                     item.LastReason = ex.Message;
                     item.UpdatedAt = DateTime.Now;
                     Logger.Error($"Ошибка файла {item.ClientFileLabel}: {ex.Message}");
@@ -262,7 +262,7 @@ namespace MyManager
 
             if (ct.IsCancellationRequested)
             {
-                Notify(order, "Отменено", "Остановлено пользователем");
+                Notify(order, WorkflowStatusNames.Cancelled, "Остановлено пользователем");
                 ReportProgress(order, 100, "Остановлено");
                 return;
             }
@@ -388,7 +388,9 @@ namespace MyManager
                 ReportItemProgress(95);
             }
 
-            item.FileStatus = !string.IsNullOrWhiteSpace(item.PrintPath) && File.Exists(item.PrintPath) ? "✅ Готово" : "Ожидание";
+            item.FileStatus = !string.IsNullOrWhiteSpace(item.PrintPath) && File.Exists(item.PrintPath)
+                ? WorkflowStatusNames.Completed
+                : WorkflowStatusNames.Waiting;
             item.LastReason = string.Empty;
             item.UpdatedAt = DateTime.Now;
             ReportItemProgress(100);
@@ -452,7 +454,13 @@ namespace MyManager
 
         private string CopyIntoStage(OrderData o, int stage, string src, string name, string rootPath)
         {
-            string sub = stage switch { 1 => TempInFolder, 2 => TempPrepressFolder, 3 => TempPrintFolder, _ => "" };
+            string sub = stage switch
+            {
+                OrderStages.Source => TempInFolder,
+                OrderStages.Prepared => TempPrepressFolder,
+                OrderStages.Print => TempPrintFolder,
+                _ => ""
+            };
             string path = Path.Combine(rootPath, sub);
             Directory.CreateDirectory(path);
             string dest = Path.Combine(path, name);
@@ -464,9 +472,9 @@ namespace MyManager
         {
             if (string.IsNullOrWhiteSpace(order.FolderName)) return;
 
-            string sourcePath = MoveFileIfExists(order.SourcePath, GetOrderStagePath(order, 1));
-            string preparedPath = MoveFileIfExists(order.PreparedPath, GetOrderStagePath(order, 2));
-            string printPath = MoveFileIfExists(order.PrintPath, GetOrderStagePath(order, 3));
+            string sourcePath = MoveFileIfExists(order.SourcePath, GetOrderStagePath(order, OrderStages.Source));
+            string preparedPath = MoveFileIfExists(order.PreparedPath, GetOrderStagePath(order, OrderStages.Prepared));
+            string printPath = MoveFileIfExists(order.PrintPath, GetOrderStagePath(order, OrderStages.Print));
 
             if (!string.IsNullOrEmpty(sourcePath)) order.SourcePath = sourcePath;
             if (!string.IsNullOrEmpty(preparedPath)) order.PreparedPath = preparedPath;
@@ -524,7 +532,13 @@ namespace MyManager
 
         private string GetOrderStagePath(OrderData order, int stage)
         {
-            string sub = stage switch { 1 => "1. исходные", 2 => "2. подготовка", 3 => "3. печать", _ => "" };
+            string sub = stage switch
+            {
+                OrderStages.Source => "1. исходные",
+                OrderStages.Prepared => "2. подготовка",
+                OrderStages.Print => "3. печать",
+                _ => ""
+            };
             string path = Path.Combine(_rootPath, order.FolderName, sub);
             Directory.CreateDirectory(path);
             return path;

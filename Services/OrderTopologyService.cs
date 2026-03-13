@@ -198,7 +198,7 @@ namespace MyManager
                 PrintPath = order.PrintPath ?? string.Empty,
                 PitStopAction = string.IsNullOrWhiteSpace(order.PitStopAction) ? "-" : order.PitStopAction,
                 ImposingAction = string.IsNullOrWhiteSpace(order.ImposingAction) ? "-" : order.ImposingAction,
-                FileStatus = string.IsNullOrWhiteSpace(order.Status) ? "Ожидание" : order.Status,
+            FileStatus = string.IsNullOrWhiteSpace(order.Status) ? WorkflowStatusNames.Waiting : order.Status,
                 UpdatedAt = DateTime.Now,
                 SequenceNo = 0
             };
@@ -241,20 +241,20 @@ namespace MyManager
         {
             return stage switch
             {
-                1 => order.SourcePath ?? string.Empty,
-                2 => order.PreparedPath ?? string.Empty,
-                3 => order.PrintPath ?? string.Empty,
+                OrderStages.Source => order.SourcePath ?? string.Empty,
+                OrderStages.Prepared => order.PreparedPath ?? string.Empty,
+                OrderStages.Print => order.PrintPath ?? string.Empty,
                 _ => string.Empty
             };
         }
 
         private static void SetOrderStagePath(OrderData order, int stage, string path)
         {
-            if (stage == 1)
+            if (stage == OrderStages.Source)
                 order.SourcePath = path;
-            else if (stage == 2)
+            else if (stage == OrderStages.Prepared)
                 order.PreparedPath = path;
-            else if (stage == 3)
+            else if (stage == OrderStages.Print)
                 order.PrintPath = path;
         }
 
@@ -262,20 +262,20 @@ namespace MyManager
         {
             return stage switch
             {
-                1 => item.SourcePath ?? string.Empty,
-                2 => item.PreparedPath ?? string.Empty,
-                3 => item.PrintPath ?? string.Empty,
+                OrderStages.Source => item.SourcePath ?? string.Empty,
+                OrderStages.Prepared => item.PreparedPath ?? string.Empty,
+                OrderStages.Print => item.PrintPath ?? string.Empty,
                 _ => string.Empty
             };
         }
 
         private static void SetItemStagePath(OrderFileItem item, int stage, string path)
         {
-            if (stage == 1)
+            if (stage == OrderStages.Source)
                 item.SourcePath = path;
-            else if (stage == 2)
+            else if (stage == OrderStages.Prepared)
                 item.PreparedPath = path;
-            else if (stage == 3)
+            else if (stage == OrderStages.Print)
                 item.PrintPath = path;
         }
 
