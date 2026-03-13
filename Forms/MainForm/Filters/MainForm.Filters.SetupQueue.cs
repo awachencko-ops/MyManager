@@ -301,7 +301,7 @@ namespace MyManager
             {
                 Name = "lblServerHeaderTitle",
                 AutoEllipsis = true,
-                Font = new Font("Segoe UI", 18f, FontStyle.Bold, GraphicsUnit.Pixel),
+                Font = new Font("Segoe UI Semibold", 18f, FontStyle.Regular, GraphicsUnit.Pixel),
                 ForeColor = QueueHeaderTextColor,
                 BackColor = Color.Transparent,
                 TextAlign = ContentAlignment.MiddleLeft
