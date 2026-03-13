@@ -77,6 +77,10 @@
             tsbBrowse = new ToolStripButton();
             tsbConsole = new ToolStripButton();
             tsbParameters = new ToolStripButton();
+            pnlDockUtilities = new Panel();
+            pictureBox3 = new PictureBox();
+            pnlDockLiterature = new Panel();
+            pictureBox4 = new PictureBox();
             pnlSidebar.SuspendLayout();
             pnl_Orders.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)pictureBox1).BeginInit();
@@ -96,10 +100,16 @@
             pnlTray.SuspendLayout();
             statusStrip1.SuspendLayout();
             tsMainActions.SuspendLayout();
+            pnlDockUtilities.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)pictureBox3).BeginInit();
+            pnlDockLiterature.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)pictureBox4).BeginInit();
             SuspendLayout();
             // 
             // pnlSidebar
             // 
+            pnlSidebar.Controls.Add(pnlDockLiterature);
+            pnlSidebar.Controls.Add(pnlDockUtilities);
             pnlSidebar.Controls.Add(pnl_Orders);
             pnlSidebar.Controls.Add(pnl_Icon);
             pnlSidebar.Dock = DockStyle.Left;
@@ -549,6 +559,42 @@
             tsbParameters.Size = new Size(138, 29);
             tsbParameters.Text = "Параметры";
             // 
+            // pnlDockUtilities
+            // 
+            pnlDockUtilities.Controls.Add(pictureBox3);
+            pnlDockUtilities.Dock = DockStyle.Top;
+            pnlDockUtilities.Location = new Point(0, 130);
+            pnlDockUtilities.Name = "pnlDockUtilities";
+            pnlDockUtilities.Size = new Size(65, 65);
+            pnlDockUtilities.TabIndex = 2;
+            // 
+            // pictureBox3
+            // 
+            pictureBox3.Dock = DockStyle.Fill;
+            pictureBox3.Location = new Point(0, 0);
+            pictureBox3.Name = "pictureBox3";
+            pictureBox3.Size = new Size(65, 65);
+            pictureBox3.TabIndex = 1;
+            pictureBox3.TabStop = false;
+            // 
+            // pnlDockLiterature
+            // 
+            pnlDockLiterature.Controls.Add(pictureBox4);
+            pnlDockLiterature.Dock = DockStyle.Top;
+            pnlDockLiterature.Location = new Point(0, 195);
+            pnlDockLiterature.Name = "pnlDockLiterature";
+            pnlDockLiterature.Size = new Size(65, 65);
+            pnlDockLiterature.TabIndex = 3;
+            // 
+            // pictureBox4
+            // 
+            pictureBox4.Dock = DockStyle.Fill;
+            pictureBox4.Location = new Point(0, 0);
+            pictureBox4.Name = "pictureBox4";
+            pictureBox4.Size = new Size(65, 65);
+            pictureBox4.TabIndex = 1;
+            pictureBox4.TabStop = false;
+            // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(10F, 25F);
@@ -582,6 +628,10 @@
             statusStrip1.PerformLayout();
             tsMainActions.ResumeLayout(false);
             tsMainActions.PerformLayout();
+            pnlDockUtilities.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)pictureBox3).EndInit();
+            pnlDockLiterature.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)pictureBox4).EndInit();
             ResumeLayout(false);
         }
 
@@ -635,5 +685,9 @@
         private Panel pnl_Orders;
         private PictureBox pictureBox1;
         private PictureBox pictureBox2;
+        private Panel pnlDockLiterature;
+        private PictureBox pictureBox4;
+        private Panel pnlDockUtilities;
+        private PictureBox pictureBox3;
     }
 }
