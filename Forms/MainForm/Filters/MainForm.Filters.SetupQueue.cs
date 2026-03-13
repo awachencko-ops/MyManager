@@ -276,34 +276,122 @@ namespace MyManager
             return bitmap;
         }
 
+        private void InitializeServerHeaderVisuals()
+        {
+            if (pnlServerHeader.IsDisposed)
+                return;
+
+            pnlServerHeader.SuspendLayout();
+            pnlServerHeader.BackColor = QueueHeaderBackColor;
+            pnlServerHeader.Padding = new Padding(0);
+            pnlServerHeader.Height = Math.Max(64, pnlServerHeader.Height);
+            pnlServerHeader.Resize -= PnlServerHeader_Resize;
+            pnlServerHeader.Resize += PnlServerHeader_Resize;
+            EnsureServerHeaderControls();
+            LayoutServerHeaderControls();
+            UpdateServerHeaderTitle();
+            UpdateServerHeaderConnectionState(IsQueueServerConnected());
+            pnlServerHeader.ResumeLayout(performLayout: false);
+        }
+
+        private void EnsureServerHeaderControls()
+        {
+            _serverHeaderTitleLabel ??= new Label
+            {
+                Name = "lblServerHeaderTitle",
+                AutoEllipsis = true,
+                Font = new Font("Segoe UI Semibold", 18f, FontStyle.Regular, GraphicsUnit.Pixel),
+                ForeColor = QueueHeaderTextColor,
+                BackColor = Color.Transparent,
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+
+            _serverHeaderStatusLabel ??= new Label
+            {
+                Name = "lblServerHeaderStatus",
+                AutoEllipsis = true,
+                Font = new Font("Segoe UI", 12f, FontStyle.Regular, GraphicsUnit.Pixel),
+                ForeColor = QueueHeaderSecondaryTextColor,
+                BackColor = Color.Transparent,
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+
+            _serverHeaderStatusDot ??= new Panel
+            {
+                Name = "pnlServerHeaderStatusDot",
+                Size = new Size(8, 8),
+                BackColor = QueueHeaderOfflineIndicatorColor
+            };
+
+            if (!pnlServerHeader.Controls.Contains(_serverHeaderTitleLabel))
+                pnlServerHeader.Controls.Add(_serverHeaderTitleLabel);
+            if (!pnlServerHeader.Controls.Contains(_serverHeaderStatusLabel))
+                pnlServerHeader.Controls.Add(_serverHeaderStatusLabel);
+            if (!pnlServerHeader.Controls.Contains(_serverHeaderStatusDot))
+                pnlServerHeader.Controls.Add(_serverHeaderStatusDot);
+        }
+
+        private void LayoutServerHeaderControls()
+        {
+            if (_serverHeaderTitleLabel == null || _serverHeaderStatusLabel == null || _serverHeaderStatusDot == null)
+                return;
+
+            var width = Math.Max(0, pnlServerHeader.ClientSize.Width);
+            _serverHeaderTitleLabel.Bounds = new Rectangle(14, 10, Math.Max(0, width - 26), 28);
+            _serverHeaderStatusDot.Location = new Point(14, 42);
+            _serverHeaderStatusLabel.Bounds = new Rectangle(28, 34, Math.Max(0, width - 40), 24);
+        }
+
+        private void PnlServerHeader_Resize(object? sender, EventArgs e)
+        {
+            LayoutServerHeaderControls();
+        }
+
+        private void UpdateServerHeaderTitle()
+        {
+            if (_serverHeaderTitleLabel == null)
+                return;
+
+            var userName = _users.FirstOrDefault();
+            _currentUserName = string.IsNullOrWhiteSpace(userName) ? "Сервер" : userName;
+            _serverHeaderTitleLabel.Text = _currentUserName;
+        }
+
+        private void UpdateServerHeaderConnectionState(bool isConnected)
+        {
+            if (_serverHeaderStatusDot != null)
+                _serverHeaderStatusDot.BackColor = isConnected ? QueueHeaderOnlineIndicatorColor : QueueHeaderOfflineIndicatorColor;
+
+            if (_serverHeaderStatusLabel != null)
+                _serverHeaderStatusLabel.Text = isConnected ? "подключен" : "автономно";
+        }
+
         private void PopulateQueueTree()
         {
             treeView1.BeginUpdate();
             treeView1.Nodes.Clear();
 
-            foreach (var userName in _users)
-            {
-                var userNode = new TreeNode(userName);
-                foreach (var statusName in QueueStatuses)
-                    userNode.Nodes.Add(statusName);
-
-                userNode.Expand();
-                treeView1.Nodes.Add(userNode);
-            }
+            foreach (var statusName in QueueStatuses)
+                treeView1.Nodes.Add(statusName);
 
             treeView1.EndUpdate();
+            UpdateServerHeaderTitle();
         }
 
-        // cbQueue всегда содержит статусы выбранного в дереве пользователя.
-        private void SelectUser(TreeNode userNode, string? preferredStatus = null)
+        private void SyncQueueSelection(string? preferredStatus = null)
         {
-            _currentUserName = userNode.Text;
-
             var targetStatus = string.IsNullOrWhiteSpace(preferredStatus)
                 ? QueueStatuses[0]
                 : preferredStatus;
 
             FillQueueCombo(targetStatus);
+            var statusNode = FindQueueStatusNode(targetStatus) ?? (treeView1.Nodes.Count > 0 ? treeView1.Nodes[0] : null);
+            if (statusNode != null)
+            {
+                treeView1.SelectedNode = statusNode;
+                statusNode.EnsureVisible();
+            }
+
             treeView1.Invalidate();
         }
 
@@ -312,16 +400,8 @@ namespace MyManager
             if (_isSyncingQueueSelection || e.Node == null)
                 return;
 
-            var userNode = e.Node.Level == 0 ? e.Node : e.Node.Parent;
-            if (userNode == null)
-                return;
-
-            var preferredStatus = e.Node.Level == 0
-                ? GetSelectedQueueStatusName()
-                : e.Node.Text;
-
             _isSyncingQueueSelection = true;
-            SelectUser(userNode, preferredStatus);
+            FillQueueCombo(e.Node.Text);
             _isSyncingQueueSelection = false;
             HandleOrdersGridChanged();
         }
@@ -331,43 +411,23 @@ namespace MyManager
             if (_isSyncingQueueSelection || cbQueue.SelectedItem is not QueueStatusItem selectedItem)
                 return;
 
-            var selectedStatus = selectedItem.StatusName;
-            var userNode = FindUserNode(_currentUserName);
-            if (userNode == null && treeView1.SelectedNode != null)
-                userNode = treeView1.SelectedNode.Level == 0 ? treeView1.SelectedNode : treeView1.SelectedNode.Parent;
-
-            if (userNode == null)
-                return;
-
-            var statusNode = FindStatusNode(userNode, selectedStatus);
+            var statusNode = FindQueueStatusNode(selectedItem.StatusName);
             if (statusNode == null)
                 return;
 
             _isSyncingQueueSelection = true;
-            userNode.Expand();
             treeView1.SelectedNode = statusNode;
             statusNode.EnsureVisible();
             _isSyncingQueueSelection = false;
             HandleOrdersGridChanged();
         }
 
-        private TreeNode? FindUserNode(string userName)
+        private TreeNode? FindQueueStatusNode(string statusName)
         {
             foreach (TreeNode node in treeView1.Nodes)
             {
-                if (string.Equals(node.Text, userName, StringComparison.Ordinal))
+                if (string.Equals(node.Text, statusName, StringComparison.Ordinal))
                     return node;
-            }
-
-            return null;
-        }
-
-        private static TreeNode? FindStatusNode(TreeNode userNode, string statusName)
-        {
-            foreach (TreeNode child in userNode.Nodes)
-            {
-                if (string.Equals(child.Text, statusName, StringComparison.Ordinal))
-                    return child;
             }
 
             return null;
@@ -381,30 +441,24 @@ namespace MyManager
             const int counterRightInset = 12;
             const int counterColumnWidth = 60;
 
-            var isRoot = e.Node.Level == 0;
             var isSelected = (e.State & TreeNodeStates.Selected) == TreeNodeStates.Selected;
-            var isHovered = !isRoot && ReferenceEquals(e.Node, _hoveredQueueNode);
+            var isHovered = ReferenceEquals(e.Node, _hoveredQueueNode);
             var rowRect = new Rectangle(0, e.Bounds.Top, treeView1.ClientSize.Width, e.Bounds.Height);
 
-            var backColor = isRoot ? QueueHeaderBackColor : QueuePanelBackColor;
-            if (!isRoot)
-            {
-                if (isSelected)
-                    backColor = QueueStatusSelectedBackColor;
-                else if (isHovered)
-                    backColor = QueueStatusHoverBackColor;
-            }
+            var backColor = QueuePanelBackColor;
+            if (isSelected)
+                backColor = QueueStatusSelectedBackColor;
+            else if (isHovered)
+                backColor = QueueStatusHoverBackColor;
 
-            var textColor = isRoot
-                ? QueueHeaderTextColor
-                : isSelected
-                    ? QueueStatusSelectedTextColor
-                    : QueueTextColor;
+            var textColor = isSelected
+                ? QueueStatusSelectedTextColor
+                : QueueTextColor;
 
             using var backBrush = new SolidBrush(backColor);
             e.Graphics.FillRectangle(backBrush, rowRect);
 
-            if (isSelected && !isRoot)
+            if (isSelected)
             {
                 var markerRect = new Rectangle(rowRect.Left, rowRect.Top, 2, rowRect.Height);
                 using var markerBrush = new SolidBrush(QueueActiveMarkerColor);
@@ -412,55 +466,6 @@ namespace MyManager
             }
 
             var textLeft = e.Bounds.X + 8;
-            if (isRoot)
-            {
-                var isConnected = IsQueueServerConnected();
-                var indicatorDiameter = 8;
-                var indicatorRect = new Rectangle(
-                    e.Bounds.X + 10,
-                    e.Bounds.Y + Math.Max(0, (e.Bounds.Height - indicatorDiameter) / 2),
-                    indicatorDiameter,
-                    indicatorDiameter);
-
-                using var indicatorBrush = new SolidBrush(isConnected
-                    ? QueueHeaderOnlineIndicatorColor
-                    : QueueHeaderOfflineIndicatorColor);
-                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-                e.Graphics.FillEllipse(indicatorBrush, indicatorRect);
-                e.Graphics.SmoothingMode = SmoothingMode.None;
-
-                textLeft = indicatorRect.Right + 8;
-
-                using var headerFont = new Font("Segoe UI Semibold", 18f, FontStyle.Regular, GraphicsUnit.Pixel);
-                using var secondaryFont = new Font("Segoe UI", 12f, FontStyle.Regular, GraphicsUnit.Pixel);
-                var headerRect = new Rectangle(
-                    textLeft,
-                    e.Bounds.Y + 2,
-                    Math.Max(0, treeView1.ClientSize.Width - textLeft - 12),
-                    24);
-                var secondaryRect = new Rectangle(
-                    textLeft,
-                    e.Bounds.Y + 26,
-                    Math.Max(0, treeView1.ClientSize.Width - textLeft - 12),
-                    18);
-
-                TextRenderer.DrawText(
-                    e.Graphics,
-                    e.Node.Text,
-                    headerFont,
-                    headerRect,
-                    QueueHeaderTextColor,
-                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
-                TextRenderer.DrawText(
-                    e.Graphics,
-                    isConnected ? "подключен" : "автономно",
-                    secondaryFont,
-                    secondaryRect,
-                    QueueHeaderSecondaryTextColor,
-                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
-                return;
-            }
-
             var textValue = FormatQueueLabel(e.Node.Text);
             using var textFont = new Font(
                 isSelected ? "Segoe UI Semibold" : "Segoe UI",
@@ -482,37 +487,32 @@ namespace MyManager
                 textColor,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
 
-            if (!isRoot)
-            {
-                var countValue = GetQueueStatusCount(e.Node.Text);
-                var countText = $"({countValue})";
-                var countColor = ResolveQueueCounterColor(countValue, isSelected);
-                using var countFont = new Font(
-                    "Segoe UI",
-                    14f,
-                    FontStyle.Regular,
-                    GraphicsUnit.Pixel);
-                var countRect = new Rectangle(
-                    treeView1.ClientSize.Width - counterRightInset - counterColumnWidth,
-                    e.Bounds.Y,
-                    counterColumnWidth,
-                    e.Bounds.Height);
-                TextRenderer.DrawText(
-                    e.Graphics,
-                    countText,
-                    countFont,
-                    countRect,
-                    countColor,
-                    TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
-            }
+            var countValue = GetQueueStatusCount(e.Node.Text);
+            var countText = $"({countValue})";
+            var countColor = ResolveQueueCounterColor(countValue, isSelected);
+            using var countFont = new Font(
+                "Segoe UI",
+                14f,
+                FontStyle.Regular,
+                GraphicsUnit.Pixel);
+            var countRect = new Rectangle(
+                treeView1.ClientSize.Width - counterRightInset - counterColumnWidth,
+                e.Bounds.Y,
+                counterColumnWidth,
+                e.Bounds.Height);
+            TextRenderer.DrawText(
+                e.Graphics,
+                countText,
+                countFont,
+                countRect,
+                countColor,
+                TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
 
         }
 
         private void TreeView1_MouseMove(object? sender, MouseEventArgs e)
         {
             var hoveredNode = treeView1.GetNodeAt(e.Location);
-            if (hoveredNode?.Level == 0)
-                hoveredNode = null;
 
             if (ReferenceEquals(hoveredNode, _hoveredQueueNode))
                 return;

@@ -25,10 +25,6 @@ namespace MyManager
         {
             treeView1.Invalidate();
 
-            var userNode = FindUserNode(_currentUserName);
-            if (userNode == null)
-                return;
-
             var preferredStatus = GetSelectedQueueStatusName();
             FillQueueCombo(preferredStatus);
         }

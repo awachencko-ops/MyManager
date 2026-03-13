@@ -130,6 +130,9 @@ namespace MyManager
 
         private bool _isSyncingQueueSelection;
         private TreeNode? _hoveredQueueNode;
+        private Panel? _serverHeaderStatusDot;
+        private Label? _serverHeaderTitleLabel;
+        private Label? _serverHeaderStatusLabel;
         private string _currentUserName = string.Empty;
         private readonly HashSet<string> _selectedFilterStatuses = new(StringComparer.Ordinal);
         private readonly HashSet<string> _selectedFilterUsers = new(StringComparer.Ordinal);

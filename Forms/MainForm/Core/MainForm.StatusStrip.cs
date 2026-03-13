@@ -145,9 +145,7 @@ namespace MyManager
                 ? "Рабочая папка заказов доступна."
                 : "Рабочая папка заказов недоступна.";
             toolConnection.ToolTipText = $"{connectionStatusText}\n{_usersDirectoryStatusText}";
-
-            if (!treeView1.IsDisposed)
-                treeView1.Invalidate();
+            UpdateServerHeaderConnectionState(isConnected);
         }
 
         private void UpdateTrayDiskIndicator()

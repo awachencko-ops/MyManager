@@ -274,6 +274,9 @@ namespace MyManager
         {
             scMain.Panel1.Padding = new Padding(1, 0, 0, 0);
             scMain.Panel1.BackColor = QueuePanelDividerColor;
+            pnlServerHeader.Dock = DockStyle.Top;
+            treeView1.Dock = DockStyle.Fill;
+            InitializeServerHeaderVisuals();
 
             treeView1.HideSelection = false;
             treeView1.DrawMode = TreeViewDrawMode.OwnerDrawText;
@@ -312,20 +315,8 @@ namespace MyManager
             if (treeView1.Nodes.Count == 0)
                 return;
 
-            var firstUserNode = treeView1.Nodes[0];
             _isSyncingQueueSelection = true;
-            SelectUser(firstUserNode, QueueStatuses[0]);
-            var defaultStatusNode = FindStatusNode(firstUserNode, QueueStatuses[0]);
-            if (defaultStatusNode != null)
-            {
-                treeView1.SelectedNode = defaultStatusNode;
-                defaultStatusNode.EnsureVisible();
-            }
-            else
-            {
-                treeView1.SelectedNode = firstUserNode;
-                firstUserNode.EnsureVisible();
-            }
+            SyncQueueSelection(QueueStatuses[0]);
             _isSyncingQueueSelection = false;
         }
 
