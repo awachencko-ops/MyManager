@@ -202,12 +202,17 @@ namespace MyManager
 
         private static readonly Color QueuePanelBackColor = Color.FromArgb(68, 74, 94);
         private static readonly Color QueueHeaderBackColor = Color.FromArgb(103, 163, 216);
-        private static readonly Color QueueStatusSelectedBackColor = Color.FromArgb(57, 63, 81);
+        private static readonly Color QueueStatusSelectedBackColor = Color.FromArgb(234, 242, 255);
+        private static readonly Color QueueStatusSelectedTextColor = Color.FromArgb(63, 74, 94);
+        private static readonly Color QueueActiveMarkerColor = Color.FromArgb(122, 167, 217);
         private static readonly Color QueueTextColor = Color.FromArgb(244, 247, 252);
         private static readonly Color OrdersRowBaseBackColor = Color.FromArgb(255, 255, 255);   // #FFFFFF
-        private static readonly Color OrdersRowZebraBackColor = Color.FromArgb(250, 251, 253);  // #FAFBFD
-        private static readonly Color OrdersRowHoverBackColor = Color.FromArgb(245, 249, 255);  // #F5F9FF
-        private static readonly Color OrdersRowSelectedBackColor = Color.FromArgb(234, 242, 255); // #EAF2FF
+        private static readonly Color OrdersRowZebraBackColor = Color.FromArgb(252, 253, 254);  // #FCFDFE
+        private static readonly Color OrdersRowHoverBackColor = Color.FromArgb(248, 250, 252);  // #F8FAFC
+        private static readonly Color OrdersRowSelectedBackColor = Color.FromArgb(243, 247, 251); // #F3F7FB
+        private static readonly Color OrdersGridLineColor = Color.FromArgb(231, 235, 240); // #E7EBF0
+        private static readonly Color OrdersActiveMarkerColor = Color.FromArgb(122, 167, 217); // #7AA7D9
+        private static readonly Color OrdersLinkTextColor = Color.FromArgb(95, 126, 168);
 
         private enum OrdersViewMode
         {

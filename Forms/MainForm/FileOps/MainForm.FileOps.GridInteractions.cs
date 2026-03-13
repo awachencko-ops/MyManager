@@ -210,7 +210,7 @@ namespace MyManager
 
             if (!isHoveredHeader)
             {
-                using var backBrush = new SolidBrush(Color.White);
+                using var backBrush = new SolidBrush(OrdersRowBaseBackColor);
                 graphics.FillRectangle(backBrush, e.CellBounds);
                 e.Paint(
                     e.CellBounds,
@@ -219,8 +219,8 @@ namespace MyManager
                     DataGridViewPaintParts.Focus);
             }
 
-            // Draw header separators in black.
-            using var gridPen = new Pen(Color.Black);
+            // Draw header separators with the same subtle color as table gridlines.
+            using var gridPen = new Pen(OrdersGridLineColor);
             if (e.ColumnIndex == 0)
                 graphics.DrawLine(gridPen, e.CellBounds.Left, e.CellBounds.Top, e.CellBounds.Left, e.CellBounds.Bottom - 1);
             graphics.DrawLine(gridPen, e.CellBounds.Left, e.CellBounds.Top, e.CellBounds.Right - 1, e.CellBounds.Top);
@@ -248,7 +248,7 @@ namespace MyManager
                 && !string.IsNullOrWhiteSpace(textValue)
                 && !string.Equals(textValue, "-", StringComparison.Ordinal)
                 && !string.Equals(textValue, "...", StringComparison.Ordinal);
-            var foreColor = hasAttachmentText ? Color.RoyalBlue : Color.Black;
+            var foreColor = hasAttachmentText ? OrdersLinkTextColor : Color.Black;
 
             if (e.CellStyle == null)
                 return;

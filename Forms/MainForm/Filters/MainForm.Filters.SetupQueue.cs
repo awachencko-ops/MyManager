@@ -387,9 +387,18 @@ namespace MyManager
                 backColor = QueueHeaderBackColor;
             if (isSelected && !isRoot)
                 backColor = QueueStatusSelectedBackColor;
+            var textColor = isSelected && !isRoot
+                ? QueueStatusSelectedTextColor
+                : QueueTextColor;
 
             using var backBrush = new SolidBrush(backColor);
             e.Graphics.FillRectangle(backBrush, rowRect);
+            if (isSelected && !isRoot)
+            {
+                var markerRect = new Rectangle(rowRect.Left, rowRect.Top, 3, rowRect.Height);
+                using var markerBrush = new SolidBrush(QueueActiveMarkerColor);
+                e.Graphics.FillRectangle(markerBrush, markerRect);
+            }
 
             var textValue = isRoot ? e.Node.Text : FormatQueueLabel(e.Node.Text);
             using var textFont = new Font(
@@ -404,7 +413,7 @@ namespace MyManager
                 textValue,
                 textFont,
                 textRect,
-                QueueTextColor,
+                textColor,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
 
             if (!isRoot)
@@ -417,12 +426,12 @@ namespace MyManager
                     countText,
                     countFont,
                     countRect,
-                    QueueTextColor,
+                    textColor,
                     TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
             }
 
             if ((e.State & TreeNodeStates.Focused) == TreeNodeStates.Focused)
-                ControlPaint.DrawFocusRectangle(e.Graphics, rowRect, QueueTextColor, backColor);
+                ControlPaint.DrawFocusRectangle(e.Graphics, rowRect, textColor, backColor);
         }
 
     }

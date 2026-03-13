@@ -30,8 +30,9 @@ namespace MyManager
 
         private static readonly Color DockSidebarBackColor = Color.FromArgb(61, 68, 88);
         private static readonly Color DockButtonBackColor = Color.FromArgb(61, 68, 88);
-        private static readonly Color DockButtonHoverBackColor = Color.FromArgb(78, 86, 108);
-        private static readonly Color DockButtonActiveBackColor = Color.FromArgb(104, 163, 216);
+        private static readonly Color DockButtonHoverBackColor = Color.FromArgb(245, 249, 255);
+        private static readonly Color DockButtonActiveBackColor = Color.FromArgb(234, 242, 255);
+        private static readonly Color DockButtonActiveMarkerColor = Color.FromArgb(122, 167, 217);
         private static readonly Color DockLockedButtonBackColor = Color.FromArgb(50, 56, 74);
 
         private void InitializeDockSidebar()
@@ -99,6 +100,8 @@ namespace MyManager
 
             WireWorkspaceDockControl(buttonPanel);
             WireWorkspaceDockControl(iconHost);
+            buttonPanel.Paint -= DockWorkspacePanel_Paint;
+            buttonPanel.Paint += DockWorkspacePanel_Paint;
 
             _dockPanelsByWorkspace[workspace] = buttonPanel;
             var title = _dockWorkspaceTitles[workspace];
@@ -206,7 +209,20 @@ namespace MyManager
                 panel.BackColor = workspace == _activeDockWorkspace
                     ? DockButtonActiveBackColor
                     : DockButtonBackColor;
+                panel.Invalidate();
             }
+        }
+
+        private void DockWorkspacePanel_Paint(object? sender, PaintEventArgs e)
+        {
+            if (sender is not Panel panel || panel.Tag is not DockWorkspaceGroup workspace)
+                return;
+
+            if (workspace != _activeDockWorkspace)
+                return;
+
+            using var markerBrush = new SolidBrush(DockButtonActiveMarkerColor);
+            e.Graphics.FillRectangle(markerBrush, 0, 0, 3, panel.Height);
         }
 
         private void EnsureWorkspaceStubPanel()
