@@ -30,6 +30,7 @@ namespace MyManager
         public OrderFileTopologyMarker FileTopologyMarker { get; set; } = OrderFileTopologyMarker.Unknown;
 
         public string Keyword { get; set; } = ""; // Новое поле
+        public string UserName { get; set; } = "";
         public DateTime ArrivalDate { get; set; } = DateTime.Now; // Дата поступления заказа в препресс-менеджер
         public DateTime OrderDate { get; set; } = PlaceholderOrderDate; // Дата формирования заказа (ДелаемДело)
         public string FolderName { get; set; } = ""; // Например: "23_10_25 №123"

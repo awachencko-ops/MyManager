@@ -30,6 +30,12 @@ namespace MyManager
         public static string DefaultHistoryFilePath => Path.Combine(DefaultBaseFolderPath, "AppData", "history.json");
         public static string DefaultManagerLogFilePath => Path.Combine(DefaultBaseFolderPath, "AppData", "manager.log");
         public static string DefaultOrderLogsFolderPath => Path.Combine(DefaultBaseFolderPath, "AppData", "order-logs");
+        public static string DefaultUsersFilePath => Path.Combine(DefaultBaseFolderPath, "Config", "users.json");
+        public static string DefaultUsersCacheFilePath => Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "MyManager",
+            "AppData",
+            "users.cache.json");
         public static string DefaultPitStopConfigFilePath => Path.Combine(DefaultBaseFolderPath, "Config", "pitstop_actions.json");
         public static string DefaultImposingConfigFilePath => Path.Combine(DefaultBaseFolderPath, "Config", "imposing_configs.json");
         public static string DefaultPitStopHotfoldersRootPath => Path.Combine(DefaultBaseFolderPath, "WARNING NOT DELETE", "PitStop");
@@ -52,6 +58,8 @@ namespace MyManager
         public string HistoryFilePath { get; set; } = DefaultHistoryFilePath;
         public string ManagerLogFilePath { get; set; } = DefaultManagerLogFilePath;
         public string OrderLogsFolderPath { get; set; } = DefaultOrderLogsFolderPath;
+        public string UsersFilePath { get; set; } = DefaultUsersFilePath;
+        public string UsersCacheFilePath { get; set; } = DefaultUsersCacheFilePath;
         public string FontsFolderPath { get; set; } = string.Empty;
         public string SharedThumbnailCachePath { get; set; } = string.Empty;
         public string PitStopConfigFilePath { get; set; } = DefaultPitStopConfigFilePath;
@@ -142,6 +150,14 @@ namespace MyManager
             if (PathEquals(normalizedOrderLogsFolderPath, "order-logs"))
                 normalizedOrderLogsFolderPath = DefaultOrderLogsFolderPath;
             changed |= SetPathIfDifferent(OrderLogsFolderPath, normalizedOrderLogsFolderPath, value => OrderLogsFolderPath = value);
+
+            var normalizedUsersFilePath = NormalizePathValue(UsersFilePath, DefaultUsersFilePath);
+            if (PathEquals(normalizedUsersFilePath, "users.json"))
+                normalizedUsersFilePath = DefaultUsersFilePath;
+            changed |= SetPathIfDifferent(UsersFilePath, normalizedUsersFilePath, value => UsersFilePath = value);
+
+            var normalizedUsersCacheFilePath = NormalizePathValue(UsersCacheFilePath, DefaultUsersCacheFilePath);
+            changed |= SetPathIfDifferent(UsersCacheFilePath, normalizedUsersCacheFilePath, value => UsersCacheFilePath = value);
 
             var normalizedFontsFolderPath = NormalizePathValue(FontsFolderPath, string.Empty);
             changed |= SetPathIfDifferent(FontsFolderPath, normalizedFontsFolderPath, value => FontsFolderPath = value);

@@ -69,8 +69,13 @@ namespace MyManager
         private int _dragSourceColumnIndex = -1;
         private OrdersViewMode _ordersViewMode = OrdersViewMode.List;
 
-        // На будущее: список пользователей можно наполнять из настроек/БД.
         private readonly List<string> _users = ["Сервер \"Таудеми\""];
+        private readonly List<string> _filterUsers = ["Сервер \"Таудеми\""];
+        private string _usersSourceFilePath = AppSettings.DefaultUsersFilePath;
+        private string _usersCacheFilePath = AppSettings.DefaultUsersCacheFilePath;
+        private bool _usersLoadedFromCache;
+        private string _usersDirectoryStatusText = "Пользователи: fallback";
+        private DateTime _usersDirectoryLastRefreshAt = DateTime.MinValue;
 
         private static readonly string[] QueueStatuses =
         {
@@ -99,12 +104,6 @@ namespace MyManager
             "Ошибка",
             "Завершено"
         };
-        private static readonly string[] FilterUsers =
-        {
-            "Андрей",
-            "Катя",
-            "Вероника"
-        };
         private const string StatusFilterLabelText = "Состояние задания";
         private const string OrderNoSearchLabelText = "Номер заказа";
         private const string UserFilterLabelText = "Пользователь";
@@ -116,6 +115,7 @@ namespace MyManager
         private const int OrdersGridWarmupIntervalMs = 3000;
         private const int GridHoverActivateDelayMs = 500;
         private const int TileHoverActivateDelayMs = 500;
+        private const int UsersDirectoryRefreshIntervalMs = 60000;
         private const long DiskWarningThresholdBytes = 10L * 1024 * 1024 * 1024;
         private const long DiskCriticalThresholdBytes = 5L * 1024 * 1024 * 1024;
 

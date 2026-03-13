@@ -185,6 +185,7 @@ namespace MyManager
         private void ApplyStatusFilterToGrid()
         {
             var hasSelectedStatuses = _selectedFilterStatuses.Count > 0;
+            var hasSelectedUsers = _selectedFilterUsers.Count > 0;
             var hasOrderNoFilter = !string.IsNullOrWhiteSpace(_orderNumberFilterText);
             var selectedQueueStatus = GetSelectedQueueStatusName();
             var orderVisibilityByInternalId = new Dictionary<string, bool>(StringComparer.Ordinal);
@@ -202,6 +203,10 @@ namespace MyManager
                 var normalizedStatus = NormalizeStatus(statusValue);
                 var queueMatches = MatchesQueueStatus(selectedQueueStatus, normalizedStatus);
                 var statusMatches = !hasSelectedStatuses || (normalizedStatus != null && _selectedFilterStatuses.Contains(normalizedStatus));
+                var orderInternalId = ExtractOrderInternalIdFromTag(rowTag);
+                var order = FindOrderByInternalId(orderInternalId);
+                var orderUserName = NormalizeOrderUserName(order?.UserName);
+                var userMatches = !hasSelectedUsers || _selectedFilterUsers.Contains(orderUserName);
                 var orderNoValue = row.Cells[colOrderNumber.Index].Value?.ToString();
                 var orderNoMatches = !hasOrderNoFilter ||
                                      (!string.IsNullOrWhiteSpace(orderNoValue) &&
@@ -210,9 +215,8 @@ namespace MyManager
                 var createdDateMatches = MatchesCreatedDateFilter(createdDateValue);
                 var receivedDateValue = row.Cells[colReceived.Index].Value?.ToString();
                 var receivedDateMatches = MatchesReceivedDateFilter(receivedDateValue);
-                var shouldShow = queueMatches && statusMatches && orderNoMatches && createdDateMatches && receivedDateMatches;
+                var shouldShow = queueMatches && statusMatches && userMatches && orderNoMatches && createdDateMatches && receivedDateMatches;
 
-                var orderInternalId = ExtractOrderInternalIdFromTag(rowTag);
                 if (!string.IsNullOrWhiteSpace(orderInternalId))
                     orderVisibilityByInternalId[orderInternalId] = shouldShow;
 
@@ -424,11 +428,29 @@ namespace MyManager
                    DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces, out parsedDate);
         }
 
-        private static Dictionary<string, int> GetCountsByFilterUsers()
+        private Dictionary<string, int> GetCountsByFilterUsers()
         {
             var counts = new Dictionary<string, int>(StringComparer.Ordinal);
-            foreach (var userName in FilterUsers)
+            foreach (var userName in _filterUsers)
                 counts[userName] = 0;
+
+            foreach (DataGridViewRow row in dgvJobs.Rows)
+            {
+                if (row.IsNewRow)
+                    continue;
+
+                var rowTag = row.Tag?.ToString();
+                if (IsItemTag(rowTag))
+                    continue;
+
+                var orderInternalId = ExtractOrderInternalIdFromTag(rowTag);
+                var order = FindOrderByInternalId(orderInternalId);
+                var orderUserName = NormalizeOrderUserName(order?.UserName);
+                if (!counts.ContainsKey(orderUserName))
+                    counts[orderUserName] = 0;
+
+                counts[orderUserName]++;
+            }
 
             return counts;
         }

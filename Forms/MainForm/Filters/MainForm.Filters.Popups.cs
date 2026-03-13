@@ -290,7 +290,7 @@ namespace MyManager
 
             var labelWidth = _userFilterLabel?.Width ?? 150;
             var popupWidth = Math.Max(labelWidth + 110, 280);
-            var listHeight = Math.Max(FilterUsers.Length * 33, 96);
+            var listHeight = Math.Max(_filterUsers.Count * 33, 96);
             var buttonTop = 16 + listHeight + 10;
             var popupHeight = buttonTop + 32 + 10;
 
@@ -386,7 +386,7 @@ namespace MyManager
             _userFilterCheckedList.BeginUpdate();
             _userFilterCheckedList.Items.Clear();
 
-            foreach (var userName in FilterUsers)
+            foreach (var userName in _filterUsers)
             {
                 countsByFilterUser.TryGetValue(userName, out var count);
                 var item = new UserFilterOption(userName, count);

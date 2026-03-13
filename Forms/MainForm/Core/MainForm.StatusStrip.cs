@@ -50,6 +50,7 @@ namespace MyManager
         private void TrayIndicatorsTimer_Tick(object? sender, EventArgs e)
         {
             RefreshArchivedStatuses();
+            RefreshUsersDirectoryIfNeeded();
             UpdateTrayConnectionIndicator();
             UpdateTrayDiskIndicator();
         }
@@ -139,9 +140,11 @@ namespace MyManager
             var isConnected = CanAccessPath(_ordersRootPath);
             toolConnection.Text = isConnected ? "● Сервер: подключен" : "● Сервер: автономно";
             toolConnection.ForeColor = isConnected ? Color.SeaGreen : Color.Firebrick;
-            toolConnection.ToolTipText = isConnected
+
+            var connectionStatusText = isConnected
                 ? "Рабочая папка заказов доступна."
                 : "Рабочая папка заказов недоступна.";
+            toolConnection.ToolTipText = $"{connectionStatusText}\n{_usersDirectoryStatusText}";
         }
 
         private void UpdateTrayDiskIndicator()

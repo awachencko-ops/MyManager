@@ -66,6 +66,7 @@ namespace MyManager
                 builder.Append(order.PrintPath ?? string.Empty).Append('|');
                 builder.Append(order.PitStopAction ?? string.Empty).Append('|');
                 builder.Append(order.ImposingAction ?? string.Empty).Append('|');
+                builder.Append(order.UserName ?? string.Empty).Append('|');
                 builder.Append(order.OrderDate.Ticks).Append('|');
                 builder.Append(order.ArrivalDate.Ticks).Append('|');
 
@@ -112,6 +113,7 @@ namespace MyManager
         {
             _orderHistory.Clear();
             _jsonHistoryFile = StoragePaths.ResolveExistingFilePath(_jsonHistoryFile, "history.json");
+            var usersNormalized = false;
 
             if (File.Exists(_jsonHistoryFile))
             {
@@ -133,9 +135,16 @@ namespace MyManager
                     order.InternalId = Guid.NewGuid().ToString("N");
                 if (order.ArrivalDate == default)
                     order.ArrivalDate = order.OrderDate != default ? order.OrderDate : DateTime.Now;
+
+                var normalizedUserName = NormalizeOrderUserName(order.UserName);
+                if (!string.Equals(order.UserName, normalizedUserName, StringComparison.Ordinal))
+                {
+                    order.UserName = normalizedUserName;
+                    usersNormalized = true;
+                }
             }
 
-            if (NormalizeOrderTopologyInHistory(logIssues: true))
+            if (NormalizeOrderTopologyInHistory(logIssues: true) || usersNormalized)
                 SaveHistory();
         }
 

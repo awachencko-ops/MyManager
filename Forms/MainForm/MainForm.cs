@@ -26,6 +26,7 @@ namespace MyManager
             InitializeComponent();
             InitializeStatusCellVisuals();
             LoadSettings();
+            InitializeUsersDirectory();
             InitializeProcessor();
             ApplyQueueVisualStyle();
             InitializeStatusFilter();
@@ -145,6 +146,7 @@ namespace MyManager
                 order.OrderDate = OrderData.PlaceholderOrderDate;
             if (order.ArrivalDate == default)
                 order.ArrivalDate = DateTime.Now;
+            order.UserName = NormalizeOrderUserName(order.UserName);
 
             _orderHistory.Add(order);
             SaveHistory();
@@ -226,6 +228,8 @@ namespace MyManager
             _jsonHistoryFile = settings.HistoryFilePath;
             _managerLogFilePath = settings.ManagerLogFilePath;
             _orderLogsFolderPath = settings.OrderLogsFolderPath;
+            _usersSourceFilePath = settings.UsersFilePath;
+            _usersCacheFilePath = settings.UsersCacheFilePath;
             _printTilesCacheFolderPath = ResolveLocalThumbnailCacheFolderPath();
             _sharedPrintTilesCacheFolderPath = ResolveOptionalSharedThumbnailCacheFolderPath(settings.SharedThumbnailCachePath);
             Logger.LogFilePath = _managerLogFilePath;
