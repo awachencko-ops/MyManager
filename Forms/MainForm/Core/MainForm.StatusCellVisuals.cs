@@ -208,16 +208,21 @@ namespace MyManager
                 & ~DataGridViewPaintParts.Focus;
             e.Paint(e.CellBounds, paintParts);
 
+            const int markerWidth = 3;
+            var contentBounds = Rectangle.Inflate(e.CellBounds, -1, -1);
+            var markerRect = new Rectangle(contentBounds.Left, contentBounds.Top, markerWidth, contentBounds.Height);
             if (e.RowIndex >= 0 && dgvJobs.Rows[e.RowIndex].Selected)
             {
-                var markerRect = new Rectangle(e.CellBounds.Left, e.CellBounds.Top, 3, e.CellBounds.Height);
                 using var markerBrush = new SolidBrush(OrdersActiveMarkerColor);
                 e.Graphics.FillRectangle(markerBrush, markerRect);
             }
 
-            var contentBounds = Rectangle.Inflate(e.CellBounds, -1, -1);
             var iconBackWidth = Math.Min(40, Math.Max(28, contentBounds.Width / 4));
-            var iconBackRect = new Rectangle(contentBounds.Left, contentBounds.Top, iconBackWidth, contentBounds.Height);
+            var iconBackRect = new Rectangle(
+                markerRect.Right,
+                contentBounds.Top,
+                iconBackWidth,
+                contentBounds.Height);
             using (var iconBackBrush = new SolidBrush(visual.IconBackgroundColor))
             {
                 e.Graphics.FillRectangle(iconBackBrush, iconBackRect);
