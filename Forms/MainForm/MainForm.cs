@@ -346,8 +346,9 @@ namespace MyManager
 
         private void InitializeOrdersGridVisuals()
         {
-            var unifiedPadding = new Padding(8, 0, 0, 0);
-            var numericRightPadding = SystemInformation.VerticalScrollBarWidth + 6;
+            const int horizontalPadding = 10;
+            var unifiedPadding = new Padding(horizontalPadding, 0, horizontalPadding, 0);
+            var rightEdgeSafePadding = horizontalPadding + SystemInformation.VerticalScrollBarWidth + 4;
 
             dgvJobs.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             dgvJobs.MultiSelect = true;
@@ -380,9 +381,14 @@ namespace MyManager
             dgvJobs.ColumnHeadersDefaultCellStyle.Padding = unifiedPadding;
             dgvJobs.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
             dgvJobs.ColumnHeadersDefaultCellStyle.WrapMode = DataGridViewTriState.False;
-            ApplyRightAlignedNumericColumnStyle(colOrderNumber, unifiedPadding.Left, numericRightPadding);
-            ApplyRightAlignedNumericColumnStyle(colReceived, unifiedPadding.Left, numericRightPadding);
-            ApplyRightAlignedNumericColumnStyle(colCreated, unifiedPadding.Left, numericRightPadding);
+            ApplyLeftAlignedColumnStyle(colStatus, unifiedPadding.Left, unifiedPadding.Right);
+            ApplyRightAlignedNumericColumnStyle(colOrderNumber, unifiedPadding.Left, unifiedPadding.Right);
+            ApplyLeftAlignedColumnStyle(colPrep, unifiedPadding.Left, unifiedPadding.Right);
+            ApplyLeftAlignedColumnStyle(colPitstop, unifiedPadding.Left, unifiedPadding.Right);
+            ApplyLeftAlignedColumnStyle(colHotimposing, unifiedPadding.Left, unifiedPadding.Right);
+            ApplyLeftAlignedColumnStyle(colPrint, unifiedPadding.Left, unifiedPadding.Right);
+            ApplyRightAlignedNumericColumnStyle(colReceived, unifiedPadding.Left, unifiedPadding.Right);
+            ApplyRightAlignedNumericColumnStyle(colCreated, unifiedPadding.Left, rightEdgeSafePadding);
 
             dgvJobs.CellPainting += DgvJobs_CellPainting;
             dgvJobs.CellFormatting += DgvJobs_CellFormatting;
@@ -408,7 +414,18 @@ namespace MyManager
             column.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
             column.DefaultCellStyle.Padding = new Padding(leftPadding, 0, rightPadding, 0);
             column.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleRight;
-            column.HeaderCell.Style.Padding = new Padding(0, 0, rightPadding, 0);
+            column.HeaderCell.Style.Padding = new Padding(leftPadding, 0, rightPadding, 0);
+        }
+
+        private static void ApplyLeftAlignedColumnStyle(DataGridViewColumn? column, int leftPadding, int rightPadding)
+        {
+            if (column == null)
+                return;
+
+            column.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
+            column.DefaultCellStyle.Padding = new Padding(leftPadding, 0, rightPadding, 0);
+            column.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleLeft;
+            column.HeaderCell.Style.Padding = new Padding(leftPadding, 0, rightPadding, 0);
         }
 
         private void InitializeActionButtonsState()
