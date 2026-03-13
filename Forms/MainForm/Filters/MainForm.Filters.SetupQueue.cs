@@ -439,8 +439,9 @@ namespace MyManager
             if (e.Node == null)
                 return;
 
+            const int markerWidth = 3;
             const int counterRightInset = 12;
-            const int counterColumnWidth = 60;
+            const int textToCounterGap = 8;
 
             var isSelected = (e.State & TreeNodeStates.Selected) == TreeNodeStates.Selected;
             var isHovered = ReferenceEquals(e.Node, _hoveredQueueNode);
@@ -461,10 +462,51 @@ namespace MyManager
 
             if (isSelected)
             {
-                var markerRect = new Rectangle(rowRect.Left, rowRect.Top, 2, rowRect.Height);
+                var markerRect = new Rectangle(rowRect.Left, rowRect.Top, markerWidth, rowRect.Height);
                 using var markerBrush = new SolidBrush(QueueActiveMarkerColor);
                 e.Graphics.FillRectangle(markerBrush, markerRect);
             }
+
+            var countValue = GetQueueStatusCount(e.Node.Text);
+            var countText = countValue.ToString(CultureInfo.InvariantCulture);
+            var countColor = ResolveQueueCounterColor(countValue, isSelected);
+            using var countFont = new Font(
+                "Segoe UI Semibold",
+                14f,
+                FontStyle.Regular,
+                GraphicsUnit.Pixel);
+
+            var measuredCountSize = TextRenderer.MeasureText(
+                e.Graphics,
+                countText,
+                countFont,
+                new Size(short.MaxValue, short.MaxValue),
+                TextFormatFlags.NoPadding);
+            var counterWidth = Math.Max(
+                QueueCounterPillMinWidth,
+                measuredCountSize.Width + (QueueCounterPillHorizontalPadding * 2));
+            var countRect = new Rectangle(
+                treeView1.ClientSize.Width - counterRightInset - counterWidth,
+                rowRect.Y + Math.Max(0, (rowRect.Height - QueueCounterPillHeight) / 2),
+                counterWidth,
+                QueueCounterPillHeight);
+
+            using (var counterPath = CreateRoundedRectanglePath(countRect, QueueCounterPillRadius))
+            using (var counterBrush = new SolidBrush(ResolveQueueCounterPillBackColor(countValue, isSelected)))
+            {
+                var previousSmoothing = e.Graphics.SmoothingMode;
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                e.Graphics.FillPath(counterBrush, counterPath);
+                e.Graphics.SmoothingMode = previousSmoothing;
+            }
+
+            TextRenderer.DrawText(
+                e.Graphics,
+                countText,
+                countFont,
+                countRect,
+                countColor,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
 
             var textLeft = e.Bounds.X + 8;
             var textValue = FormatQueueLabel(e.Node.Text);
@@ -474,11 +516,10 @@ namespace MyManager
                 FontStyle.Regular,
                 GraphicsUnit.Pixel);
 
-            var countColumnX = treeView1.ClientSize.Width - counterRightInset - counterColumnWidth;
             var textRect = new Rectangle(
                 textLeft,
                 e.Bounds.Y,
-                Math.Max(0, countColumnX - textLeft - 8),
+                Math.Max(0, countRect.Left - textLeft - textToCounterGap),
                 e.Bounds.Height);
             TextRenderer.DrawText(
                 e.Graphics,
@@ -487,27 +528,6 @@ namespace MyManager
                 textRect,
                 textColor,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
-
-            var countValue = GetQueueStatusCount(e.Node.Text);
-            var countText = $"({countValue})";
-            var countColor = ResolveQueueCounterColor(countValue, isSelected);
-            using var countFont = new Font(
-                "Segoe UI",
-                14f,
-                FontStyle.Regular,
-                GraphicsUnit.Pixel);
-            var countRect = new Rectangle(
-                treeView1.ClientSize.Width - counterRightInset - counterColumnWidth,
-                e.Bounds.Y,
-                counterColumnWidth,
-                e.Bounds.Height);
-            TextRenderer.DrawText(
-                e.Graphics,
-                countText,
-                countFont,
-                countRect,
-                countColor,
-                TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
 
         }
 
@@ -543,6 +563,44 @@ namespace MyManager
             return isSelected
                 ? QueueCounterSelectedTextColor
                 : QueueCounterTextColor;
+        }
+
+        private static Color ResolveQueueCounterPillBackColor(int count, bool isSelected)
+        {
+            if (count == 0)
+            {
+                return isSelected
+                    ? QueueCounterPillSelectedZeroBackColor
+                    : QueueCounterPillZeroBackColor;
+            }
+
+            return isSelected
+                ? QueueCounterPillSelectedBackColor
+                : QueueCounterPillBackColor;
+        }
+
+        private static GraphicsPath CreateRoundedRectanglePath(Rectangle bounds, int radius)
+        {
+            var normalizedRadius = Math.Min(radius, Math.Min(bounds.Width, bounds.Height) / 2);
+            if (normalizedRadius <= 0)
+            {
+                var squarePath = new GraphicsPath();
+                squarePath.AddRectangle(bounds);
+                return squarePath;
+            }
+
+            var diameter = normalizedRadius * 2;
+            var arcRect = new Rectangle(bounds.X, bounds.Y, diameter, diameter);
+            var path = new GraphicsPath();
+            path.AddArc(arcRect, 180, 90);
+            arcRect.X = bounds.Right - diameter;
+            path.AddArc(arcRect, 270, 90);
+            arcRect.Y = bounds.Bottom - diameter;
+            path.AddArc(arcRect, 0, 90);
+            arcRect.X = bounds.X;
+            path.AddArc(arcRect, 90, 90);
+            path.CloseFigure();
+            return path;
         }
 
         private bool IsQueueServerConnected()
