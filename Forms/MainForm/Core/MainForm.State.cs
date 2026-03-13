@@ -107,8 +107,8 @@ namespace MyManager
         private const string StatusFilterLabelText = "Состояние задания";
         private const string OrderNoSearchLabelText = "Номер заказа";
         private const string UserFilterLabelText = "Пользователь";
-        private const string CreatedDateFilterLabelText = "Начало обработки";
-        private const string ReceivedDateFilterLabelText = "Дата поступления";
+        private const string CreatedDateFilterLabelText = "В препрессе";
+        private const string ReceivedDateFilterLabelText = "Заказ принят";
         private const string DefaultTrayStatusText = "Готово";
         private const int TrayIndicatorsRefreshIntervalMs = 15000;
         private static readonly TimeSpan ArchiveIndexLifetime = TimeSpan.FromSeconds(15);
