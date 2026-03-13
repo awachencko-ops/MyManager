@@ -184,9 +184,6 @@ namespace MyManager
             {
                 if (_workspaceStubPanel != null)
                     _workspaceStubPanel.Visible = false;
-
-                scMain.BringToFront();
-                pnlSidebar.BringToFront();
                 return;
             }
 
@@ -200,9 +197,6 @@ namespace MyManager
 
             if (_workspaceStubPanel != null)
                 _workspaceStubPanel.Visible = true;
-
-            _workspaceStubPanel?.BringToFront();
-            pnlSidebar.BringToFront();
         }
 
         private void UpdateDockWorkspaceSelectionVisuals()
@@ -238,6 +232,9 @@ namespace MyManager
             _workspaceStubPanel.Controls.Add(_workspaceStubLabel);
 
             Controls.Add(_workspaceStubPanel);
+            // Keep the sidebar docking layout stable: left dock reserves width, fill panels use the rest.
+            var mainAreaIndex = Controls.GetChildIndex(scMain);
+            Controls.SetChildIndex(_workspaceStubPanel, mainAreaIndex);
         }
 
         private Image CreateApplicationDockIcon(int targetSize)
