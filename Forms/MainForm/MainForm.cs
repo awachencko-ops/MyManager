@@ -372,7 +372,7 @@ namespace MyManager
             dgvJobs.DefaultCellStyle.WrapMode = DataGridViewTriState.False;
             dgvJobs.EnableHeadersVisualStyles = true;
             dgvJobs.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-            dgvJobs.ColumnHeadersHeight = 30;
+            dgvJobs.ColumnHeadersHeight = dgvJobs.RowTemplate.Height;
             dgvJobs.ColumnHeadersDefaultCellStyle.BackColor = Color.White;
             dgvJobs.ColumnHeadersDefaultCellStyle.ForeColor = Color.Black;
             dgvJobs.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.White;
