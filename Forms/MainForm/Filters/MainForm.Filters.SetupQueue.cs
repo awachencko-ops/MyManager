@@ -281,6 +281,7 @@ namespace MyManager
             if (pnlServerHeader.IsDisposed)
                 return;
 
+            EnsureQueuePanelLayoutOrder();
             pnlServerHeader.SuspendLayout();
             pnlServerHeader.BackColor = QueueHeaderBackColor;
             pnlServerHeader.Padding = new Padding(0);

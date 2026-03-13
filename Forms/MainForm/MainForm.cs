@@ -274,8 +274,7 @@ namespace MyManager
         {
             scMain.Panel1.Padding = new Padding(1, 0, 0, 0);
             scMain.Panel1.BackColor = QueuePanelDividerColor;
-            pnlServerHeader.Dock = DockStyle.Top;
-            treeView1.Dock = DockStyle.Fill;
+            EnsureQueuePanelLayoutOrder();
             InitializeServerHeaderVisuals();
 
             treeView1.HideSelection = false;
@@ -298,6 +297,21 @@ namespace MyManager
             treeView1.MouseLeave += TreeView1_MouseLeave;
 
             cbQueue.DrawMode = DrawMode.Normal;
+        }
+
+        private void EnsureQueuePanelLayoutOrder()
+        {
+            pnlServerHeader.Dock = DockStyle.Top;
+            treeView1.Dock = DockStyle.Fill;
+
+            var panel1Controls = scMain.Panel1.Controls;
+            if (!panel1Controls.Contains(pnlServerHeader) || !panel1Controls.Contains(treeView1))
+                return;
+
+            // Keep header above and tree below; otherwise tree can slide under header.
+            panel1Controls.SetChildIndex(pnlServerHeader, 0);
+            panel1Controls.SetChildIndex(treeView1, 1);
+            scMain.Panel1.PerformLayout();
         }
 
         private void InitializeQueueNavigation()
