@@ -85,6 +85,32 @@ namespace MyManager
             return false;
         }
 
+        private bool TryResolveArchivedPrintPath(OrderData order, out string archivedPrintPath)
+        {
+            archivedPrintPath = string.Empty;
+            if (order == null || string.IsNullOrWhiteSpace(_grandpaFolder))
+                return false;
+
+            var fileNames = GetOrderArchiveFileNames(order);
+            if (fileNames.Count == 0)
+                return false;
+
+            RefreshArchiveIndexIfNeeded();
+            foreach (var fileName in fileNames)
+            {
+                if (!_archivedFilePathsByName.TryGetValue(fileName, out var candidatePath))
+                    continue;
+
+                if (!HasExistingFile(candidatePath))
+                    continue;
+
+                archivedPrintPath = candidatePath;
+                return true;
+            }
+
+            return false;
+        }
+
         private static HashSet<string> GetOrderArchiveFileNames(OrderData order)
         {
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -140,6 +166,7 @@ namespace MyManager
 
             _archiveIndexLoadedAt = DateTime.UtcNow;
             _archivedFileNames.Clear();
+            _archivedFilePathsByName.Clear();
 
             var archiveFolderPath = ResolveArchiveDoneFolderPath();
             if (string.IsNullOrWhiteSpace(archiveFolderPath) || !Directory.Exists(archiveFolderPath))
@@ -151,7 +178,11 @@ namespace MyManager
                 {
                     var fileName = Path.GetFileName(filePath);
                     if (!string.IsNullOrWhiteSpace(fileName))
+                    {
                         _archivedFileNames.Add(fileName);
+                        if (!_archivedFilePathsByName.ContainsKey(fileName))
+                            _archivedFilePathsByName[fileName] = filePath;
+                    }
                 }
             }
             catch

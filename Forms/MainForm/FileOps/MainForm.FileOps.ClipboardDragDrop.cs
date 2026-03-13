@@ -23,7 +23,7 @@ namespace MyManager
     {
         private void CopyPathToClipboard(OrderData order, int stage)
         {
-            CopyExistingPathToClipboard(GetOrderStagePath(order, stage));
+            CopyExistingPathToClipboard(ResolveSingleOrderDisplayPath(order, stage));
         }
 
         private void CopyPathToClipboard(OrderFileItem item, int stage)
@@ -116,7 +116,7 @@ namespace MyManager
             if (!IsOrderTag(rowTag))
                 return string.Empty;
 
-            return GetOrderStagePath(order, stage);
+            return ResolveSingleOrderDisplayPath(order, stage);
         }
 
         private static void TrySetClipboardText(string? text)

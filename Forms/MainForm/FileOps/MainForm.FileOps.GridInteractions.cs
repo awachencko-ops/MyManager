@@ -416,7 +416,7 @@ namespace MyManager
                 if (!IsOrderTag(rowTag))
                     return;
 
-                var orderPath = GetOrderStagePath(order, stage);
+                var orderPath = ResolveSingleOrderDisplayPath(order, stage);
                 if (HasExistingFile(orderPath))
                 {
                     OpenFileDefault(orderPath);

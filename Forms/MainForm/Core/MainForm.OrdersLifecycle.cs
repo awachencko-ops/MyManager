@@ -250,7 +250,7 @@ namespace MyManager
             dgvJobs.Rows[orderRowIndex].Tag = $"order|{order.InternalId}";
         }
 
-        private static string ResolveSingleOrderDisplayPath(OrderData order, int stage)
+        private string ResolveSingleOrderDisplayPath(OrderData order, int stage)
         {
             var orderPath = GetOrderStagePath(order, stage);
             var primaryItem = GetPrimaryItem(order);
@@ -261,6 +261,9 @@ namespace MyManager
 
             if (HasExistingFile(orderPath))
                 return orderPath;
+
+            if (stage == 3 && TryResolveArchivedPrintPath(order, out var archivedPrintPath))
+                return archivedPrintPath;
 
             if (!string.IsNullOrWhiteSpace(orderPath))
                 return orderPath;
@@ -847,9 +850,17 @@ namespace MyManager
 
             string targetPath;
             if (stage is >= 1 and <= 3)
-                targetPath = GetStageFolder(order, stage);
+            {
+                var stageFilePath = ResolveSingleOrderDisplayPath(order, stage);
+                if (HasExistingFile(stageFilePath))
+                    targetPath = Path.GetDirectoryName(stageFilePath) ?? GetStageFolder(order, stage);
+                else
+                    targetPath = GetStageFolder(order, stage);
+            }
             else
+            {
                 targetPath = GetPreferredOrderFolder(order);
+            }
 
             if (string.IsNullOrWhiteSpace(targetPath))
             {

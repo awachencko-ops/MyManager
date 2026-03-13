@@ -254,14 +254,24 @@ namespace MyManager
         {
             try
             {
-                if (!HasExistingFile(order.PrintPath))
+                var printPath = ResolveSingleOrderDisplayPath(order, 3);
+                if (!HasExistingFile(printPath))
                 {
                     SetBottomStatus("Файл печати не найден");
                     MessageBox.Show(this, "Файл печати не найден.", "Водяной знак", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
 
-                PdfWatermark.Apply(order, isVertical);
+                var originalPrintPath = order.PrintPath;
+                try
+                {
+                    order.PrintPath = printPath;
+                    PdfWatermark.Apply(order, isVertical);
+                }
+                finally
+                {
+                    order.PrintPath = originalPrintPath;
+                }
                 var pos = isVertical ? "слева" : "сверху";
                 SetBottomStatus($"Водяной знак ({pos}) нанесен на {GetOrderDisplayId(order)}");
             }
@@ -357,14 +367,14 @@ namespace MyManager
 
         private async Task<string> CopyToGrandpaAsync(OrderData order)
         {
-            if (!HasExistingFile(order.PrintPath))
+            var sourcePath = ResolveSingleOrderDisplayPath(order, 3);
+            if (!HasExistingFile(sourcePath))
             {
                 SetBottomStatus("Файл печати не найден");
                 MessageBox.Show(this, "Файл печати не найден.", "Копирование", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return string.Empty;
             }
 
-            var sourcePath = order.PrintPath ?? string.Empty;
             var targetName = Path.GetFileName(sourcePath);
             return await CopyToGrandpaFromSourceAsync(sourcePath, targetName);
         }
