@@ -206,8 +206,8 @@ namespace MyManager
         private static readonly Color QueueTextColor = Color.FromArgb(244, 247, 252);
         private static readonly Color OrdersRowBaseBackColor = Color.FromArgb(255, 255, 255);   // #FFFFFF
         private static readonly Color OrdersRowZebraBackColor = Color.FromArgb(250, 251, 253);  // #FAFBFD
-        private static readonly Color OrdersRowHoverBackColor = Color.FromArgb(238, 244, 251);  // #EEF4FB
-        private static readonly Color OrdersRowSelectedBackColor = Color.FromArgb(220, 231, 245); // #DCE7F5
+        private static readonly Color OrdersRowHoverBackColor = Color.FromArgb(245, 249, 255);  // #F5F9FF
+        private static readonly Color OrdersRowSelectedBackColor = Color.FromArgb(234, 242, 255); // #EAF2FF
 
         private enum OrdersViewMode
         {
