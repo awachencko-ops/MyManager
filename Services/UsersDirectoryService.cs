@@ -97,15 +97,8 @@ namespace MyManager
             if (string.IsNullOrWhiteSpace(json))
                 return [];
 
-            try
-            {
-                using var document = JsonDocument.Parse(json);
-                return NormalizeUsers(ExtractUsers(document.RootElement));
-            }
-            catch
-            {
-                return [];
-            }
+            using var document = JsonDocument.Parse(json);
+            return NormalizeUsers(ExtractUsers(document.RootElement));
         }
 
         private static IEnumerable<string> ExtractUsers(JsonElement element)
