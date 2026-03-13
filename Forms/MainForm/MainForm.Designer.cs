@@ -30,6 +30,10 @@
         {
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(MainForm));
             pnlSidebar = new Panel();
+            pnl_Orders = new Panel();
+            pictureBox1 = new PictureBox();
+            pnl_Icon = new Panel();
+            pictureBox2 = new PictureBox();
             scMain = new SplitContainer();
             treeView1 = new TreeView();
             tableLayoutPanel1 = new TableLayoutPanel();
@@ -73,6 +77,11 @@
             tsbBrowse = new ToolStripButton();
             tsbConsole = new ToolStripButton();
             tsbParameters = new ToolStripButton();
+            pnlSidebar.SuspendLayout();
+            pnl_Orders.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)pictureBox1).BeginInit();
+            pnl_Icon.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)pictureBox2).BeginInit();
             ((System.ComponentModel.ISupportInitialize)scMain).BeginInit();
             scMain.Panel1.SuspendLayout();
             scMain.Panel2.SuspendLayout();
@@ -91,11 +100,49 @@
             // 
             // pnlSidebar
             // 
+            pnlSidebar.Controls.Add(pnl_Orders);
+            pnlSidebar.Controls.Add(pnl_Icon);
             pnlSidebar.Dock = DockStyle.Left;
             pnlSidebar.Location = new Point(0, 0);
             pnlSidebar.Name = "pnlSidebar";
             pnlSidebar.Size = new Size(65, 1244);
             pnlSidebar.TabIndex = 0;
+            // 
+            // pnl_Orders
+            // 
+            pnl_Orders.Controls.Add(pictureBox1);
+            pnl_Orders.Dock = DockStyle.Top;
+            pnl_Orders.Location = new Point(0, 65);
+            pnl_Orders.Name = "pnl_Orders";
+            pnl_Orders.Size = new Size(65, 65);
+            pnl_Orders.TabIndex = 1;
+            // 
+            // pictureBox1
+            // 
+            pictureBox1.Dock = DockStyle.Fill;
+            pictureBox1.Location = new Point(0, 0);
+            pictureBox1.Name = "pictureBox1";
+            pictureBox1.Size = new Size(65, 65);
+            pictureBox1.TabIndex = 0;
+            pictureBox1.TabStop = false;
+            // 
+            // pnl_Icon
+            // 
+            pnl_Icon.Controls.Add(pictureBox2);
+            pnl_Icon.Dock = DockStyle.Top;
+            pnl_Icon.Location = new Point(0, 0);
+            pnl_Icon.Name = "pnl_Icon";
+            pnl_Icon.Size = new Size(65, 65);
+            pnl_Icon.TabIndex = 0;
+            // 
+            // pictureBox2
+            // 
+            pictureBox2.Dock = DockStyle.Fill;
+            pictureBox2.Location = new Point(0, 0);
+            pictureBox2.Name = "pictureBox2";
+            pictureBox2.Size = new Size(65, 65);
+            pictureBox2.TabIndex = 1;
+            pictureBox2.TabStop = false;
             // 
             // scMain
             // 
@@ -511,6 +558,11 @@
             Controls.Add(pnlSidebar);
             Name = "MainForm";
             Text = "MainForm";
+            pnlSidebar.ResumeLayout(false);
+            pnl_Orders.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)pictureBox1).EndInit();
+            pnl_Icon.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)pictureBox2).EndInit();
             scMain.Panel1.ResumeLayout(false);
             scMain.Panel2.ResumeLayout(false);
             scMain.Panel2.PerformLayout();
@@ -579,5 +631,9 @@
         private DataGridViewTextBoxColumn colReceived;
         private DataGridViewTextBoxColumn colCreated;
         private TextBox tbSearch;
+        private Panel pnl_Icon;
+        private Panel pnl_Orders;
+        private PictureBox pictureBox1;
+        private PictureBox pictureBox2;
     }
 }
