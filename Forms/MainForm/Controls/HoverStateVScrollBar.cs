@@ -219,6 +219,9 @@ namespace MyManager
             if (!HasScrollableRange)
                 return;
 
+            if (e.Delta == 0)
+                return;
+
             var wheelStep = Math.Max(_smallChange * 3, 1);
             ChangeValueBy(e.Delta > 0 ? -wheelStep : wheelStep, raiseEvent: true);
         }
