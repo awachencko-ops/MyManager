@@ -506,8 +506,6 @@ namespace MyManager
                     TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
             }
 
-            if (!isRoot && (e.State & TreeNodeStates.Focused) == TreeNodeStates.Focused)
-                ControlPaint.DrawFocusRectangle(e.Graphics, rowRect, textColor, backColor);
         }
 
         private void TreeView1_MouseMove(object? sender, MouseEventArgs e)
