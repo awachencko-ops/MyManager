@@ -68,4 +68,4 @@
 
 Связь с этапами:
 - Вход: `2_MULTI_ORDER_LOGIC_AND_POSTGRESQL_PLAN.md`
-- Продолжение: EF/migrations/API endpoints и затем автообновление клиента.
+- Продолжение: `4_EF_MIGRATIONS_API_AND_AUTOUPDATE_ROLLOUT_PLAN.md`.
