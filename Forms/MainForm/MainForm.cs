@@ -272,7 +272,8 @@ namespace MyManager
 
         private void ApplyQueueVisualStyle()
         {
-            scMain.Panel1.BackColor = QueuePanelBackColor;
+            scMain.Panel1.Padding = new Padding(1, 0, 0, 0);
+            scMain.Panel1.BackColor = QueuePanelDividerColor;
 
             treeView1.HideSelection = false;
             treeView1.DrawMode = TreeViewDrawMode.OwnerDrawText;
@@ -283,7 +284,7 @@ namespace MyManager
             treeView1.ShowPlusMinus = false;
             treeView1.BackColor = QueuePanelBackColor;
             treeView1.ForeColor = QueueTextColor;
-            treeView1.ItemHeight = 40;
+            treeView1.ItemHeight = 42;
             treeView1.Indent = 16;
             treeView1.LineColor = QueuePanelBackColor;
             treeView1.DrawNode -= TreeView1_DrawNode;

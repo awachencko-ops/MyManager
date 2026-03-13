@@ -378,6 +378,9 @@ namespace MyManager
             if (e.Node == null)
                 return;
 
+            const int counterRightInset = 12;
+            const int counterColumnWidth = 64;
+
             var isRoot = e.Node.Level == 0;
             var isSelected = (e.State & TreeNodeStates.Selected) == TreeNodeStates.Selected;
             var isHovered = !isRoot && ReferenceEquals(e.Node, _hoveredQueueNode);
@@ -403,15 +406,15 @@ namespace MyManager
 
             if (isSelected && !isRoot)
             {
-                var markerRect = new Rectangle(rowRect.Left, rowRect.Top, 3, rowRect.Height);
+                var markerRect = new Rectangle(rowRect.Left, rowRect.Top, 2, rowRect.Height);
                 using var markerBrush = new SolidBrush(QueueActiveMarkerColor);
                 e.Graphics.FillRectangle(markerBrush, markerRect);
             }
 
-            var textValue = isRoot ? e.Node.Text : FormatQueueLabel(e.Node.Text);
             var textLeft = e.Bounds.X + 8;
             if (isRoot)
             {
+                var isConnected = IsQueueServerConnected();
                 var indicatorDiameter = 8;
                 var indicatorRect = new Rectangle(
                     e.Bounds.X + 10,
@@ -419,7 +422,7 @@ namespace MyManager
                     indicatorDiameter,
                     indicatorDiameter);
 
-                using var indicatorBrush = new SolidBrush(IsQueueServerConnected()
+                using var indicatorBrush = new SolidBrush(isConnected
                     ? QueueHeaderOnlineIndicatorColor
                     : QueueHeaderOfflineIndicatorColor);
                 e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
@@ -427,19 +430,49 @@ namespace MyManager
                 e.Graphics.SmoothingMode = SmoothingMode.None;
 
                 textLeft = indicatorRect.Right + 8;
+
+                using var headerFont = new Font("Segoe UI Semibold", 15f, FontStyle.Regular, GraphicsUnit.Pixel);
+                using var secondaryFont = new Font("Segoe UI", 12f, FontStyle.Regular, GraphicsUnit.Pixel);
+                var headerRect = new Rectangle(
+                    textLeft,
+                    e.Bounds.Y + 2,
+                    Math.Max(0, treeView1.ClientSize.Width - textLeft - 12),
+                    20);
+                var secondaryRect = new Rectangle(
+                    textLeft,
+                    e.Bounds.Y + 20,
+                    Math.Max(0, treeView1.ClientSize.Width - textLeft - 12),
+                    18);
+
+                TextRenderer.DrawText(
+                    e.Graphics,
+                    e.Node.Text,
+                    headerFont,
+                    headerRect,
+                    QueueHeaderTextColor,
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+                TextRenderer.DrawText(
+                    e.Graphics,
+                    isConnected ? "подключен" : "автономно",
+                    secondaryFont,
+                    secondaryRect,
+                    QueueHeaderSecondaryTextColor,
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+                return;
             }
 
+            var textValue = FormatQueueLabel(e.Node.Text);
             using var textFont = new Font(
-                isRoot || isSelected ? "Segoe UI Semibold" : "Segoe UI",
-                isRoot ? 16f : 15f,
+                "Segoe UI",
+                15f,
                 FontStyle.Regular,
                 GraphicsUnit.Pixel);
 
-            var trailingInset = isRoot ? 14 : 86;
+            var countColumnX = treeView1.ClientSize.Width - counterRightInset - counterColumnWidth;
             var textRect = new Rectangle(
                 textLeft,
                 e.Bounds.Y,
-                Math.Max(0, treeView1.ClientSize.Width - textLeft - trailingInset),
+                Math.Max(0, countColumnX - textLeft - 8),
                 e.Bounds.Height);
             TextRenderer.DrawText(
                 e.Graphics,
@@ -455,11 +488,15 @@ namespace MyManager
                 var countText = $"({countValue})";
                 var countColor = ResolveQueueCounterColor(countValue, isSelected);
                 using var countFont = new Font(
-                    isSelected ? "Segoe UI Semibold" : "Segoe UI",
+                    "Segoe UI",
                     14f,
                     FontStyle.Regular,
                     GraphicsUnit.Pixel);
-                var countRect = new Rectangle(0, e.Bounds.Y, treeView1.ClientSize.Width - 14, e.Bounds.Height);
+                var countRect = new Rectangle(
+                    treeView1.ClientSize.Width - counterRightInset - counterColumnWidth,
+                    e.Bounds.Y,
+                    counterColumnWidth,
+                    e.Bounds.Height);
                 TextRenderer.DrawText(
                     e.Graphics,
                     countText,

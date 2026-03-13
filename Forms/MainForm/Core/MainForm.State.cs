@@ -202,12 +202,14 @@ namespace MyManager
         private int _acknowledgedErrorCount;
 
         private static readonly Color QueuePanelBackColor = Color.FromArgb(55, 65, 81); // #374151
+        private static readonly Color QueuePanelDividerColor = Color.FromArgb(44, 55, 70); // subtle rail/menu split
         private static readonly Color QueueHeaderBackColor = Color.FromArgb(55, 65, 81); // #374151
         private static readonly Color QueueHeaderTextColor = Color.FromArgb(229, 231, 235); // #E5E7EB
+        private static readonly Color QueueHeaderSecondaryTextColor = Color.FromArgb(156, 163, 175); // #9CA3AF
         private static readonly Color QueueHeaderOnlineIndicatorColor = Color.FromArgb(52, 211, 153); // #34D399
         private static readonly Color QueueHeaderOfflineIndicatorColor = Color.FromArgb(107, 114, 128); // #6B7280
         private static readonly Color QueueStatusHoverBackColor = Color.FromArgb(65, 75, 90); // rgba(255,255,255,0.05) over #374151
-        private static readonly Color QueueStatusSelectedBackColor = Color.FromArgb(67, 82, 102); // #435266
+        private static readonly Color QueueStatusSelectedBackColor = Color.FromArgb(63, 77, 95); // calmer active bg
         private static readonly Color QueueStatusSelectedTextColor = Color.FromArgb(243, 246, 251);
         private static readonly Color QueueActiveMarkerColor = Color.FromArgb(96, 165, 250); // #60A5FA
         private static readonly Color QueueTextColor = Color.FromArgb(209, 213, 219); // #D1D5DB
