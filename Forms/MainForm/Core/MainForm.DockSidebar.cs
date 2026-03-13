@@ -11,7 +11,6 @@ namespace MyManager
         private enum DockWorkspaceGroup
         {
             Orders,
-            Prepress,
             Literature,
             Utilities
         }
@@ -21,7 +20,6 @@ namespace MyManager
         private readonly Dictionary<DockWorkspaceGroup, string> _dockWorkspaceTitles = new()
         {
             [DockWorkspaceGroup.Orders] = "\u0417\u0430\u043A\u0430\u0437\u044B",
-            [DockWorkspaceGroup.Prepress] = "\u041F\u0440\u0435\u043F\u0440\u0435\u0441\u0441",
             [DockWorkspaceGroup.Literature] = "\u041B\u0438\u0442\u0435\u0440\u0430\u0442\u0443\u0440\u0430",
             [DockWorkspaceGroup.Utilities] = "\u0423\u0442\u0438\u043B\u0438\u0442\u044B"
         };
@@ -47,14 +45,15 @@ namespace MyManager
                 pictureBox1,
                 Path.Combine("Icons", "cards", "cards_24dp_1F1F1F_FILL0_wght400_GRAD0_opsz24.png"));
 
-            AddWorkspaceDockButton(
-                DockWorkspaceGroup.Prepress,
-                Path.Combine("Icons", "check", "check_24dp_1F1F1F_FILL1_wght400_GRAD0_opsz24.png"));
-            AddWorkspaceDockButton(
+            ConfigureWorkspaceDockButton(
                 DockWorkspaceGroup.Literature,
+                pnlDockLiterature,
+                pictureBox4,
                 Path.Combine("Icons", "file export", "file_export_24dp_1F1F1F_FILL0_wght400_GRAD0_opsz24.png"));
-            AddWorkspaceDockButton(
+            ConfigureWorkspaceDockButton(
                 DockWorkspaceGroup.Utilities,
+                pnlDockUtilities,
+                pictureBox3,
                 Path.Combine("Icons", "settings", "settings_24dp_1F1F1F_FILL1_wght400_GRAD0_opsz24.png"));
 
             SetDockWorkspace(DockWorkspaceGroup.Orders);
@@ -105,30 +104,6 @@ namespace MyManager
             var title = _dockWorkspaceTitles[workspace];
             _dockToolTip.SetToolTip(buttonPanel, title);
             _dockToolTip.SetToolTip(iconHost, title);
-        }
-
-        private void AddWorkspaceDockButton(DockWorkspaceGroup workspace, string iconRelativePath)
-        {
-            var panel = new Panel
-            {
-                Name = $"pnlDock{workspace}",
-                Dock = DockStyle.Top,
-                Width = pnl_Orders.Width,
-                Height = pnl_Orders.Height,
-                Margin = Padding.Empty
-            };
-
-            var iconHost = new PictureBox
-            {
-                Name = $"picDock{workspace}",
-                Margin = Padding.Empty
-            };
-
-            panel.Controls.Add(iconHost);
-            pnlSidebar.Controls.Add(panel);
-            pnlSidebar.Controls.SetChildIndex(panel, 0);
-
-            ConfigureWorkspaceDockButton(workspace, panel, iconHost, iconRelativePath);
         }
 
         private void WireWorkspaceDockControl(Control control)
