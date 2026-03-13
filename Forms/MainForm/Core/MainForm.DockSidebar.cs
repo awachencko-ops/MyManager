@@ -17,6 +17,10 @@ namespace MyManager
 
         private readonly ToolTip _dockToolTip = new();
         private readonly Dictionary<DockWorkspaceGroup, Panel> _dockPanelsByWorkspace = [];
+        private readonly Dictionary<DockWorkspaceGroup, PictureBox> _dockIconHostsByWorkspace = [];
+        private readonly Dictionary<DockWorkspaceGroup, Image> _dockInactiveIconsByWorkspace = [];
+        private readonly Dictionary<DockWorkspaceGroup, Image> _dockHoverIconsByWorkspace = [];
+        private readonly Dictionary<DockWorkspaceGroup, Image> _dockActiveIconsByWorkspace = [];
         private readonly Dictionary<DockWorkspaceGroup, string> _dockWorkspaceTitles = new()
         {
             [DockWorkspaceGroup.Orders] = "\u0417\u0430\u043A\u0430\u0437\u044B",
@@ -25,15 +29,19 @@ namespace MyManager
         };
 
         private DockWorkspaceGroup _activeDockWorkspace = DockWorkspaceGroup.Orders;
+        private DockWorkspaceGroup? _hoveredDockWorkspace;
         private Panel? _workspaceStubPanel;
         private Label? _workspaceStubLabel;
 
-        private static readonly Color DockSidebarBackColor = Color.FromArgb(61, 68, 88);
-        private static readonly Color DockButtonBackColor = Color.FromArgb(61, 68, 88);
-        private static readonly Color DockButtonHoverBackColor = Color.FromArgb(245, 249, 255);
-        private static readonly Color DockButtonActiveBackColor = Color.FromArgb(234, 242, 255);
-        private static readonly Color DockButtonActiveMarkerColor = Color.FromArgb(122, 167, 217);
-        private static readonly Color DockLockedButtonBackColor = Color.FromArgb(50, 56, 74);
+        private static readonly Color DockSidebarBackColor = Color.FromArgb(47, 58, 74); // #2F3A4A
+        private static readonly Color DockButtonBackColor = Color.FromArgb(47, 58, 74); // #2F3A4A
+        private static readonly Color DockButtonHoverBackColor = Color.FromArgb(57, 68, 83); // rgba(255,255,255,0.05) over #2F3A4A
+        private static readonly Color DockButtonActiveBackColor = Color.FromArgb(67, 82, 102); // #435266
+        private static readonly Color DockButtonActiveMarkerColor = Color.FromArgb(96, 165, 250); // #60A5FA
+        private static readonly Color DockLockedButtonBackColor = Color.FromArgb(47, 58, 74); // #2F3A4A
+        private static readonly Color DockButtonIconColor = Color.FromArgb(156, 163, 175); // #9CA3AF
+        private static readonly Color DockButtonHoverIconColor = Color.FromArgb(209, 213, 219); // #D1D5DB
+        private static readonly Color DockButtonActiveIconColor = Color.FromArgb(243, 246, 251);
 
         private void InitializeDockSidebar()
         {
@@ -95,8 +103,7 @@ namespace MyManager
             iconHost.TabStop = false;
             iconHost.Cursor = Cursors.Hand;
             iconHost.Tag = workspace;
-            iconHost.Image?.Dispose();
-            iconHost.Image = LoadDockIcon(iconRelativePath, 30);
+            RegisterDockWorkspaceIcons(workspace, iconHost, iconRelativePath);
 
             WireWorkspaceDockControl(buttonPanel);
             WireWorkspaceDockControl(iconHost);
@@ -137,7 +144,8 @@ namespace MyManager
             if (workspace == _activeDockWorkspace)
                 return;
 
-            panel.BackColor = DockButtonHoverBackColor;
+            _hoveredDockWorkspace = workspace;
+            UpdateDockWorkspaceSelectionVisuals();
         }
 
         private void DockWorkspaceControl_MouseLeave(object? sender, EventArgs e)
@@ -149,9 +157,14 @@ namespace MyManager
             if (panel.Tag is not DockWorkspaceGroup workspace)
                 return;
 
-            panel.BackColor = workspace == _activeDockWorkspace
-                ? DockButtonActiveBackColor
-                : DockButtonBackColor;
+            if (panel.ClientRectangle.Contains(panel.PointToClient(Cursor.Position)))
+                return;
+
+            if (_hoveredDockWorkspace == workspace)
+            {
+                _hoveredDockWorkspace = null;
+                UpdateDockWorkspaceSelectionVisuals();
+            }
         }
 
         private DockWorkspaceGroup? TryResolveDockWorkspace(object? sender)
@@ -179,6 +192,7 @@ namespace MyManager
         private void SetDockWorkspace(DockWorkspaceGroup workspace)
         {
             _activeDockWorkspace = workspace;
+            _hoveredDockWorkspace = null;
             UpdateDockWorkspaceSelectionVisuals();
 
             var showOrdersWorkspace = workspace == DockWorkspaceGroup.Orders;
@@ -206,10 +220,23 @@ namespace MyManager
         {
             foreach (var (workspace, panel) in _dockPanelsByWorkspace)
             {
-                panel.BackColor = workspace == _activeDockWorkspace
+                var isActive = workspace == _activeDockWorkspace;
+                var isHovered = workspace == _hoveredDockWorkspace;
+                panel.BackColor = isActive
                     ? DockButtonActiveBackColor
-                    : DockButtonBackColor;
+                    : isHovered
+                        ? DockButtonHoverBackColor
+                        : DockButtonBackColor;
                 panel.Invalidate();
+
+                if (_dockIconHostsByWorkspace.TryGetValue(workspace, out var iconHost))
+                {
+                    iconHost.Image = isActive
+                        ? ResolveDockIconVariant(_dockActiveIconsByWorkspace, workspace)
+                        : isHovered
+                            ? ResolveDockIconVariant(_dockHoverIconsByWorkspace, workspace)
+                            : ResolveDockIconVariant(_dockInactiveIconsByWorkspace, workspace);
+                }
             }
         }
 
@@ -222,7 +249,70 @@ namespace MyManager
                 return;
 
             using var markerBrush = new SolidBrush(DockButtonActiveMarkerColor);
-            e.Graphics.FillRectangle(markerBrush, 0, 0, 3, panel.Height);
+            e.Graphics.FillRectangle(markerBrush, 0, 0, 2, panel.Height);
+        }
+
+        private void RegisterDockWorkspaceIcons(
+            DockWorkspaceGroup workspace,
+            PictureBox iconHost,
+            string iconRelativePath)
+        {
+            DisposeDockWorkspaceIcons(workspace);
+
+            var baseIcon = LoadDockIcon(iconRelativePath, 30);
+            _dockInactiveIconsByWorkspace[workspace] = RecolorDockIcon(baseIcon, DockButtonIconColor);
+            _dockHoverIconsByWorkspace[workspace] = RecolorDockIcon(baseIcon, DockButtonHoverIconColor);
+            _dockActiveIconsByWorkspace[workspace] = RecolorDockIcon(baseIcon, DockButtonActiveIconColor);
+            _dockIconHostsByWorkspace[workspace] = iconHost;
+            iconHost.Image = _dockInactiveIconsByWorkspace[workspace];
+
+            baseIcon.Dispose();
+        }
+
+        private void DisposeDockWorkspaceIcons(DockWorkspaceGroup workspace)
+        {
+            if (_dockInactiveIconsByWorkspace.Remove(workspace, out var inactiveIcon))
+                inactiveIcon.Dispose();
+            if (_dockHoverIconsByWorkspace.Remove(workspace, out var hoverIcon))
+                hoverIcon.Dispose();
+            if (_dockActiveIconsByWorkspace.Remove(workspace, out var activeIcon))
+                activeIcon.Dispose();
+        }
+
+        private static Image? ResolveDockIconVariant(
+            IReadOnlyDictionary<DockWorkspaceGroup, Image> iconsByWorkspace,
+            DockWorkspaceGroup workspace)
+        {
+            if (iconsByWorkspace.TryGetValue(workspace, out var icon))
+                return icon;
+
+            return null;
+        }
+
+        private static Bitmap RecolorDockIcon(Image source, Color color)
+        {
+            var srcBitmap = source as Bitmap ?? new Bitmap(source);
+            var result = new Bitmap(srcBitmap.Width, srcBitmap.Height);
+
+            for (var y = 0; y < srcBitmap.Height; y++)
+            {
+                for (var x = 0; x < srcBitmap.Width; x++)
+                {
+                    var sourcePixel = srcBitmap.GetPixel(x, y);
+                    if (sourcePixel.A == 0)
+                    {
+                        result.SetPixel(x, y, Color.Transparent);
+                        continue;
+                    }
+
+                    result.SetPixel(x, y, Color.FromArgb(sourcePixel.A, color.R, color.G, color.B));
+                }
+            }
+
+            if (!ReferenceEquals(srcBitmap, source))
+                srcBitmap.Dispose();
+
+            return result;
         }
 
         private void EnsureWorkspaceStubPanel()

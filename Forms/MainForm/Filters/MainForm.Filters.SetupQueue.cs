@@ -380,19 +380,27 @@ namespace MyManager
 
             var isRoot = e.Node.Level == 0;
             var isSelected = (e.State & TreeNodeStates.Selected) == TreeNodeStates.Selected;
+            var isHovered = !isRoot && ReferenceEquals(e.Node, _hoveredQueueNode);
             var rowRect = new Rectangle(0, e.Bounds.Top, treeView1.ClientSize.Width, e.Bounds.Height);
 
-            var backColor = QueuePanelBackColor;
-            if (isRoot)
-                backColor = QueueHeaderBackColor;
-            if (isSelected && !isRoot)
-                backColor = QueueStatusSelectedBackColor;
-            var textColor = isSelected && !isRoot
-                ? QueueStatusSelectedTextColor
-                : QueueTextColor;
+            var backColor = isRoot ? QueueHeaderBackColor : QueuePanelBackColor;
+            if (!isRoot)
+            {
+                if (isSelected)
+                    backColor = QueueStatusSelectedBackColor;
+                else if (isHovered)
+                    backColor = QueueStatusHoverBackColor;
+            }
+
+            var textColor = isRoot
+                ? QueueHeaderTextColor
+                : isSelected
+                    ? QueueStatusSelectedTextColor
+                    : QueueTextColor;
 
             using var backBrush = new SolidBrush(backColor);
             e.Graphics.FillRectangle(backBrush, rowRect);
+
             if (isSelected && !isRoot)
             {
                 var markerRect = new Rectangle(rowRect.Left, rowRect.Top, 3, rowRect.Height);
@@ -401,13 +409,38 @@ namespace MyManager
             }
 
             var textValue = isRoot ? e.Node.Text : FormatQueueLabel(e.Node.Text);
+            var textLeft = e.Bounds.X + 8;
+            if (isRoot)
+            {
+                var indicatorDiameter = 8;
+                var indicatorRect = new Rectangle(
+                    e.Bounds.X + 10,
+                    e.Bounds.Y + Math.Max(0, (e.Bounds.Height - indicatorDiameter) / 2),
+                    indicatorDiameter,
+                    indicatorDiameter);
+
+                using var indicatorBrush = new SolidBrush(IsQueueServerConnected()
+                    ? QueueHeaderOnlineIndicatorColor
+                    : QueueHeaderOfflineIndicatorColor);
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                e.Graphics.FillEllipse(indicatorBrush, indicatorRect);
+                e.Graphics.SmoothingMode = SmoothingMode.None;
+
+                textLeft = indicatorRect.Right + 8;
+            }
+
             using var textFont = new Font(
-                "Segoe UI",
-                isRoot ? 22f : 18f,
-                isRoot || isSelected ? FontStyle.Bold : FontStyle.Regular,
+                isRoot || isSelected ? "Segoe UI Semibold" : "Segoe UI",
+                isRoot ? 16f : 15f,
+                FontStyle.Regular,
                 GraphicsUnit.Pixel);
 
-            var textRect = new Rectangle(e.Bounds.X + 8, e.Bounds.Y, treeView1.ClientSize.Width - e.Bounds.X - 16, e.Bounds.Height);
+            var trailingInset = isRoot ? 14 : 86;
+            var textRect = new Rectangle(
+                textLeft,
+                e.Bounds.Y,
+                Math.Max(0, treeView1.ClientSize.Width - textLeft - trailingInset),
+                e.Bounds.Height);
             TextRenderer.DrawText(
                 e.Graphics,
                 textValue,
@@ -418,20 +451,71 @@ namespace MyManager
 
             if (!isRoot)
             {
-                var countText = GetQueueStatusCountText(e.Node.Text);
-                using var countFont = new Font("Segoe UI", 18f, isSelected ? FontStyle.Bold : FontStyle.Regular, GraphicsUnit.Pixel);
-                var countRect = new Rectangle(0, e.Bounds.Y, treeView1.ClientSize.Width - 16, e.Bounds.Height);
+                var countValue = GetQueueStatusCount(e.Node.Text);
+                var countText = $"({countValue})";
+                var countColor = ResolveQueueCounterColor(countValue, isSelected);
+                using var countFont = new Font(
+                    isSelected ? "Segoe UI Semibold" : "Segoe UI",
+                    14f,
+                    FontStyle.Regular,
+                    GraphicsUnit.Pixel);
+                var countRect = new Rectangle(0, e.Bounds.Y, treeView1.ClientSize.Width - 14, e.Bounds.Height);
                 TextRenderer.DrawText(
                     e.Graphics,
                     countText,
                     countFont,
                     countRect,
-                    textColor,
+                    countColor,
                     TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
             }
 
-            if ((e.State & TreeNodeStates.Focused) == TreeNodeStates.Focused)
+            if (!isRoot && (e.State & TreeNodeStates.Focused) == TreeNodeStates.Focused)
                 ControlPaint.DrawFocusRectangle(e.Graphics, rowRect, textColor, backColor);
+        }
+
+        private void TreeView1_MouseMove(object? sender, MouseEventArgs e)
+        {
+            var hoveredNode = treeView1.GetNodeAt(e.Location);
+            if (hoveredNode?.Level == 0)
+                hoveredNode = null;
+
+            if (ReferenceEquals(hoveredNode, _hoveredQueueNode))
+                return;
+
+            _hoveredQueueNode = hoveredNode;
+            treeView1.Invalidate();
+        }
+
+        private void TreeView1_MouseLeave(object? sender, EventArgs e)
+        {
+            if (_hoveredQueueNode == null)
+                return;
+
+            _hoveredQueueNode = null;
+            treeView1.Invalidate();
+        }
+
+        private static Color ResolveQueueCounterColor(int count, bool isSelected)
+        {
+            if (count == 0)
+            {
+                return isSelected
+                    ? QueueCounterSelectedZeroTextColor
+                    : QueueCounterZeroTextColor;
+            }
+
+            return isSelected
+                ? QueueCounterSelectedTextColor
+                : QueueCounterTextColor;
+        }
+
+        private bool IsQueueServerConnected()
+        {
+            if (toolConnection.IsDisposed)
+                return false;
+
+            var connectionText = toolConnection.Text ?? string.Empty;
+            return connectionText.Contains("подключен", StringComparison.OrdinalIgnoreCase);
         }
 
     }

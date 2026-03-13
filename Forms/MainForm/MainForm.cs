@@ -280,12 +280,18 @@ namespace MyManager
             treeView1.BorderStyle = BorderStyle.None;
             treeView1.ShowLines = false;
             treeView1.ShowRootLines = false;
+            treeView1.ShowPlusMinus = false;
             treeView1.BackColor = QueuePanelBackColor;
             treeView1.ForeColor = QueueTextColor;
-            treeView1.ItemHeight = 44;
-            treeView1.Indent = 18;
-            treeView1.LineColor = Color.FromArgb(134, 142, 166);
+            treeView1.ItemHeight = 40;
+            treeView1.Indent = 16;
+            treeView1.LineColor = QueuePanelBackColor;
+            treeView1.DrawNode -= TreeView1_DrawNode;
             treeView1.DrawNode += TreeView1_DrawNode;
+            treeView1.MouseMove -= TreeView1_MouseMove;
+            treeView1.MouseMove += TreeView1_MouseMove;
+            treeView1.MouseLeave -= TreeView1_MouseLeave;
+            treeView1.MouseLeave += TreeView1_MouseLeave;
 
             cbQueue.DrawMode = DrawMode.Normal;
         }

@@ -129,6 +129,7 @@ namespace MyManager
         };
 
         private bool _isSyncingQueueSelection;
+        private TreeNode? _hoveredQueueNode;
         private string _currentUserName = string.Empty;
         private readonly HashSet<string> _selectedFilterStatuses = new(StringComparer.Ordinal);
         private readonly HashSet<string> _selectedFilterUsers = new(StringComparer.Ordinal);
@@ -200,12 +201,20 @@ namespace MyManager
         private DateTimePicker? _receivedCalendarTargetPicker;
         private int _acknowledgedErrorCount;
 
-        private static readonly Color QueuePanelBackColor = Color.FromArgb(68, 74, 94);
-        private static readonly Color QueueHeaderBackColor = Color.FromArgb(103, 163, 216);
-        private static readonly Color QueueStatusSelectedBackColor = Color.FromArgb(234, 242, 255);
-        private static readonly Color QueueStatusSelectedTextColor = Color.FromArgb(63, 74, 94);
-        private static readonly Color QueueActiveMarkerColor = Color.FromArgb(122, 167, 217);
-        private static readonly Color QueueTextColor = Color.FromArgb(244, 247, 252);
+        private static readonly Color QueuePanelBackColor = Color.FromArgb(55, 65, 81); // #374151
+        private static readonly Color QueueHeaderBackColor = Color.FromArgb(55, 65, 81); // #374151
+        private static readonly Color QueueHeaderTextColor = Color.FromArgb(229, 231, 235); // #E5E7EB
+        private static readonly Color QueueHeaderOnlineIndicatorColor = Color.FromArgb(52, 211, 153); // #34D399
+        private static readonly Color QueueHeaderOfflineIndicatorColor = Color.FromArgb(107, 114, 128); // #6B7280
+        private static readonly Color QueueStatusHoverBackColor = Color.FromArgb(65, 75, 90); // rgba(255,255,255,0.05) over #374151
+        private static readonly Color QueueStatusSelectedBackColor = Color.FromArgb(67, 82, 102); // #435266
+        private static readonly Color QueueStatusSelectedTextColor = Color.FromArgb(243, 246, 251);
+        private static readonly Color QueueActiveMarkerColor = Color.FromArgb(96, 165, 250); // #60A5FA
+        private static readonly Color QueueTextColor = Color.FromArgb(209, 213, 219); // #D1D5DB
+        private static readonly Color QueueCounterTextColor = Color.FromArgb(156, 163, 175); // #9CA3AF
+        private static readonly Color QueueCounterZeroTextColor = Color.FromArgb(107, 114, 128); // #6B7280
+        private static readonly Color QueueCounterSelectedTextColor = Color.FromArgb(193, 201, 212);
+        private static readonly Color QueueCounterSelectedZeroTextColor = Color.FromArgb(145, 154, 167);
         private static readonly Color OrdersRowBaseBackColor = Color.FromArgb(255, 255, 255);   // #FFFFFF
         private static readonly Color OrdersRowZebraBackColor = Color.FromArgb(252, 253, 254);  // #FCFDFE
         private static readonly Color OrdersRowHoverBackColor = Color.FromArgb(248, 250, 252);  // #F8FAFC
