@@ -114,3 +114,4 @@
 Связь с этапами:
 - Вход: `3_LAN_CLIENT_SERVER_BRIEF_STEP1.md`
 - Выход: рабочий цикл релизов и поддержка LAN-клиентов без ручной установки.
+- Следующий этап: `5_INSTALLER_AND_DEPENDENCIES_PACKAGING_PLAN.md`.
