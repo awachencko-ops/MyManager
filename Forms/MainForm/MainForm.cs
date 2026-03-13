@@ -348,20 +348,6 @@ namespace MyManager
         {
             var unifiedPadding = new Padding(8, 0, 0, 0);
             var numericRightPadding = SystemInformation.VerticalScrollBarWidth + 6;
-            var workspaceBackColor = Color.FromArgb(243, 247, 252); // #F3F7FC
-            var headerStripeColor = Color.FromArgb(238, 243, 249); // #EEF3F9
-            var toolbarBackColor = Color.FromArgb(241, 245, 251); // #F1F5FB
-            var chromeTextColor = Color.FromArgb(33, 48, 68); // #213044
-
-            scMain.Panel2.BackColor = workspaceBackColor;
-            tableLayoutPanel1.BackColor = workspaceBackColor;
-            pnlHeader.BackColor = headerStripeColor;
-            pnlFilters.BackColor = headerStripeColor;
-            flpFilters.BackColor = headerStripeColor;
-            pnlTray.BackColor = workspaceBackColor;
-            statusStrip1.BackColor = workspaceBackColor;
-            tsMainActions.BackColor = toolbarBackColor;
-            tsMainActions.ForeColor = chromeTextColor;
 
             dgvJobs.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             dgvJobs.MultiSelect = true;
@@ -372,27 +358,25 @@ namespace MyManager
             dgvJobs.AllowDrop = true;
             dgvJobs.CellBorderStyle = DataGridViewCellBorderStyle.Single;
             dgvJobs.GridColor = OrdersGridLineColor;
-            dgvJobs.BackgroundColor = workspaceBackColor;
             dgvJobs.DefaultCellStyle.BackColor = OrdersRowBaseBackColor;
             dgvJobs.RowsDefaultCellStyle.BackColor = OrdersRowBaseBackColor;
             dgvJobs.AlternatingRowsDefaultCellStyle.BackColor = OrdersRowZebraBackColor;
             dgvJobs.DefaultCellStyle.SelectionBackColor = OrdersRowSelectedBackColor;
             dgvJobs.RowsDefaultCellStyle.SelectionBackColor = OrdersRowSelectedBackColor;
             dgvJobs.AlternatingRowsDefaultCellStyle.SelectionBackColor = OrdersRowSelectedBackColor;
-            dgvJobs.DefaultCellStyle.SelectionForeColor = chromeTextColor;
-            dgvJobs.RowsDefaultCellStyle.SelectionForeColor = chromeTextColor;
-            dgvJobs.AlternatingRowsDefaultCellStyle.SelectionForeColor = chromeTextColor;
-            dgvJobs.DefaultCellStyle.ForeColor = chromeTextColor;
+            dgvJobs.DefaultCellStyle.SelectionForeColor = Color.Black;
+            dgvJobs.RowsDefaultCellStyle.SelectionForeColor = Color.Black;
+            dgvJobs.AlternatingRowsDefaultCellStyle.SelectionForeColor = Color.Black;
             dgvJobs.DefaultCellStyle.Padding = unifiedPadding;
             dgvJobs.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
             dgvJobs.DefaultCellStyle.WrapMode = DataGridViewTriState.False;
             dgvJobs.EnableHeadersVisualStyles = true;
             dgvJobs.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
             dgvJobs.ColumnHeadersHeight = 30;
-            dgvJobs.ColumnHeadersDefaultCellStyle.BackColor = headerStripeColor;
-            dgvJobs.ColumnHeadersDefaultCellStyle.ForeColor = chromeTextColor;
-            dgvJobs.ColumnHeadersDefaultCellStyle.SelectionBackColor = headerStripeColor;
-            dgvJobs.ColumnHeadersDefaultCellStyle.SelectionForeColor = chromeTextColor;
+            dgvJobs.ColumnHeadersDefaultCellStyle.BackColor = Color.White;
+            dgvJobs.ColumnHeadersDefaultCellStyle.ForeColor = Color.Black;
+            dgvJobs.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.White;
+            dgvJobs.ColumnHeadersDefaultCellStyle.SelectionForeColor = Color.Black;
             dgvJobs.ColumnHeadersDefaultCellStyle.Padding = unifiedPadding;
             dgvJobs.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
             dgvJobs.ColumnHeadersDefaultCellStyle.WrapMode = DataGridViewTriState.False;
