@@ -24,6 +24,7 @@ namespace MyManager
         public MainForm()
         {
             InitializeComponent();
+            InitializeDockSidebar();
             InitializeStatusCellVisuals();
             LoadSettings();
             InitializeUsersDirectory();
