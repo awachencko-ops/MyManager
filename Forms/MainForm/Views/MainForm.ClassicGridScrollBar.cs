@@ -55,6 +55,18 @@ namespace MyManager
             UpdateClassicGridScrollBar();
         }
 
+        private bool IsGridInputOverClassicScrollBar()
+        {
+            if (_classicGridScrollBar == null || !_classicGridScrollBar.Visible || !dgvJobs.Visible)
+                return false;
+
+            if (_classicGridScrollBar.Capture)
+                return true;
+
+            var mouseClient = dgvJobs.PointToClient(Cursor.Position);
+            return _classicGridScrollBar.Bounds.Contains(mouseClient);
+        }
+
         private void ClassicGridScrollBar_ValueChanged(object? sender, EventArgs e)
         {
             if (_classicGridScrollBar == null || _isSyncingClassicGridScrollBar)

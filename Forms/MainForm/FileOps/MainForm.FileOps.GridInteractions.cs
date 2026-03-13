@@ -29,6 +29,13 @@ namespace MyManager
             _dragSourceRowIndex = -1;
             _dragSourceColumnIndex = -1;
 
+            if (IsGridInputOverClassicScrollBar())
+            {
+                dgvJobs.Cursor = Cursors.Default;
+                ClearGridHoverVisual();
+                return;
+            }
+
             var hit = dgvJobs.HitTest(e.X, e.Y);
             if (e.Button == MouseButtons.Left && hit.Type == DataGridViewHitTestType.None)
             {
@@ -81,6 +88,13 @@ namespace MyManager
 
         private void DgvJobs_MouseMove(object? sender, MouseEventArgs e)
         {
+            if (IsGridInputOverClassicScrollBar())
+            {
+                StopGridHoverActivation();
+                dgvJobs.Cursor = Cursors.Default;
+                return;
+            }
+
             if ((e.Button & MouseButtons.Left) == MouseButtons.Left)
             {
                 StopGridHoverActivation();
@@ -115,6 +129,9 @@ namespace MyManager
 
         private void DgvJobs_MouseUp(object? sender, MouseEventArgs e)
         {
+            if (IsGridInputOverClassicScrollBar())
+                return;
+
             if (e.Button == MouseButtons.Left)
                 CollapseDragSelectionToSingleRow(e.X, e.Y);
         }
@@ -245,6 +262,14 @@ namespace MyManager
             if (e.RowIndex < 0)
                 return;
 
+            if (IsGridInputOverClassicScrollBar())
+            {
+                dgvJobs.Cursor = Cursors.Default;
+                StopGridHoverActivation();
+                ClearGridHoverVisual();
+                return;
+            }
+
             var isFileColumn = e.ColumnIndex == colSource.Index
                 || e.ColumnIndex == colPrep.Index
                 || e.ColumnIndex == colPrint.Index;
@@ -254,14 +279,7 @@ namespace MyManager
             if (!IsOrderTag(rowTag))
             {
                 StopGridHoverActivation();
-
-                if (_hoveredRowIndex != -1)
-                {
-                    var oldIndex = _hoveredRowIndex;
-                    _hoveredRowIndex = -1;
-                    if (oldIndex >= 0 && oldIndex < dgvJobs.Rows.Count)
-                        dgvJobs.InvalidateRow(oldIndex);
-                }
+                ClearGridHoverVisual();
                 return;
             }
 
@@ -280,14 +298,7 @@ namespace MyManager
         private void DgvJobs_CellMouseLeave(object? sender, EventArgs e)
         {
             dgvJobs.Cursor = Cursors.Default;
-
-            if (_hoveredRowIndex == -1)
-                return;
-
-            var oldIndex = _hoveredRowIndex;
-            _hoveredRowIndex = -1;
-            if (oldIndex >= 0 && oldIndex < dgvJobs.Rows.Count)
-                dgvJobs.InvalidateRow(oldIndex);
+            ClearGridHoverVisual();
         }
 
         private void DgvJobs_MouseLeave(object? sender, EventArgs e)
@@ -297,6 +308,9 @@ namespace MyManager
 
         private void DgvJobs_CellDoubleClick(object? sender, DataGridViewCellEventArgs e)
         {
+            if (IsGridInputOverClassicScrollBar())
+                return;
+
             if (e.RowIndex < 0)
                 return;
 
@@ -395,6 +409,9 @@ namespace MyManager
         {
             StopGridHoverActivation();
 
+            if (IsGridInputOverClassicScrollBar())
+                return;
+
             if (e.RowIndex < 0 || e.ColumnIndex < 0)
                 return;
 
@@ -434,6 +451,12 @@ namespace MyManager
 
         private void SetGridHoverActivationCandidate(int rowIndex)
         {
+            if (IsGridInputOverClassicScrollBar())
+            {
+                StopGridHoverActivation();
+                return;
+            }
+
             if (!dgvJobs.Visible || rowIndex < 0 || rowIndex >= dgvJobs.Rows.Count)
             {
                 StopGridHoverActivation();
@@ -484,6 +507,9 @@ namespace MyManager
         {
             _gridHoverActivateTimer?.Stop();
 
+            if (IsGridInputOverClassicScrollBar())
+                return;
+
             if (!dgvJobs.Visible)
                 return;
 
@@ -507,6 +533,17 @@ namespace MyManager
             SyncTilesSelectionWithGrid();
             UpdateActionButtonsState();
             UpdateTrayStatsIndicator();
+        }
+
+        private void ClearGridHoverVisual()
+        {
+            if (_hoveredRowIndex == -1)
+                return;
+
+            var oldIndex = _hoveredRowIndex;
+            _hoveredRowIndex = -1;
+            if (oldIndex >= 0 && oldIndex < dgvJobs.Rows.Count)
+                dgvJobs.InvalidateRow(oldIndex);
         }
 
         private void DgvJobs_DragEnter(object? sender, DragEventArgs e)
