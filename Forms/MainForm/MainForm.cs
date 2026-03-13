@@ -284,8 +284,8 @@ namespace MyManager
             treeView1.ShowPlusMinus = false;
             treeView1.BackColor = QueuePanelBackColor;
             treeView1.ForeColor = QueueTextColor;
-            treeView1.ItemHeight = 42;
-            treeView1.Indent = 16;
+            treeView1.ItemHeight = 44;
+            treeView1.Indent = 18;
             treeView1.LineColor = QueuePanelBackColor;
             treeView1.DrawNode -= TreeView1_DrawNode;
             treeView1.DrawNode += TreeView1_DrawNode;
