@@ -216,14 +216,19 @@ namespace MyManager
         {
             base.OnMouseWheel(e);
 
-            if (!HasScrollableRange)
-                return;
+            if (e is HandledMouseEventArgs handledMouseEventArgs)
+                handledMouseEventArgs.Handled = true;
 
-            if (e.Delta == 0)
+            ApplyMouseWheelDelta(e.Delta);
+        }
+
+        public void ApplyMouseWheelDelta(int delta)
+        {
+            if (!HasScrollableRange || delta == 0)
                 return;
 
             var wheelStep = Math.Max(_smallChange * 3, 1);
-            ChangeValueBy(e.Delta > 0 ? -wheelStep : wheelStep, raiseEvent: true);
+            ChangeValueBy(delta > 0 ? -wheelStep : wheelStep, raiseEvent: true);
         }
 
         private void ChangeValueBy(int delta, bool raiseEvent)

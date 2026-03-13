@@ -38,6 +38,7 @@ namespace MyManager
             _classicGridScrollBar.ValueChanged += ClassicGridScrollBar_ValueChanged;
 
             dgvJobs.Scroll += DgvJobs_ScrollForClassicBar;
+            dgvJobs.MouseWheel += DgvJobs_MouseWheelForClassicBar;
             dgvJobs.RowsAdded += (_, _) => UpdateClassicGridScrollBar();
             dgvJobs.RowsRemoved += (_, _) => UpdateClassicGridScrollBar();
             dgvJobs.DataBindingComplete += (_, _) => UpdateClassicGridScrollBar();
@@ -53,6 +54,19 @@ namespace MyManager
                 return;
 
             UpdateClassicGridScrollBar();
+        }
+
+        private void DgvJobs_MouseWheelForClassicBar(object? sender, MouseEventArgs e)
+        {
+            if (!IsGridInputOverClassicScrollBar() || _classicGridScrollBar == null)
+                return;
+
+            if (e is HandledMouseEventArgs handledMouseEventArgs)
+                handledMouseEventArgs.Handled = true;
+
+            StopGridHoverActivation();
+            ClearGridHoverVisual();
+            _classicGridScrollBar.ApplyMouseWheelDelta(e.Delta);
         }
 
         private bool IsGridInputOverClassicScrollBar()
