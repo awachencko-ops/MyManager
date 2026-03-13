@@ -230,10 +230,10 @@ namespace MyManager
         private static readonly Color QueueCounterPillSelectedBackColor = Color.FromArgb(47, 111, 237); // #2F6FED
         private static readonly Color QueueCounterPillSelectedZeroBackColor = Color.FromArgb(70, 88, 117);
         private static readonly Color OrdersRowBaseBackColor = Color.FromArgb(255, 255, 255);   // #FFFFFF
-        private static readonly Color OrdersRowZebraBackColor = Color.FromArgb(252, 253, 254);  // #FCFDFE
-        private static readonly Color OrdersRowHoverBackColor = Color.FromArgb(248, 250, 252);  // #F8FAFC
-        private static readonly Color OrdersRowSelectedBackColor = Color.FromArgb(243, 247, 251); // #F3F7FB
-        private static readonly Color OrdersGridLineColor = Color.FromArgb(231, 235, 240); // #E7EBF0
+        private static readonly Color OrdersRowZebraBackColor = Color.FromArgb(248, 251, 255);  // #F8FBFF
+        private static readonly Color OrdersRowHoverBackColor = Color.FromArgb(238, 244, 252);  // #EEF4FC
+        private static readonly Color OrdersRowSelectedBackColor = Color.FromArgb(228, 238, 249); // #E4EEF9
+        private static readonly Color OrdersGridLineColor = Color.FromArgb(216, 226, 240); // #D8E2F0
         private static readonly Color OrdersActiveMarkerColor = Color.FromArgb(122, 167, 217); // #7AA7D9
         private static readonly Color OrdersLinkTextColor = Color.FromArgb(95, 126, 168);
 
