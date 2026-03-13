@@ -366,6 +366,9 @@ namespace MyManager
             dgvJobs.ColumnHeadersDefaultCellStyle.Padding = unifiedPadding;
             dgvJobs.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
             dgvJobs.ColumnHeadersDefaultCellStyle.WrapMode = DataGridViewTriState.False;
+            ApplyRightAlignedNumericColumnStyle(colOrderNumber);
+            ApplyRightAlignedNumericColumnStyle(colReceived);
+            ApplyRightAlignedNumericColumnStyle(colCreated);
 
             dgvJobs.CellPainting += DgvJobs_CellPainting;
             dgvJobs.CellFormatting += DgvJobs_CellFormatting;
@@ -381,6 +384,16 @@ namespace MyManager
             dgvJobs.DragOver += DgvJobs_DragOver;
             dgvJobs.DragDrop += DgvJobs_DragDrop;
 
+        }
+
+        private static void ApplyRightAlignedNumericColumnStyle(DataGridViewColumn? column)
+        {
+            if (column == null)
+                return;
+
+            column.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
+            column.DefaultCellStyle.Padding = new Padding(0, 0, 8, 0);
+            column.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleRight;
         }
 
         private void InitializeActionButtonsState()
