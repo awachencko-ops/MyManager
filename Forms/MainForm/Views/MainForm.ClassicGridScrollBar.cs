@@ -161,7 +161,9 @@ namespace MyManager
                     largeChange: largeChange,
                     smallChange: 1,
                     value: Math.Clamp(value, 0, Math.Max(0, maximum - largeChange + 1)));
-                _classicGridScrollBar.Enabled = maxFirstRowIndex > 0;
+                // Keep the overlay control enabled so it always consumes mouse hit-testing,
+                // even when there is no scrollable range.
+                _classicGridScrollBar.Enabled = true;
             }
             finally
             {
