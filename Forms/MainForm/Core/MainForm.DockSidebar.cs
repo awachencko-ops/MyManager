@@ -48,7 +48,6 @@ namespace MyManager
         {
             pnlSidebar.BackColor = DockSidebarBackColor;
             pnlSidebar.Paint -= PnlSidebar_Paint;
-            pnlSidebar.Paint += PnlSidebar_Paint;
 
             ConfigureLockedAppDockButton();
             ConfigureWorkspaceDockButton(
