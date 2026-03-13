@@ -379,7 +379,7 @@ namespace MyManager
                 return;
 
             const int counterRightInset = 12;
-            const int counterColumnWidth = 56;
+            const int counterColumnWidth = 60;
 
             var isRoot = e.Node.Level == 0;
             var isSelected = (e.State & TreeNodeStates.Selected) == TreeNodeStates.Selected;
@@ -431,18 +431,18 @@ namespace MyManager
 
                 textLeft = indicatorRect.Right + 8;
 
-                using var headerFont = new Font("Segoe UI Semibold", 16f, FontStyle.Regular, GraphicsUnit.Pixel);
-                using var secondaryFont = new Font("Segoe UI", 11f, FontStyle.Regular, GraphicsUnit.Pixel);
+                using var headerFont = new Font("Segoe UI Semibold", 18f, FontStyle.Regular, GraphicsUnit.Pixel);
+                using var secondaryFont = new Font("Segoe UI", 12f, FontStyle.Regular, GraphicsUnit.Pixel);
                 var headerRect = new Rectangle(
                     textLeft,
                     e.Bounds.Y + 2,
                     Math.Max(0, treeView1.ClientSize.Width - textLeft - 12),
-                    21);
+                    24);
                 var secondaryRect = new Rectangle(
                     textLeft,
-                    e.Bounds.Y + 22,
+                    e.Bounds.Y + 26,
                     Math.Max(0, treeView1.ClientSize.Width - textLeft - 12),
-                    16);
+                    18);
 
                 TextRenderer.DrawText(
                     e.Graphics,
@@ -464,7 +464,7 @@ namespace MyManager
             var textValue = FormatQueueLabel(e.Node.Text);
             using var textFont = new Font(
                 isSelected ? "Segoe UI Semibold" : "Segoe UI",
-                16f,
+                17f,
                 FontStyle.Regular,
                 GraphicsUnit.Pixel);
 
@@ -489,7 +489,7 @@ namespace MyManager
                 var countColor = ResolveQueueCounterColor(countValue, isSelected);
                 using var countFont = new Font(
                     "Segoe UI",
-                    13f,
+                    14f,
                     FontStyle.Regular,
                     GraphicsUnit.Pixel);
                 var countRect = new Rectangle(
