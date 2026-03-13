@@ -321,6 +321,7 @@ namespace MyManager
         {
             tbSearch.TextChanged += (_, _) => RebuildOrdersGrid();
             LoadHistory();
+            RefreshArchivedStatuses(forceArchiveIndexRefresh: true, rebuildGridIfChanged: false);
             RebuildOrdersGrid();
             InitializeOrdersViewsWarmupCoordinator();
         }
@@ -476,6 +477,7 @@ namespace MyManager
             var settingsSavedMessage = cacheRootChanged
                 ? "Настройки сохранены. Путь общего кэша превью изменен и будет полностью применен после перезапуска приложения."
                 : "Настройки сохранены";
+            RefreshArchivedStatuses(forceArchiveIndexRefresh: true, rebuildGridIfChanged: true);
             SetBottomStatus(settingsSavedMessage);
             MessageBox.Show(this, settingsSavedMessage, "MainForm", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }

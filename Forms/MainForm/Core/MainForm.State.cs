@@ -32,6 +32,7 @@ namespace MyManager
         private readonly HashSet<string> _expandedOrderIds = new(StringComparer.Ordinal);
         private readonly Dictionary<string, CancellationTokenSource> _runTokensByOrder = new(StringComparer.Ordinal);
         private readonly Dictionary<string, int> _runProgressByOrderInternalId = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _archivedFileNames = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, int> _printTileImageIndexesByExtension = new(StringComparer.OrdinalIgnoreCase);
         private readonly ConcurrentDictionary<string, int> _printTileImageIndexesByPath = new(StringComparer.OrdinalIgnoreCase);
         private string _printTilesCacheFolderPath = AppSettings.DefaultThumbnailCacheFolderPath;
@@ -57,6 +58,8 @@ namespace MyManager
         private int _fileTransferProgressPercent = -1;
         private bool _fileTransferIsIndeterminate;
         private string _fileTransferStatusText = string.Empty;
+        private DateTime _archiveIndexLoadedAt = DateTime.MinValue;
+        private bool _archiveSyncInProgress;
         private int _hoveredRowIndex = -1;
         private int _ctxRow = -1;
         private int _ctxCol = -1;
@@ -108,6 +111,7 @@ namespace MyManager
         private const string ReceivedDateFilterLabelText = "Дата поступления";
         private const string DefaultTrayStatusText = "Готово";
         private const int TrayIndicatorsRefreshIntervalMs = 15000;
+        private static readonly TimeSpan ArchiveIndexLifetime = TimeSpan.FromSeconds(15);
         private const int OrdersGridWarmupIntervalMs = 3000;
         private const int GridHoverActivateDelayMs = 500;
         private const int TileHoverActivateDelayMs = 500;

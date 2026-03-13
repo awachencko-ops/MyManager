@@ -49,6 +49,7 @@ namespace MyManager
 
         private void TrayIndicatorsTimer_Tick(object? sender, EventArgs e)
         {
+            RefreshArchivedStatuses();
             UpdateTrayConnectionIndicator();
             UpdateTrayDiskIndicator();
         }
