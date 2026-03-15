@@ -1,6 +1,6 @@
 ﻿# Replica: строгий план на текущий момент
 
-Дата актуализации: 2026-03-13
+Дата актуализации: 2026-03-16
 
 ## 1. Область и границы
 
@@ -27,7 +27,8 @@
 
 ### 2.2 В работе
 
-1. Финальный single-regression по чеклисту.
+1. Финальный single-regression по чеклисту: `Docs/этапы/1_SINGLE_ORDER_REGRESSION_CHECKLIST.md`.
+2. На текущий момент в чеклисте закрыт `SR-01` (сборка проекта), `SR-02` переведен в `In Progress` (базовый старт-smoke пройден), в работе `SR-03...SR-12`.
 
 ### 2.3 Не начато
 
@@ -55,7 +56,7 @@
 |---|---|---|---|---|
 | P1 | Реальный user-filter из `users.json` + кеш + offline fallback | Completed | Пользовательский фильтр из сети с безопасной деградацией | При отключении NAS фильтр продолжает работу из кеша, UI показывает offline |
 | P2 | Typed-контракты для `status/stage/column IDs` | Completed | Убраны критичные string-магии в core потоке | Основные сценарии используют централизованные константы/enum |
-| P3 | Финальный single-regression | In Progress | Закрыт ручной чеклист single-сценариев | Нет блокирующих дефектов (`P0/P1`) |
+| P3 | Финальный single-regression | In Progress | Закрыт чеклист `1_SINGLE_ORDER_REGRESSION_CHECKLIST.md` | Нет блокирующих дефектов (`P0/P1`) |
 | P4 | Минимум автотестов (`Verify` + `FlaUI`) | Not Started | Snapshot + UI smoke база | Есть 5+ snapshot и 3-5 UI smoke, проходят стабильно |
 | P5 | Фиксация релизного baseline по single-first | Not Started | Release note + known issues + актуальная документация | Этап single-first formally closed |
 
