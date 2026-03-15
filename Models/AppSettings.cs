@@ -8,8 +8,10 @@ namespace Replica
     public class AppSettings
     {
         public const string DefaultBaseFolderPath = @"\\NAS\work\Первая Чукотская Типография\Шкалы\Replica BASEFOLDER";
+        public const string LegacyDefaultBaseFolderPath = @"\\NAS\work\Первая Чукотская Типография\Шкалы\MYMANAGER BASEFOLDER";
         public const string DefaultGrandpaPath = @"\\NAS\work\Temp\!!!Дедушка";
         public const string DefaultTempFolderName = "TempReplica";
+        public const string LegacyTempFolderName = "TempMyManager";
 
         private static string SystemDriveRoot
         {
@@ -116,9 +118,13 @@ namespace Replica
             var normalizedOrdersRootPath = NormalizePathValue(OrdersRootPath, DefaultOrdersRootPath);
             if (PathEquals(normalizedOrdersRootPath, LegacyOrdersRootPath))
                 normalizedOrdersRootPath = DefaultOrdersRootPath;
+            if (TryMapFromLegacyRoot(normalizedOrdersRootPath, LegacyDefaultBaseFolderPath, DefaultBaseFolderPath, out var migratedOrdersRootPath))
+                normalizedOrdersRootPath = migratedOrdersRootPath;
             changed |= SetPathIfDifferent(OrdersRootPath, normalizedOrdersRootPath, value => OrdersRootPath = value);
 
             var normalizedTempFolderName = string.IsNullOrWhiteSpace(TempFolderName) ? DefaultTempFolderName : TempFolderName.Trim();
+            if (string.Equals(normalizedTempFolderName, LegacyTempFolderName, StringComparison.OrdinalIgnoreCase))
+                normalizedTempFolderName = DefaultTempFolderName;
             if (!string.Equals(TempFolderName, normalizedTempFolderName, StringComparison.Ordinal))
             {
                 TempFolderName = normalizedTempFolderName;
@@ -128,6 +134,8 @@ namespace Replica
             var expectedTempFolderPath = Path.Combine(OrdersRootPath, TempFolderName);
             var normalizedTempFolderPath = NormalizePathValue(TempFolderPath, expectedTempFolderPath);
             if (TryMapFromLegacyRoot(normalizedTempFolderPath, LegacyOrdersRootPath, OrdersRootPath, out var migratedTempFolderPath))
+                normalizedTempFolderPath = migratedTempFolderPath;
+            if (TryMapFromLegacyRoot(normalizedTempFolderPath, LegacyDefaultBaseFolderPath, DefaultBaseFolderPath, out migratedTempFolderPath))
                 normalizedTempFolderPath = migratedTempFolderPath;
             changed |= SetPathIfDifferent(TempFolderPath, normalizedTempFolderPath, value => TempFolderPath = value);
 
@@ -139,21 +147,29 @@ namespace Replica
             var normalizedHistoryFilePath = NormalizePathValue(HistoryFilePath, DefaultHistoryFilePath);
             if (PathEquals(normalizedHistoryFilePath, "history.json"))
                 normalizedHistoryFilePath = DefaultHistoryFilePath;
+            if (TryMapFromLegacyRoot(normalizedHistoryFilePath, LegacyDefaultBaseFolderPath, DefaultBaseFolderPath, out var migratedHistoryFilePath))
+                normalizedHistoryFilePath = migratedHistoryFilePath;
             changed |= SetPathIfDifferent(HistoryFilePath, normalizedHistoryFilePath, value => HistoryFilePath = value);
 
             var normalizedManagerLogFilePath = NormalizePathValue(ManagerLogFilePath, DefaultManagerLogFilePath);
             if (PathEquals(normalizedManagerLogFilePath, "manager.log"))
                 normalizedManagerLogFilePath = DefaultManagerLogFilePath;
+            if (TryMapFromLegacyRoot(normalizedManagerLogFilePath, LegacyDefaultBaseFolderPath, DefaultBaseFolderPath, out var migratedManagerLogFilePath))
+                normalizedManagerLogFilePath = migratedManagerLogFilePath;
             changed |= SetPathIfDifferent(ManagerLogFilePath, normalizedManagerLogFilePath, value => ManagerLogFilePath = value);
 
             var normalizedOrderLogsFolderPath = NormalizePathValue(OrderLogsFolderPath, DefaultOrderLogsFolderPath);
             if (PathEquals(normalizedOrderLogsFolderPath, "order-logs"))
                 normalizedOrderLogsFolderPath = DefaultOrderLogsFolderPath;
+            if (TryMapFromLegacyRoot(normalizedOrderLogsFolderPath, LegacyDefaultBaseFolderPath, DefaultBaseFolderPath, out var migratedOrderLogsFolderPath))
+                normalizedOrderLogsFolderPath = migratedOrderLogsFolderPath;
             changed |= SetPathIfDifferent(OrderLogsFolderPath, normalizedOrderLogsFolderPath, value => OrderLogsFolderPath = value);
 
             var normalizedUsersFilePath = NormalizePathValue(UsersFilePath, DefaultUsersFilePath);
             if (PathEquals(normalizedUsersFilePath, "users.json"))
                 normalizedUsersFilePath = DefaultUsersFilePath;
+            if (TryMapFromLegacyRoot(normalizedUsersFilePath, LegacyDefaultBaseFolderPath, DefaultBaseFolderPath, out var migratedUsersFilePath))
+                normalizedUsersFilePath = migratedUsersFilePath;
             changed |= SetPathIfDifferent(UsersFilePath, normalizedUsersFilePath, value => UsersFilePath = value);
 
             var normalizedUsersCacheFilePath = NormalizePathValue(UsersCacheFilePath, DefaultUsersCacheFilePath);
@@ -163,26 +179,36 @@ namespace Replica
             changed |= SetPathIfDifferent(FontsFolderPath, normalizedFontsFolderPath, value => FontsFolderPath = value);
 
             var normalizedSharedThumbnailCachePath = NormalizePathValue(SharedThumbnailCachePath, string.Empty);
+            if (TryMapFromLegacyRoot(normalizedSharedThumbnailCachePath, LegacyDefaultBaseFolderPath, DefaultBaseFolderPath, out var migratedSharedThumbnailCachePath))
+                normalizedSharedThumbnailCachePath = migratedSharedThumbnailCachePath;
             changed |= SetPathIfDifferent(SharedThumbnailCachePath, normalizedSharedThumbnailCachePath, value => SharedThumbnailCachePath = value);
 
             var normalizedPitStopConfigFilePath = NormalizePathValue(PitStopConfigFilePath, DefaultPitStopConfigFilePath);
             if (PathEquals(normalizedPitStopConfigFilePath, "pitstop_actions.json"))
                 normalizedPitStopConfigFilePath = DefaultPitStopConfigFilePath;
+            if (TryMapFromLegacyRoot(normalizedPitStopConfigFilePath, LegacyDefaultBaseFolderPath, DefaultBaseFolderPath, out var migratedPitStopConfigFilePath))
+                normalizedPitStopConfigFilePath = migratedPitStopConfigFilePath;
             changed |= SetPathIfDifferent(PitStopConfigFilePath, normalizedPitStopConfigFilePath, value => PitStopConfigFilePath = value);
 
             var normalizedImposingConfigFilePath = NormalizePathValue(ImposingConfigFilePath, DefaultImposingConfigFilePath);
             if (PathEquals(normalizedImposingConfigFilePath, "imposing_configs.json"))
                 normalizedImposingConfigFilePath = DefaultImposingConfigFilePath;
+            if (TryMapFromLegacyRoot(normalizedImposingConfigFilePath, LegacyDefaultBaseFolderPath, DefaultBaseFolderPath, out var migratedImposingConfigFilePath))
+                normalizedImposingConfigFilePath = migratedImposingConfigFilePath;
             changed |= SetPathIfDifferent(ImposingConfigFilePath, normalizedImposingConfigFilePath, value => ImposingConfigFilePath = value);
 
             var normalizedPitStopHotfoldersRootPath = NormalizePathValue(PitStopHotfoldersRootPath, DefaultPitStopHotfoldersRootPath);
             if (PathEquals(normalizedPitStopHotfoldersRootPath, LegacyPitStopHotfoldersRootPath))
                 normalizedPitStopHotfoldersRootPath = DefaultPitStopHotfoldersRootPath;
+            if (TryMapFromLegacyRoot(normalizedPitStopHotfoldersRootPath, LegacyDefaultBaseFolderPath, DefaultBaseFolderPath, out var migratedPitStopHotfoldersRootPath))
+                normalizedPitStopHotfoldersRootPath = migratedPitStopHotfoldersRootPath;
             changed |= SetPathIfDifferent(PitStopHotfoldersRootPath, normalizedPitStopHotfoldersRootPath, value => PitStopHotfoldersRootPath = value);
 
             var normalizedImposingHotfoldersRootPath = NormalizePathValue(ImposingHotfoldersRootPath, DefaultImposingHotfoldersRootPath);
             if (PathEquals(normalizedImposingHotfoldersRootPath, LegacyImposingHotfoldersRootPath))
                 normalizedImposingHotfoldersRootPath = DefaultImposingHotfoldersRootPath;
+            if (TryMapFromLegacyRoot(normalizedImposingHotfoldersRootPath, LegacyDefaultBaseFolderPath, DefaultBaseFolderPath, out var migratedImposingHotfoldersRootPath))
+                normalizedImposingHotfoldersRootPath = migratedImposingHotfoldersRootPath;
             changed |= SetPathIfDifferent(ImposingHotfoldersRootPath, normalizedImposingHotfoldersRootPath, value => ImposingHotfoldersRootPath = value);
 
             return changed;
