@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Windows.Forms;
 
-namespace MyManager
+namespace Replica
 {
     public partial class SimpleOrderForm : Form
     {

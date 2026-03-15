@@ -2,7 +2,7 @@
 using System.IO;
 using System.Text;
 
-namespace MyManager
+namespace Replica
 {
     public static class Logger
     {

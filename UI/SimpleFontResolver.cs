@@ -1,10 +1,10 @@
-using PdfSharp.Fonts;
+﻿using PdfSharp.Fonts;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-namespace MyManager
+namespace Replica
 {
     public sealed class SimpleFontResolver : IFontResolver
     {

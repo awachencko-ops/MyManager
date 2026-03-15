@@ -5,7 +5,7 @@ using System.Data;
 using System.Linq;
 using System.Windows.Forms;
 
-namespace MyManager
+namespace Replica
 {
     public partial class ImposingSelectForm : Form
     {

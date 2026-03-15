@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using Svg;
 
-namespace MyManager
+namespace Replica
 {
     public partial class MainForm
     {

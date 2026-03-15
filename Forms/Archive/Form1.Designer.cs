@@ -1,4 +1,4 @@
-﻿namespace MyManager
+﻿namespace Replica
 {
     partial class Form1
     {
@@ -127,7 +127,7 @@
             label1.Name = "label1";
             label1.Size = new Size(119, 25);
             label1.TabIndex = 0;
-            label1.Text = "MyManager";
+            label1.Text = "Replica";
             //
             // btnCreateOrder
             //
@@ -281,7 +281,7 @@
             Controls.Add(panel1);
             Icon = (Icon)resources.GetObject("$this.Icon");
             Name = "Form1";
-            Text = "MyManager";
+            Text = "Replica";
             panel1.ResumeLayout(false);
             panel1.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)gridOrders).EndInit();

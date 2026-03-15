@@ -1,5 +1,5 @@
 ﻿// ActionConfig.cs
-namespace MyManager
+namespace Replica
 {
     public class ActionConfig
     {

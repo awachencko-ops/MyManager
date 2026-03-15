@@ -1,7 +1,7 @@
-using System;
+﻿using System;
 using System.IO;
 
-namespace MyManager
+namespace Replica
 {
     internal static class StoragePaths
     {

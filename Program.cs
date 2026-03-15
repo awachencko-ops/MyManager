@@ -1,8 +1,8 @@
-using System;
+﻿using System;
 using System.Windows.Forms;
 using PdfSharp.Fonts;
 
-namespace MyManager
+namespace Replica
 {
     internal static class Program
     {

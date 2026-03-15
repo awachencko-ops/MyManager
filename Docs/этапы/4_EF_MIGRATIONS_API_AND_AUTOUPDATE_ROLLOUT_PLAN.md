@@ -1,4 +1,4 @@
-# Этап 4: EF migrations, API endpoints и автообновление клиента
+﻿# Этап 4: EF migrations, API endpoints и автообновление клиента
 
 Дата актуализации: 2026-03-13
 Статус: рабочий план этапа 4
@@ -15,7 +15,7 @@
 
 ## 2.1 Что внедряем
 
-1. `DbContext` в `MyManager.Api`.
+1. `DbContext` в `Replica.Api`.
 2. Конфигурации сущностей: `Order`, `OrderItem`, `OrderEvent`, `User`.
 3. `Version` как concurrency token.
 4. Индексы и ограничения:
@@ -65,17 +65,17 @@
 
 ## 5. Автообновление клиента (LAN)
 
-## 5.1 Сервер (`MyManager.Api`)
+## 5.1 Сервер (`Replica.Api`)
 
 1. Папка: `wwwroot/updates/`.
 2. Раздача статических файлов через `app.UseStaticFiles()`.
 3. API bind на `0.0.0.0:5000`.
 4. Артефакты:
    - `update.xml`,
-   - `MyManagerClient.zip`,
+   - `ReplicaClient.zip`,
    - `changelog.txt` (опционально).
 
-## 5.2 Клиент (`MyManager.Client`)
+## 5.2 Клиент (`Replica.Client`)
 
 1. NuGet: `Autoupdater.NET.Official`.
 2. Запуск проверки до `Application.Run(MainForm)`:

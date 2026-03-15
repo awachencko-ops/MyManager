@@ -1,4 +1,4 @@
-# Этап 3: LAN client-server brief (Step 1 implementation)
+﻿# Этап 3: LAN client-server brief (Step 1 implementation)
 
 Дата актуализации: 2026-03-13
 Статус: рабочий план этапа 3
@@ -6,24 +6,24 @@
 ## 1. Цель этапа
 
 Запустить архитектурный переход на LAN:
-- `MyManager.Client` (WinForms)
-- `MyManager.Api` (ASP.NET Core)
+- `Replica.Client` (WinForms)
+- `Replica.Api` (ASP.NET Core)
 - PostgreSQL
 
 Сфокусироваться на **Step 1**: структура solution и вынесение общих моделей.
 
 ## 2. Целевая структура solution
 
-1. `MyManager.Shared` (Class Library)
+1. `Replica.Shared` (Class Library)
    - DTO, Enums, domain-классы (`Order`, `OrderItem`, `User`, `OrderEvent`).
    - Без ссылок на UI и EF.
 
-2. `MyManager.Api` (Web API)
+2. `Replica.Api` (Web API)
    - Ссылка на `Shared`.
    - EF Core + Npgsql.
    - Бизнес-логика, фильтры, аудит, concurrency.
 
-3. `MyManager.Client` (WinForms)
+3. `Replica.Client` (WinForms)
    - Ссылка на `Shared`.
    - Только HTTP к API, без прямого доступа к БД.
 

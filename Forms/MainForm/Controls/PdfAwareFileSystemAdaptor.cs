@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Drawing;
@@ -15,7 +15,7 @@ using Manina.Windows.Forms;
 using Manina.Windows.Forms.ImageListViewItemAdaptors;
 using PdfiumViewer;
 
-namespace MyManager
+namespace Replica
 {
     internal sealed class PdfAwareFileSystemAdaptor : FileSystemAdaptor
     {
@@ -494,7 +494,7 @@ namespace MyManager
 
             return Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "MyManager",
+                "Replica",
                 "ThumbnailCache",
                 "PdfPreviewCache");
         }

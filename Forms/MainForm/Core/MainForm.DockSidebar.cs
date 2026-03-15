@@ -4,7 +4,7 @@ using System.Drawing;
 using System.IO;
 using System.Windows.Forms;
 
-namespace MyManager
+namespace Replica
 {
     public partial class MainForm
     {
@@ -84,7 +84,7 @@ namespace MyManager
             pictureBox2.Image?.Dispose();
             pictureBox2.Image = CreateApplicationDockIcon(30);
 
-            var appTitle = string.IsNullOrWhiteSpace(Application.ProductName) ? "MyManager" : Application.ProductName;
+            var appTitle = string.IsNullOrWhiteSpace(Application.ProductName) ? "Replica" : Application.ProductName;
             _dockToolTip.SetToolTip(pnl_Icon, appTitle);
             _dockToolTip.SetToolTip(pictureBox2, appTitle);
         }

@@ -1,29 +1,29 @@
-# Памятка по каталогизации (текущее состояние)
+﻿# Памятка по каталогизации (текущее состояние)
 
 Дата фиксации: 2026-03-11
 
 ## 1) Рабочие пути приложения
 
-- Папка хранения заказов: `\\NAS\work\Первая Чукотская Типография\Шкалы\MYMANAGER BASEFOLDER\Orders`
-- Папка временных файлов: `\\NAS\work\Первая Чукотская Типография\Шкалы\MYMANAGER BASEFOLDER\Orders\TempMyManager`
+- Папка хранения заказов: `\\NAS\work\Первая Чукотская Типография\Шкалы\Replica BASEFOLDER\Orders`
+- Папка временных файлов: `\\NAS\work\Первая Чукотская Типография\Шкалы\Replica BASEFOLDER\Orders\TempReplica`
 - Папка архива (Дедушка): `\\NAS\work\Temp\!!!Дедушка`
-- История заказов: `\\NAS\work\Первая Чукотская Типография\Шкалы\MYMANAGER BASEFOLDER\AppData\history.json`
-- Общий лог: `\\NAS\work\Первая Чукотская Типография\Шкалы\MYMANAGER BASEFOLDER\AppData\manager.log`
-- Логи заказов: `\\NAS\work\Первая Чукотская Типография\Шкалы\MYMANAGER BASEFOLDER\AppData\order-logs`
+- История заказов: `\\NAS\work\Первая Чукотская Типография\Шкалы\Replica BASEFOLDER\AppData\history.json`
+- Общий лог: `\\NAS\work\Первая Чукотская Типография\Шкалы\Replica BASEFOLDER\AppData\manager.log`
+- Логи заказов: `\\NAS\work\Первая Чукотская Типография\Шкалы\Replica BASEFOLDER\AppData\order-logs`
 
 ## 2) Единый рабочий каталог обработки (single)
 
 Используется один рабочий temp-контур:
 
-- `\\NAS\work\Первая Чукотская Типография\Шкалы\MYMANAGER BASEFOLDER\Orders\TempMyManager\in`
-- `\\NAS\work\Первая Чукотская Типография\Шкалы\MYMANAGER BASEFOLDER\Orders\TempMyManager\prepress`
-- `\\NAS\work\Первая Чукотская Типография\Шкалы\MYMANAGER BASEFOLDER\Orders\TempMyManager\print`
+- `\\NAS\work\Первая Чукотская Типография\Шкалы\Replica BASEFOLDER\Orders\TempReplica\in`
+- `\\NAS\work\Первая Чукотская Типография\Шкалы\Replica BASEFOLDER\Orders\TempReplica\prepress`
+- `\\NAS\work\Первая Чукотская Типография\Шкалы\Replica BASEFOLDER\Orders\TempReplica\print`
 
 ## 3) Контур HotFolder (критично, не удалять)
 
 Базовый контур:
 
-- `\\NAS\work\Первая Чукотская Типография\Шкалы\MYMANAGER BASEFOLDER\WARNING NOT DELETE`
+- `\\NAS\work\Первая Чукотская Типография\Шкалы\Replica BASEFOLDER\WARNING NOT DELETE`
 
 Подкаталоги:
 
@@ -32,8 +32,8 @@
 
 ## 4) Конфиги сценариев (централизовано на NAS)
 
-- `\\NAS\work\Первая Чукотская Типография\Шкалы\MYMANAGER BASEFOLDER\Config\imposing_configs.json`
-- `\\NAS\work\Первая Чукотская Типография\Шкалы\MYMANAGER BASEFOLDER\Config\pitstop_actions.json`
+- `\\NAS\work\Первая Чукотская Типография\Шкалы\Replica BASEFOLDER\Config\imposing_configs.json`
+- `\\NAS\work\Первая Чукотская Типография\Шкалы\Replica BASEFOLDER\Config\pitstop_actions.json`
 
 Пути внутри этих JSON уже переписаны на NAS-контур `WARNING NOT DELETE`.
 

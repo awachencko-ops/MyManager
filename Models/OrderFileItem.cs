@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace MyManager
+namespace Replica
 {
     public class OrderFileItem
     {

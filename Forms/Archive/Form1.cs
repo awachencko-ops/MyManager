@@ -9,7 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
-namespace MyManager
+namespace Replica
 {
     public partial class Form1 : Form
     {
@@ -18,10 +18,10 @@ namespace MyManager
         private OrderProcessor _processor;
         private readonly OrderGridContextMenu _gridMenu = new OrderGridContextMenu();
         private List<OrderData> _orderHistory = new List<OrderData>();
-        private string _ordersRootPath = @"C:\MyManager\Orders";
+        private string _ordersRootPath = @"C:\Replica\Orders";
         private string _jsonHistoryFile = "history.json";
         private string _tempRootPath = "";
-        private string _grandpaFolder = @"C:\MyManager\Archive";
+        private string _grandpaFolder = @"C:\Replica\Archive";
         private string _archiveDoneSubfolder = "Готово";
         private string _managerLogFilePath = "manager.log";
         private string _orderLogsFolderPath = "";

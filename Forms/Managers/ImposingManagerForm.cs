@@ -6,7 +6,7 @@ using System.Windows.Forms;
 using System.Xml.Linq;
 using System.Text.RegularExpressions;
 
-namespace MyManager
+namespace Replica
 {
     public partial class ImposingManagerForm : Form
     {

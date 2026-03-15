@@ -4,7 +4,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Windows.Forms;
 
-namespace MyManager
+namespace Replica
 {
     public partial class PitStopSelectForm : Form
     {

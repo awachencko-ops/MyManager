@@ -2,7 +2,7 @@
 using System.Drawing;
 using System.Windows.Forms;
 
-namespace MyManager
+namespace Replica
 {
     public class SettingsDialogForm : Form
     {

@@ -1,10 +1,10 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Windows.Forms;
 using Manina.Windows.Forms;
 using Manina.Windows.Forms.ImageListViewRenderers;
 
-namespace MyManager
+namespace Replica
 {
     internal sealed class SimpleTilesRenderer : DefaultRenderer
     {

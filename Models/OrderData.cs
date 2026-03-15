@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace MyManager
+namespace Replica
 {
     public enum OrderStartMode
     {

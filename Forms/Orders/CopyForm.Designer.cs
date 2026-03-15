@@ -1,4 +1,4 @@
-﻿namespace MyManager
+﻿namespace Replica
 {
     partial class CopyForm
     {

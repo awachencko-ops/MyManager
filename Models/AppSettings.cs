@@ -1,15 +1,15 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 
-namespace MyManager
+namespace Replica
 {
     public class AppSettings
     {
-        public const string DefaultBaseFolderPath = @"\\NAS\work\Первая Чукотская Типография\Шкалы\MYMANAGER BASEFOLDER";
+        public const string DefaultBaseFolderPath = @"\\NAS\work\Первая Чукотская Типография\Шкалы\Replica BASEFOLDER";
         public const string DefaultGrandpaPath = @"\\NAS\work\Temp\!!!Дедушка";
-        public const string DefaultTempFolderName = "TempMyManager";
+        public const string DefaultTempFolderName = "TempReplica";
 
         private static string SystemDriveRoot
         {
@@ -20,8 +20,8 @@ namespace MyManager
             }
         }
 
-        public static string LegacyOrdersRootPath => Path.Combine(SystemDriveRoot, "MyManager", "Orders");
-        public static string LegacyGrandpaPath => Path.Combine(SystemDriveRoot, "MyManager", "Archive");
+        public static string LegacyOrdersRootPath => Path.Combine(SystemDriveRoot, "Replica", "Orders");
+        public static string LegacyGrandpaPath => Path.Combine(SystemDriveRoot, "Replica", "Archive");
         public static string LegacyPitStopHotfoldersRootPath => Path.Combine(SystemDriveRoot, "PitStop");
         public static string LegacyImposingHotfoldersRootPath => Path.Combine(SystemDriveRoot, "HotImposing");
 
@@ -33,7 +33,7 @@ namespace MyManager
         public static string DefaultUsersFilePath => Path.Combine(DefaultBaseFolderPath, "Config", "users.json");
         public static string DefaultUsersCacheFilePath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "MyManager",
+            "Replica",
             "AppData",
             "users.cache.json");
         public static string DefaultPitStopConfigFilePath => Path.Combine(DefaultBaseFolderPath, "Config", "pitstop_actions.json");
@@ -42,7 +42,7 @@ namespace MyManager
         public static string DefaultImposingHotfoldersRootPath => Path.Combine(DefaultBaseFolderPath, "WARNING NOT DELETE", "HotImposing");
         public static string DefaultThumbnailCacheFolderPath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "MyManager",
+            "Replica",
             "ThumbnailCache");
 
         public string OrdersRootPath { get; set; } = DefaultOrdersRootPath;

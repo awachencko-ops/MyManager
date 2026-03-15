@@ -1,4 +1,4 @@
-﻿namespace MyManager
+﻿namespace Replica
 {
     public class ImposingConfig
     {

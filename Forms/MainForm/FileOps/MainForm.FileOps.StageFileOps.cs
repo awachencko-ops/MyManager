@@ -17,7 +17,7 @@ using System.Windows.Forms;
 using PdfiumViewer;
 using Svg;
 
-namespace MyManager
+namespace Replica
 {
     public partial class MainForm
     {

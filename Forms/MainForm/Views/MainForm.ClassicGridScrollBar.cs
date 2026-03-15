@@ -1,9 +1,9 @@
-using System;
+﻿using System;
 using System.Reflection;
 using System.Windows.Forms;
 using Manina.Windows.Forms;
 
-namespace MyManager
+namespace Replica
 {
     public partial class MainForm
     {

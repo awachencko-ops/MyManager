@@ -4,7 +4,7 @@ using PdfSharp.Pdf.IO;
 using System;
 using System.IO;
 
-namespace MyManager
+namespace Replica
 {
     public static class PdfWatermark
     {

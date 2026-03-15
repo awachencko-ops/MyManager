@@ -1,4 +1,4 @@
-# MyManager — универсальный бриф: MainForm migration → group-order → PostgreSQL/LAN → автообновление клиента
+﻿# Replica — универсальный бриф: MainForm migration → group-order → PostgreSQL/LAN → автообновление клиента
 
 Дата: 2026-03-13
 Статус: единый рабочий документ
@@ -8,7 +8,7 @@
 Собираем единый трек работ:
 1. Закрыть текущий этап стабилизации `MainForm` (`single-first`).
 2. Реализовать `group-order` (контейнер заказа + вложенные files/items) без ломки текущей логики.
-3. Перейти на клиент-сервер в LAN: `MyManager.Client` (WinForms) -> `MyManager.Api` (ASP.NET Core) -> PostgreSQL.
+3. Перейти на клиент-сервер в LAN: `Replica.Client` (WinForms) -> `Replica.Api` (ASP.NET Core) -> PostgreSQL.
 4. Убрать ручные обходы по 5 ПК через автоматические обновления клиента.
 
 ## 2. Базовые принципы (согласовано)
@@ -38,9 +38,9 @@
 
 ## 4. Целевая архитектура solution (LAN)
 
-1. `MyManager.Shared` (Class Library): DTO/Enums/Domain (`Order`, `OrderItem`, `User`, `OrderEvent`) — без UI/EF.
-2. `MyManager.Api` (ASP.NET Core Web API): EF Core + Npgsql, бизнес-логика, фильтры, аудит, concurrency.
-3. `MyManager.Client` (WinForms): только HTTP к API, без прямого доступа к PostgreSQL.
+1. `Replica.Shared` (Class Library): DTO/Enums/Domain (`Order`, `OrderItem`, `User`, `OrderEvent`) — без UI/EF.
+2. `Replica.Api` (ASP.NET Core Web API): EF Core + Npgsql, бизнес-логика, фильтры, аудит, concurrency.
+3. `Replica.Client` (WinForms): только HTTP к API, без прямого доступа к PostgreSQL.
 
 ## 5. Пользователи и авторство заказа
 
@@ -65,18 +65,18 @@
 ## 7. Автообновление WinForms-клиента (новый обязательный блок)
 
 Выбранный стек: **Autoupdater.NET.Official**.
-Сервер обновлений: наш `MyManager.Api` (раздаёт `update.xml` + ZIP клиента).
+Сервер обновлений: наш `Replica.Api` (раздаёт `update.xml` + ZIP клиента).
 
 ### 7.1 Шаг 1 (API): статические файлы обновления
 
 Папка:
-- `MyManager.Api/wwwroot/updates/`
+- `Replica.Api/wwwroot/updates/`
 
 Что кладём туда:
 - `update.xml`
-- `MyManagerClient.zip`
+- `ReplicaClient.zip`
 
-Код для `Program.cs` в `MyManager.Api`:
+Код для `Program.cs` в `Replica.Api`:
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
@@ -101,7 +101,7 @@ app.Run("http://0.0.0.0:5000");
 <?xml version="1.0" encoding="utf-8"?>
 <item>
   <version>1.2.0</version>
-  <url>http://192.168.1.10:5000/updates/MyManagerClient.zip</url>
+  <url>http://192.168.1.10:5000/updates/ReplicaClient.zip</url>
   <changelog>http://192.168.1.10:5000/updates/changelog.txt</changelog>
   <mandatory>
     <value>true</value>
@@ -115,7 +115,7 @@ app.Run("http://0.0.0.0:5000");
 Установить NuGet:
 - `Autoupdater.NET.Official`
 
-Код для `Program.cs` в `MyManager.Client`:
+Код для `Program.cs` в `Replica.Client`:
 
 ```csharp
 using AutoUpdaterDotNET;
@@ -149,14 +149,14 @@ static void Main()
 ## 8. Как выпускать релиз, чтобы 5 клиентов обновлялись автоматически
 
 1. Собрать клиент:
-   - `dotnet publish MyManager.Client -c Release -r win-x64 --self-contained false`
-2. Взять содержимое publish-папки и упаковать в `MyManagerClient.zip`.
+   - `dotnet publish Replica.Client -c Release -r win-x64 --self-contained false`
+2. Взять содержимое publish-папки и упаковать в `ReplicaClient.zip`.
 3. Обновить в `update.xml`:
    - `<version>` (увеличить),
    - `<url>` на новый ZIP,
    - `<changelog>` (по желанию),
    - `<mandatory>` по политике релиза.
-4. Скопировать `update.xml` и ZIP в `MyManager.Api/wwwroot/updates/` на серверном ПК.
+4. Скопировать `update.xml` и ZIP в `Replica.Api/wwwroot/updates/` на серверном ПК.
 5. Перезапустить API (или просто заменить файлы, если static hosting уже активен).
 6. При следующем старте клиенты увидят новую версию и обновятся без ручной установки на каждом ПК.
 
