@@ -182,6 +182,16 @@
         fB6o6fYN9QAAAABJRU5ErkJggg==
 </value>
   </data>
+  <data name="tsbAddFile.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
+    <value>
+        iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8
+        YQUAAADiSURBVEhL3ZWxDcIwEEVTUlLS+P4vGYGSEdIxTkpKSsZgBEagZARKSkrQSbHkXMjJNiCkPMmS
+        7e+8s6MobppZQ3IF4AHg2bc7yaVdVwXJTSIeNJJbu76YKBORQ5wTkWOcH64uJITQ9qKbzXTu41OQ7HpJ
+        p+N01yKyn8qy8Qp4WTaexMuy8SRelo0n8bJsPInNqrCSvxb4+iuyeNkkPy8QQtjpQ/rv0TGAayqJ0qk2
+        kL2D5MIuBnBJ+iNpUQEl3gMi4n4tRdIUkkx2dTZZG/vVBRSSa3t8K7TjKgCcTIHRPTFfXgf2xZitSHeW
+        AAAAAElFTkSuQmCC
+</value>
+  </data>
   <data name="tsbBrowse.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
     <value>
         iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABGdBTUEAALGPC/xhBQAAAJpJREFUSEvt
@@ -198,7 +208,7 @@
         Pde/HtMGGM4BeFZfPFYAAAAASUVORK5CYII=
 </value>
   </data>
-  <data name="tsbParameters.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
+  <data name="toolStripButton1.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
     <value>
         iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABGdBTUEAALGPC/xhBQAAAQFJREFUSEvl
         lDsOwjAQRCk5xWaPQUnJjVJSUlKm5AiUlJQchzIlaK04cp43P0OBxEijyMnb2dhOvNn8haqqenkmVywG

@@ -60,7 +60,7 @@ namespace Replica
                 return;
             }
 
-            if (e.ClickedItem == tsbParameters)
+            if (e.ClickedItem == tsbAddFile)
             {
                 ShowSettingsDialog();
                 return;

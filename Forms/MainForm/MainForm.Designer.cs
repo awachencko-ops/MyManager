@@ -40,6 +40,7 @@
             pictureBox2 = new PictureBox();
             scMain = new SplitContainer();
             treeView1 = new TreeView();
+            pnlServerHeader = new Panel();
             tableLayoutPanel1 = new TableLayoutPanel();
             pnlHeader = new Panel();
             btnViewTiles = new Button();
@@ -80,8 +81,8 @@
             tsbRemove = new ToolStripButton();
             tsbBrowse = new ToolStripButton();
             tsbConsole = new ToolStripButton();
-            tsbParameters = new ToolStripButton();
-            pnlServerHeader = new Panel();
+            tsbAddFile = new ToolStripButton();
+            toolStripButton1 = new ToolStripButton();
             pnlSidebar.SuspendLayout();
             pnlDockLiterature.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)pictureBox4).BeginInit();
@@ -214,10 +215,18 @@
             // 
             treeView1.Dock = DockStyle.Fill;
             treeView1.HideSelection = false;
-            treeView1.Location = new Point(0, 0);
+            treeView1.Location = new Point(0, 75);
             treeView1.Name = "treeView1";
-            treeView1.Size = new Size(460, 1244);
+            treeView1.Size = new Size(460, 1169);
             treeView1.TabIndex = 1;
+            // 
+            // pnlServerHeader
+            // 
+            pnlServerHeader.Dock = DockStyle.Top;
+            pnlServerHeader.Location = new Point(0, 0);
+            pnlServerHeader.Name = "pnlServerHeader";
+            pnlServerHeader.Size = new Size(460, 75);
+            pnlServerHeader.TabIndex = 2;
             // 
             // tableLayoutPanel1
             // 
@@ -532,7 +541,7 @@
             // 
             tsMainActions.GripStyle = ToolStripGripStyle.Hidden;
             tsMainActions.ImageScalingSize = new Size(24, 24);
-            tsMainActions.Items.AddRange(new ToolStripItem[] { tsbNewJob, tsbRun, tsbStop, tsbRemove, tsbBrowse, tsbConsole, tsbParameters });
+            tsMainActions.Items.AddRange(new ToolStripItem[] { tsbNewJob, tsbRun, tsbStop, tsbRemove, tsbAddFile, tsbBrowse, tsbConsole, toolStripButton1 });
             tsMainActions.Location = new Point(0, 0);
             tsMainActions.Name = "tsMainActions";
             tsMainActions.Padding = new Padding(6);
@@ -546,8 +555,8 @@
             tsbNewJob.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold, GraphicsUnit.Point, 204);
             tsbNewJob.Image = (Image)resources.GetObject("tsbNewJob.Image");
             tsbNewJob.Name = "tsbNewJob";
-            tsbNewJob.Size = new Size(107, 29);
-            tsbNewJob.Text = "Создать";
+            tsbNewJob.Size = new Size(155, 29);
+            tsbNewJob.Text = "Создать заказ";
             // 
             // tsbRun
             // 
@@ -589,21 +598,21 @@
             tsbConsole.Size = new Size(71, 29);
             tsbConsole.Text = "Лог";
             // 
-            // tsbParameters
+            // tsbAddFile
             // 
-            tsbParameters.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
-            tsbParameters.Image = (Image)resources.GetObject("tsbParameters.Image");
-            tsbParameters.Name = "tsbParameters";
-            tsbParameters.Size = new Size(138, 29);
-            tsbParameters.Text = "Параметры";
+            tsbAddFile.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
+            tsbAddFile.Image = (Image)resources.GetObject("tsbAddFile.Image");
+            tsbAddFile.Name = "tsbAddFile";
+            tsbAddFile.Size = new Size(176, 29);
+            tsbAddFile.Text = "Добавить файл ";
             // 
-            // pnlServerHeader
+            // toolStripButton1
             // 
-            pnlServerHeader.Dock = DockStyle.Top;
-            pnlServerHeader.Location = new Point(0, 0);
-            pnlServerHeader.Name = "pnlServerHeader";
-            pnlServerHeader.Size = new Size(460, 75);
-            pnlServerHeader.TabIndex = 2;
+            toolStripButton1.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
+            toolStripButton1.Image = (Image)resources.GetObject("toolStripButton1.Image");
+            toolStripButton1.Name = "toolStripButton1";
+            toolStripButton1.Size = new Size(138, 29);
+            toolStripButton1.Text = "Параметры";
             // 
             // MainForm
             // 
@@ -671,7 +680,7 @@
         private ToolStripButton tsbRemove;
         private ToolStripButton tsbBrowse;
         private ToolStripButton tsbConsole;
-        private ToolStripButton tsbParameters;
+        private ToolStripButton tsbAddFile;
         private ComboBox cbFCreated;
         private Panel pnlTray;
         private StatusStrip statusStrip1;
@@ -700,5 +709,6 @@
         private Panel pnlDockUtilities;
         private PictureBox pictureBox3;
         private Panel pnlServerHeader;
+        private ToolStripButton toolStripButton1;
     }
 }
