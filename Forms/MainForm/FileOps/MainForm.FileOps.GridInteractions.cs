@@ -84,7 +84,7 @@ namespace Replica
             _dragSourceRowIndex = -1;
             _dragSourceColumnIndex = -1;
 
-            if (IsGridInputOverClassicScrollBar())
+            if (IsGridInputOverOrdersViewScrollBar())
             {
                 dgvJobs.Cursor = Cursors.Default;
                 ClearGridHoverVisual();
@@ -152,7 +152,7 @@ namespace Replica
 
         private void DgvJobs_MouseMove(object? sender, MouseEventArgs e)
         {
-            if (IsGridInputOverClassicScrollBar())
+            if (IsGridInputOverOrdersViewScrollBar())
             {
                 StopGridHoverActivation();
                 dgvJobs.Cursor = Cursors.Default;
@@ -193,7 +193,7 @@ namespace Replica
 
         private void DgvJobs_MouseUp(object? sender, MouseEventArgs e)
         {
-            if (IsGridInputOverClassicScrollBar())
+            if (IsGridInputOverOrdersViewScrollBar())
                 return;
 
             if (e.Button == MouseButtons.Left)
@@ -352,7 +352,7 @@ namespace Replica
             if (e.RowIndex < 0)
                 return;
 
-            if (IsGridInputOverClassicScrollBar())
+            if (IsGridInputOverOrdersViewScrollBar())
             {
                 dgvJobs.Cursor = Cursors.Default;
                 StopGridHoverActivation();
@@ -401,7 +401,7 @@ namespace Replica
 
         private void DgvJobs_CellDoubleClick(object? sender, DataGridViewCellEventArgs e)
         {
-            if (IsGridInputOverClassicScrollBar())
+            if (IsGridInputOverOrdersViewScrollBar())
                 return;
 
             if (e.RowIndex < 0)
@@ -504,7 +504,7 @@ namespace Replica
         {
             StopGridHoverActivation();
 
-            if (IsGridInputOverClassicScrollBar())
+            if (IsGridInputOverOrdersViewScrollBar())
             {
                 ResetGridClickState();
                 return;
@@ -579,7 +579,7 @@ namespace Replica
 
         private void SetGridHoverActivationCandidate(int rowIndex)
         {
-            if (IsGridInputOverClassicScrollBar())
+            if (IsGridInputOverOrdersViewScrollBar())
             {
                 StopGridHoverActivation();
                 return;
@@ -635,7 +635,7 @@ namespace Replica
         {
             _gridHoverActivateTimer?.Stop();
 
-            if (IsGridInputOverClassicScrollBar())
+            if (IsGridInputOverOrdersViewScrollBar())
                 return;
 
             if (!dgvJobs.Visible)

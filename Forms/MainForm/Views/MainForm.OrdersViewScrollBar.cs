@@ -7,7 +7,7 @@ namespace Replica
 {
     public partial class MainForm
     {
-        private const int OrdersViewScrollBarWidth = 16;
+        private const int OrdersViewScrollBarWidth = 25;
 
         private static readonly FieldInfo? ImageListViewVScrollBarField = typeof(ImageListView).GetField(
             "vScrollBar",
@@ -39,6 +39,7 @@ namespace Replica
             pnlScrollBar.Controls.Add(_ordersViewScrollBar);
 
             dgvJobs.Scroll += DgvJobs_ScrollForCustomBar;
+            dgvJobs.MouseWheel += DgvJobs_MouseWheelForOrdersViewScrollBar;
             dgvJobs.RowsAdded += (_, _) => UpdateOrdersViewScrollBarFromActiveView();
             dgvJobs.RowsRemoved += (_, _) => UpdateOrdersViewScrollBarFromActiveView();
             dgvJobs.DataBindingComplete += (_, _) => UpdateOrdersViewScrollBarFromActiveView();
@@ -80,6 +81,47 @@ namespace Replica
                 return;
 
             UpdateOrdersViewScrollBarFromActiveView();
+        }
+
+        private void DgvJobs_MouseWheelForOrdersViewScrollBar(object? sender, MouseEventArgs e)
+        {
+            if (!IsCursorOverOrdersViewScrollBar() || _ordersViewScrollBar == null)
+                return;
+
+            if (e is HandledMouseEventArgs handledMouseEventArgs)
+                handledMouseEventArgs.Handled = true;
+
+            StopGridHoverActivation();
+            ClearGridHoverVisual();
+            _ordersViewScrollBar.ApplyMouseWheelDelta(e.Delta);
+        }
+
+        private bool IsGridInputOverOrdersViewScrollBar()
+        {
+            if (!IsCursorOverOrdersViewScrollBar())
+                return false;
+
+            return _ordersViewScrollBar?.Capture == true || Control.MouseButtons != MouseButtons.None;
+        }
+
+        private bool IsCursorOverOrdersViewScrollBar()
+        {
+            if (_ordersViewScrollBar == null || !_ordersViewScrollBar.Visible || !dgvJobs.Visible || !pnlScrollBar.Visible)
+                return false;
+
+            if (_ordersViewScrollBar.Capture)
+                return true;
+
+            if (!dgvJobs.IsHandleCreated || !pnlScrollBar.IsHandleCreated)
+                return false;
+
+            var mouseInGrid = dgvJobs.PointToClient(Cursor.Position);
+            if (!dgvJobs.ClientRectangle.Contains(mouseInGrid))
+                return false;
+
+            var panelScreenRect = pnlScrollBar.RectangleToScreen(pnlScrollBar.ClientRectangle);
+            var panelRectInGrid = dgvJobs.RectangleToClient(panelScreenRect);
+            return panelRectInGrid.Contains(mouseInGrid);
         }
 
         private void AttachTilesInternalVScrollBar()
