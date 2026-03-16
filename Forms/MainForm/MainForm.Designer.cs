@@ -280,6 +280,7 @@
             dgvJobs.RowHeadersWidth = 62;
             dgvJobs.Size = new Size(1718, 1068);
             dgvJobs.TabIndex = 2;
+            dgvJobs.VirtualMode = true;
             // 
             // colStatus
             // 
