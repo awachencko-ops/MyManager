@@ -25,6 +25,12 @@ namespace Replica
         {
             _gridMenu.OpenFolder = (stage) =>
             {
+                if (TryGetContextOrderItem(out var itemOrder, out var item))
+                {
+                    OpenOrderStageFolder(itemOrder!, item!, stage);
+                    return;
+                }
+
                 var order = GetContextOrder();
                 if (order != null)
                     OpenOrderStageFolder(order, stage);
@@ -72,7 +78,7 @@ namespace Replica
 
             var row = dgvJobs.Rows[e.RowIndex];
             var rowTag = row.Tag?.ToString();
-            if (!IsOrderTag(rowTag))
+            if (!IsOrderTag(rowTag) && !IsItemTag(rowTag))
                 return;
 
             _ctxRow = e.RowIndex;
@@ -84,7 +90,7 @@ namespace Replica
             if (order == null)
                 return;
 
-            if (OrderTopologyService.IsMultiOrder(order))
+            if (IsOrderTag(rowTag) && OrderTopologyService.IsMultiOrder(order))
             {
                 ShowGroupOrderContextMenu(order);
                 return;
@@ -121,10 +127,62 @@ namespace Replica
 
         private OrderData? GetContextOrder()
         {
-            if (_ctxRow < 0)
+            if (_ctxRow < 0 || _ctxRow >= dgvJobs.Rows.Count)
                 return null;
 
-            return GetOrderByRowIndex(_ctxRow);
+            var rowTag = dgvJobs.Rows[_ctxRow].Tag?.ToString();
+            var orderInternalId = ExtractOrderInternalIdFromTag(rowTag);
+            if (string.IsNullOrWhiteSpace(orderInternalId))
+                return null;
+
+            return FindOrderByInternalId(orderInternalId);
+        }
+
+        private bool TryGetContextOrderItem(out OrderData? order, out OrderFileItem? item)
+        {
+            order = null;
+            item = null;
+
+            if (_ctxRow < 0 || _ctxRow >= dgvJobs.Rows.Count)
+                return false;
+
+            var rowTag = dgvJobs.Rows[_ctxRow].Tag?.ToString();
+            if (!IsItemTag(rowTag))
+                return false;
+
+            var orderInternalId = ExtractOrderInternalIdFromTag(rowTag);
+            var itemId = ExtractItemIdFromTag(rowTag);
+            if (string.IsNullOrWhiteSpace(orderInternalId) || string.IsNullOrWhiteSpace(itemId))
+                return false;
+
+            order = FindOrderByInternalId(orderInternalId);
+            if (order?.Items == null)
+                return false;
+
+            item = order.Items.FirstOrDefault(x => x != null && string.Equals(x.ItemId, itemId, StringComparison.Ordinal));
+            return item != null;
+        }
+
+        private void OpenOrderStageFolder(OrderData order, OrderFileItem item, int stage)
+        {
+            if (order == null || item == null)
+                return;
+
+            string targetPath;
+            if (OrderStages.IsFileStage(stage))
+            {
+                var stageFilePath = GetItemStagePath(item, stage);
+                if (HasExistingFile(stageFilePath))
+                    targetPath = Path.GetDirectoryName(stageFilePath) ?? GetStageFolder(order, stage);
+                else
+                    targetPath = GetStageFolder(order, stage);
+            }
+            else
+            {
+                targetPath = GetPreferredOrderFolder(order);
+            }
+
+            OpenOrderFolderPath(targetPath);
         }
 
         private void ShowGroupOrderContextMenu(OrderData order)
@@ -192,6 +250,12 @@ namespace Replica
 
             try
             {
+                if (TryGetContextOrderItem(out var itemOrder, out var item))
+                {
+                    await PickAndCopyFileForItemAsync(itemOrder!, item!, stage);
+                    return;
+                }
+
                 var order = GetContextOrder();
                 if (order == null)
                     return;
@@ -210,6 +274,12 @@ namespace Replica
             if (!OrderStages.IsFileStage(stage))
                 return;
 
+            if (TryGetContextOrderItem(out var itemOrder, out var item))
+            {
+                RemoveFileFromItem(itemOrder!, item!, stage);
+                return;
+            }
+
             var order = GetContextOrder();
             if (order == null)
                 return;
@@ -222,6 +292,12 @@ namespace Replica
             if (!OrderStages.IsFileStage(stage))
                 return;
 
+            if (TryGetContextOrderItem(out var itemOrder, out var item))
+            {
+                RenameFileForItem(itemOrder!, item!, stage);
+                return;
+            }
+
             var order = GetContextOrder();
             if (order == null)
                 return;
@@ -233,6 +309,12 @@ namespace Replica
         {
             if (!OrderStages.IsFileStage(stage))
                 return;
+
+            if (TryGetContextOrderItem(out _, out var item))
+            {
+                CopyPathToClipboard(item!, stage);
+                return;
+            }
 
             var order = GetContextOrder();
             if (order == null)
@@ -248,6 +330,12 @@ namespace Replica
 
             try
             {
+                if (TryGetContextOrderItem(out var itemOrder, out var item))
+                {
+                    await PasteFileFromClipboardAsync(itemOrder!, item!, stage);
+                    return;
+                }
+
                 var order = GetContextOrder();
                 if (order == null)
                     return;
@@ -263,6 +351,12 @@ namespace Replica
 
         private void ApplyWatermarkFromContext(bool isVertical)
         {
+            if (TryGetContextOrderItem(out var itemOrder, out var item))
+            {
+                ProcessWatermark(itemOrder!, item!, isVertical);
+                return;
+            }
+
             var order = GetContextOrder();
             if (order == null)
                 return;
@@ -274,6 +368,12 @@ namespace Replica
         {
             try
             {
+                if (TryGetContextOrderItem(out var itemOrder, out var item))
+                {
+                    await CopyToGrandpaAsync(itemOrder!, item!);
+                    return;
+                }
+
                 var order = GetContextOrder();
                 if (order == null)
                     return;
@@ -289,6 +389,12 @@ namespace Replica
 
         private void RemovePitStopActionFromContext()
         {
+            if (TryGetContextOrderItem(out var itemOrder, out var item))
+            {
+                RemovePitStopAction(itemOrder!, item!);
+                return;
+            }
+
             var order = GetContextOrder();
             if (order == null)
                 return;
@@ -298,6 +404,12 @@ namespace Replica
 
         private void RemoveImposingActionFromContext()
         {
+            if (TryGetContextOrderItem(out var itemOrder, out var item))
+            {
+                RemoveImposingAction(itemOrder!, item!);
+                return;
+            }
+
             var order = GetContextOrder();
             if (order == null)
                 return;

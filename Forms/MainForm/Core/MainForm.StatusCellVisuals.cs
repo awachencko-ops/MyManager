@@ -271,7 +271,7 @@ namespace Replica
                 var order = GetOrderByRowIndex(rowIndex);
                 if (order != null && OrderTopologyService.IsMultiOrder(order))
                 {
-                    visual = new StatusCellVisual("group-order", _groupOrderCellIcon, Color.White, Color.Black);
+                    visual = new StatusCellVisual("group-order", _groupOrderCellIcon, GroupOrderIconBackColor, Color.Black);
                     return true;
                 }
             }

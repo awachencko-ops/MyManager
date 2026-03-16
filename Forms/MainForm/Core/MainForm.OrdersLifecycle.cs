@@ -253,9 +253,9 @@ namespace Replica
             if (isMultiOrder)
             {
                 // Group header must not mirror first item file fields.
-                sourceDisplay = "...";
-                preparedDisplay = "...";
-                printDisplay = "...";
+                sourceDisplay = "-";
+                preparedDisplay = "-";
+                printDisplay = "-";
             }
             else
             {

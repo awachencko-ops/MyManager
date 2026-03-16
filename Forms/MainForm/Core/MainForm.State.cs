@@ -212,6 +212,14 @@ namespace Replica
         private static readonly Color OrdersGridLineColor = Color.FromArgb(231, 235, 240); // #E7EBF0
         private static readonly Color OrdersActiveMarkerColor = Color.FromArgb(122, 167, 217); // #7AA7D9
         private static readonly Color OrdersLinkTextColor = Color.FromArgb(95, 126, 168);
+        private static readonly Color GroupOrderIconBackColor = Color.FromArgb(247, 200, 119); // folder-like accent
+        private static readonly Color GroupOrderRowBackColor = Color.FromArgb(255, 252, 244);
+        private static readonly Color GroupOrderRowHoverBackColor = Color.FromArgb(255, 249, 238);
+        private static readonly Color GroupOrderRowSelectedBackColor = Color.FromArgb(255, 246, 232);
+        private static readonly Color GroupOrderItemRowBaseBackColor = Color.FromArgb(255, 255, 255);
+        private static readonly Color GroupOrderItemRowZebraBackColor = Color.FromArgb(255, 253, 248);
+        private static readonly Color GroupOrderItemRowHoverBackColor = Color.FromArgb(255, 251, 244);
+        private static readonly Color GroupOrderItemRowSelectedBackColor = Color.FromArgb(255, 248, 238);
 
         private enum OrdersViewMode
         {

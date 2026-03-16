@@ -422,8 +422,8 @@ public sealed class MainFormCoreRegressionTests
                 .Cast<DataGridViewRow>()
                 .First(row => string.Equals(row.Tag?.ToString(), $"order|{groupOrder.InternalId}", StringComparison.Ordinal));
 
-            Assert.Equal("...", orderRow.Cells[colPrep.Index].Value?.ToString());
-            Assert.Equal("...", orderRow.Cells[colPrint.Index].Value?.ToString());
+            Assert.Equal("-", orderRow.Cells[colPrep.Index].Value?.ToString());
+            Assert.Equal("-", orderRow.Cells[colPrint.Index].Value?.ToString());
             Assert.Equal("Outlines CMYK", orderRow.Cells[colPitstop.Index].Value?.ToString());
             Assert.Equal("Step & Repeat", orderRow.Cells[colHotimposing.Index].Value?.ToString());
 
@@ -439,6 +439,95 @@ public sealed class MainFormCoreRegressionTests
                 OrderStages.Print) ?? false);
             Assert.True(isPreparedLocked);
             Assert.True(isPrintLocked);
+        });
+    }
+
+    [Fact]
+    public void SR19_GroupOrder_ItemContext_ResolvesOrderAndItem()
+    {
+        MainFormTestHarness.RunWithIsolatedForm((form, _) =>
+        {
+            var groupOrder = CreateGroupOrder("GR-1901");
+            MainFormTestHarness.InvokePrivate(form, "AddCreatedOrder", groupOrder);
+            MainFormTestHarness.InvokePrivate(form, "ToggleOrderExpanded", groupOrder.InternalId);
+
+            var dgv = MainFormTestHarness.GetPrivateField<DataGridView>(form, "dgvJobs");
+            var itemRow = dgv.Rows
+                .Cast<DataGridViewRow>()
+                .First(row => (row.Tag?.ToString() ?? string.Empty).StartsWith("item|", StringComparison.Ordinal));
+
+            MainFormTestHarness.SetPrivateField(form, "_ctxRow", itemRow.Index);
+            MainFormTestHarness.SetPrivateField(form, "_ctxCol", 0);
+
+            var tryGetContextItemMethod = form.GetType().GetMethod("TryGetContextOrderItem", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(form.GetType().FullName, "TryGetContextOrderItem");
+
+            object?[] args = { null, null };
+            var resolved = (bool)(tryGetContextItemMethod.Invoke(form, args) ?? false);
+
+            Assert.True(resolved);
+            Assert.NotNull(args[0]);
+            Assert.NotNull(args[1]);
+            Assert.Equal(groupOrder.InternalId, ((OrderData)args[0]!).InternalId);
+        });
+    }
+
+    [Fact]
+    public void SR20_GroupOrder_ItemRows_UseLightFolderZebraPalette()
+    {
+        MainFormTestHarness.RunWithIsolatedForm((form, _) =>
+        {
+            var groupOrder = CreateGroupOrder("GR-2001");
+            MainFormTestHarness.InvokePrivate(form, "AddCreatedOrder", groupOrder);
+            MainFormTestHarness.InvokePrivate(form, "ToggleOrderExpanded", groupOrder.InternalId);
+
+            var dgv = MainFormTestHarness.GetPrivateField<DataGridView>(form, "dgvJobs");
+            var colStatus = MainFormTestHarness.GetPrivateField<DataGridViewColumn>(form, "colStatus");
+
+            var itemRow = dgv.Rows
+                .Cast<DataGridViewRow>()
+                .First(row => (row.Tag?.ToString() ?? string.Empty).StartsWith("item|", StringComparison.Ordinal));
+
+            dgv.ClearSelection();
+
+            var args = new DataGridViewCellFormattingEventArgs(
+                colStatus.Index,
+                itemRow.Index,
+                itemRow.Cells[colStatus.Index].Value,
+                typeof(string),
+                new DataGridViewCellStyle());
+            MainFormTestHarness.InvokePrivate(form, "DgvJobs_CellFormatting", null, args);
+
+            var expectedFieldName = itemRow.Index % 2 == 0
+                ? "GroupOrderItemRowBaseBackColor"
+                : "GroupOrderItemRowZebraBackColor";
+            var expectedField = form.GetType().GetField(expectedFieldName, BindingFlags.Static | BindingFlags.NonPublic)
+                ?? throw new MissingFieldException(form.GetType().FullName, expectedFieldName);
+            var expectedColor = (Color)(expectedField.GetValue(null) ?? Color.Empty);
+
+            Assert.NotNull(args.CellStyle);
+            Assert.Equal(expectedColor, args.CellStyle!.BackColor);
+        });
+    }
+
+    [Fact]
+    public void SR21_FolderStatus_IsTechnicalAndHiddenFromUiFilters()
+    {
+        MainFormTestHarness.RunWithIsolatedForm((form, _) =>
+        {
+            Assert.DoesNotContain(WorkflowStatusNames.Folder, WorkflowStatusNames.Filterable);
+            Assert.Equal(WorkflowStatusNames.Waiting, WorkflowStatusNames.Normalize(WorkflowStatusNames.Folder));
+
+            var folderOrder = CreateOrder("SR21-001", WorkflowStatusNames.Folder, "QA User", new DateTime(2026, 1, 1), new DateTime(2026, 1, 1));
+            MainFormTestHarness.InvokePrivate(form, "AddCreatedOrder", folderOrder);
+
+            var dgv = MainFormTestHarness.GetPrivateField<DataGridView>(form, "dgvJobs");
+            var colStatus = MainFormTestHarness.GetPrivateField<DataGridViewColumn>(form, "colStatus");
+            var orderRow = dgv.Rows
+                .Cast<DataGridViewRow>()
+                .First(row => string.Equals(row.Tag?.ToString(), $"order|{folderOrder.InternalId}", StringComparison.Ordinal));
+
+            Assert.Equal(WorkflowStatusNames.Waiting, orderRow.Cells[colStatus.Index].Value?.ToString());
         });
     }
 

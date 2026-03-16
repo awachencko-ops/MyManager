@@ -46,6 +46,18 @@ namespace Replica
                 || columnIndex == colPrint.Index;
         }
 
+        private OrderData? ResolveOrderFromRowTag(string? rowTag, int rowIndex)
+        {
+            if (IsOrderTag(rowTag))
+                return GetOrderByRowIndex(rowIndex);
+
+            var orderInternalId = ExtractOrderInternalIdFromTag(rowTag);
+            if (string.IsNullOrWhiteSpace(orderInternalId))
+                return null;
+
+            return FindOrderByInternalId(orderInternalId);
+        }
+
         private void DgvJobs_MouseDown(object? sender, MouseEventArgs e)
         {
             StopGridHoverActivation();
@@ -265,7 +277,9 @@ namespace Replica
 
             var row = dgvJobs.Rows[e.RowIndex];
             var rowTag = row.Tag?.ToString();
-            var order = GetOrderByRowIndex(e.RowIndex);
+            var order = ResolveOrderFromRowTag(rowTag, e.RowIndex);
+            var isGroupContainerRow = IsGroupOrderContainerRow(rowTag, order);
+            var isGroupItemRow = IsItemTag(rowTag) && order != null && OrderTopologyService.IsMultiOrder(order);
             var isLockedGroupContainerCell = IsGroupOrderContainerRow(rowTag, order)
                 && IsGroupContainerLockedColumn(e.ColumnIndex);
             var rowBackColor = row.Selected
@@ -273,6 +287,20 @@ namespace Replica
                 : (e.RowIndex == _hoveredRowIndex
                     ? OrdersRowHoverBackColor
                     : (e.RowIndex % 2 == 0 ? OrdersRowBaseBackColor : OrdersRowZebraBackColor));
+            if (isGroupContainerRow)
+            {
+                rowBackColor = row.Selected
+                    ? GroupOrderRowSelectedBackColor
+                    : (e.RowIndex == _hoveredRowIndex ? GroupOrderRowHoverBackColor : GroupOrderRowBackColor);
+            }
+            else if (isGroupItemRow)
+            {
+                rowBackColor = row.Selected
+                    ? GroupOrderItemRowSelectedBackColor
+                    : (e.RowIndex == _hoveredRowIndex
+                        ? GroupOrderItemRowHoverBackColor
+                        : (e.RowIndex % 2 == 0 ? GroupOrderItemRowBaseBackColor : GroupOrderItemRowZebraBackColor));
+            }
             var isAttachmentColumn = e.ColumnIndex == colSource.Index
                 || e.ColumnIndex == colPrep.Index
                 || e.ColumnIndex == colPrint.Index;
@@ -289,7 +317,9 @@ namespace Replica
                 return;
 
             e.CellStyle.BackColor = rowBackColor;
-            e.CellStyle.SelectionBackColor = OrdersRowSelectedBackColor;
+            e.CellStyle.SelectionBackColor = isGroupContainerRow
+                ? GroupOrderRowSelectedBackColor
+                : (isGroupItemRow ? GroupOrderItemRowSelectedBackColor : OrdersRowSelectedBackColor);
             e.CellStyle.ForeColor = foreColor;
             e.CellStyle.SelectionForeColor = foreColor;
         }
