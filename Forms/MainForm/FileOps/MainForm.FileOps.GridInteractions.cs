@@ -401,13 +401,6 @@ namespace Replica
 
             if (e.ColumnIndex == colOrderNumber.Index)
             {
-                var order = GetOrderByRowIndex(e.RowIndex);
-                if (order != null && OrderTopologyService.IsMultiOrder(order))
-                {
-                    ToggleOrderExpanded(order.InternalId);
-                    return;
-                }
-
                 EditOrderFromGrid(e.RowIndex);
                 return;
             }
@@ -505,16 +498,8 @@ namespace Replica
                 return;
 
             if (stage == 0)
-            {
-                if (IsOrderTag(rowTag)
-                    && OrderTopologyService.IsMultiOrder(order)
-                    && (e.ColumnIndex == colOrderNumber.Index || e.ColumnIndex == colStatus.Index))
-                {
-                    ToggleOrderExpanded(order.InternalId);
-                }
-
                 return;
-            }
+            
 
             if (IsGroupOrderContainerRow(rowTag, order) && IsGroupContainerFileStageLocked(order, stage))
             {

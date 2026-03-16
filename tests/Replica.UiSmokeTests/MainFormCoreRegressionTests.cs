@@ -255,23 +255,28 @@ public sealed class MainFormCoreRegressionTests
             MainFormTestHarness.InvokePrivate(form, "AddCreatedOrder", groupOrder);
 
             var dgv = MainFormTestHarness.GetPrivateField<DataGridView>(form, "dgvJobs");
+            var colStatus = MainFormTestHarness.GetPrivateField<DataGridViewColumn>(form, "colStatus");
             var colOrderNumber = MainFormTestHarness.GetPrivateField<DataGridViewColumn>(form, "colOrderNumber");
 
             Assert.Single(GetVisibleRows(dgv));
-            Assert.StartsWith("▸", dgv.Rows[0].Cells[colOrderNumber.Index].Value?.ToString(), StringComparison.Ordinal);
+            Assert.Equal(WorkflowStatusNames.Folder, dgv.Rows[0].Cells[colStatus.Index].Value?.ToString());
+            Assert.Equal(groupOrder.Id, dgv.Rows[0].Cells[colOrderNumber.Index].Value?.ToString());
 
             MainFormTestHarness.InvokePrivate(form, "ToggleOrderExpanded", groupOrder.InternalId);
 
             var expandedRows = GetVisibleRows(dgv);
             Assert.Equal(3, expandedRows.Count);
-            Assert.StartsWith("▾", expandedRows[0].Cells[colOrderNumber.Index].Value?.ToString(), StringComparison.Ordinal);
+            Assert.Equal(WorkflowStatusNames.Folder, expandedRows[0].Cells[colStatus.Index].Value?.ToString());
+            Assert.Equal(groupOrder.Id, expandedRows[0].Cells[colOrderNumber.Index].Value?.ToString());
+            Assert.True(string.IsNullOrWhiteSpace(expandedRows[1].Cells[colOrderNumber.Index].Value?.ToString()));
+            Assert.True(string.IsNullOrWhiteSpace(expandedRows[2].Cells[colOrderNumber.Index].Value?.ToString()));
             Assert.StartsWith("item|", expandedRows[1].Tag?.ToString() ?? string.Empty, StringComparison.Ordinal);
             Assert.StartsWith("item|", expandedRows[2].Tag?.ToString() ?? string.Empty, StringComparison.Ordinal);
 
             MainFormTestHarness.InvokePrivate(form, "ToggleOrderExpanded", groupOrder.InternalId);
 
             Assert.Single(GetVisibleRows(dgv));
-            Assert.StartsWith("▸", dgv.Rows[0].Cells[colOrderNumber.Index].Value?.ToString(), StringComparison.Ordinal);
+            Assert.Equal(groupOrder.Id, dgv.Rows[0].Cells[colOrderNumber.Index].Value?.ToString());
         });
     }
 

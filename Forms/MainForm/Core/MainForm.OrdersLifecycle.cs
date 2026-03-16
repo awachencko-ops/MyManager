@@ -243,6 +243,9 @@ namespace Replica
             var normalizedStatus = NormalizeStatus(order.Status) ?? (order.Status ?? string.Empty).Trim();
             if (string.IsNullOrWhiteSpace(normalizedStatus))
                 normalizedStatus = WorkflowStatusNames.Processing;
+            var displayStatus = isMultiOrder
+                ? WorkflowStatusNames.Folder
+                : normalizedStatus;
 
             var sourceDisplay = string.Empty;
             var preparedDisplay = string.Empty;
@@ -270,7 +273,7 @@ namespace Replica
             }
 
             var orderRowIndex = dgvJobs.Rows.Add(
-                normalizedStatus,
+                displayStatus,
                 BuildOrderRowCaption(order, isExpanded),
                 sourceDisplay,
                 preparedDisplay,
@@ -333,21 +336,15 @@ namespace Replica
 
         private string BuildOrderRowCaption(OrderData order, bool isExpanded)
         {
-            var orderCaption = GetOrderDisplayId(order);
-            if (!OrderTopologyService.IsMultiOrder(order))
-                return orderCaption;
-
-            var prefix = isExpanded ? "▾ " : "▸ ";
-            return $"{prefix}{orderCaption}";
+            _ = isExpanded;
+            return string.IsNullOrWhiteSpace(order.Id) ? string.Empty : order.Id.Trim();
         }
 
         private static string BuildItemRowCaption(OrderFileItem item, int index)
         {
-            var itemLabel = item.ClientFileLabel;
-            if (string.IsNullOrWhiteSpace(itemLabel))
-                itemLabel = $"item {index + 1}";
-
-            return $"    • {itemLabel.Trim()}";
+            _ = item;
+            _ = index;
+            return string.Empty;
         }
 
         private void ToggleOrderExpanded(string orderInternalId)
