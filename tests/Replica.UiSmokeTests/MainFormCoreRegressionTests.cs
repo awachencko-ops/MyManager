@@ -257,10 +257,16 @@ public sealed class MainFormCoreRegressionTests
             var dgv = MainFormTestHarness.GetPrivateField<DataGridView>(form, "dgvJobs");
             var colStatus = MainFormTestHarness.GetPrivateField<DataGridViewColumn>(form, "colStatus");
             var colOrderNumber = MainFormTestHarness.GetPrivateField<DataGridViewColumn>(form, "colOrderNumber");
+            var colReceived = MainFormTestHarness.GetPrivateField<DataGridViewColumn>(form, "colReceived");
+            var colCreated = MainFormTestHarness.GetPrivateField<DataGridViewColumn>(form, "colCreated");
+            var expectedOrderDate = groupOrder.OrderDate.ToString("dd.MM.yyyy");
+            var expectedArrivalDate = groupOrder.ArrivalDate.ToString("dd.MM.yyyy");
 
             Assert.Single(GetVisibleRows(dgv));
             Assert.Equal(WorkflowStatusNames.Group, dgv.Rows[0].Cells[colStatus.Index].Value?.ToString());
             Assert.Equal(groupOrder.Id, dgv.Rows[0].Cells[colOrderNumber.Index].Value?.ToString());
+            Assert.Equal(expectedOrderDate, dgv.Rows[0].Cells[colReceived.Index].Value?.ToString());
+            Assert.Equal(expectedArrivalDate, dgv.Rows[0].Cells[colCreated.Index].Value?.ToString());
 
             MainFormTestHarness.InvokePrivate(form, "ToggleOrderExpanded", groupOrder.InternalId);
 
@@ -268,8 +274,14 @@ public sealed class MainFormCoreRegressionTests
             Assert.Equal(3, expandedRows.Count);
             Assert.Equal(WorkflowStatusNames.Group, expandedRows[0].Cells[colStatus.Index].Value?.ToString());
             Assert.Equal(groupOrder.Id, expandedRows[0].Cells[colOrderNumber.Index].Value?.ToString());
-            Assert.True(string.IsNullOrWhiteSpace(expandedRows[1].Cells[colOrderNumber.Index].Value?.ToString()));
-            Assert.True(string.IsNullOrWhiteSpace(expandedRows[2].Cells[colOrderNumber.Index].Value?.ToString()));
+            Assert.Equal(expectedOrderDate, expandedRows[0].Cells[colReceived.Index].Value?.ToString());
+            Assert.Equal(expectedArrivalDate, expandedRows[0].Cells[colCreated.Index].Value?.ToString());
+            Assert.Equal(groupOrder.Id, expandedRows[1].Cells[colOrderNumber.Index].Value?.ToString());
+            Assert.Equal(groupOrder.Id, expandedRows[2].Cells[colOrderNumber.Index].Value?.ToString());
+            Assert.Equal(expectedOrderDate, expandedRows[1].Cells[colReceived.Index].Value?.ToString());
+            Assert.Equal(expectedOrderDate, expandedRows[2].Cells[colReceived.Index].Value?.ToString());
+            Assert.Equal(expectedArrivalDate, expandedRows[1].Cells[colCreated.Index].Value?.ToString());
+            Assert.Equal(expectedArrivalDate, expandedRows[2].Cells[colCreated.Index].Value?.ToString());
             Assert.StartsWith("item|", expandedRows[1].Tag?.ToString() ?? string.Empty, StringComparison.Ordinal);
             Assert.StartsWith("item|", expandedRows[2].Tag?.ToString() ?? string.Empty, StringComparison.Ordinal);
 

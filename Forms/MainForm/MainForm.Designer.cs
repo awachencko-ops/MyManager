@@ -42,6 +42,17 @@
             treeView1 = new TreeView();
             pnlServerHeader = new Panel();
             tableLayoutPanel1 = new TableLayoutPanel();
+            panel1 = new Panel();
+            dgvJobs = new DataGridView();
+            colStatus = new DataGridViewTextBoxColumn();
+            colOrderNumber = new DataGridViewTextBoxColumn();
+            colSource = new DataGridViewTextBoxColumn();
+            colPrep = new DataGridViewTextBoxColumn();
+            colPitstop = new DataGridViewTextBoxColumn();
+            colHotimposing = new DataGridViewTextBoxColumn();
+            colPrint = new DataGridViewTextBoxColumn();
+            colReceived = new DataGridViewTextBoxColumn();
+            colCreated = new DataGridViewTextBoxColumn();
             pnlHeader = new Panel();
             btnViewTiles = new Button();
             btnViewList = new Button();
@@ -56,16 +67,6 @@
             cbUser = new ComboBox();
             cbFCreated = new ComboBox();
             cbFReceived = new ComboBox();
-            dgvJobs = new DataGridView();
-            colStatus = new DataGridViewTextBoxColumn();
-            colOrderNumber = new DataGridViewTextBoxColumn();
-            colSource = new DataGridViewTextBoxColumn();
-            colPrep = new DataGridViewTextBoxColumn();
-            colPitstop = new DataGridViewTextBoxColumn();
-            colHotimposing = new DataGridViewTextBoxColumn();
-            colPrint = new DataGridViewTextBoxColumn();
-            colReceived = new DataGridViewTextBoxColumn();
-            colCreated = new DataGridViewTextBoxColumn();
             pnlTray = new Panel();
             statusStrip1 = new StatusStrip();
             toolStatus = new ToolStripStatusLabel();
@@ -97,12 +98,13 @@
             scMain.Panel2.SuspendLayout();
             scMain.SuspendLayout();
             tableLayoutPanel1.SuspendLayout();
+            panel1.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)dgvJobs).BeginInit();
             pnlHeader.SuspendLayout();
             pnlFilters.SuspendLayout();
             flpFilters.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)picFStatusGlyph).BeginInit();
             ((System.ComponentModel.ISupportInitialize)picFOrderNoGlyph).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)dgvJobs).BeginInit();
             pnlTray.SuspendLayout();
             statusStrip1.SuspendLayout();
             tsMainActions.SuspendLayout();
@@ -232,21 +234,113 @@
             // 
             tableLayoutPanel1.ColumnCount = 1;
             tableLayoutPanel1.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            tableLayoutPanel1.Controls.Add(panel1, 0, 2);
             tableLayoutPanel1.Controls.Add(pnlHeader, 0, 0);
             tableLayoutPanel1.Controls.Add(pnlFilters, 0, 1);
-            tableLayoutPanel1.Controls.Add(dgvJobs, 0, 2);
             tableLayoutPanel1.Controls.Add(pnlTray, 0, 3);
             tableLayoutPanel1.Dock = DockStyle.Fill;
             tableLayoutPanel1.Location = new Point(0, 46);
             tableLayoutPanel1.Margin = new Padding(0);
             tableLayoutPanel1.Name = "tableLayoutPanel1";
-            tableLayoutPanel1.RowCount = 3;
+            tableLayoutPanel1.RowCount = 4;
             tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));
             tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));
             tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
             tableLayoutPanel1.RowStyles.Add(new RowStyle(SizeType.Absolute, 40F));
             tableLayoutPanel1.Size = new Size(1749, 1198);
             tableLayoutPanel1.TabIndex = 1;
+            // 
+            // panel1
+            // 
+            panel1.Controls.Add(dgvJobs);
+            panel1.Dock = DockStyle.Fill;
+            panel1.Location = new Point(3, 87);
+            panel1.Name = "panel1";
+            panel1.Size = new Size(1743, 1068);
+            panel1.TabIndex = 3;
+            // 
+            // dgvJobs
+            // 
+            dgvJobs.AllowUserToAddRows = false;
+            dgvJobs.AllowUserToDeleteRows = false;
+            dgvJobs.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            dgvJobs.BackgroundColor = Color.White;
+            dgvJobs.BorderStyle = BorderStyle.None;
+            dgvJobs.CellBorderStyle = DataGridViewCellBorderStyle.None;
+            dgvJobs.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            dgvJobs.Columns.AddRange(new DataGridViewColumn[] { colStatus, colOrderNumber, colSource, colPrep, colPitstop, colHotimposing, colPrint, colReceived, colCreated });
+            dgvJobs.Dock = DockStyle.Fill;
+            dgvJobs.Location = new Point(0, 0);
+            dgvJobs.Name = "dgvJobs";
+            dgvJobs.ReadOnly = true;
+            dgvJobs.RowHeadersVisible = false;
+            dgvJobs.RowHeadersWidth = 62;
+            dgvJobs.Size = new Size(1743, 1068);
+            dgvJobs.TabIndex = 2;
+            // 
+            // colStatus
+            // 
+            colStatus.HeaderText = "Состояние";
+            colStatus.MinimumWidth = 8;
+            colStatus.Name = "colStatus";
+            colStatus.ReadOnly = true;
+            // 
+            // colOrderNumber
+            // 
+            colOrderNumber.HeaderText = "№ заказа";
+            colOrderNumber.MinimumWidth = 8;
+            colOrderNumber.Name = "colOrderNumber";
+            colOrderNumber.ReadOnly = true;
+            // 
+            // colSource
+            // 
+            colSource.HeaderText = "Исходные";
+            colSource.MinimumWidth = 8;
+            colSource.Name = "colSource";
+            colSource.ReadOnly = true;
+            colSource.Visible = false;
+            // 
+            // colPrep
+            // 
+            colPrep.HeaderText = "Заголовок задания";
+            colPrep.MinimumWidth = 8;
+            colPrep.Name = "colPrep";
+            colPrep.ReadOnly = true;
+            // 
+            // colPitstop
+            // 
+            colPitstop.HeaderText = "Проверка файлов";
+            colPitstop.MinimumWidth = 8;
+            colPitstop.Name = "colPitstop";
+            colPitstop.ReadOnly = true;
+            // 
+            // colHotimposing
+            // 
+            colHotimposing.HeaderText = "Спуск полос";
+            colHotimposing.MinimumWidth = 8;
+            colHotimposing.Name = "colHotimposing";
+            colHotimposing.ReadOnly = true;
+            // 
+            // colPrint
+            // 
+            colPrint.HeaderText = "Готов к печати";
+            colPrint.MinimumWidth = 8;
+            colPrint.Name = "colPrint";
+            colPrint.ReadOnly = true;
+            // 
+            // colReceived
+            // 
+            colReceived.HeaderText = "Заказ принят";
+            colReceived.MinimumWidth = 8;
+            colReceived.Name = "colReceived";
+            colReceived.ReadOnly = true;
+            // 
+            // colCreated
+            // 
+            colCreated.HeaderText = "В препрессе";
+            colCreated.MinimumWidth = 8;
+            colCreated.Name = "colCreated";
+            colCreated.ReadOnly = true;
             // 
             // pnlHeader
             // 
@@ -396,89 +490,6 @@
             cbFReceived.Name = "cbFReceived";
             cbFReceived.Size = new Size(170, 33);
             cbFReceived.TabIndex = 6;
-            // 
-            // dgvJobs
-            // 
-            dgvJobs.AllowUserToAddRows = false;
-            dgvJobs.AllowUserToDeleteRows = false;
-            dgvJobs.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-            dgvJobs.BackgroundColor = Color.White;
-            dgvJobs.BorderStyle = BorderStyle.None;
-            dgvJobs.CellBorderStyle = DataGridViewCellBorderStyle.None;
-            dgvJobs.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            dgvJobs.Columns.AddRange(new DataGridViewColumn[] { colStatus, colOrderNumber, colSource, colPrep, colPitstop, colHotimposing, colPrint, colReceived, colCreated });
-            dgvJobs.Dock = DockStyle.Fill;
-            dgvJobs.Location = new Point(3, 87);
-            dgvJobs.Name = "dgvJobs";
-            dgvJobs.ReadOnly = true;
-            dgvJobs.RowHeadersVisible = false;
-            dgvJobs.RowHeadersWidth = 62;
-            dgvJobs.Size = new Size(1743, 1068);
-            dgvJobs.TabIndex = 2;
-            // 
-            // colStatus
-            // 
-            colStatus.HeaderText = "Состояние";
-            colStatus.MinimumWidth = 8;
-            colStatus.Name = "colStatus";
-            colStatus.ReadOnly = true;
-            // 
-            // colOrderNumber
-            // 
-            colOrderNumber.HeaderText = "№ заказа";
-            colOrderNumber.MinimumWidth = 8;
-            colOrderNumber.Name = "colOrderNumber";
-            colOrderNumber.ReadOnly = true;
-            // 
-            // colSource
-            // 
-            colSource.HeaderText = "Исходные";
-            colSource.MinimumWidth = 8;
-            colSource.Name = "colSource";
-            colSource.ReadOnly = true;
-            colSource.Visible = false;
-            // 
-            // colPrep
-            // 
-            colPrep.HeaderText = "Заголовок задания";
-            colPrep.MinimumWidth = 8;
-            colPrep.Name = "colPrep";
-            colPrep.ReadOnly = true;
-            // 
-            // colPitstop
-            // 
-            colPitstop.HeaderText = "Проверка файлов";
-            colPitstop.MinimumWidth = 8;
-            colPitstop.Name = "colPitstop";
-            colPitstop.ReadOnly = true;
-            // 
-            // colHotimposing
-            // 
-            colHotimposing.HeaderText = "Спуск полос";
-            colHotimposing.MinimumWidth = 8;
-            colHotimposing.Name = "colHotimposing";
-            colHotimposing.ReadOnly = true;
-            // 
-            // colPrint
-            // 
-            colPrint.HeaderText = "Готов к печати";
-            colPrint.MinimumWidth = 8;
-            colPrint.Name = "colPrint";
-            colPrint.ReadOnly = true;
-            // 
-            // colReceived
-            // 
-            colReceived.HeaderText = "Заказ принят";
-            colReceived.MinimumWidth = 8;
-            colReceived.Name = "colReceived";
-            colReceived.ReadOnly = true;
-            // 
-            // colCreated
-            // 
-            colCreated.HeaderText = "В препрессе";
-            colCreated.MinimumWidth = 8;
-            colCreated.Name = "colCreated";
-            colCreated.ReadOnly = true;
             // 
             // pnlTray
             // 
@@ -638,13 +649,14 @@
             ((System.ComponentModel.ISupportInitialize)scMain).EndInit();
             scMain.ResumeLayout(false);
             tableLayoutPanel1.ResumeLayout(false);
+            panel1.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)dgvJobs).EndInit();
             pnlHeader.ResumeLayout(false);
             pnlHeader.PerformLayout();
             pnlFilters.ResumeLayout(false);
             flpFilters.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)picFStatusGlyph).EndInit();
             ((System.ComponentModel.ISupportInitialize)picFOrderNoGlyph).EndInit();
-            ((System.ComponentModel.ISupportInitialize)dgvJobs).EndInit();
             pnlTray.ResumeLayout(false);
             pnlTray.PerformLayout();
             statusStrip1.ResumeLayout(false);
@@ -710,5 +722,6 @@
         private PictureBox pictureBox3;
         private Panel pnlServerHeader;
         private ToolStripButton toolStripButton1;
+        private Panel panel1;
     }
 }

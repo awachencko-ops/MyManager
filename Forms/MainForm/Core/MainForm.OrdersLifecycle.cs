@@ -319,16 +319,20 @@ namespace Replica
                 if (string.Equals(imposingAction, "-", StringComparison.Ordinal))
                     imposingAction = NormalizeAction(order.ImposingAction);
 
+                var orderNumberDisplay = string.IsNullOrWhiteSpace(order.Id)
+                    ? string.Empty
+                    : order.Id.Trim();
+
                 var rowIndex = dgvJobs.Rows.Add(
                     itemStatus,
-                    BuildItemRowCaption(item, index),
+                    orderNumberDisplay,
                     GetFileName(item.SourcePath),
                     GetFileName(item.PreparedPath),
                     pitStopAction,
                     imposingAction,
                     GetFileName(item.PrintPath),
-                    string.Empty,
-                    string.Empty);
+                    FormatDate(order.OrderDate),
+                    FormatDate(order.ArrivalDate));
 
                 dgvJobs.Rows[rowIndex].Tag = OrderGridLogic.BuildItemTag(order.InternalId, item.ItemId);
             }
@@ -810,7 +814,7 @@ namespace Replica
         {
             if (selectedOrderItems == null || selectedOrderItems.Count == 0)
             {
-                SetBottomStatus("Выберите файл группы для удаления");
+                SetBottomStatus("Выберите файл для удаления");
                 return;
             }
 
@@ -818,22 +822,20 @@ namespace Replica
             var firstSelection = selectedOrderItems[0];
             var firstItemName = BuildOrderItemDisplayName(firstSelection.Item);
             var confirmationText = isBatchDelete
-                ? $"Выбрано item: {selectedOrderItems.Count}\n\n" +
-                  "Удалить файлы item с диска?\n\n" +
-                  "[Да] — удалить с диска и из группы.\n" +
-                  "[Нет] — только удалить из группы.\n" +
-                  "[Отмена] — ничего не менять."
+                ? $"Выбрано файлов: {selectedOrderItems.Count}\n\n" +
+                  "Удалить файлы с диска?\n\n" +
+                  "Да — удалить с диска и из групп.\n" +
+                  "Нет — удалить только из групп."
                 : $"Заказ №{GetOrderDisplayId(firstSelection.Order)}\n" +
-                  $"Item: {firstItemName}\n\n" +
-                  "Удалить файлы item с диска?\n\n" +
-                  "[Да] — удалить с диска и из группы.\n" +
-                  "[Нет] — только удалить из группы.\n" +
-                  "[Отмена] — ничего не менять.";
+                  $"Файл: {firstItemName}\n\n" +
+                  "Удалить файл с диска?\n\n" +
+                  "Да — удалить с диска и из группы.\n" +
+                  "Нет — удалить только из группы.";
 
             var decision = MessageBox.Show(
                 this,
                 confirmationText,
-                isBatchDelete ? "Удаление item группы" : "Удаление item",
+                isBatchDelete ? "Удаление файлов" : "Удаление файла",
                 MessageBoxButtons.YesNoCancel,
                 MessageBoxIcon.Warning);
 
@@ -865,7 +867,7 @@ namespace Replica
                     var removed = order.Items?.RemoveAll(x => x != null && string.Equals(x.ItemId, item.ItemId, StringComparison.Ordinal)) > 0;
                     if (!removed)
                     {
-                        failedItems.Add($"{GetOrderDisplayId(order)} / {itemName}: item не найден");
+                        failedItems.Add($"{GetOrderDisplayId(order)} / {itemName}: файл не найден");
                         continue;
                     }
 
@@ -874,8 +876,8 @@ namespace Replica
                         order,
                         OrderOperationNames.RemoveItem,
                         removeFilesFromDisk
-                            ? $"Удален item: {itemName} (с диска и из группы)"
-                            : $"Удален item: {itemName} (из группы)");
+                            ? $"Удален файл: {itemName} (с диска и из группы)"
+                            : $"Удален файл: {itemName} (из группы)");
                     removedItemsCount++;
                 }
                 catch (Exception ex)
@@ -898,12 +900,12 @@ namespace Replica
                 RebuildOrdersGrid();
                 UpdateActionButtonsState();
                 SetBottomStatus(isBatchDelete
-                    ? $"Удалено item: {removedItemsCount}"
-                    : $"Item {firstItemName} удален");
+                    ? $"Удалено файлов: {removedItemsCount}"
+                    : $"Файл {firstItemName} удален");
             }
             else
             {
-                SetBottomStatus("Удаление item не выполнено");
+                SetBottomStatus("Удаление файла не выполнено");
             }
 
             if (failedItems.Count == 0)
@@ -915,8 +917,8 @@ namespace Replica
 
             MessageBox.Show(
                 this,
-                $"Не удалось удалить некоторые item:{Environment.NewLine}{failedPreview}",
-                isBatchDelete ? "Удаление item группы" : "Удаление item",
+                $"Не удалось удалить некоторые файлы:{Environment.NewLine}{failedPreview}",
+                isBatchDelete ? "Удаление файлов" : "Удаление файла",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
         }
@@ -954,7 +956,7 @@ namespace Replica
                 }
                 catch (Exception ex)
                 {
-                    throw new IOException($"Не удалось удалить файл item: {path}", ex);
+                    throw new IOException($"Не удалось удалить файл: {path}", ex);
                 }
             }
         }
@@ -1001,7 +1003,7 @@ namespace Replica
         private static string BuildOrderItemDisplayName(OrderFileItem item)
         {
             if (item == null)
-                return "item";
+                return "файл";
 
             if (!string.IsNullOrWhiteSpace(item.ClientFileLabel))
                 return item.ClientFileLabel.Trim();
@@ -1009,7 +1011,7 @@ namespace Replica
             if (!string.IsNullOrWhiteSpace(item.ItemId))
                 return item.ItemId;
 
-            return "item";
+            return "файл";
         }
 
         private void OpenLogForSelectionOrManager()
