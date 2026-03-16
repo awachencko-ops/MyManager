@@ -262,20 +262,20 @@
             // 
             // btnViewTiles
             // 
+            btnViewTiles.Image = (Image)resources.GetObject("btnViewTiles.Image");
             btnViewTiles.Location = new Point(1700, 3);
             btnViewTiles.Name = "btnViewTiles";
             btnViewTiles.Size = new Size(34, 33);
             btnViewTiles.TabIndex = 3;
-            btnViewTiles.Text = "▦";
             btnViewTiles.UseVisualStyleBackColor = true;
             // 
             // btnViewList
             // 
+            btnViewList.Image = (Image)resources.GetObject("btnViewList.Image");
             btnViewList.Location = new Point(1665, 3);
             btnViewList.Name = "btnViewList";
             btnViewList.Size = new Size(34, 33);
             btnViewList.TabIndex = 2;
-            btnViewList.Text = "≡";
             btnViewList.UseVisualStyleBackColor = true;
             // 
             // tbSearch
