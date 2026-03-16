@@ -42,7 +42,7 @@
             treeView1 = new TreeView();
             pnlServerHeader = new Panel();
             tableLayoutPanel1 = new TableLayoutPanel();
-            panel1 = new Panel();
+            pnlTable = new Panel();
             dgvJobs = new DataGridView();
             colStatus = new DataGridViewTextBoxColumn();
             colOrderNumber = new DataGridViewTextBoxColumn();
@@ -84,6 +84,7 @@
             tsbBrowse = new ToolStripButton();
             tsbConsole = new ToolStripButton();
             toolStripButton1 = new ToolStripButton();
+            pnlScrollBar = new Panel();
             pnlSidebar.SuspendLayout();
             pnlDockLiterature.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)pictureBox4).BeginInit();
@@ -98,7 +99,7 @@
             scMain.Panel2.SuspendLayout();
             scMain.SuspendLayout();
             tableLayoutPanel1.SuspendLayout();
-            panel1.SuspendLayout();
+            pnlTable.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)dgvJobs).BeginInit();
             pnlHeader.SuspendLayout();
             pnlFilters.SuspendLayout();
@@ -234,7 +235,7 @@
             // 
             tableLayoutPanel1.ColumnCount = 1;
             tableLayoutPanel1.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            tableLayoutPanel1.Controls.Add(panel1, 0, 2);
+            tableLayoutPanel1.Controls.Add(pnlTable, 0, 2);
             tableLayoutPanel1.Controls.Add(pnlHeader, 0, 0);
             tableLayoutPanel1.Controls.Add(pnlFilters, 0, 1);
             tableLayoutPanel1.Controls.Add(pnlTray, 0, 3);
@@ -250,14 +251,15 @@
             tableLayoutPanel1.Size = new Size(1749, 1198);
             tableLayoutPanel1.TabIndex = 1;
             // 
-            // panel1
+            // pnlTable
             // 
-            panel1.Controls.Add(dgvJobs);
-            panel1.Dock = DockStyle.Fill;
-            panel1.Location = new Point(3, 87);
-            panel1.Name = "panel1";
-            panel1.Size = new Size(1743, 1068);
-            panel1.TabIndex = 3;
+            pnlTable.Controls.Add(dgvJobs);
+            pnlTable.Controls.Add(pnlScrollBar);
+            pnlTable.Dock = DockStyle.Fill;
+            pnlTable.Location = new Point(3, 87);
+            pnlTable.Name = "pnlTable";
+            pnlTable.Size = new Size(1743, 1068);
+            pnlTable.TabIndex = 3;
             // 
             // dgvJobs
             // 
@@ -275,7 +277,7 @@
             dgvJobs.ReadOnly = true;
             dgvJobs.RowHeadersVisible = false;
             dgvJobs.RowHeadersWidth = 62;
-            dgvJobs.Size = new Size(1743, 1068);
+            dgvJobs.Size = new Size(1723, 1068);
             dgvJobs.TabIndex = 2;
             // 
             // colStatus
@@ -625,6 +627,14 @@
             toolStripButton1.Size = new Size(138, 29);
             toolStripButton1.Text = "Параметры";
             // 
+            // pnlScrollBar
+            // 
+            pnlScrollBar.Dock = DockStyle.Right;
+            pnlScrollBar.Location = new Point(1723, 0);
+            pnlScrollBar.Name = "pnlScrollBar";
+            pnlScrollBar.Size = new Size(20, 1068);
+            pnlScrollBar.TabIndex = 3;
+            // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(10F, 25F);
@@ -649,7 +659,7 @@
             ((System.ComponentModel.ISupportInitialize)scMain).EndInit();
             scMain.ResumeLayout(false);
             tableLayoutPanel1.ResumeLayout(false);
-            panel1.ResumeLayout(false);
+            pnlTable.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)dgvJobs).EndInit();
             pnlHeader.ResumeLayout(false);
             pnlHeader.PerformLayout();
@@ -722,6 +732,7 @@
         private PictureBox pictureBox3;
         private Panel pnlServerHeader;
         private ToolStripButton toolStripButton1;
-        private Panel panel1;
+        private Panel pnlTable;
+        private Panel pnlScrollBar;
     }
 }
