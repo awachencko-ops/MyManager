@@ -189,6 +189,7 @@
             // pictureBox2
             // 
             pictureBox2.Dock = DockStyle.Fill;
+            pictureBox2.Image = (Image)resources.GetObject("pictureBox2.Image");
             pictureBox2.Location = new Point(0, 0);
             pictureBox2.Name = "pictureBox2";
             pictureBox2.Size = new Size(65, 65);
@@ -642,6 +643,7 @@
             ClientSize = new Size(2278, 1244);
             Controls.Add(scMain);
             Controls.Add(pnlSidebar);
+            Icon = (Icon)resources.GetObject("$this.Icon");
             Name = "MainForm";
             Text = "Replica";
             pnlSidebar.ResumeLayout(false);
