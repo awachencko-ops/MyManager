@@ -252,7 +252,7 @@ namespace Replica
                 FormatDate(order.OrderDate),
                 FormatDate(order.ArrivalDate));
 
-            dgvJobs.Rows[orderRowIndex].Tag = $"order|{order.InternalId}";
+            dgvJobs.Rows[orderRowIndex].Tag = OrderGridLogic.BuildOrderTag(order.InternalId);
         }
 
         private string ResolveSingleOrderDisplayPath(OrderData order, int stage)
@@ -278,194 +278,72 @@ namespace Replica
 
         private static string ResolveSingleOrderDisplayAction(OrderData order, Func<OrderFileItem, string> selector, string? orderAction)
         {
-            var normalizedOrderAction = NormalizeAction(orderAction);
-            if (!string.Equals(normalizedOrderAction, "-", StringComparison.Ordinal))
-                return normalizedOrderAction;
-
-            var primaryItem = GetPrimaryItem(order);
-            if (primaryItem == null)
-                return normalizedOrderAction;
-
-            return NormalizeAction(selector(primaryItem));
+            return OrderGridLogic.ResolveSingleOrderDisplayAction(order, selector, orderAction);
         }
 
         private static OrderFileItem? GetPrimaryItem(OrderData order)
         {
-            if (order?.Items == null || order.Items.Count == 0)
-                return null;
-
-            return order.Items
-                .Where(x => x != null)
-                .OrderBy(x => x.SequenceNo)
-                .FirstOrDefault();
+            return OrderGridLogic.GetPrimaryItem(order);
         }
 
         private bool OrderMatchesSearch(OrderData order, string searchText)
         {
-            if (order == null)
-                return false;
-
-            var query = searchText.Trim();
-            if (string.IsNullOrWhiteSpace(query))
-                return true;
-
-            static bool Contains(string source, string queryValue)
-                => !string.IsNullOrWhiteSpace(source) &&
-                   source.IndexOf(queryValue, StringComparison.OrdinalIgnoreCase) >= 0;
-
-            if (Contains(order.Id, query)
-                || Contains(Path.GetFileName(order.SourcePath), query)
-                || Contains(Path.GetFileName(order.PreparedPath), query)
-                || Contains(Path.GetFileName(order.PrintPath), query))
-            {
-                return true;
-            }
-
-            if (order.Items == null || order.Items.Count == 0)
-                return false;
-
-            foreach (var item in order.Items)
-            {
-                if (item == null)
-                    continue;
-
-                if (Contains(item.ClientFileLabel, query)
-                    || Contains(Path.GetFileName(item.SourcePath), query)
-                    || Contains(Path.GetFileName(item.PreparedPath), query)
-                    || Contains(Path.GetFileName(item.PrintPath), query))
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return OrderGridLogic.OrderMatchesSearch(order, searchText);
         }
 
         private void TryRestoreSelectedRowByTag(string selectedTag)
         {
-            foreach (DataGridViewRow row in dgvJobs.Rows)
-            {
-                if (string.Equals(row.Tag?.ToString(), selectedTag, StringComparison.Ordinal))
-                {
-                    dgvJobs.CurrentCell = row.Cells[colStatus.Index];
-                    return;
-                }
-            }
+            OrderGridLogic.TryRestoreSelectedRowByTag(dgvJobs, colStatus.Index, selectedTag);
         }
 
         private OrderData? FindOrderByInternalId(string? internalId)
         {
-            if (string.IsNullOrWhiteSpace(internalId))
-                return null;
-
-            return _orderHistory.FirstOrDefault(x => string.Equals(x.InternalId, internalId, StringComparison.Ordinal));
+            return OrderGridLogic.FindOrderByInternalId(_orderHistory, internalId);
         }
 
         private static bool IsOrderTag(string? tag)
         {
-            return !string.IsNullOrWhiteSpace(tag) && tag.StartsWith("order|", StringComparison.Ordinal);
+            return OrderGridLogic.IsOrderTag(tag);
         }
 
         private static bool IsItemTag(string? tag)
         {
-            return !string.IsNullOrWhiteSpace(tag) && tag.StartsWith("item|", StringComparison.Ordinal);
+            return OrderGridLogic.IsItemTag(tag);
         }
 
         private static string? ExtractOrderInternalIdFromTag(string? tag)
         {
-            if (string.IsNullOrWhiteSpace(tag))
-                return null;
-
-            var parts = tag.Split('|');
-            if (parts.Length < 2)
-                return null;
-
-            return parts[1];
+            return OrderGridLogic.ExtractOrderInternalIdFromTag(tag);
         }
 
         private static string GetOrderDisplayId(OrderData order)
         {
-            return string.IsNullOrWhiteSpace(order.Id) ? "—" : order.Id.Trim();
+            return OrderGridLogic.GetOrderDisplayId(order);
         }
 
         private static string GetFileName(string? path)
         {
-            if (string.IsNullOrWhiteSpace(path))
-                return "...";
-
-            var normalizedPath = path.Trim();
-            if (Directory.Exists(normalizedPath))
-                return "...";
-
-            var fileName = Path.GetFileName(normalizedPath);
-            return string.IsNullOrWhiteSpace(fileName) ? "..." : fileName;
+            return OrderGridLogic.GetFileName(path);
         }
 
         private static string FormatDate(DateTime value)
         {
-            if (value == default)
-                return string.Empty;
-
-            return value.ToString("dd.MM.yyyy");
+            return OrderGridLogic.FormatDate(value);
         }
 
         private static string NormalizeAction(string? action)
         {
-            return string.IsNullOrWhiteSpace(action) ? "-" : action.Trim();
+            return OrderGridLogic.NormalizeAction(action);
         }
 
         private OrderData? GetSelectedOrder()
         {
-            var selectedRow = dgvJobs.CurrentRow;
-            if (selectedRow == null || selectedRow.IsNewRow)
-            {
-                selectedRow = dgvJobs.SelectedRows
-                    .Cast<DataGridViewRow>()
-                    .Where(row => !row.IsNewRow)
-                    .OrderBy(row => row.Index)
-                    .FirstOrDefault();
-            }
-
-            if (selectedRow == null)
-                return null;
-
-            var rowTag = selectedRow.Tag?.ToString();
-            var orderInternalId = ExtractOrderInternalIdFromTag(rowTag);
-            if (string.IsNullOrWhiteSpace(orderInternalId))
-                return null;
-
-            return FindOrderByInternalId(orderInternalId);
+            return OrderGridLogic.GetSelectedOrder(dgvJobs, _orderHistory);
         }
 
         private List<OrderData> GetSelectedOrders()
         {
-            var selectedOrders = new List<OrderData>();
-            var uniqueOrderIds = new HashSet<string>(StringComparer.Ordinal);
-
-            var selectedRows = dgvJobs.SelectedRows
-                .Cast<DataGridViewRow>()
-                .Where(row => !row.IsNewRow)
-                .OrderBy(row => row.Index);
-
-            foreach (var row in selectedRows)
-            {
-                var orderInternalId = ExtractOrderInternalIdFromTag(row.Tag?.ToString());
-                if (string.IsNullOrWhiteSpace(orderInternalId) || !uniqueOrderIds.Add(orderInternalId))
-                    continue;
-
-                var order = FindOrderByInternalId(orderInternalId);
-                if (order != null)
-                    selectedOrders.Add(order);
-            }
-
-            if (selectedOrders.Count > 0)
-                return selectedOrders;
-
-            var singleOrder = GetSelectedOrder();
-            if (singleOrder != null && uniqueOrderIds.Add(singleOrder.InternalId))
-                selectedOrders.Add(singleOrder);
-
-            return selectedOrders;
+            return OrderGridLogic.GetSelectedOrders(dgvJobs, _orderHistory);
         }
 
         private async Task RunSelectedOrderAsync()

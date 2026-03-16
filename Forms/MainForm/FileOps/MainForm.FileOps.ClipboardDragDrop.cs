@@ -53,7 +53,7 @@ namespace Replica
             if (!await AddFileToOrderAsync(order, clipboardFilePath, stage))
                 return;
 
-            PersistGridChanges($"order|{order.InternalId}");
+            PersistGridChanges(OrderGridLogic.BuildOrderTag(order.InternalId));
         }
 
         private async Task PasteFileFromClipboardAsync(OrderData order, OrderFileItem item, int stage)
@@ -65,7 +65,7 @@ namespace Replica
             if (!await AddFileToItemAsync(order, item, clipboardFilePath, stage))
                 return;
 
-            PersistGridChanges($"item|{order.InternalId}|{item.ItemId}");
+            PersistGridChanges(OrderGridLogic.BuildItemTag(order.InternalId, item.ItemId));
         }
 
         private string? TryGetClipboardFilePath()

@@ -334,7 +334,7 @@ namespace Replica
                     item.PitStopAction = "-";
             }
 
-            PersistGridChanges($"order|{order.InternalId}");
+            PersistGridChanges(OrderGridLogic.BuildOrderTag(order.InternalId));
             SetBottomStatus($"PitStop очищен для {GetOrderDisplayId(order)}");
         }
 
@@ -347,21 +347,21 @@ namespace Replica
                     item.ImposingAction = "-";
             }
 
-            PersistGridChanges($"order|{order.InternalId}");
+            PersistGridChanges(OrderGridLogic.BuildOrderTag(order.InternalId));
             SetBottomStatus($"Imposing очищен для {GetOrderDisplayId(order)}");
         }
 
         private void RemovePitStopAction(OrderData order, OrderFileItem item)
         {
             item.PitStopAction = "-";
-            PersistGridChanges($"item|{order.InternalId}|{item.ItemId}");
+            PersistGridChanges(OrderGridLogic.BuildItemTag(order.InternalId, item.ItemId));
             SetBottomStatus($"PitStop очищен для item {item.ClientFileLabel}");
         }
 
         private void RemoveImposingAction(OrderData order, OrderFileItem item)
         {
             item.ImposingAction = "-";
-            PersistGridChanges($"item|{order.InternalId}|{item.ItemId}");
+            PersistGridChanges(OrderGridLogic.BuildItemTag(order.InternalId, item.ItemId));
             SetBottomStatus($"Imposing очищен для item {item.ClientFileLabel}");
         }
 

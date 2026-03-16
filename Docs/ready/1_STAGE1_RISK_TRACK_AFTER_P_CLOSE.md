@@ -5,9 +5,9 @@
 
 ## 1. Приоритетный порядок
 
-1. `R2` Фильтр пользователей не связан с фактическими данными заказов.
-2. `R3` Multi-order backend есть, UI пока single-only.
-3. `R1` MainForm остается крупным aggregate.
+1. `R1` MainForm остается крупным aggregate.
+2. `R2` Фильтр пользователей не связан с фактическими данными заказов.
+3. `R3` Multi-order backend есть, UI пока single-only.
 4. `R4` Остаточные string-контракты.
 5. `R5` Legacy path-слой order-level vs item-level.
 6. `R8` LAN feature-gate не закреплен формально.
@@ -23,7 +23,20 @@
 | R5 | Убрать неоднозначность путей, закрепить единый source-of-truth | Нет рассинхрона order/item путей в истории и UI |
 | R8 | Ввести явный LAN feature-gate и поведение offline/online | Сетевой режим предсказуем, fallback формализован и документирован |
 
-## 3. Режим фиксации
+## 3. Текущий прогресс
+
+| Risk | Статус | Зафиксировано |
+|---|---|---|
+| R1 | Completed | `MainForm` дополнительно декомпозирован: (1) вынесен `OrderGridLogic` (теги row, выбор заказа/набора, поиск, форматирование, restore selection), (2) `MainForm.Filters.Popups.cs` разрезан на `...CreatedDate.cs` и `...ReceivedDate.cs`. Метрики: `OrdersLifecycle 949 -> 827`, `Filters.Popups 1465 -> 456`. |
+| R2 | Completed | Фильтр пользователя уже работает по фактическому полю `order.UserName` в истории (`ApplyStatusFilterToGrid`), подтверждено тестом `SR08_SR09_SR10_Filters_WorkForStatusUserOrderAndDates` + `UsersDirectory` source/cache/fallback тестами. |
+| R3 | Pending | Ожидает запуска после R2. |
+| R4 | Pending | Ожидает запуска после R3. |
+| R5 | Pending | Ожидает запуска после R4. |
+| R8 | Pending | Ожидает запуска после R5. |
+
+Активный риск на текущий момент: `R3`.
+
+## 4. Режим фиксации
 
 1. Каждое изменение по рискам фиксировать в `Docs/этапы/1_MAINFORM_MIGRATION_COMPLEX_RESEARCH_AND_PLAN.md`.
 2. По каждому риску закрывать минимум один измеримый критерий.

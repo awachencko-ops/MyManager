@@ -406,7 +406,7 @@ namespace Replica
             UpdatePrintPathReferencesForOrder(order, currentPath, renamedPath);
             RemovePrintTileImageIndex(currentPath);
             RemovePrintTileImageIndex(renamedPath);
-            PersistGridChanges($"order|{order.InternalId}");
+            PersistGridChanges(OrderGridLogic.BuildOrderTag(order.InternalId));
             SetBottomStatus("Файл переименован");
         }
 

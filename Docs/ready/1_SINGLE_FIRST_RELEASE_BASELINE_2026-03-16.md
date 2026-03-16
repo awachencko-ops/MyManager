@@ -38,8 +38,8 @@ Baseline покрывает только prepress-сценарии этапа `s
 
 ## 4. Known Issues (non-blocking)
 
-1. `R1` MainForm остается крупным aggregate, несмотря на декомпозицию.
-2. `R3` Multi-order backend есть, UI пока single-first.
+1. `R3` Multi-order backend есть, UI пока single-first.
+2. `R4` Остались точечные string-контракты вне критического потока.
 3. `R6` Снимковое покрытие есть, но расширение snapshot-набора потребуется на следующих этапах.
 4. `R8` LAN-контур не оформлен как отдельный feature-gate.
 

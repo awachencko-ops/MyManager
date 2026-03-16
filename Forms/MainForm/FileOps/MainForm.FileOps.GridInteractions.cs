@@ -356,7 +356,7 @@ namespace Replica
                     entry.PitStopAction = selected;
             }
 
-            PersistGridChanges($"order|{order.InternalId}");
+            PersistGridChanges(OrderGridLogic.BuildOrderTag(order.InternalId));
         }
 
         private void SelectImposingActionFromGrid(int rowIndex)
@@ -377,7 +377,7 @@ namespace Replica
                     entry.ImposingAction = selected;
             }
 
-            PersistGridChanges($"order|{order.InternalId}");
+            PersistGridChanges(OrderGridLogic.BuildOrderTag(order.InternalId));
         }
 
         private void DgvJobs_CellToolTipTextNeeded(object? sender, DataGridViewCellToolTipTextNeededEventArgs e)
@@ -642,7 +642,7 @@ namespace Replica
                 if (!await AddFileToOrderAsync(order, sourceFile, stage))
                     return;
 
-                PersistGridChanges($"order|{order.InternalId}");
+                PersistGridChanges(OrderGridLogic.BuildOrderTag(order.InternalId));
             }
             catch (Exception ex)
             {

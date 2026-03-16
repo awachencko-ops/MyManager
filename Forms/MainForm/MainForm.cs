@@ -152,7 +152,7 @@ namespace Replica
             _orderHistory.Add(order);
             SaveHistory();
             RebuildOrdersGrid();
-            TryRestoreSelectedRowByTag($"order|{order.InternalId}");
+            TryRestoreSelectedRowByTag(OrderGridLogic.BuildOrderTag(order.InternalId));
         }
 
         private void EditOrderFromGrid(int rowIndex)
@@ -192,7 +192,7 @@ namespace Replica
 
             SaveHistory();
             RebuildOrdersGrid();
-            TryRestoreSelectedRowByTag($"order|{order.InternalId}");
+            TryRestoreSelectedRowByTag(OrderGridLogic.BuildOrderTag(order.InternalId));
         }
 
         private void EditOrderExtended(OrderData order)
@@ -216,7 +216,7 @@ namespace Replica
 
             SaveHistory();
             RebuildOrdersGrid();
-            TryRestoreSelectedRowByTag($"order|{order.InternalId}");
+            TryRestoreSelectedRowByTag(OrderGridLogic.BuildOrderTag(order.InternalId));
         }
 
         private void LoadSettings()

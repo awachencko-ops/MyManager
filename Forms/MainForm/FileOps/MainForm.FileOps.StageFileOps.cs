@@ -39,7 +39,7 @@ namespace Replica
             if (!await AddFileToOrderAsync(order, ofd.FileName, stage))
                 return;
 
-            PersistGridChanges($"order|{order.InternalId}");
+            PersistGridChanges(OrderGridLogic.BuildOrderTag(order.InternalId));
             SetBottomStatus("Файл добавлен в заказ");
         }
 
@@ -61,7 +61,7 @@ namespace Replica
             if (!await AddFileToItemAsync(order, item, ofd.FileName, stage))
                 return;
 
-            PersistGridChanges($"item|{order.InternalId}|{item.ItemId}");
+            PersistGridChanges(OrderGridLogic.BuildItemTag(order.InternalId, item.ItemId));
             SetBottomStatus("Файл добавлен в item");
         }
 
@@ -196,7 +196,7 @@ namespace Replica
             }
 
             UpdateOrderFilePath(order, stage, string.Empty);
-            PersistGridChanges($"order|{order.InternalId}");
+            PersistGridChanges(OrderGridLogic.BuildOrderTag(order.InternalId));
             SetBottomStatus("Файл удален");
         }
 
@@ -228,7 +228,7 @@ namespace Replica
             }
 
             UpdateItemFilePath(order, item, stage, string.Empty);
-            PersistGridChanges($"item|{order.InternalId}|{item.ItemId}");
+            PersistGridChanges(OrderGridLogic.BuildItemTag(order.InternalId, item.ItemId));
             SetBottomStatus("Файл item удален");
         }
 
@@ -253,7 +253,7 @@ namespace Replica
             }
 
             UpdateOrderFilePath(order, stage, renamedPath);
-            PersistGridChanges($"order|{order.InternalId}");
+            PersistGridChanges(OrderGridLogic.BuildOrderTag(order.InternalId));
             SetBottomStatus("Файл переименован");
         }
 
@@ -278,7 +278,7 @@ namespace Replica
             }
 
             UpdateItemFilePath(order, item, stage, renamedPath);
-            PersistGridChanges($"item|{order.InternalId}|{item.ItemId}");
+            PersistGridChanges(OrderGridLogic.BuildItemTag(order.InternalId, item.ItemId));
             SetBottomStatus("Файл item переименован");
         }
 
