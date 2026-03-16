@@ -406,6 +406,11 @@ namespace Replica
             return OrderGridLogic.ExtractOrderInternalIdFromTag(tag);
         }
 
+        private static string? ExtractItemIdFromTag(string? tag)
+        {
+            return OrderGridLogic.ExtractItemIdFromTag(tag);
+        }
+
         private static string GetOrderDisplayId(OrderData order)
         {
             return OrderGridLogic.GetOrderDisplayId(order);
@@ -434,6 +439,58 @@ namespace Replica
         private List<OrderData> GetSelectedOrders()
         {
             return OrderGridLogic.GetSelectedOrders(dgvJobs, _orderHistory);
+        }
+
+        private bool HasSelectedOrderContainerRow()
+        {
+            var currentRow = dgvJobs.CurrentRow;
+            if (currentRow != null && !currentRow.IsNewRow && IsOrderTag(currentRow.Tag?.ToString()))
+                return true;
+
+            return dgvJobs.SelectedRows
+                .Cast<DataGridViewRow>()
+                .Where(row => !row.IsNewRow)
+                .Any(row => IsOrderTag(row.Tag?.ToString()));
+        }
+
+        private List<(OrderData Order, OrderFileItem Item)> GetSelectedOrderItems()
+        {
+            var selectedOrderItems = new List<(OrderData Order, OrderFileItem Item)>();
+            var uniqueItemKeys = new HashSet<string>(StringComparer.Ordinal);
+
+            var candidateRows = dgvJobs.SelectedRows
+                .Cast<DataGridViewRow>()
+                .Where(row => !row.IsNewRow)
+                .OrderBy(row => row.Index)
+                .ToList();
+
+            if (candidateRows.Count == 0 && dgvJobs.CurrentRow != null && !dgvJobs.CurrentRow.IsNewRow)
+                candidateRows.Add(dgvJobs.CurrentRow);
+
+            foreach (var row in candidateRows)
+            {
+                var rowTag = row.Tag?.ToString();
+                if (!IsItemTag(rowTag))
+                    continue;
+
+                var orderInternalId = ExtractOrderInternalIdFromTag(rowTag);
+                var itemId = ExtractItemIdFromTag(rowTag);
+                if (string.IsNullOrWhiteSpace(orderInternalId) || string.IsNullOrWhiteSpace(itemId))
+                    continue;
+
+                var uniqueItemKey = $"{orderInternalId}|{itemId}";
+                if (!uniqueItemKeys.Add(uniqueItemKey))
+                    continue;
+
+                var order = FindOrderByInternalId(orderInternalId);
+                var item = order?.Items?.FirstOrDefault(x => x != null && string.Equals(x.ItemId, itemId, StringComparison.Ordinal));
+                if (order == null || item == null)
+                    continue;
+
+                selectedOrderItems.Add((order, item));
+            }
+
+            return selectedOrderItems;
         }
 
         private async Task RunSelectedOrderAsync()
@@ -616,6 +673,14 @@ namespace Replica
 
         private void RemoveSelectedOrder()
         {
+            var selectedOrderItems = GetSelectedOrderItems();
+            var hasSelectedOrderContainers = HasSelectedOrderContainerRow();
+            if (!hasSelectedOrderContainers && selectedOrderItems.Count > 0)
+            {
+                RemoveSelectedOrderItems(selectedOrderItems);
+                return;
+            }
+
             var selectedOrders = GetSelectedOrders();
             if (selectedOrders.Count == 0)
             {
@@ -725,6 +790,121 @@ namespace Replica
                 MessageBoxIcon.Error);
         }
 
+        private void RemoveSelectedOrderItems(List<(OrderData Order, OrderFileItem Item)> selectedOrderItems)
+        {
+            if (selectedOrderItems == null || selectedOrderItems.Count == 0)
+            {
+                SetBottomStatus("Выберите файл группы для удаления");
+                return;
+            }
+
+            var isBatchDelete = selectedOrderItems.Count > 1;
+            var firstSelection = selectedOrderItems[0];
+            var firstItemName = BuildOrderItemDisplayName(firstSelection.Item);
+            var confirmationText = isBatchDelete
+                ? $"Выбрано item: {selectedOrderItems.Count}\n\n" +
+                  "Удалить файлы item с диска?\n\n" +
+                  "[Да] — удалить с диска и из группы.\n" +
+                  "[Нет] — только удалить из группы.\n" +
+                  "[Отмена] — ничего не менять."
+                : $"Заказ №{GetOrderDisplayId(firstSelection.Order)}\n" +
+                  $"Item: {firstItemName}\n\n" +
+                  "Удалить файлы item с диска?\n\n" +
+                  "[Да] — удалить с диска и из группы.\n" +
+                  "[Нет] — только удалить из группы.\n" +
+                  "[Отмена] — ничего не менять.";
+
+            var decision = MessageBox.Show(
+                this,
+                confirmationText,
+                isBatchDelete ? "Удаление item группы" : "Удаление item",
+                MessageBoxButtons.YesNoCancel,
+                MessageBoxIcon.Warning);
+
+            if (decision == DialogResult.Cancel)
+            {
+                SetBottomStatus("Удаление отменено");
+                return;
+            }
+
+            var removeFilesFromDisk = decision == DialogResult.Yes;
+            var removedItemsCount = 0;
+            var failedItems = new List<string>();
+            var affectedOrders = new Dictionary<string, (OrderData Order, bool WasMultiBefore)>(StringComparer.Ordinal);
+
+            foreach (var (order, item) in selectedOrderItems)
+            {
+                if (order == null || item == null)
+                    continue;
+
+                if (!affectedOrders.ContainsKey(order.InternalId))
+                    affectedOrders[order.InternalId] = (order, OrderTopologyService.IsMultiOrder(order));
+
+                var itemName = BuildOrderItemDisplayName(item);
+                try
+                {
+                    if (removeFilesFromDisk)
+                        DeleteOrderItemFiles(item);
+
+                    var removed = order.Items?.RemoveAll(x => x != null && string.Equals(x.ItemId, item.ItemId, StringComparison.Ordinal)) > 0;
+                    if (!removed)
+                    {
+                        failedItems.Add($"{GetOrderDisplayId(order)} / {itemName}: item не найден");
+                        continue;
+                    }
+
+                    ReindexOrderItems(order);
+                    AppendOrderOperationLog(
+                        order,
+                        OrderOperationNames.RemoveItem,
+                        removeFilesFromDisk
+                            ? $"Удален item: {itemName} (с диска и из группы)"
+                            : $"Удален item: {itemName} (из группы)");
+                    removedItemsCount++;
+                }
+                catch (Exception ex)
+                {
+                    failedItems.Add($"{GetOrderDisplayId(order)} / {itemName}: {ex.Message}");
+                }
+            }
+
+            foreach (var (_, payload) in affectedOrders)
+            {
+                NormalizeOrderTopologyAfterItemMutation(
+                    payload.Order,
+                    payload.WasMultiBefore,
+                    "remove-item-row");
+            }
+
+            if (removedItemsCount > 0)
+            {
+                SaveHistory();
+                RebuildOrdersGrid();
+                UpdateActionButtonsState();
+                SetBottomStatus(isBatchDelete
+                    ? $"Удалено item: {removedItemsCount}"
+                    : $"Item {firstItemName} удален");
+            }
+            else
+            {
+                SetBottomStatus("Удаление item не выполнено");
+            }
+
+            if (failedItems.Count == 0)
+                return;
+
+            var failedPreview = string.Join(Environment.NewLine, failedItems.Take(5));
+            if (failedItems.Count > 5)
+                failedPreview += $"{Environment.NewLine}... ещё: {failedItems.Count - 5}";
+
+            MessageBox.Show(
+                this,
+                $"Не удалось удалить некоторые item:{Environment.NewLine}{failedPreview}",
+                isBatchDelete ? "Удаление item группы" : "Удаление item",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+
         private void DeleteOrderFiles(OrderData order)
         {
             foreach (var path in GetOrderAllKnownPaths(order))
@@ -740,6 +920,25 @@ namespace Replica
                 catch (Exception ex)
                 {
                     throw new IOException($"Не удалось удалить файл: {path}", ex);
+                }
+            }
+        }
+
+        private void DeleteOrderItemFiles(OrderFileItem item)
+        {
+            foreach (var path in GetOrderItemAllKnownPaths(item))
+            {
+                if (string.IsNullOrWhiteSpace(path))
+                    continue;
+
+                try
+                {
+                    if (File.Exists(path))
+                        File.Delete(path);
+                }
+                catch (Exception ex)
+                {
+                    throw new IOException($"Не удалось удалить файл item: {path}", ex);
                 }
             }
         }
@@ -765,6 +964,36 @@ namespace Replica
                 yield return item.PreparedPath;
                 yield return item.PrintPath;
             }
+        }
+
+        private static IEnumerable<string?> GetOrderItemAllKnownPaths(OrderFileItem item)
+        {
+            if (item == null)
+                yield break;
+
+            yield return item.SourcePath;
+            yield return item.PreparedPath;
+            yield return item.PrintPath;
+
+            if (item.TechnicalFiles == null || item.TechnicalFiles.Count == 0)
+                yield break;
+
+            foreach (var technicalFilePath in item.TechnicalFiles)
+                yield return technicalFilePath;
+        }
+
+        private static string BuildOrderItemDisplayName(OrderFileItem item)
+        {
+            if (item == null)
+                return "item";
+
+            if (!string.IsNullOrWhiteSpace(item.ClientFileLabel))
+                return item.ClientFileLabel.Trim();
+
+            if (!string.IsNullOrWhiteSpace(item.ItemId))
+                return item.ItemId;
+
+            return "item";
         }
 
         private void OpenLogForSelectionOrManager()

@@ -79,9 +79,9 @@
             tsbRun = new ToolStripButton();
             tsbStop = new ToolStripButton();
             tsbRemove = new ToolStripButton();
+            tsbAddFile = new ToolStripButton();
             tsbBrowse = new ToolStripButton();
             tsbConsole = new ToolStripButton();
-            tsbAddFile = new ToolStripButton();
             toolStripButton1 = new ToolStripButton();
             pnlSidebar.SuspendLayout();
             pnlDockLiterature.SuspendLayout();
@@ -582,6 +582,14 @@
             tsbRemove.Size = new Size(107, 29);
             tsbRemove.Text = "Удалить";
             // 
+            // tsbAddFile
+            // 
+            tsbAddFile.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
+            tsbAddFile.Image = (Image)resources.GetObject("tsbAddFile.Image");
+            tsbAddFile.Name = "tsbAddFile";
+            tsbAddFile.Size = new Size(201, 29);
+            tsbAddFile.Text = "Добавить в группу";
+            // 
             // tsbBrowse
             // 
             tsbBrowse.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
@@ -597,14 +605,6 @@
             tsbConsole.Name = "tsbConsole";
             tsbConsole.Size = new Size(71, 29);
             tsbConsole.Text = "Лог";
-            // 
-            // tsbAddFile
-            // 
-            tsbAddFile.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
-            tsbAddFile.Image = (Image)resources.GetObject("tsbAddFile.Image");
-            tsbAddFile.Name = "tsbAddFile";
-            tsbAddFile.Size = new Size(206, 29);
-            tsbAddFile.Text = "Добавить в группу";
             // 
             // toolStripButton1
             // 

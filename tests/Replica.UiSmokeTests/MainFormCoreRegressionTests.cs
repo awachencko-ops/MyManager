@@ -370,6 +370,35 @@ public sealed class MainFormCoreRegressionTests
         });
     }
 
+    [Fact]
+    public void SR17_GroupOrder_ItemRowSelection_IsDetectedAsItemDeletionTarget_NotOrderContainer()
+    {
+        MainFormTestHarness.RunWithIsolatedForm((form, _) =>
+        {
+            var groupOrder = CreateGroupOrder("GR-1701");
+            MainFormTestHarness.InvokePrivate(form, "AddCreatedOrder", groupOrder);
+            MainFormTestHarness.InvokePrivate(form, "ToggleOrderExpanded", groupOrder.InternalId);
+
+            var dgv = MainFormTestHarness.GetPrivateField<DataGridView>(form, "dgvJobs");
+            var colStatus = MainFormTestHarness.GetPrivateField<DataGridViewColumn>(form, "colStatus");
+
+            var itemRow = dgv.Rows
+                .Cast<DataGridViewRow>()
+                .First(row => (row.Tag?.ToString() ?? string.Empty).StartsWith("item|", StringComparison.Ordinal));
+
+            dgv.ClearSelection();
+            dgv.CurrentCell = itemRow.Cells[colStatus.Index];
+            itemRow.Selected = true;
+
+            var hasOrderContainerSelection = (bool)(MainFormTestHarness.InvokePrivate(form, "HasSelectedOrderContainerRow") ?? true);
+            Assert.False(hasOrderContainerSelection);
+
+            var selectedOrderItems = MainFormTestHarness.InvokePrivate(form, "GetSelectedOrderItems") as IEnumerable;
+            Assert.NotNull(selectedOrderItems);
+            Assert.Single(selectedOrderItems!.Cast<object>());
+        });
+    }
+
     private static OrderData CreateOrder(string id, string status, string userName, DateTime createdAt, DateTime receivedAt)
     {
         return new OrderData

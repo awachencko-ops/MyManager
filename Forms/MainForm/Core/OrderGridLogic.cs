@@ -43,6 +43,21 @@ namespace Replica
             return parts[1];
         }
 
+        public static string? ExtractItemIdFromTag(string? tag)
+        {
+            if (string.IsNullOrWhiteSpace(tag))
+                return null;
+
+            if (!IsItemTag(tag))
+                return null;
+
+            var parts = tag.Split('|');
+            if (parts.Length < 3)
+                return null;
+
+            return parts[2];
+        }
+
         public static OrderData? FindOrderByInternalId(IEnumerable<OrderData> orderHistory, string? internalId)
         {
             if (orderHistory == null || string.IsNullOrWhiteSpace(internalId))
