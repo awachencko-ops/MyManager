@@ -29,11 +29,13 @@
 15. `P4` закрыт: добавлен snapshot-слой `Verify` (`tests/Replica.VerifyTests`, `5/5 PASS`) и UI/core smoke (`tests/Replica.UiSmokeTests`, `9/9 PASS`).
 16. Закрыт `R1`: вынесен `OrderGridLogic` и выполнена дополнительная декомпозиция `MainForm.Filters.Popups` на отдельные partial для created/received фильтров дат.
 17. Закрыт `R2`: user-filter подтвержден на фактическом `order.UserName` + source/cache/fallback (`users.json`) и покрыт smoke-тестами.
+18. Закрыт `R3`: минимальный group-order UI стабилизирован и подтвержден регрессионными тестами `SR13/SR14/SR15` (expand/collapse, browse-folder mismatch, container-level actions).
 
 ### 2.2 В работе
 
-1. Риск-трек этапа 1: точечная стабилизация по `R3/R4/R5/R8` (`R1/R2` закрыты).
+1. Риск-трек этапа 1: точечная стабилизация по `R4/R5/R8` (`R1/R2/R3` закрыты).
 2. Рабочий документ риск-трека: `Docs/ready/1_STAGE1_RISK_TRACK_AFTER_P_CLOSE.md`.
+3. `R4` стартован: выполняется дочистка остаточных string-контрактов в активном `MainForm`-контуре; вынесены operation-коды order-лога в `OrderOperationNames` и source-контракты статусов в `OrderStatusSourceNames`.
 
 ### 2.3 Не начато
 
@@ -46,7 +48,7 @@
 |---|---|---|---|---|
 | R1 | Средний | Closed | `MainForm` дополнительно декомпозирован (`OrderGridLogic`, split popup partials) | Снижен: aggregate уменьшен, логика вынесена |
 | R2 | Высокий | Closed | User-filter привязан к фактическому `order.UserName` + `users.json` source/cache/fallback | Снижен: ложные совпадения устранены |
-| R3 | Средний | Open | Multi-order backend уже есть, UI временно single-only | Разрыв между возможностями модели и интерфейсом |
+| R3 | Средний | Closed | Минимальный group-order UI внедрен и закреплен тестами `SR13/SR14/SR15` | Снижен: multi-order сценарий выполняется без переключения на legacy |
 | R4 | Средний | Open | Есть string-контракты (имена колонок, статусы, маркеры) | Хрупкость при рефакторинге |
 | R5 | Средний | Open | Остатки legacy-подхода: order-level пути плюс item-level пути | Риск расхождений данных |
 | R6 | Низкий | Closed | Snapshot + smoke слой внедрен (`Verify` + `FlaUI`) | Базовые регрессии покрыты автоматически |
@@ -65,7 +67,7 @@
 
 ## 5. Приоритет на ближайший цикл
 
-1. Выполнять риск-трек этапа 1 строго по порядку: `R3 -> R4 -> R5 -> R8` (`R1` и `R2` закрыты).
+1. Выполнять риск-трек этапа 1 строго по порядку: `R4 -> R5 -> R8` (`R1/R2/R3` закрыты).
 2. После фиксации рисков перейти к этапу `2_MULTI_ORDER_LOGIC_AND_POSTGRESQL_PLAN.md`.
 
 ## 6. Зафиксированные решения

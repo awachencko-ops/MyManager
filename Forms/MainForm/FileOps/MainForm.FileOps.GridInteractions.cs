@@ -333,6 +333,13 @@ namespace Replica
 
             if (e.ColumnIndex == colOrderNumber.Index)
             {
+                var order = GetOrderByRowIndex(e.RowIndex);
+                if (order != null && OrderTopologyService.IsMultiOrder(order))
+                {
+                    ToggleOrderExpanded(order.InternalId);
+                    return;
+                }
+
                 EditOrderFromGrid(e.RowIndex);
                 return;
             }
@@ -424,13 +431,22 @@ namespace Replica
                 return;
 
             var stage = GetStageByColumnIndex(e.ColumnIndex);
-            if (stage == 0)
-                return;
-
             var rowTag = dgvJobs.Rows[e.RowIndex].Tag?.ToString();
             var order = GetOrderByRowIndex(e.RowIndex);
             if (order == null || string.IsNullOrWhiteSpace(rowTag))
                 return;
+
+            if (stage == 0)
+            {
+                if (IsOrderTag(rowTag)
+                    && OrderTopologyService.IsMultiOrder(order)
+                    && (e.ColumnIndex == colOrderNumber.Index || e.ColumnIndex == colStatus.Index))
+                {
+                    ToggleOrderExpanded(order.InternalId);
+                }
+
+                return;
+            }
 
             try
             {

@@ -29,12 +29,12 @@
 |---|---|---|
 | R1 | Completed | `MainForm` дополнительно декомпозирован: (1) вынесен `OrderGridLogic` (теги row, выбор заказа/набора, поиск, форматирование, restore selection), (2) `MainForm.Filters.Popups.cs` разрезан на `...CreatedDate.cs` и `...ReceivedDate.cs`. Метрики: `OrdersLifecycle 949 -> 827`, `Filters.Popups 1465 -> 456`. |
 | R2 | Completed | Фильтр пользователя уже работает по фактическому полю `order.UserName` в истории (`ApplyStatusFilterToGrid`), подтверждено тестом `SR08_SR09_SR10_Filters_WorkForStatusUserOrderAndDates` + `UsersDirectory` source/cache/fallback тестами. |
-| R3 | Pending | Ожидает запуска после R2. |
-| R4 | Pending | Ожидает запуска после R3. |
+| R3 | Completed | Минимальный group-order UI закрыт: стабильная иконка контейнера (`files`), expand/collapse контейнера, безопасное контекстное меню группы (развернуть/свернуть, открыть папку, открыть лог), toolbar-правила для `Добавить файл`/`Папка`, добавление файла с конвертацией `single-order -> group-order`, единый order-log для операций группы; дополнительно покрыто тестами `SR13/SR14/SR15` (group expand/collapse, browse-folder mismatch, container-level actions). |
+| R4 | In progress | Запущен аудит остаточных string-контрактов в активном `MainForm`-контуре после фиксации R3; вынесены operation-коды order-лога в typed-константы `OrderOperationNames` (`run/stop/delete/add-item/topology`) и source-контракты переходов статуса в `OrderStatusSourceNames` (`processor/ui/file-sync`). |
 | R5 | Pending | Ожидает запуска после R4. |
 | R8 | Pending | Ожидает запуска после R5. |
 
-Активный риск на текущий момент: `R3`.
+Активный риск на текущий момент: `R4`.
 
 ## 4. Режим фиксации
 

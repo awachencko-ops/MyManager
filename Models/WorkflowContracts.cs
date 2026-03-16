@@ -156,4 +156,20 @@ namespace Replica
             return null;
         }
     }
+
+    public static class OrderOperationNames
+    {
+        public const string Run = "run";
+        public const string Stop = "stop";
+        public const string Delete = "delete";
+        public const string AddItem = "add-item";
+        public const string Topology = "topology";
+    }
+
+    public static class OrderStatusSourceNames
+    {
+        public const string Processor = "processor";
+        public const string Ui = "ui";
+        public const string FileSync = "file-sync";
+    }
 }

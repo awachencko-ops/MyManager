@@ -65,6 +65,140 @@ namespace Replica
             SetBottomStatus("Файл добавлен в item");
         }
 
+        private bool TryGetSelectedOrderContainer(out OrderData? order)
+        {
+            order = null;
+
+            var currentRow = dgvJobs.CurrentRow;
+            if (currentRow != null && !currentRow.IsNewRow)
+            {
+                var currentTag = currentRow.Tag?.ToString();
+                if (IsOrderTag(currentTag))
+                {
+                    order = FindOrderByInternalId(ExtractOrderInternalIdFromTag(currentTag));
+                    if (order != null)
+                        return true;
+                }
+            }
+
+            foreach (var selectedRow in dgvJobs.SelectedRows
+                .Cast<DataGridViewRow>()
+                .Where(x => !x.IsNewRow)
+                .OrderBy(x => x.Index))
+            {
+                var rowTag = selectedRow.Tag?.ToString();
+                if (!IsOrderTag(rowTag))
+                    continue;
+
+                order = FindOrderByInternalId(ExtractOrderInternalIdFromTag(rowTag));
+                if (order != null)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private async Task AddFileToSelectedOrderAsync()
+        {
+            if (!TryGetSelectedOrderContainer(out var order) || order == null)
+            {
+                SetBottomStatus("Выберите строку заказа");
+                MessageBox.Show(this, "Выберите строку заказа (single-order или group-order).", "Добавление файла", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            if (!HasAtLeastOneOrderFile(order))
+            {
+                SetBottomStatus("Сначала добавьте первый файл в строку заказа");
+                MessageBox.Show(
+                    this,
+                    "Сначала добавьте первый файл через строку заказа (ячейка Источник или drag-and-drop). После этого станет доступно добавление в группу.",
+                    "Добавление в группу",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+                return;
+            }
+
+            var sourceStageFolder = GetStageFolder(order, OrderStages.Source);
+            Directory.CreateDirectory(sourceStageFolder);
+
+            using var ofd = new OpenFileDialog
+            {
+                Filter = "PDF|*.pdf|Все файлы|*.*",
+                InitialDirectory = sourceStageFolder,
+                RestoreDirectory = false
+            };
+
+            if (ofd.ShowDialog(this) != DialogResult.OK)
+                return;
+
+            var wasMultiOrderBefore = OrderTopologyService.IsMultiOrder(order);
+            var normalization = OrderTopologyService.Normalize(order);
+            if (normalization.Changed && normalization.Issues.Count > 0)
+            {
+                foreach (var issue in normalization.Issues)
+                    Logger.Warn($"TOPOLOGY | order={GetOrderDisplayId(order)} | {issue}");
+            }
+
+            order.Items ??= [];
+            var nextSequenceNo = order.Items
+                .Where(x => x != null)
+                .Select(x => x.SequenceNo)
+                .DefaultIfEmpty(-1L)
+                .Max() + 1L;
+
+            var sourcePath = CleanPath(ofd.FileName);
+            var newItem = new OrderFileItem
+            {
+                ItemId = Guid.NewGuid().ToString("N"),
+                SequenceNo = nextSequenceNo,
+                ClientFileLabel = Path.GetFileNameWithoutExtension(sourcePath),
+                PitStopAction = NormalizeAction(order.PitStopAction),
+                ImposingAction = NormalizeAction(order.ImposingAction),
+                FileStatus = WorkflowStatusNames.Waiting,
+                UpdatedAt = DateTime.Now
+            };
+
+            order.Items.Add(newItem);
+            var addSucceeded = false;
+            try
+            {
+                addSucceeded = await AddFileToItemAsync(order, newItem, sourcePath, OrderStages.Source);
+            }
+            catch (Exception ex)
+            {
+                order.Items.Remove(newItem);
+                SetBottomStatus($"Не удалось добавить файл: {ex.Message}");
+                MessageBox.Show(this, $"Не удалось добавить файл: {ex.Message}", "Добавление файла", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            if (!addSucceeded)
+            {
+                order.Items.Remove(newItem);
+                SetBottomStatus("Файл не добавлен");
+                return;
+            }
+
+            OrderTopologyService.Normalize(order);
+            var isMultiOrderNow = OrderTopologyService.IsMultiOrder(order);
+            if (isMultiOrderNow)
+                _expandedOrderIds.Add(order.InternalId);
+
+            PersistGridChanges(OrderGridLogic.BuildOrderTag(order.InternalId));
+
+            var addedFileName = Path.GetFileName(sourcePath);
+            if (!wasMultiOrderBefore && isMultiOrderNow)
+            {
+                AppendOrderOperationLog(order, OrderOperationNames.Topology, $"single-order -> group-order | add-item: {addedFileName}");
+                SetBottomStatus("Файл добавлен. single-order преобразован в group-order");
+                return;
+            }
+
+            AppendOrderOperationLog(order, OrderOperationNames.AddItem, $"Добавлен файл: {addedFileName}");
+            SetBottomStatus("Файл добавлен в заказ");
+        }
+
         private async Task<bool> AddFileToOrderAsync(OrderData order, string sourceFile, int stage)
         {
             var cleanSource = CleanPath(sourceFile);
@@ -379,7 +513,7 @@ namespace Replica
                 order.PrintPath = path;
 
             var status = ResolveWorkflowStatus(order.SourcePath, order.PreparedPath, order.PrintPath);
-            SetOrderStatus(order, status, "file-sync", $"stage-{stage}", persistHistory: false, rebuildGrid: false);
+                SetOrderStatus(order, status, OrderStatusSourceNames.FileSync, $"stage-{stage}", persistHistory: false, rebuildGrid: false);
 
             if (order.Items != null && order.Items.Count == 1)
             {
@@ -405,7 +539,7 @@ namespace Replica
                 else if (stage == OrderStages.Print)
                     order.PrintPath = item.PrintPath;
 
-                SetOrderStatus(order, item.FileStatus, "file-sync", $"item-stage-{stage}", persistHistory: false, rebuildGrid: false);
+                    SetOrderStatus(order, item.FileStatus, OrderStatusSourceNames.FileSync, $"item-stage-{stage}", persistHistory: false, rebuildGrid: false);
                 return;
             }
 
@@ -417,14 +551,14 @@ namespace Replica
             if (order.Items == null || order.Items.Count == 0)
             {
                 var status = ResolveWorkflowStatus(order.SourcePath, order.PreparedPath, order.PrintPath);
-                SetOrderStatus(order, status, "file-sync", "no-items", persistHistory: false, rebuildGrid: false);
+                        SetOrderStatus(order, status, OrderStatusSourceNames.FileSync, "no-items", persistHistory: false, rebuildGrid: false);
                 return;
             }
 
             var items = order.Items.Where(x => x != null).ToList();
             if (items.Count == 0)
             {
-                SetOrderStatus(order, WorkflowStatusNames.Waiting, "file-sync", "empty-items", persistHistory: false, rebuildGrid: false);
+                SetOrderStatus(order, WorkflowStatusNames.Waiting, OrderStatusSourceNames.FileSync, "empty-items", persistHistory: false, rebuildGrid: false);
                 return;
             }
 
@@ -438,7 +572,7 @@ namespace Replica
                     ? WorkflowStatusNames.Processing
                     : WorkflowStatusNames.Waiting;
 
-            SetOrderStatus(order, statusValue, "file-sync", "aggregate", persistHistory: false, rebuildGrid: false);
+            SetOrderStatus(order, statusValue, OrderStatusSourceNames.FileSync, "aggregate", persistHistory: false, rebuildGrid: false);
         }
 
         private static string ResolveWorkflowStatus(string? sourcePath, string? preparedPath, string? printPath)

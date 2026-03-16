@@ -246,6 +246,99 @@ public sealed class MainFormCoreRegressionTests
         }
     }
 
+    [Fact]
+    public void SR13_GroupOrder_ExpandCollapse_ShowsAndHidesItemRows()
+    {
+        MainFormTestHarness.RunWithIsolatedForm((form, _) =>
+        {
+            var groupOrder = CreateGroupOrder("GR-1301");
+            MainFormTestHarness.InvokePrivate(form, "AddCreatedOrder", groupOrder);
+
+            var dgv = MainFormTestHarness.GetPrivateField<DataGridView>(form, "dgvJobs");
+            var colOrderNumber = MainFormTestHarness.GetPrivateField<DataGridViewColumn>(form, "colOrderNumber");
+
+            Assert.Single(GetVisibleRows(dgv));
+            Assert.StartsWith("▸", dgv.Rows[0].Cells[colOrderNumber.Index].Value?.ToString(), StringComparison.Ordinal);
+
+            MainFormTestHarness.InvokePrivate(form, "ToggleOrderExpanded", groupOrder.InternalId);
+
+            var expandedRows = GetVisibleRows(dgv);
+            Assert.Equal(3, expandedRows.Count);
+            Assert.StartsWith("▾", expandedRows[0].Cells[colOrderNumber.Index].Value?.ToString(), StringComparison.Ordinal);
+            Assert.StartsWith("item|", expandedRows[1].Tag?.ToString() ?? string.Empty, StringComparison.Ordinal);
+            Assert.StartsWith("item|", expandedRows[2].Tag?.ToString() ?? string.Empty, StringComparison.Ordinal);
+
+            MainFormTestHarness.InvokePrivate(form, "ToggleOrderExpanded", groupOrder.InternalId);
+
+            Assert.Single(GetVisibleRows(dgv));
+            Assert.StartsWith("▸", dgv.Rows[0].Cells[colOrderNumber.Index].Value?.ToString(), StringComparison.Ordinal);
+        });
+    }
+
+    [Fact]
+    public void SR14_GroupOrder_BrowseFolderRule_ReturnsMismatchReason_ForDifferentRoots()
+    {
+        MainFormTestHarness.RunWithIsolatedForm((form, _) =>
+        {
+            var groupOrder = CreateGroupOrder(
+                "GR-1401",
+                @"C:\Orders\GR-1401\in\front.pdf",
+                @"D:\Orders\GR-1401\in\back.pdf");
+            MainFormTestHarness.InvokePrivate(form, "AddCreatedOrder", groupOrder);
+
+            var method = form.GetType().GetMethod("TryGetBrowseFolderPathForOrder", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(form.GetType().FullName, "TryGetBrowseFolderPathForOrder");
+
+            object[] args = { groupOrder, string.Empty, string.Empty };
+            var canBrowse = (bool)(method.Invoke(form, args) ?? false);
+            var reason = args[2]?.ToString() ?? string.Empty;
+
+            Assert.False(canBrowse);
+            Assert.Equal("Пути не совпадают", reason);
+        });
+    }
+
+    [Fact]
+    public void SR15_GroupOrder_ItemSelection_DisablesAddFile_AndActionsStayAtContainerLevel()
+    {
+        MainFormTestHarness.RunWithIsolatedForm((form, _) =>
+        {
+            var groupOrder = CreateGroupOrder("GR-1501");
+            MainFormTestHarness.InvokePrivate(form, "AddCreatedOrder", groupOrder);
+            MainFormTestHarness.InvokePrivate(form, "ToggleOrderExpanded", groupOrder.InternalId);
+
+            var dgv = MainFormTestHarness.GetPrivateField<DataGridView>(form, "dgvJobs");
+            var colStatus = MainFormTestHarness.GetPrivateField<DataGridViewColumn>(form, "colStatus");
+            var addFileButton = MainFormTestHarness.GetPrivateField<ToolStripButton>(form, "tsbAddFile");
+
+            var itemRow = dgv.Rows
+                .Cast<DataGridViewRow>()
+                .First(row => (row.Tag?.ToString() ?? string.Empty).StartsWith("item|", StringComparison.Ordinal));
+
+            dgv.ClearSelection();
+            dgv.CurrentCell = itemRow.Cells[colStatus.Index];
+            itemRow.Selected = true;
+
+            MainFormTestHarness.InvokePrivate(form, "UpdateActionButtonsState");
+            Assert.False(addFileButton.Enabled);
+
+            var selectedOrderFromItemRow = MainFormTestHarness.InvokePrivate(form, "GetSelectedOrder") as OrderData;
+            Assert.NotNull(selectedOrderFromItemRow);
+            Assert.Equal(groupOrder.InternalId, selectedOrderFromItemRow!.InternalId);
+
+            var orderRow = dgv.Rows
+                .Cast<DataGridViewRow>()
+                .First(row => string.Equals(row.Tag?.ToString(), $"order|{groupOrder.InternalId}", StringComparison.Ordinal));
+
+            dgv.ClearSelection();
+            dgv.CurrentCell = orderRow.Cells[colStatus.Index];
+            orderRow.Selected = true;
+
+            MainFormTestHarness.InvokePrivate(form, "UpdateActionButtonsState");
+            Assert.True(addFileButton.Enabled);
+        });
+    }
+
     private static OrderData CreateOrder(string id, string status, string userName, DateTime createdAt, DateTime receivedAt)
     {
         return new OrderData
@@ -259,6 +352,52 @@ public sealed class MainFormCoreRegressionTests
             ArrivalDate = receivedAt,
             FolderName = string.Empty
         };
+    }
+
+    private static OrderData CreateGroupOrder(
+        string id,
+        string firstSourcePath = @"C:\Orders\group\in\front.pdf",
+        string secondSourcePath = @"C:\Orders\group\in\back.pdf")
+    {
+        return new OrderData
+        {
+            InternalId = Guid.NewGuid().ToString("N"),
+            Id = id,
+            StartMode = OrderStartMode.Extended,
+            FileTopologyMarker = OrderFileTopologyMarker.MultiOrder,
+            Status = WorkflowStatusNames.Waiting,
+            UserName = "QA User",
+            OrderDate = new DateTime(2026, 1, 10),
+            ArrivalDate = new DateTime(2026, 1, 10),
+            FolderName = string.Empty,
+            Items =
+            [
+                new OrderFileItem
+                {
+                    ItemId = Guid.NewGuid().ToString("N"),
+                    ClientFileLabel = "front",
+                    SourcePath = firstSourcePath,
+                    FileStatus = WorkflowStatusNames.Waiting,
+                    SequenceNo = 0
+                },
+                new OrderFileItem
+                {
+                    ItemId = Guid.NewGuid().ToString("N"),
+                    ClientFileLabel = "back",
+                    SourcePath = secondSourcePath,
+                    FileStatus = WorkflowStatusNames.Waiting,
+                    SequenceNo = 1
+                }
+            ]
+        };
+    }
+
+    private static List<DataGridViewRow> GetVisibleRows(DataGridView dgv)
+    {
+        return dgv.Rows
+            .Cast<DataGridViewRow>()
+            .Where(row => !row.IsNewRow && row.Visible)
+            .ToList();
     }
 
     private static void ResetAllFilters(MainForm form)

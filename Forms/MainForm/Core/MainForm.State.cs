@@ -39,6 +39,7 @@ namespace Replica
         private string _printTilesCacheFolderPath = AppSettings.DefaultThumbnailCacheFolderPath;
         private string _sharedPrintTilesCacheFolderPath = string.Empty;
         private readonly OrderGridContextMenu _gridMenu = new();
+        private readonly ContextMenuStrip _groupOrderContextMenu = new();
         private readonly ContextMenuStrip _printTilesContextMenu = new();
         private readonly Manina.Windows.Forms.ImageListView _lvPrintTiles = new();
         private readonly ImageList _printTilesImageList = new();

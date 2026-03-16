@@ -59,7 +59,7 @@ namespace Replica
             _gridMenu.OpenOrderLog = () =>
             {
                 if (TrySelectContextRow())
-                    OpenLogForSelectionOrManager();
+                    OpenOrderLogForOrderOnly(GetContextOrder());
             };
 
             dgvJobs.CellMouseDown += DgvJobs_CellMouseDown;
@@ -81,6 +81,15 @@ namespace Replica
                 return;
 
             var order = GetContextOrder();
+            if (order == null)
+                return;
+
+            if (OrderTopologyService.IsMultiOrder(order))
+            {
+                ShowGroupOrderContextMenu(order);
+                return;
+            }
+
             var allowCopyToGrandpa = order == null || UsesOrderFolderStorage(order);
             var columnName = dgvJobs.Columns[e.ColumnIndex].Name;
             var menu = _gridMenu.Build(columnName, allowCopyToGrandpa);
@@ -116,6 +125,64 @@ namespace Replica
                 return null;
 
             return GetOrderByRowIndex(_ctxRow);
+        }
+
+        private void ShowGroupOrderContextMenu(OrderData order)
+        {
+            _groupOrderContextMenu.Items.Clear();
+            _groupOrderContextMenu.ShowItemToolTips = true;
+
+            var isExpanded = _expandedOrderIds.Contains(order.InternalId);
+            var expandCaption = isExpanded ? "Свернуть" : "Развернуть";
+            AddGroupOrderMenuItem(expandCaption, () => ToggleOrderExpanded(order.InternalId));
+
+            var hasCommonFolder = TryGetBrowseFolderPathForOrder(order, out var commonFolderPath, out var folderReason);
+            AddGroupOrderMenuItem(
+                "Открыть папку",
+                hasCommonFolder ? () => OpenOrderFolderPath(commonFolderPath) : null,
+                hasCommonFolder,
+                folderReason);
+
+            AddGroupOrderMenuItem("Открыть лог заказа", () => OpenOrderLogForOrderOnly(order));
+
+            if (_groupOrderContextMenu.Items.Count == 0)
+                return;
+
+            _groupOrderContextMenu.Show(Cursor.Position);
+        }
+
+        private void AddGroupOrderMenuItem(string text, Action? action, bool enabled = true, string? toolTipText = null)
+        {
+            var menuItem = new ToolStripMenuItem(text)
+            {
+                Enabled = enabled
+            };
+
+            if (!string.IsNullOrWhiteSpace(toolTipText))
+                menuItem.ToolTipText = toolTipText;
+
+            if (enabled && action != null)
+                menuItem.Click += (_, _) => action();
+
+            _groupOrderContextMenu.Items.Add(menuItem);
+        }
+
+        private void OpenOrderLogForOrderOnly(OrderData? order)
+        {
+            if (order == null)
+                return;
+
+            AcknowledgeErrorNotifications();
+            var orderLogPath = GetOrderLogFilePath(order);
+            if (!File.Exists(orderLogPath))
+            {
+                SetBottomStatus("Лог заказа пока не создан");
+                MessageBox.Show(this, "Лог заказа пока не создан.", "Лог", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            using var viewer = new OrderLogViewerForm(orderLogPath, GetOrderDisplayId(order));
+            viewer.ShowDialog(this);
         }
 
         private async Task PickFileFromContextAsync(int stage)

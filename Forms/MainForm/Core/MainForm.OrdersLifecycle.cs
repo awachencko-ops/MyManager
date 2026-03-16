@@ -209,6 +209,13 @@ namespace Replica
                         .ToList();
                 }
 
+                var visibleMultiOrderIds = sortedOrders
+                    .Where(OrderTopologyService.IsMultiOrder)
+                    .Select(x => x.InternalId)
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .ToHashSet(StringComparer.Ordinal);
+                _expandedOrderIds.RemoveWhere(orderInternalId => !visibleMultiOrderIds.Contains(orderInternalId));
+
                 foreach (var order in sortedOrders)
                     AddOrderRowsToGrid(order);
 
@@ -231,6 +238,8 @@ namespace Replica
             if (order == null)
                 return;
 
+            var isMultiOrder = OrderTopologyService.IsMultiOrder(order);
+            var isExpanded = isMultiOrder && _expandedOrderIds.Contains(order.InternalId);
             var normalizedStatus = NormalizeStatus(order.Status) ?? (order.Status ?? string.Empty).Trim();
             if (string.IsNullOrWhiteSpace(normalizedStatus))
                 normalizedStatus = WorkflowStatusNames.Processing;
@@ -243,7 +252,7 @@ namespace Replica
 
             var orderRowIndex = dgvJobs.Rows.Add(
                 normalizedStatus,
-                GetOrderDisplayId(order),
+                BuildOrderRowCaption(order, isExpanded),
                 GetFileName(sourcePath),
                 GetFileName(preparedPath),
                 pitStopAction,
@@ -253,6 +262,87 @@ namespace Replica
                 FormatDate(order.ArrivalDate));
 
             dgvJobs.Rows[orderRowIndex].Tag = OrderGridLogic.BuildOrderTag(order.InternalId);
+
+            if (isMultiOrder && isExpanded)
+                AddOrderItemRowsToGrid(order);
+        }
+
+        private void AddOrderItemRowsToGrid(OrderData order)
+        {
+            if (order?.Items == null || order.Items.Count == 0)
+                return;
+
+            var orderedItems = order.Items
+                .Where(x => x != null)
+                .OrderBy(x => x.SequenceNo)
+                .ToList();
+            if (orderedItems.Count == 0)
+                return;
+
+            for (var index = 0; index < orderedItems.Count; index++)
+            {
+                var item = orderedItems[index];
+                if (string.IsNullOrWhiteSpace(item.ItemId))
+                    item.ItemId = Guid.NewGuid().ToString("N");
+
+                var itemStatus = NormalizeStatus(item.FileStatus) ?? (item.FileStatus ?? string.Empty).Trim();
+                if (string.IsNullOrWhiteSpace(itemStatus))
+                    itemStatus = WorkflowStatusNames.Waiting;
+
+                var pitStopAction = NormalizeAction(item.PitStopAction);
+                if (string.Equals(pitStopAction, "-", StringComparison.Ordinal))
+                    pitStopAction = NormalizeAction(order.PitStopAction);
+
+                var imposingAction = NormalizeAction(item.ImposingAction);
+                if (string.Equals(imposingAction, "-", StringComparison.Ordinal))
+                    imposingAction = NormalizeAction(order.ImposingAction);
+
+                var rowIndex = dgvJobs.Rows.Add(
+                    itemStatus,
+                    BuildItemRowCaption(item, index),
+                    GetFileName(item.SourcePath),
+                    GetFileName(item.PreparedPath),
+                    pitStopAction,
+                    imposingAction,
+                    GetFileName(item.PrintPath),
+                    string.Empty,
+                    string.Empty);
+
+                dgvJobs.Rows[rowIndex].Tag = OrderGridLogic.BuildItemTag(order.InternalId, item.ItemId);
+            }
+        }
+
+        private string BuildOrderRowCaption(OrderData order, bool isExpanded)
+        {
+            var orderCaption = GetOrderDisplayId(order);
+            if (!OrderTopologyService.IsMultiOrder(order))
+                return orderCaption;
+
+            var prefix = isExpanded ? "▾ " : "▸ ";
+            return $"{prefix}{orderCaption}";
+        }
+
+        private static string BuildItemRowCaption(OrderFileItem item, int index)
+        {
+            var itemLabel = item.ClientFileLabel;
+            if (string.IsNullOrWhiteSpace(itemLabel))
+                itemLabel = $"item {index + 1}";
+
+            return $"    • {itemLabel.Trim()}";
+        }
+
+        private void ToggleOrderExpanded(string orderInternalId)
+        {
+            if (string.IsNullOrWhiteSpace(orderInternalId))
+                return;
+
+            if (_expandedOrderIds.Contains(orderInternalId))
+                _expandedOrderIds.Remove(orderInternalId);
+            else
+                _expandedOrderIds.Add(orderInternalId);
+
+            RebuildOrdersGrid();
+            TryRestoreSelectedRowByTag(OrderGridLogic.BuildOrderTag(orderInternalId));
         }
 
         private string ResolveSingleOrderDisplayPath(OrderData order, int stage)
@@ -398,10 +488,17 @@ namespace Replica
                 _runProgressByOrderInternalId[order.InternalId] = 0;
                 runSessions.Add((order, cts));
 
+                AppendOrderOperationLog(
+                    order,
+                    OrderOperationNames.Run,
+                    runnableOrders.Count > 1
+                        ? "Пакетный запуск заказа из MainForm"
+                        : "Запуск заказа из MainForm");
+
                 SetOrderStatus(
                     order,
                     WorkflowStatusNames.Processing,
-                    "ui",
+                    OrderStatusSourceNames.Ui,
                     runnableOrders.Count > 1 ? "Пакетный запуск из MainForm" : "Запуск из MainForm",
                     persistHistory: false,
                     rebuildGrid: false);
@@ -439,7 +536,7 @@ namespace Replica
                     SetOrderStatus(
                         session.Order,
                         WorkflowStatusNames.Cancelled,
-                        "ui",
+                        OrderStatusSourceNames.Ui,
                         "Остановлено пользователем",
                         persistHistory: false,
                         rebuildGrid: false);
@@ -449,7 +546,7 @@ namespace Replica
                     SetOrderStatus(
                         session.Order,
                         WorkflowStatusNames.Error,
-                        "ui",
+                        OrderStatusSourceNames.Ui,
                         ex.Message,
                         persistHistory: false,
                         rebuildGrid: false);
@@ -511,7 +608,8 @@ namespace Replica
             _runTokensByOrder.Remove(order.InternalId);
             _runProgressByOrderInternalId.Remove(order.InternalId);
             UpdateTrayProgressIndicator();
-            SetOrderStatus(order, WorkflowStatusNames.Cancelled, "ui", "Остановлено пользователем", persistHistory: true, rebuildGrid: true);
+            AppendOrderOperationLog(order, OrderOperationNames.Stop, "Остановлено пользователем");
+            SetOrderStatus(order, WorkflowStatusNames.Cancelled, OrderStatusSourceNames.Ui, "Остановлено пользователем", persistHistory: true, rebuildGrid: true);
             UpdateActionButtonsState();
             SetBottomStatus($"Остановлен заказ {GetOrderDisplayId(order)}");
         }
@@ -581,6 +679,12 @@ namespace Replica
                     }
 
                     _expandedOrderIds.Remove(order.InternalId);
+                    AppendOrderOperationLog(
+                        order,
+                        OrderOperationNames.Delete,
+                        removeFilesFromDisk
+                            ? "Удален из списка и с диска"
+                            : "Удален из списка");
                     _orderHistory.Remove(order);
                     removedOrdersCount++;
                 }
@@ -707,23 +811,15 @@ namespace Replica
             }
             else
             {
-                targetPath = GetPreferredOrderFolder(order);
+                if (!TryGetBrowseFolderPathForOrder(order, out targetPath, out var reason))
+                {
+                    SetBottomStatus(reason);
+                    MessageBox.Show(this, reason, "Папка", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
             }
 
-            if (string.IsNullOrWhiteSpace(targetPath))
-            {
-                SetBottomStatus("Папка не определена");
-                MessageBox.Show(this, "Папка не определена.", "Папка", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-            }
-
-            Directory.CreateDirectory(targetPath);
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = targetPath,
-                UseShellExecute = true
-            });
-            SetBottomStatus($"Открыта папка: {targetPath}");
+            OpenOrderFolderPath(targetPath);
         }
 
         private void OpenOrderStageFolder(OrderData order, int stage)
@@ -742,7 +838,8 @@ namespace Replica
             }
             else
             {
-                targetPath = GetPreferredOrderFolder(order);
+                if (!TryGetBrowseFolderPathForOrder(order, out targetPath, out _))
+                    targetPath = GetPreferredOrderFolder(order);
             }
 
             if (string.IsNullOrWhiteSpace(targetPath))
@@ -759,6 +856,186 @@ namespace Replica
                 UseShellExecute = true
             });
             SetBottomStatus($"Открыта папка этапа: {targetPath}");
+        }
+
+        private bool TryGetBrowseFolderPathForOrder(OrderData order, out string folderPath, out string reason)
+        {
+            folderPath = string.Empty;
+            reason = "Папка не определена";
+
+            if (order == null)
+                return false;
+
+            if (!OrderTopologyService.IsMultiOrder(order))
+            {
+                folderPath = GetPreferredOrderFolder(order);
+                return !string.IsNullOrWhiteSpace(folderPath);
+            }
+
+            if (!TryGetCommonFolderForGroupOrder(order, out folderPath, out reason))
+                return false;
+
+            return !string.IsNullOrWhiteSpace(folderPath);
+        }
+
+        private void OpenOrderFolderPath(string targetPath)
+        {
+            if (string.IsNullOrWhiteSpace(targetPath))
+            {
+                SetBottomStatus("Папка не определена");
+                MessageBox.Show(this, "Папка не определена.", "Папка", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            try
+            {
+                Directory.CreateDirectory(targetPath);
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = targetPath,
+                    UseShellExecute = true
+                });
+                SetBottomStatus($"Открыта папка: {targetPath}");
+            }
+            catch (Exception ex)
+            {
+                SetBottomStatus($"Не удалось открыть папку: {ex.Message}");
+                MessageBox.Show(this, $"Не удалось открыть папку: {ex.Message}", "Папка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private bool TryGetCommonFolderForGroupOrder(OrderData order, out string folderPath, out string reason)
+        {
+            folderPath = string.Empty;
+            reason = "Папка не определена";
+            if (order == null)
+                return false;
+
+            if (!string.IsNullOrWhiteSpace(order.FolderName))
+            {
+                folderPath = Path.Combine(_ordersRootPath, order.FolderName);
+                return true;
+            }
+
+            var directories = GetGroupDirectoryCandidates(order)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (directories.Count == 0)
+                return false;
+
+            var distinctRoots = directories
+                .Select(GetPathRootSafe)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (distinctRoots.Count > 1)
+            {
+                reason = "Пути не совпадают";
+                return false;
+            }
+
+            var commonDirectory = FindCommonDirectory(directories);
+            if (string.IsNullOrWhiteSpace(commonDirectory))
+                return false;
+
+            folderPath = commonDirectory;
+            return true;
+        }
+
+        private static IEnumerable<string> GetGroupDirectoryCandidates(OrderData order)
+        {
+            if (order?.Items != null)
+            {
+                foreach (var item in order.Items.Where(x => x != null))
+                {
+                    var itemPaths = new[] { item.SourcePath, item.PreparedPath, item.PrintPath };
+                    foreach (var rawPath in itemPaths)
+                    {
+                        var cleanPath = CleanPath(rawPath);
+                        if (string.IsNullOrWhiteSpace(cleanPath))
+                            continue;
+
+                        var candidateDirectory = Path.HasExtension(cleanPath)
+                            ? Path.GetDirectoryName(cleanPath)
+                            : cleanPath;
+                        if (!string.IsNullOrWhiteSpace(candidateDirectory))
+                            yield return NormalizePath(candidateDirectory);
+                    }
+                }
+            }
+
+            var orderPaths = new[] { order?.SourcePath, order?.PreparedPath, order?.PrintPath };
+            foreach (var rawPath in orderPaths)
+            {
+                var cleanPath = CleanPath(rawPath);
+                if (string.IsNullOrWhiteSpace(cleanPath))
+                    continue;
+
+                var candidateDirectory = Path.HasExtension(cleanPath)
+                    ? Path.GetDirectoryName(cleanPath)
+                    : cleanPath;
+                if (!string.IsNullOrWhiteSpace(candidateDirectory))
+                    yield return NormalizePath(candidateDirectory);
+            }
+        }
+
+        private static string FindCommonDirectory(IReadOnlyList<string> directories)
+        {
+            if (directories == null || directories.Count == 0)
+                return string.Empty;
+
+            var commonPath = directories[0];
+            if (string.IsNullOrWhiteSpace(commonPath))
+                return string.Empty;
+
+            for (var i = 1; i < directories.Count; i++)
+            {
+                var candidatePath = directories[i];
+                if (string.IsNullOrWhiteSpace(candidatePath))
+                    continue;
+
+                while (!IsDirectoryPrefix(candidatePath, commonPath))
+                {
+                    var parentPath = Path.GetDirectoryName(commonPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                    if (string.IsNullOrWhiteSpace(parentPath))
+                        return string.Empty;
+
+                    commonPath = parentPath;
+                }
+            }
+
+            return commonPath;
+        }
+
+        private static bool IsDirectoryPrefix(string path, string prefix)
+        {
+            if (string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(prefix))
+                return false;
+
+            if (!path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            if (path.Length == prefix.Length)
+                return true;
+
+            var boundary = path[prefix.Length];
+            return boundary == Path.DirectorySeparatorChar || boundary == Path.AltDirectorySeparatorChar;
+        }
+
+        private static string GetPathRootSafe(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return string.Empty;
+
+            try
+            {
+                return Path.GetPathRoot(path) ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
         }
 
         private string GetPreferredOrderFolder(OrderData order)

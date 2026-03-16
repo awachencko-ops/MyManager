@@ -27,6 +27,7 @@ namespace Replica
         }
 
         private readonly Dictionary<string, StatusCellVisual> _statusCellVisuals = new(StringComparer.OrdinalIgnoreCase);
+        private Image? _groupOrderCellIcon;
 
         private void InitializeStatusCellVisuals()
         {
@@ -94,6 +95,9 @@ namespace Replica
                 icon: LoadStatusCellIcon("check", "check"),
                 iconBackgroundColor: iconBackCompleted,
                 textColor: Color.Black);
+
+            _groupOrderCellIcon?.Dispose();
+            _groupOrderCellIcon = LoadStatusCellIcon("files", "files", ("files FILES", "files"));
         }
 
         private void RegisterStatusCellVisual(string status, Image? icon, Color iconBackgroundColor, Color textColor)
@@ -117,6 +121,8 @@ namespace Replica
                 visual.Icon?.Dispose();
 
             _statusCellVisuals.Clear();
+            _groupOrderCellIcon?.Dispose();
+            _groupOrderCellIcon = null;
         }
 
         private static Image? LoadStatusCellIcon(string iconFolder, string fileNameHint, params (string Folder, string FileNameHint)[] fallbacks)
@@ -200,7 +206,7 @@ namespace Replica
                 return false;
 
             var rawStatus = e.FormattedValue?.ToString() ?? e.Value?.ToString() ?? string.Empty;
-            if (!TryGetStatusCellVisual(rawStatus, out var visual))
+            if (!TryGetStatusCellVisualForRow(e.RowIndex, rawStatus, out var visual))
                 return false;
 
             var paintParts = e.PaintParts
@@ -255,6 +261,22 @@ namespace Replica
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
 
             return true;
+        }
+
+        private bool TryGetStatusCellVisualForRow(int rowIndex, string rawStatus, out StatusCellVisual visual)
+        {
+            var rowTag = dgvJobs.Rows[rowIndex].Tag?.ToString();
+            if (IsOrderTag(rowTag))
+            {
+                var order = GetOrderByRowIndex(rowIndex);
+                if (order != null && OrderTopologyService.IsMultiOrder(order))
+                {
+                    visual = new StatusCellVisual("group-order", _groupOrderCellIcon, Color.White, Color.Black);
+                    return true;
+                }
+            }
+
+            return TryGetStatusCellVisual(rawStatus, out visual);
         }
 
         private bool TryGetStatusCellVisual(string? rawStatus, out StatusCellVisual visual)

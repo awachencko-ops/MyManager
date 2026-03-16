@@ -574,6 +574,25 @@ namespace Replica
             }
         }
 
+        private void AppendOrderOperationLog(OrderData order, string operation, string details)
+        {
+            if (order == null)
+                return;
+
+            try
+            {
+                var opName = string.IsNullOrWhiteSpace(operation) ? "operation" : operation.Trim();
+                var opDetails = string.IsNullOrWhiteSpace(details) ? "-" : details.Trim();
+                var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} | op: {opName} | details: {opDetails}";
+                File.AppendAllText(GetOrderLogFilePath(order), line + Environment.NewLine);
+                Logger.Info($"ORDER-OP | order={GetOrderDisplayId(order)} | {line}");
+            }
+            catch
+            {
+                // Лог не должен ломать основной поток.
+            }
+        }
+
         private void RunOnUiThread(Action action)
         {
             if (action == null || Disposing || IsDisposed)

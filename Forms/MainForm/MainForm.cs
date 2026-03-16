@@ -62,6 +62,12 @@ namespace Replica
 
             if (e.ClickedItem == tsbAddFile)
             {
+                await AddFileToSelectedOrderAsync();
+                return;
+            }
+
+            if (e.ClickedItem == toolStripButton1)
+            {
                 ShowSettingsDialog();
                 return;
             }
@@ -247,7 +253,7 @@ namespace Replica
                     if (order == null)
                         return;
 
-                    SetOrderStatus(order, status, "processor", reason, persistHistory: false, rebuildGrid: true);
+            SetOrderStatus(order, status, OrderStatusSourceNames.Processor, reason, persistHistory: false, rebuildGrid: true);
                 }
 
                 if (InvokeRequired)
@@ -473,12 +479,66 @@ namespace Replica
         {
             var order = GetSelectedOrder();
             var hasOrder = order != null;
+            var hasSelectedOrderContainer = TryGetSelectedOrderContainer(out var selectedOrderContainer) && selectedOrderContainer != null;
+            var hasFirstFileInSelectedOrder = hasSelectedOrderContainer && HasAtLeastOneOrderFile(selectedOrderContainer!);
+            var canAddFileToSelectedOrder = hasSelectedOrderContainer && hasFirstFileInSelectedOrder;
+            var canOpenOrderFolder = false;
+            var browseTooltipText = string.Empty;
+
+            if (hasOrder && order != null)
+            {
+                if (TryGetBrowseFolderPathForOrder(order, out _, out var browseReason))
+                {
+                    canOpenOrderFolder = true;
+                    browseTooltipText = OrderTopologyService.IsMultiOrder(order)
+                        ? "Открыть общую папку группы"
+                        : "Открыть папку заказа";
+                }
+                else
+                {
+                    canOpenOrderFolder = false;
+                    browseTooltipText = string.IsNullOrWhiteSpace(browseReason) ? "Папка недоступна" : browseReason;
+                }
+            }
 
             tsbRun.Enabled = hasOrder;
             tsbRemove.Enabled = hasOrder;
-            tsbBrowse.Enabled = hasOrder;
+            tsbBrowse.Enabled = canOpenOrderFolder;
             tsbConsole.Enabled = hasOrder;
             tsbStop.Enabled = hasOrder && _runTokensByOrder.ContainsKey(order!.InternalId);
+            tsbAddFile.Enabled = canAddFileToSelectedOrder;
+
+            tsbBrowse.ToolTipText = browseTooltipText;
+            tsbAddFile.ToolTipText = canAddFileToSelectedOrder
+                ? "Добавить следующий файл в группу заказа"
+                : hasSelectedOrderContainer
+                    ? "Сначала добавьте первый файл в строку заказа (ячейка Источник или drag-and-drop)"
+                    : "Выберите строку заказа (single-order или group-order)";
+        }
+
+        private static bool HasAtLeastOneOrderFile(OrderData order)
+        {
+            if (order == null)
+                return false;
+
+            static bool HasPath(string? rawPath)
+            {
+                return !string.IsNullOrWhiteSpace(CleanPath(rawPath));
+            }
+
+            if (HasPath(order.SourcePath) || HasPath(order.PreparedPath) || HasPath(order.PrintPath))
+                return true;
+
+            if (order.Items == null || order.Items.Count == 0)
+                return false;
+
+            foreach (var item in order.Items.Where(x => x != null))
+            {
+                if (HasPath(item.SourcePath) || HasPath(item.PreparedPath) || HasPath(item.PrintPath))
+                    return true;
+            }
+
+            return false;
         }
 
         private void ShowSettingsDialog()

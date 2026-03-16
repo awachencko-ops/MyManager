@@ -603,8 +603,8 @@
             tsbAddFile.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
             tsbAddFile.Image = (Image)resources.GetObject("tsbAddFile.Image");
             tsbAddFile.Name = "tsbAddFile";
-            tsbAddFile.Size = new Size(176, 29);
-            tsbAddFile.Text = "Добавить файл ";
+            tsbAddFile.Size = new Size(206, 29);
+            tsbAddFile.Text = "Добавить в группу";
             // 
             // toolStripButton1
             // 

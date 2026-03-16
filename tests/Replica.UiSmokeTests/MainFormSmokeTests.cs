@@ -39,10 +39,11 @@ public sealed class MainFormSmokeTests
                 .Where(name => !string.IsNullOrWhiteSpace(name))
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-            Assert.Contains("Создать", buttons);
+            Assert.Contains("Создать заказ", buttons);
             Assert.Contains("Запустить", buttons);
             Assert.Contains("Остановить", buttons);
             Assert.Contains("Удалить", buttons);
+            Assert.Contains("Добавить в группу", buttons);
             Assert.Contains("Папка", buttons);
             Assert.Contains("Лог", buttons);
             Assert.Contains("Параметры", buttons);
