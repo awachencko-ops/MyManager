@@ -53,6 +53,7 @@
             colPrint = new DataGridViewTextBoxColumn();
             colReceived = new DataGridViewTextBoxColumn();
             colCreated = new DataGridViewTextBoxColumn();
+            pnlScrollBar = new Panel();
             pnlHeader = new Panel();
             btnViewTiles = new Button();
             btnViewList = new Button();
@@ -84,7 +85,6 @@
             tsbBrowse = new ToolStripButton();
             tsbConsole = new ToolStripButton();
             toolStripButton1 = new ToolStripButton();
-            pnlScrollBar = new Panel();
             pnlSidebar.SuspendLayout();
             pnlDockLiterature.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)pictureBox4).BeginInit();
@@ -277,7 +277,7 @@
             dgvJobs.ReadOnly = true;
             dgvJobs.RowHeadersVisible = false;
             dgvJobs.RowHeadersWidth = 62;
-            dgvJobs.Size = new Size(1723, 1068);
+            dgvJobs.Size = new Size(1718, 1068);
             dgvJobs.TabIndex = 2;
             // 
             // colStatus
@@ -343,6 +343,14 @@
             colCreated.MinimumWidth = 8;
             colCreated.Name = "colCreated";
             colCreated.ReadOnly = true;
+            // 
+            // pnlScrollBar
+            // 
+            pnlScrollBar.Dock = DockStyle.Right;
+            pnlScrollBar.Location = new Point(1718, 0);
+            pnlScrollBar.Name = "pnlScrollBar";
+            pnlScrollBar.Size = new Size(25, 1068);
+            pnlScrollBar.TabIndex = 3;
             // 
             // pnlHeader
             // 
@@ -627,14 +635,6 @@
             toolStripButton1.Size = new Size(138, 29);
             toolStripButton1.Text = "Параметры";
             // 
-            // pnlScrollBar
-            // 
-            pnlScrollBar.Dock = DockStyle.Right;
-            pnlScrollBar.Location = new Point(1723, 0);
-            pnlScrollBar.Name = "pnlScrollBar";
-            pnlScrollBar.Size = new Size(20, 1068);
-            pnlScrollBar.TabIndex = 3;
-            // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(10F, 25F);
@@ -643,7 +643,7 @@
             Controls.Add(scMain);
             Controls.Add(pnlSidebar);
             Name = "MainForm";
-            Text = "MainForm";
+            Text = "Replica";
             pnlSidebar.ResumeLayout(false);
             pnlDockLiterature.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)pictureBox4).EndInit();
