@@ -29,14 +29,14 @@
 
 1. Финальный single-regression по чеклисту: `Docs/этапы/1_SINGLE_ORDER_REGRESSION_CHECKLIST.md`.
 2. На текущий момент в чеклисте закрыты `SR-01` и `SR-02` (сборка + старт/чтение истории).
-3. Для `SR-09` и `SR-12` закрыта техническая часть (source/cache/fallback), в работе UI-подтверждение и сценарии `SR-03...SR-08`, `SR-10...SR-11`.
+3. Для `SR-03/SR-04/SR-05` закрыта техническая часть через harness `artifacts/verify_single_order_regression` (создание/редактирование/core-stage-операции); в работе UI-подтверждение.
+4. Для `SR-09` и `SR-12` закрыта техническая часть (source/cache/fallback), в работе UI-подтверждение и сценарии `SR-06...SR-08`, `SR-10...SR-11`.
+5. Запущен `P4` по UI-smoke: добавлен проект `tests/Replica.UiSmokeTests` с 3 тестами `FlaUI` (launch/grid, toolbar actions, tray indicator texts), `dotnet test` проходит.
 
 ### 2.3 Не начато
 
 1. Полноценный group-order UI (group/item визуализация и item-level действия).
-2. Минимальная автоматизация тестов:
-   - `Verify` для snapshot-проверок JSON/моделей/конфигов,
-   - `FlaUI` для 3-5 UI smoke-сценариев.
+2. `Verify` для snapshot-проверок JSON/моделей/конфигов.
 
 ## 3. Ключевые риски (без изменений)
 
@@ -58,7 +58,7 @@
 | P1 | Реальный user-filter из `users.json` + кеш + offline fallback | Completed | Пользовательский фильтр из сети с безопасной деградацией | При отключении NAS фильтр продолжает работу из кеша, UI показывает offline |
 | P2 | Typed-контракты для `status/stage/column IDs` | Completed | Убраны критичные string-магии в core потоке | Основные сценарии используют централизованные константы/enum |
 | P3 | Финальный single-regression | In Progress | Закрыт чеклист `1_SINGLE_ORDER_REGRESSION_CHECKLIST.md` | Нет блокирующих дефектов (`P0/P1`) |
-| P4 | Минимум автотестов (`Verify` + `FlaUI`) | Not Started | Snapshot + UI smoke база | Есть 5+ snapshot и 3-5 UI smoke, проходят стабильно |
+| P4 | Минимум автотестов (`Verify` + `FlaUI`) | In Progress | Snapshot + UI smoke база | Есть 5+ snapshot и 3-5 UI smoke, проходят стабильно |
 | P5 | Фиксация релизного baseline по single-first | Not Started | Release note + known issues + актуальная документация | Этап single-first formally closed |
 
 ## 5. Приоритет на ближайший цикл

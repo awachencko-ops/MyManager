@@ -20,6 +20,7 @@
   <ItemGroup>
     <Compile Remove="Forms\Archive\**\*.cs" />
     <Compile Remove="artifacts\**\*.cs" />
+    <Compile Remove="tests\**\*.cs" />
     <Compile Remove=".codex_build_out\**\*.cs" />
   </ItemGroup>
 
@@ -27,6 +28,7 @@
     <EmbeddedResource Remove="Forms\MainForm\Filters\MainForm.Filters.Evaluation.resx" />
     <EmbeddedResource Remove="Forms\MainForm\Filters\MainForm.Filters.Popups.resx" />
     <EmbeddedResource Remove="Forms\MainForm\Core\MainForm.ArchiveSync.resx" />
+    <EmbeddedResource Remove="tests\**\*.resx" />
     <EmbeddedResource Remove=".codex_build_out\**\*.resx" />
     <None Remove="Forms\MainForm\Core\MainForm.ArchiveSync.resx" />
   </ItemGroup>
