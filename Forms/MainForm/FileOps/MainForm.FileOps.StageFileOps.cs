@@ -340,6 +340,8 @@ namespace Replica
             if (string.IsNullOrWhiteSpace(currentPath))
                 return;
 
+            var wasMultiOrderBeforeMutation = OrderTopologyService.IsMultiOrder(order);
+
             var decision = MessageBox.Show(
                 this,
                 $"Удалить файл {Path.GetFileName(currentPath)}?",
@@ -361,9 +363,118 @@ namespace Replica
                 return;
             }
 
+            var removedFileName = Path.GetFileName(currentPath);
             UpdateItemFilePath(order, item, stage, string.Empty);
-            PersistGridChanges(OrderGridLogic.BuildItemTag(order.InternalId, item.ItemId));
+
+            var itemRemovedFromOrder = RemoveItemIfEmpty(order, item);
+            if (itemRemovedFromOrder)
+            {
+                AppendOrderOperationLog(
+                    order,
+                    OrderOperationNames.RemoveItem,
+                    $"Удален пустой item после удаления файла: {removedFileName} | stage-{stage}");
+            }
+
+            var demotedToSingleOrder = NormalizeOrderTopologyAfterItemMutation(
+                order,
+                wasMultiOrderBeforeMutation,
+                $"remove-file: {removedFileName} | stage-{stage}");
+
+            var canRestoreItemSelection = !itemRemovedFromOrder && ContainsOrderItem(order, item.ItemId);
+            var selectionTag = canRestoreItemSelection
+                ? OrderGridLogic.BuildItemTag(order.InternalId, item.ItemId)
+                : OrderGridLogic.BuildOrderTag(order.InternalId);
+
+            PersistGridChanges(selectionTag);
+            if (demotedToSingleOrder)
+            {
+                SetBottomStatus("Файл удален. group-order преобразован в single-order");
+                return;
+            }
+
+            if (itemRemovedFromOrder)
+            {
+                SetBottomStatus("Файл удален. item исключен из группы");
+                return;
+            }
+
             SetBottomStatus("Файл item удален");
+        }
+
+        private bool NormalizeOrderTopologyAfterItemMutation(OrderData order, bool wasMultiOrderBeforeMutation, string details)
+        {
+            if (order == null)
+                return false;
+
+            var normalization = OrderTopologyService.Normalize(order);
+            if (normalization.Changed && normalization.Issues.Count > 0)
+            {
+                foreach (var issue in normalization.Issues)
+                    Logger.Warn($"TOPOLOGY | order={GetOrderDisplayId(order)} | {issue}");
+            }
+
+            var isMultiOrderNow = OrderTopologyService.IsMultiOrder(order);
+            var demotedToSingleOrder = wasMultiOrderBeforeMutation && !isMultiOrderNow;
+            if (!demotedToSingleOrder)
+                return false;
+
+            _expandedOrderIds.Remove(order.InternalId);
+            AppendOrderOperationLog(
+                order,
+                OrderOperationNames.Topology,
+                $"group-order -> single-order | {details}");
+            return true;
+        }
+
+        private static bool ContainsOrderItem(OrderData order, string? itemId)
+        {
+            if (order?.Items == null || string.IsNullOrWhiteSpace(itemId))
+                return false;
+
+            return order.Items.Any(x => x != null && string.Equals(x.ItemId, itemId, StringComparison.Ordinal));
+        }
+
+        private static bool RemoveItemIfEmpty(OrderData order, OrderFileItem item)
+        {
+            if (order?.Items == null || item == null)
+                return false;
+
+            if (!IsItemEmpty(item))
+                return false;
+
+            var removed = order.Items.RemoveAll(x => x != null && string.Equals(x.ItemId, item.ItemId, StringComparison.Ordinal)) > 0;
+            if (!removed)
+                return false;
+
+            ReindexOrderItems(order);
+            return true;
+        }
+
+        private static bool IsItemEmpty(OrderFileItem? item)
+        {
+            if (item == null)
+                return true;
+
+            var hasStagePaths = !string.IsNullOrWhiteSpace(CleanPath(item.SourcePath))
+                                || !string.IsNullOrWhiteSpace(CleanPath(item.PreparedPath))
+                                || !string.IsNullOrWhiteSpace(CleanPath(item.PrintPath));
+            if (hasStagePaths)
+                return false;
+
+            return item.TechnicalFiles == null || item.TechnicalFiles.All(x => string.IsNullOrWhiteSpace(CleanPath(x)));
+        }
+
+        private static void ReindexOrderItems(OrderData order)
+        {
+            if (order?.Items == null || order.Items.Count == 0)
+                return;
+
+            var orderedItems = order.Items
+                .Where(x => x != null)
+                .OrderBy(x => x.SequenceNo)
+                .ToList();
+            for (var index = 0; index < orderedItems.Count; index++)
+                orderedItems[index].SequenceNo = index;
         }
 
         private void RenameFileForOrder(OrderData order, int stage)

@@ -339,6 +339,37 @@ public sealed class MainFormCoreRegressionTests
         });
     }
 
+    [Fact]
+    public void SR16_GroupOrder_ReverseTransition_DemotesToSingle_WhenOneItemRemains()
+    {
+        MainFormTestHarness.RunWithIsolatedForm((form, _) =>
+        {
+            var groupOrder = CreateGroupOrder("GR-1601");
+            Assert.Equal(2, groupOrder.Items.Count);
+            Assert.True(OrderTopologyService.IsMultiOrder(groupOrder));
+
+            var removedItem = groupOrder.Items[0];
+            removedItem.SourcePath = string.Empty;
+            removedItem.PreparedPath = string.Empty;
+            removedItem.PrintPath = string.Empty;
+
+            var removeItemMethod = form.GetType().GetMethod("RemoveItemIfEmpty", BindingFlags.Static | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(form.GetType().FullName, "RemoveItemIfEmpty");
+            var removed = (bool)(removeItemMethod.Invoke(null, new object[] { groupOrder, removedItem }) ?? false);
+            Assert.True(removed);
+            Assert.Single(groupOrder.Items);
+
+            var normalizeMethod = form.GetType().GetMethod("NormalizeOrderTopologyAfterItemMutation", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(form.GetType().FullName, "NormalizeOrderTopologyAfterItemMutation");
+            var demoted = (bool)(normalizeMethod.Invoke(form, new object[] { groupOrder, true, "sr16-remove-item" }) ?? false);
+
+            Assert.True(demoted);
+            Assert.False(OrderTopologyService.IsMultiOrder(groupOrder));
+            Assert.Equal(OrderFileTopologyMarker.SingleOrder, groupOrder.FileTopologyMarker);
+            Assert.Equal(groupOrder.Items[0].SourcePath, groupOrder.SourcePath);
+        });
+    }
+
     private static OrderData CreateOrder(string id, string status, string userName, DateTime createdAt, DateTime receivedAt)
     {
         return new OrderData

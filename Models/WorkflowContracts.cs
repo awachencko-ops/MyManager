@@ -163,6 +163,7 @@ namespace Replica
         public const string Stop = "stop";
         public const string Delete = "delete";
         public const string AddItem = "add-item";
+        public const string RemoveItem = "remove-item";
         public const string Topology = "topology";
     }
 
