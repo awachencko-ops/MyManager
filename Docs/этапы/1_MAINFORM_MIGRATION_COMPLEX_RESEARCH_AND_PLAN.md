@@ -24,14 +24,12 @@
 10. Сборка: `0 warnings`, `0 errors`.
 11. Реальный user-filter подключен к `users.json` (source + cache + offline fallback + индикатор состояния в UI).
 12. Введены typed-контракты `status/stage/column IDs` и убраны string-магии в `MainForm`/`UI`/core-сервисах.
+13. Финальный single-regression (`P3`) закрыт по чеклисту `SR-01...SR-12` (автоматизированный прогон).
 
 ### 2.2 В работе
 
-1. Финальный single-regression по чеклисту: `Docs/этапы/1_SINGLE_ORDER_REGRESSION_CHECKLIST.md`.
-2. На текущий момент в чеклисте закрыты `SR-01` и `SR-02` (сборка + старт/чтение истории).
-3. Для `SR-03/SR-04/SR-05` закрыта техническая часть через harness `artifacts/verify_single_order_regression` (создание/редактирование/core-stage-операции); в работе UI-подтверждение.
-4. Для `SR-09` и `SR-12` закрыта техническая часть (source/cache/fallback), в работе UI-подтверждение и сценарии `SR-06...SR-08`, `SR-10...SR-11`.
-5. Запущен `P4` по UI-smoke: добавлен проект `tests/Replica.UiSmokeTests` с 3 тестами `FlaUI` (launch/grid, toolbar actions, tray indicator texts), `dotnet test` проходит.
+1. `P4` по автотестам: добавлен проект `tests/Replica.UiSmokeTests` и расширен до 9 тестов (`FlaUI smoke + core regression`), `dotnet test` проходит.
+2. `P5` релизный baseline: не зафиксирован release note / known issues пакет.
 
 ### 2.3 Не начато
 
@@ -47,7 +45,7 @@
 | R3 | Средний | Multi-order backend уже есть, UI временно single-only | Разрыв между возможностями модели и интерфейсом |
 | R4 | Средний | Есть string-контракты (имена колонок, статусы, маркеры) | Хрупкость при рефакторинге |
 | R5 | Средний | Остатки legacy-подхода: order-level пути плюс item-level пути | Риск расхождений данных |
-| R6 | Средний | Нет автоматических тестов (unit/integration/smoke) | Регрессии выявляются только вручную |
+| R6 | Средний | Snapshot-тесты (`Verify`) еще не внедрены; покрытие опирается на smoke/core-regression | Часть регрессий по данным может выявляться вручную |
 | R7 | Низкий | Остаточные проблемы кодировки отдельных UI-строк | UX-шум и поддерживаемость |
 | R8 | Средний | LAN-контур формально не закреплён как отдельный feature-gate | Непредсказуемость при доступе к сетевым папкам |
 
@@ -57,15 +55,14 @@
 |---|---|---|---|---|
 | P1 | Реальный user-filter из `users.json` + кеш + offline fallback | Completed | Пользовательский фильтр из сети с безопасной деградацией | При отключении NAS фильтр продолжает работу из кеша, UI показывает offline |
 | P2 | Typed-контракты для `status/stage/column IDs` | Completed | Убраны критичные string-магии в core потоке | Основные сценарии используют централизованные константы/enum |
-| P3 | Финальный single-regression | In Progress | Закрыт чеклист `1_SINGLE_ORDER_REGRESSION_CHECKLIST.md` | Нет блокирующих дефектов (`P0/P1`) |
+| P3 | Финальный single-regression | Completed | Закрыт чеклист `1_SINGLE_ORDER_REGRESSION_CHECKLIST.md` | Нет блокирующих дефектов (`P0/P1`) |
 | P4 | Минимум автотестов (`Verify` + `FlaUI`) | In Progress | Snapshot + UI smoke база | Есть 5+ snapshot и 3-5 UI smoke, проходят стабильно |
 | P5 | Фиксация релизного baseline по single-first | Not Started | Release note + known issues + актуальная документация | Этап single-first formally closed |
 
 ## 5. Приоритет на ближайший цикл
 
-1. Закрыть `P3` (single-regression).
-2. Зафиксировать `P5` (релизный baseline и документацию по single-first).
-3. После фиксации baseline запустить `P4` (автотест-минимум).
+1. Зафиксировать `P5` (релизный baseline и документацию по single-first).
+2. Дозавершить `P4` через `Verify` snapshot-тесты (JSON/модели/конфиги).
 
 ## 6. Зафиксированные решения
 

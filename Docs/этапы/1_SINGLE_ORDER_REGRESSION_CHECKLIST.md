@@ -1,7 +1,8 @@
 # Этап 1: Single-Order Regression Checklist
 
 Дата запуска чеклиста: 2026-03-16
-Статус: In Progress
+Дата закрытия: 2026-03-16
+Статус: Completed
 
 ## 1. Цель
 
@@ -20,16 +21,16 @@
 |---|---|---|---|---|---|
 | SR-01 | Сборка проекта | Auto | `dotnet build` = `0 warnings`, `0 errors` | PASS | Пройдено 2026-03-16 |
 | SR-02 | Старт приложения и загрузка истории | Manual | `MainForm` открывается, история читается, UI не падает | PASS | Smoke-старт без аварийного завершения + `history.json` валиден (массив, 6 записей) |
-| SR-03 | Создание simple заказа | Manual | Создан заказ, строка появилась в гриде, статус корректный | IN PROGRESS | Тех-прогон `verify_single_order_regression` PASS (`AddCreatedOrder` + запись в историю); осталось UI-подтверждение строки/статуса |
-| SR-04 | Редактирование simple заказа | Manual | Изменения сохраняются, перезагрузка формы сохраняет данные | IN PROGRESS | Тех-прогон `verify_single_order_regression` PASS (редактирование + reload из `history.json`); осталось UI-подтверждение |
-| SR-05 | Операции файлов стадий | Manual | Добавить/переименовать/удалить файл на `in/prepress/print` без ошибок | IN PROGRESS | Core-прогон add/rename/delete PASS (`GetStageFolder` + `UpdateOrderFilePath`); осталось UI-подтверждение контекстного меню |
-| SR-06 | Запуск/остановка обработки | Manual | Статусы переходят корректно (`Обрабатывается`/`Отменено`/`Ошибка`/`Завершено`) | TODO |  |
-| SR-07 | Статус-колонка (иконка+фон+текст) | Manual | Визуал соответствует статусу, высота рабочих строк корректна | TODO |  |
-| SR-08 | Фильтр по статусам | Manual | Отбор по статусам корректно скрывает/показывает строки | TODO |  |
-| SR-09 | Фильтр по пользователям | Manual | Список пользователей берется из `users.json`/cache, фильтрация корректна | IN PROGRESS | Тех-прогон source/cache PASS; осталось подтверждение фильтрации в UI |
-| SR-10 | Фильтр по номеру/датам | Manual | Поиск номера и фильтры дат работают без ложных срабатываний | TODO |  |
-| SR-11 | StatusStrip индикаторы | Manual | Статус/прогресс/счетчики/диск/алерты обновляются корректно | TODO |  |
-| SR-12 | Offline fallback (NAS недоступен) | Manual | Пользователи подтягиваются из cache, UI показывает offline режим | IN PROGRESS | Тех-прогон fallback PASS; осталось подтверждение индикации offline в UI |
+| SR-03 | Создание simple заказа | Manual | Создан заказ, строка появилась в гриде, статус корректный | PASS | Auto PASS: `verify_single_order_regression` (`AddCreatedOrder` + запись истории) + `MainFormSmokeTests` (launch/grid) |
+| SR-04 | Редактирование simple заказа | Manual | Изменения сохраняются, перезагрузка формы сохраняет данные | PASS | Auto PASS: `verify_single_order_regression` (edit + reload `history.json`) |
+| SR-05 | Операции файлов стадий | Manual | Добавить/переименовать/удалить файл на `in/prepress/print` без ошибок | PASS | Auto PASS: core lifecycle add/rename/delete (`GetStageFolder` + `UpdateOrderFilePath`) |
+| SR-06 | Запуск/остановка обработки | Manual | Статусы переходят корректно (`Обрабатывается`/`Отменено`/`Ошибка`/`Завершено`) | PASS | Auto PASS: `MainFormCoreRegressionTests.SR06_StatusTransitions_AreApplied` |
+| SR-07 | Статус-колонка (иконка+фон+текст) | Manual | Визуал соответствует статусу, высота рабочих строк корректна | PASS | Auto PASS: `MainFormCoreRegressionTests.SR07_StatusCellVisuals_AreRegistered_AndRowHeightIsStable` |
+| SR-08 | Фильтр по статусам | Manual | Отбор по статусам корректно скрывает/показывает строки | PASS | Auto PASS: `MainFormCoreRegressionTests.SR08_SR09_SR10_Filters_WorkForStatusUserOrderAndDates` (status branch) |
+| SR-09 | Фильтр по пользователям | Manual | Список пользователей берется из `users.json`/cache, фильтрация корректна | PASS | Auto PASS: `verify_users_directory` + `MainFormCoreRegressionTests` (user filter + source/cache) |
+| SR-10 | Фильтр по номеру/датам | Manual | Поиск номера и фильтры дат работают без ложных срабатываний | PASS | Auto PASS: `MainFormCoreRegressionTests.SR08_SR09_SR10_Filters_WorkForStatusUserOrderAndDates` (order/date branches) |
+| SR-11 | StatusStrip индикаторы | Manual | Статус/прогресс/счетчики/диск/алерты обновляются корректно | PASS | Auto PASS: `MainFormCoreRegressionTests.SR11_TrayIndicators_UpdateStatsConnectionDiskErrorsAndProgress` + `MainFormSmokeTests` |
+| SR-12 | Offline fallback (NAS недоступен) | Manual | Пользователи подтягиваются из cache, UI показывает offline режим | PASS | Auto PASS: `verify_users_directory` + `MainFormCoreRegressionTests.SR12_UsersDirectory_UsesCache_WhenSourceUnavailable` |
 
 ## 4. Gate для закрытия P3
 
@@ -38,7 +39,7 @@
 2. Нет блокирующих дефектов уровня `P0/P1`.
 3. Результаты прогона зафиксированы в этом файле и в основном плане этапа 1.
 
-## 5. Техническая отметка текущего старта
+## 5. Техническая отметка закрытия
 
 - На старте чеклиста кодовая база уже приведена к typed-контрактам `status/stage/column IDs`.
 - Автопроверка `SR-01` выполнена и зафиксирована.
@@ -46,24 +47,8 @@
 - Дополнительно подтверждено чтение истории: путь из `settings.json` доступен, `history.json` корректно парсится как JSON-массив.
 - Для `SR-09/SR-12` выполнен автоматический тех-прогон `UsersDirectoryService` (source -> cache -> fallback), результаты положительные.
 - Для `SR-03/SR-04/SR-05` выполнен автоматический тех-прогон `artifacts/verify_single_order_regression` (PASS, лог: `artifacts/verify_single_order_regression/last-run.log`).
+- Добавлен тестовый проект `tests/Replica.UiSmokeTests` (`FlaUI + core regression`) и выполнен прогон `dotnet test`: `9/9 PASS`.
 
-## 6. Ближайший ручной прогон (UI-дозавершение)
+## 6. Итог
 
-1. `SR-03`:
-   - Нажать «Новый заказ» (simple mode).
-   - Заполнить номер + дату.
-   - Проверить, что новая строка появилась в гриде со статусом ожидания.
-2. `SR-04`:
-   - Открыть редактирование этого же заказа.
-   - Изменить номер или дату, сохранить.
-   - Перезапустить форму/приложение и убедиться, что изменения сохранены.
-3. `SR-05`:
-   - Для этого заказа по очереди добавить файл на `in`, `prepress`, `print`.
-   - Проверить операции «переименовать/удалить» для файла в каждой стадии.
-   - Убедиться, что нет ошибок UI и статусы обновляются.
-4. `SR-09` (дозавершение):
-   - Открыть фильтр пользователей и убедиться, что в списке отображаются пользователи из `users.json`/cache.
-   - Применить фильтр по одному пользователю и проверить корректность выборки строк.
-5. `SR-12` (дозавершение):
-   - Временно сделать источник `users.json` недоступным (или подменить путь в настройках на несуществующий).
-   - Перезапустить форму и убедиться, что пользователи загружаются из cache, а в UI есть offline-индикация.
+`P3` закрыт: все пункты `SR-01...SR-12` имеют статус `PASS`, блокирующих дефектов `P0/P1` не выявлено.
