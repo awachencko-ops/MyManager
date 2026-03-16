@@ -76,7 +76,7 @@ namespace Replica
         public const string Error = "Ошибка";
         public const string Completed = "Завершено";
         public const string Printed = "Напечатано";
-        public const string Folder = "Папка";
+        public const string Group = "Группа";
 
         public const string LegacyReady = "✅ Готово";
         public const string LegacyInWork = "🟡 В работе";
@@ -142,6 +142,9 @@ namespace Replica
             }
 
             if (value.Contains("ожид", StringComparison.OrdinalIgnoreCase))
+                return Waiting;
+
+            if (value.Contains("групп", StringComparison.OrdinalIgnoreCase))
                 return Waiting;
 
             if (value.Contains("папк", StringComparison.OrdinalIgnoreCase))

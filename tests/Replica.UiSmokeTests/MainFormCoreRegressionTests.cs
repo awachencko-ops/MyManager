@@ -259,14 +259,14 @@ public sealed class MainFormCoreRegressionTests
             var colOrderNumber = MainFormTestHarness.GetPrivateField<DataGridViewColumn>(form, "colOrderNumber");
 
             Assert.Single(GetVisibleRows(dgv));
-            Assert.Equal(WorkflowStatusNames.Folder, dgv.Rows[0].Cells[colStatus.Index].Value?.ToString());
+            Assert.Equal(WorkflowStatusNames.Group, dgv.Rows[0].Cells[colStatus.Index].Value?.ToString());
             Assert.Equal(groupOrder.Id, dgv.Rows[0].Cells[colOrderNumber.Index].Value?.ToString());
 
             MainFormTestHarness.InvokePrivate(form, "ToggleOrderExpanded", groupOrder.InternalId);
 
             var expandedRows = GetVisibleRows(dgv);
             Assert.Equal(3, expandedRows.Count);
-            Assert.Equal(WorkflowStatusNames.Folder, expandedRows[0].Cells[colStatus.Index].Value?.ToString());
+            Assert.Equal(WorkflowStatusNames.Group, expandedRows[0].Cells[colStatus.Index].Value?.ToString());
             Assert.Equal(groupOrder.Id, expandedRows[0].Cells[colOrderNumber.Index].Value?.ToString());
             Assert.True(string.IsNullOrWhiteSpace(expandedRows[1].Cells[colOrderNumber.Index].Value?.ToString()));
             Assert.True(string.IsNullOrWhiteSpace(expandedRows[2].Cells[colOrderNumber.Index].Value?.ToString()));
@@ -516,14 +516,14 @@ public sealed class MainFormCoreRegressionTests
     }
 
     [Fact]
-    public void SR21_FolderStatus_IsTechnicalAndHiddenFromUiFilters()
+    public void SR21_GroupStatus_IsTechnicalAndHiddenFromUiFilters()
     {
         MainFormTestHarness.RunWithIsolatedForm((form, _) =>
         {
-            Assert.DoesNotContain(WorkflowStatusNames.Folder, WorkflowStatusNames.Filterable);
-            Assert.Equal(WorkflowStatusNames.Waiting, WorkflowStatusNames.Normalize(WorkflowStatusNames.Folder));
+            Assert.DoesNotContain(WorkflowStatusNames.Group, WorkflowStatusNames.Filterable);
+            Assert.Equal(WorkflowStatusNames.Waiting, WorkflowStatusNames.Normalize(WorkflowStatusNames.Group));
 
-            var folderOrder = CreateOrder("SR21-001", WorkflowStatusNames.Folder, "QA User", new DateTime(2026, 1, 1), new DateTime(2026, 1, 1));
+            var folderOrder = CreateOrder("SR21-001", WorkflowStatusNames.Group, "QA User", new DateTime(2026, 1, 1), new DateTime(2026, 1, 1));
             MainFormTestHarness.InvokePrivate(form, "AddCreatedOrder", folderOrder);
 
             var dgv = MainFormTestHarness.GetPrivateField<DataGridView>(form, "dgvJobs");
@@ -533,6 +533,43 @@ public sealed class MainFormCoreRegressionTests
                 .First(row => string.Equals(row.Tag?.ToString(), $"order|{folderOrder.InternalId}", StringComparison.Ordinal));
 
             Assert.Equal(WorkflowStatusNames.Waiting, orderRow.Cells[colStatus.Index].Value?.ToString());
+        });
+    }
+
+    [Fact]
+    public void SR22_GroupOrder_RowClick_TogglesOnlyWhenRowWasAlreadySelected()
+    {
+        MainFormTestHarness.RunWithIsolatedForm((form, _) =>
+        {
+            var groupOrder = CreateGroupOrder("GR-2201");
+            MainFormTestHarness.InvokePrivate(form, "AddCreatedOrder", groupOrder);
+
+            var dgv = MainFormTestHarness.GetPrivateField<DataGridView>(form, "dgvJobs");
+            var colStatus = MainFormTestHarness.GetPrivateField<DataGridViewColumn>(form, "colStatus");
+            var orderRow = dgv.Rows
+                .Cast<DataGridViewRow>()
+                .First(row => string.Equals(row.Tag?.ToString(), $"order|{groupOrder.InternalId}", StringComparison.Ordinal));
+
+            dgv.ClearSelection();
+            dgv.CurrentCell = orderRow.Cells[colStatus.Index];
+            orderRow.Selected = true;
+
+            MainFormTestHarness.SetPrivateField(form, "_gridMouseDownRowIndex", orderRow.Index);
+            MainFormTestHarness.SetPrivateField(form, "_gridMouseDownRowWasSelected", false);
+            MainFormTestHarness.InvokePrivate(form, "DgvJobs_CellClick", null, new DataGridViewCellEventArgs(colStatus.Index, orderRow.Index));
+            Assert.Single(GetVisibleRows(dgv));
+
+            MainFormTestHarness.SetPrivateField(form, "_gridMouseDownRowIndex", orderRow.Index);
+            MainFormTestHarness.SetPrivateField(form, "_gridMouseDownRowWasSelected", true);
+            MainFormTestHarness.InvokePrivate(form, "DgvJobs_CellClick", null, new DataGridViewCellEventArgs(colStatus.Index, orderRow.Index));
+            Assert.Equal(3, GetVisibleRows(dgv).Count);
+
+            var expandedOrderRow = GetVisibleRows(dgv)
+                .First(row => string.Equals(row.Tag?.ToString(), $"order|{groupOrder.InternalId}", StringComparison.Ordinal));
+            MainFormTestHarness.SetPrivateField(form, "_gridMouseDownRowIndex", expandedOrderRow.Index);
+            MainFormTestHarness.SetPrivateField(form, "_gridMouseDownRowWasSelected", true);
+            MainFormTestHarness.InvokePrivate(form, "DgvJobs_CellClick", null, new DataGridViewCellEventArgs(colStatus.Index, expandedOrderRow.Index));
+            Assert.Single(GetVisibleRows(dgv));
         });
     }
 
@@ -664,3 +701,4 @@ public sealed class MainFormCoreRegressionTests
         return property.GetValue(target);
     }
 }
+

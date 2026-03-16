@@ -244,7 +244,7 @@ namespace Replica
             if (string.IsNullOrWhiteSpace(normalizedStatus))
                 normalizedStatus = WorkflowStatusNames.Processing;
             var displayStatus = isMultiOrder
-                ? WorkflowStatusNames.Folder
+                ? WorkflowStatusNames.Group
                 : normalizedStatus;
 
             var sourceDisplay = string.Empty;

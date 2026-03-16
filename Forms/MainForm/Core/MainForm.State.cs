@@ -65,6 +65,8 @@ namespace Replica
         private int _hoveredRowIndex = -1;
         private int _ctxRow = -1;
         private int _ctxCol = -1;
+        private int _gridMouseDownRowIndex = -1;
+        private bool _gridMouseDownRowWasSelected;
         private Rectangle _dragBoxFromMouseDown = Rectangle.Empty;
         private int _dragSourceRowIndex = -1;
         private int _dragSourceColumnIndex = -1;

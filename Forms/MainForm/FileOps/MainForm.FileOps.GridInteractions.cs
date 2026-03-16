@@ -58,9 +58,27 @@ namespace Replica
             return FindOrderByInternalId(orderInternalId);
         }
 
+        private bool ShouldToggleGroupOrderOnCellClick(int rowIndex, int columnIndex)
+        {
+            if (_gridMouseDownRowIndex != rowIndex || !_gridMouseDownRowWasSelected)
+                return false;
+
+            if (columnIndex == colPitstop.Index || columnIndex == colHotimposing.Index)
+                return false;
+
+            return true;
+        }
+
+        private void ResetGridClickState()
+        {
+            _gridMouseDownRowIndex = -1;
+            _gridMouseDownRowWasSelected = false;
+        }
+
         private void DgvJobs_MouseDown(object? sender, MouseEventArgs e)
         {
             StopGridHoverActivation();
+            ResetGridClickState();
 
             _dragBoxFromMouseDown = Rectangle.Empty;
             _dragSourceRowIndex = -1;
@@ -96,6 +114,11 @@ namespace Replica
             var clickedRow = dgvJobs.Rows[hit.RowIndex];
             var clickedRowTag = clickedRow.Tag?.ToString();
             var clickedOrder = GetOrderByRowIndex(hit.RowIndex);
+            _gridMouseDownRowIndex = hit.RowIndex;
+            _gridMouseDownRowWasSelected =
+                clickedRow.Selected
+                && dgvJobs.CurrentCell != null
+                && dgvJobs.CurrentCell.RowIndex == hit.RowIndex;
 
             var stage = GetStageByColumnIndex(hit.ColumnIndex);
             if (stage == 0)
@@ -482,28 +505,50 @@ namespace Replica
             StopGridHoverActivation();
 
             if (IsGridInputOverClassicScrollBar())
+            {
+                ResetGridClickState();
                 return;
+            }
 
             if (e.RowIndex < 0 || e.ColumnIndex < 0)
+            {
+                ResetGridClickState();
                 return;
+            }
 
             // Ctrl/Shift clicks are used for multi-selection (Explorer-like behavior).
             if ((ModifierKeys & (Keys.Control | Keys.Shift)) != Keys.None)
+            {
+                ResetGridClickState();
                 return;
+            }
 
             var stage = GetStageByColumnIndex(e.ColumnIndex);
             var rowTag = dgvJobs.Rows[e.RowIndex].Tag?.ToString();
             var order = GetOrderByRowIndex(e.RowIndex);
             if (order == null || string.IsNullOrWhiteSpace(rowTag))
+            {
+                ResetGridClickState();
                 return;
+            }
 
             if (stage == 0)
+            {
+                if (IsOrderTag(rowTag)
+                    && OrderTopologyService.IsMultiOrder(order)
+                    && ShouldToggleGroupOrderOnCellClick(e.RowIndex, e.ColumnIndex))
+                {
+                    ToggleOrderExpanded(order.InternalId);
+                }
+
+                ResetGridClickState();
                 return;
-            
+            }
 
             if (IsGroupOrderContainerRow(rowTag, order) && IsGroupContainerFileStageLocked(order, stage))
             {
                 SetBottomStatus("В group-order у контейнера файлы заполняются только в строках item");
+                ResetGridClickState();
                 return;
             }
 
@@ -525,6 +570,10 @@ namespace Replica
             {
                 SetBottomStatus($"Не удалось обработать действие по файлу: {ex.Message}");
                 MessageBox.Show(this, $"Не удалось обработать действие по файлу: {ex.Message}", "Файловая операция", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                ResetGridClickState();
             }
         }
 
