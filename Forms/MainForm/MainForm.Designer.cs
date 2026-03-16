@@ -608,8 +608,8 @@
             tsbAddFile.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
             tsbAddFile.Image = (Image)resources.GetObject("tsbAddFile.Image");
             tsbAddFile.Name = "tsbAddFile";
-            tsbAddFile.Size = new Size(201, 29);
-            tsbAddFile.Text = "Добавить в группу";
+            tsbAddFile.Size = new Size(171, 29);
+            tsbAddFile.Text = "Добавить файл";
             // 
             // tsbBrowse
             // 
