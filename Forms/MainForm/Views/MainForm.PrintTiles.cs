@@ -77,7 +77,8 @@ namespace Replica
             _lvPrintTiles.MouseUp += LvPrintTiles_MouseUp;
             _printTileOrderFont = new Font(_lvPrintTiles.Font, FontStyle.Bold);
 
-            tableLayoutPanel1.Controls.Add(_lvPrintTiles, 0, 2);
+            pnlTable.Controls.Add(_lvPrintTiles);
+            pnlScrollBar.BringToFront();
             _lvPrintTiles.BringToFront();
         }
 
@@ -144,8 +145,8 @@ namespace Replica
                 else
                     dgvJobs.BringToFront();
 
-                UpdateClassicGridScrollBar();
-                UpdateClassicTilesScrollBar();
+                UpdateOrdersViewScrollBarFromActiveView();
+                pnlScrollBar.BringToFront();
             }
             finally
             {
@@ -594,7 +595,7 @@ namespace Replica
             if (shouldRebuildTiles)
                 StartPdfThumbnailGeneration(nextTiles.Select(tile => tile.PrintPath));
 
-            UpdateClassicTilesScrollBar();
+            UpdateOrdersViewScrollBarFromActiveView();
         }
 
         private bool ArePrintTilesItemsUpToDate(IReadOnlyList<PrintTileTag> expectedTiles)

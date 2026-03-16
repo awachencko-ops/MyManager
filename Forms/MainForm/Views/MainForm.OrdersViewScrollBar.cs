@@ -8,8 +8,6 @@ namespace Replica
     public partial class MainForm
     {
         private const int OrdersViewScrollBarWidth = 16;
-        private const int OrdersViewScrollBarGap = 1;
-        private const int OrdersViewScrollBarRightMargin = 3;
 
         private static readonly FieldInfo? ImageListViewVScrollBarField = typeof(ImageListView).GetField(
             "vScrollBar",
@@ -24,23 +22,21 @@ namespace Replica
             if (_ordersViewScrollBar != null)
                 return;
 
-            ReserveRightSideForOrdersViewScrollBar(dgvJobs);
-            ReserveRightSideForOrdersViewScrollBar(_lvPrintTiles);
-
             dgvJobs.ScrollBars = ScrollBars.Horizontal;
             _lvPrintTiles.ScrollBars = false;
+
+            pnlScrollBar.Controls.Clear();
+            pnlScrollBar.Width = OrdersViewScrollBarWidth;
 
             _ordersViewScrollBar = new HoverStateVScrollBar
             {
                 Name = "ordersViewScrollBar",
-                Width = OrdersViewScrollBarWidth,
-                Margin = new Padding(0, dgvJobs.Margin.Top, OrdersViewScrollBarRightMargin, dgvJobs.Margin.Bottom),
-                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Right,
+                Dock = DockStyle.Fill,
                 TabStop = false
             };
 
             _ordersViewScrollBar.ValueChanged += OrdersViewScrollBar_ValueChanged;
-            tableLayoutPanel1.Controls.Add(_ordersViewScrollBar, 0, 2);
+            pnlScrollBar.Controls.Add(_ordersViewScrollBar);
 
             dgvJobs.Scroll += DgvJobs_ScrollForCustomBar;
             dgvJobs.RowsAdded += (_, _) => UpdateOrdersViewScrollBarFromActiveView();
@@ -61,16 +57,6 @@ namespace Replica
 
             AttachTilesInternalVScrollBar();
             UpdateOrdersViewScrollBarFromActiveView();
-        }
-
-        private static void ReserveRightSideForOrdersViewScrollBar(Control control)
-        {
-            var margin = control.Margin;
-            var requiredRightMargin = OrdersViewScrollBarWidth + OrdersViewScrollBarGap + OrdersViewScrollBarRightMargin;
-            if (margin.Right >= requiredRightMargin)
-                return;
-
-            control.Margin = new Padding(margin.Left, margin.Top, requiredRightMargin, margin.Bottom);
         }
 
         private void OrdersViewScrollBar_ValueChanged(object? sender, EventArgs e)
@@ -203,6 +189,7 @@ namespace Replica
                 return;
 
             var hasVisibleOrdersView = dgvJobs.Visible || _lvPrintTiles.Visible;
+            pnlScrollBar.Visible = hasVisibleOrdersView;
             _ordersViewScrollBar.Visible = hasVisibleOrdersView;
             if (!hasVisibleOrdersView)
                 return;
@@ -220,6 +207,7 @@ namespace Replica
                 _isSyncingOrdersViewScrollBar = false;
             }
 
+            pnlScrollBar.BringToFront();
             _ordersViewScrollBar.BringToFront();
         }
 

@@ -38,8 +38,7 @@ namespace Replica
             InitializeQueueNavigation();
             InitializeOrdersGridVisuals();
             InitializeOrdersTilesView();
-            InitializeClassicGridScrollBar();
-            InitializeClassicTilesScrollBar();
+            InitializeOrdersViewScrollBar();
             InitializeViewModeSwitches();
             InitializeOrdersDataFlow();
             InitializeOrderRowContextMenu();
