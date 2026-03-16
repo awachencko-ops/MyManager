@@ -244,20 +244,39 @@ namespace Replica
             if (string.IsNullOrWhiteSpace(normalizedStatus))
                 normalizedStatus = WorkflowStatusNames.Processing;
 
-            var sourcePath = ResolveSingleOrderDisplayPath(order, 1);
-            var preparedPath = ResolveSingleOrderDisplayPath(order, 2);
-            var printPath = ResolveSingleOrderDisplayPath(order, 3);
-            var pitStopAction = ResolveSingleOrderDisplayAction(order, x => x.PitStopAction, order.PitStopAction);
-            var imposingAction = ResolveSingleOrderDisplayAction(order, x => x.ImposingAction, order.ImposingAction);
+            var sourceDisplay = string.Empty;
+            var preparedDisplay = string.Empty;
+            var printDisplay = string.Empty;
+            var pitStopAction = NormalizeAction(order.PitStopAction);
+            var imposingAction = NormalizeAction(order.ImposingAction);
+
+            if (isMultiOrder)
+            {
+                // Group header must not mirror first item file fields.
+                sourceDisplay = "...";
+                preparedDisplay = "...";
+                printDisplay = "...";
+            }
+            else
+            {
+                var sourcePath = ResolveSingleOrderDisplayPath(order, OrderStages.Source);
+                var preparedPath = ResolveSingleOrderDisplayPath(order, OrderStages.Prepared);
+                var printPath = ResolveSingleOrderDisplayPath(order, OrderStages.Print);
+                sourceDisplay = GetFileName(sourcePath);
+                preparedDisplay = GetFileName(preparedPath);
+                printDisplay = GetFileName(printPath);
+                pitStopAction = ResolveSingleOrderDisplayAction(order, x => x.PitStopAction, order.PitStopAction);
+                imposingAction = ResolveSingleOrderDisplayAction(order, x => x.ImposingAction, order.ImposingAction);
+            }
 
             var orderRowIndex = dgvJobs.Rows.Add(
                 normalizedStatus,
                 BuildOrderRowCaption(order, isExpanded),
-                GetFileName(sourcePath),
-                GetFileName(preparedPath),
+                sourceDisplay,
+                preparedDisplay,
                 pitStopAction,
                 imposingAction,
-                GetFileName(printPath),
+                printDisplay,
                 FormatDate(order.OrderDate),
                 FormatDate(order.ArrivalDate));
 

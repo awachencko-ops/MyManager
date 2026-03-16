@@ -399,6 +399,49 @@ public sealed class MainFormCoreRegressionTests
         });
     }
 
+    [Fact]
+    public void SR18_GroupOrder_HeaderRow_DoesNotMirrorFirstItemStageFields()
+    {
+        MainFormTestHarness.RunWithIsolatedForm((form, _) =>
+        {
+            var groupOrder = CreateGroupOrder("GR-1801");
+            groupOrder.Items[0].PreparedPath = @"C:\Orders\group\prepress\front-prepared.pdf";
+            groupOrder.Items[0].PrintPath = @"C:\Orders\group\print\front-print.pdf";
+            groupOrder.PitStopAction = "Outlines CMYK";
+            groupOrder.ImposingAction = "Step & Repeat";
+
+            MainFormTestHarness.InvokePrivate(form, "AddCreatedOrder", groupOrder);
+
+            var dgv = MainFormTestHarness.GetPrivateField<DataGridView>(form, "dgvJobs");
+            var colPrep = MainFormTestHarness.GetPrivateField<DataGridViewColumn>(form, "colPrep");
+            var colPitstop = MainFormTestHarness.GetPrivateField<DataGridViewColumn>(form, "colPitstop");
+            var colHotimposing = MainFormTestHarness.GetPrivateField<DataGridViewColumn>(form, "colHotimposing");
+            var colPrint = MainFormTestHarness.GetPrivateField<DataGridViewColumn>(form, "colPrint");
+
+            var orderRow = dgv.Rows
+                .Cast<DataGridViewRow>()
+                .First(row => string.Equals(row.Tag?.ToString(), $"order|{groupOrder.InternalId}", StringComparison.Ordinal));
+
+            Assert.Equal("...", orderRow.Cells[colPrep.Index].Value?.ToString());
+            Assert.Equal("...", orderRow.Cells[colPrint.Index].Value?.ToString());
+            Assert.Equal("Outlines CMYK", orderRow.Cells[colPitstop.Index].Value?.ToString());
+            Assert.Equal("Step & Repeat", orderRow.Cells[colHotimposing.Index].Value?.ToString());
+
+            var isPreparedLocked = (bool)(MainFormTestHarness.InvokePrivate(
+                form,
+                "IsGroupContainerFileStageLocked",
+                groupOrder,
+                OrderStages.Prepared) ?? false);
+            var isPrintLocked = (bool)(MainFormTestHarness.InvokePrivate(
+                form,
+                "IsGroupContainerFileStageLocked",
+                groupOrder,
+                OrderStages.Print) ?? false);
+            Assert.True(isPreparedLocked);
+            Assert.True(isPrintLocked);
+        });
+    }
+
     private static OrderData CreateOrder(string id, string status, string userName, DateTime createdAt, DateTime receivedAt)
     {
         return new OrderData

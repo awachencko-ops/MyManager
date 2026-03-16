@@ -116,6 +116,9 @@ namespace Replica
             if (!IsOrderTag(rowTag))
                 return string.Empty;
 
+            if (OrderTopologyService.IsMultiOrder(order))
+                return string.Empty;
+
             return ResolveSingleOrderDisplayPath(order, stage);
         }
 

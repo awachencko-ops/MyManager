@@ -21,6 +21,31 @@ namespace Replica
 {
     public partial class MainForm
     {
+        private bool IsGroupOrderContainerRow(string? rowTag, OrderData? order)
+        {
+            return order != null
+                && IsOrderTag(rowTag)
+                && OrderTopologyService.IsMultiOrder(order);
+        }
+
+        private bool IsGroupContainerFileStageLocked(OrderData? order, int stage)
+        {
+            if (order == null)
+                return false;
+
+            if (!OrderTopologyService.IsMultiOrder(order))
+                return false;
+
+            return stage is OrderStages.Source or OrderStages.Prepared or OrderStages.Print;
+        }
+
+        private bool IsGroupContainerLockedColumn(int columnIndex)
+        {
+            return columnIndex == colSource.Index
+                || columnIndex == colPrep.Index
+                || columnIndex == colPrint.Index;
+        }
+
         private void DgvJobs_MouseDown(object? sender, MouseEventArgs e)
         {
             StopGridHoverActivation();
@@ -58,9 +83,13 @@ namespace Replica
 
             var clickedRow = dgvJobs.Rows[hit.RowIndex];
             var clickedRowTag = clickedRow.Tag?.ToString();
+            var clickedOrder = GetOrderByRowIndex(hit.RowIndex);
 
             var stage = GetStageByColumnIndex(hit.ColumnIndex);
             if (stage == 0)
+                return;
+
+            if (IsGroupOrderContainerRow(clickedRowTag, clickedOrder) && IsGroupContainerFileStageLocked(clickedOrder, stage))
                 return;
 
             var canStartFileDrag =
@@ -235,6 +264,10 @@ namespace Replica
                 return;
 
             var row = dgvJobs.Rows[e.RowIndex];
+            var rowTag = row.Tag?.ToString();
+            var order = GetOrderByRowIndex(e.RowIndex);
+            var isLockedGroupContainerCell = IsGroupOrderContainerRow(rowTag, order)
+                && IsGroupContainerLockedColumn(e.ColumnIndex);
             var rowBackColor = row.Selected
                 ? OrdersRowSelectedBackColor
                 : (e.RowIndex == _hoveredRowIndex
@@ -249,6 +282,8 @@ namespace Replica
                 && !string.Equals(textValue, "-", StringComparison.Ordinal)
                 && !string.Equals(textValue, "...", StringComparison.Ordinal);
             var foreColor = hasAttachmentText ? OrdersLinkTextColor : Color.Black;
+            if (isLockedGroupContainerCell)
+                foreColor = Color.FromArgb(128, 128, 128);
 
             if (e.CellStyle == null)
                 return;
@@ -272,12 +307,15 @@ namespace Replica
                 return;
             }
 
-            var isFileColumn = e.ColumnIndex == colSource.Index
-                || e.ColumnIndex == colPrep.Index
-                || e.ColumnIndex == colPrint.Index;
-            dgvJobs.Cursor = isFileColumn ? Cursors.Hand : Cursors.Default;
-
             var rowTag = dgvJobs.Rows[e.RowIndex].Tag?.ToString();
+            var order = GetOrderByRowIndex(e.RowIndex);
+            var stage = GetStageByColumnIndex(e.ColumnIndex);
+            var canInteractWithFileCell =
+                stage != OrderStages.None
+                && IsOrderTag(rowTag)
+                && !IsGroupContainerFileStageLocked(order, stage);
+            dgvJobs.Cursor = canInteractWithFileCell ? Cursors.Hand : Cursors.Default;
+
             if (!IsOrderTag(rowTag))
             {
                 StopGridHoverActivation();
@@ -448,6 +486,12 @@ namespace Replica
                 return;
             }
 
+            if (IsGroupOrderContainerRow(rowTag, order) && IsGroupContainerFileStageLocked(order, stage))
+            {
+                SetBottomStatus("В group-order у контейнера файлы заполняются только в строках item");
+                return;
+            }
+
             try
             {
                 if (!IsOrderTag(rowTag))
@@ -610,6 +654,12 @@ namespace Replica
                 return;
             }
 
+            if (IsGroupOrderContainerRow(rowTag, order) && IsGroupContainerFileStageLocked(order, stage))
+            {
+                e.Effect = DragDropEffects.None;
+                return;
+            }
+
             var draggingFile = (e.Data.GetData(DataFormats.FileDrop) as string[])?.FirstOrDefault();
             draggingFile = CleanPath(draggingFile);
             if (string.IsNullOrWhiteSpace(draggingFile))
@@ -654,6 +704,12 @@ namespace Replica
             {
                 if (!IsOrderTag(rowTag))
                     return;
+
+                if (IsGroupOrderContainerRow(rowTag, order) && IsGroupContainerFileStageLocked(order, stage))
+                {
+                    SetBottomStatus("В group-order добавляйте файлы в строки item");
+                    return;
+                }
 
                 if (!await AddFileToOrderAsync(order, sourceFile, stage))
                     return;
