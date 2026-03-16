@@ -25,16 +25,17 @@
 11. Реальный user-filter подключен к `users.json` (source + cache + offline fallback + индикатор состояния в UI).
 12. Введены typed-контракты `status/stage/column IDs` и убраны string-магии в `MainForm`/`UI`/core-сервисах.
 13. Финальный single-regression (`P3`) закрыт по чеклисту `SR-01...SR-12` (автоматизированный прогон).
+14. Зафиксирован release baseline этапа `single-first`: `Docs/ready/1_SINGLE_FIRST_RELEASE_BASELINE_2026-03-16.md`.
 
 ### 2.2 В работе
 
 1. `P4` по автотестам: добавлен проект `tests/Replica.UiSmokeTests` и расширен до 9 тестов (`FlaUI smoke + core regression`), `dotnet test` проходит.
-2. `P5` релизный baseline: не зафиксирован release note / known issues пакет.
+2. `P4` snapshot-слой `Verify`: не начат (ожидает отдельного мини-этапа).
 
 ### 2.3 Не начато
 
 1. Полноценный group-order UI (group/item визуализация и item-level действия).
-2. `Verify` для snapshot-проверок JSON/моделей/конфигов.
+2. Этап 2: `2_MULTI_ORDER_LOGIC_AND_POSTGRESQL_PLAN.md`.
 
 ## 3. Ключевые риски (без изменений)
 
@@ -57,12 +58,12 @@
 | P2 | Typed-контракты для `status/stage/column IDs` | Completed | Убраны критичные string-магии в core потоке | Основные сценарии используют централизованные константы/enum |
 | P3 | Финальный single-regression | Completed | Закрыт чеклист `1_SINGLE_ORDER_REGRESSION_CHECKLIST.md` | Нет блокирующих дефектов (`P0/P1`) |
 | P4 | Минимум автотестов (`Verify` + `FlaUI`) | In Progress | Snapshot + UI smoke база | Есть 5+ snapshot и 3-5 UI smoke, проходят стабильно |
-| P5 | Фиксация релизного baseline по single-first | Not Started | Release note + known issues + актуальная документация | Этап single-first formally closed |
+| P5 | Фиксация релизного baseline по single-first | Completed | Release note + known issues + актуальная документация | Baseline зафиксирован в `Docs/ready/1_SINGLE_FIRST_RELEASE_BASELINE_2026-03-16.md` |
 
 ## 5. Приоритет на ближайший цикл
 
-1. Зафиксировать `P5` (релизный baseline и документацию по single-first).
-2. Дозавершить `P4` через `Verify` snapshot-тесты (JSON/модели/конфиги).
+1. Дозавершить `P4` через `Verify` snapshot-тесты (JSON/модели/конфиги).
+2. Перейти к этапу `2_MULTI_ORDER_LOGIC_AND_POSTGRESQL_PLAN.md`.
 
 ## 6. Зафиксированные решения
 
@@ -81,6 +82,8 @@
 ---
 
 Статус документа: рабочий, строгий, используется как основной трекер текущего этапа.
+
+Этап 1 (`single-first`) формально закрыт по DoD (`P1+P2+P3` и baseline зафиксированы).
 
 
 ## 8. Передача на следующий этап
