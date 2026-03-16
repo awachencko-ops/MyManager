@@ -26,11 +26,12 @@
 12. Введены typed-контракты `status/stage/column IDs` и убраны string-магии в `MainForm`/`UI`/core-сервисах.
 13. Финальный single-regression (`P3`) закрыт по чеклисту `SR-01...SR-12` (автоматизированный прогон).
 14. Зафиксирован release baseline этапа `single-first`: `Docs/ready/1_SINGLE_FIRST_RELEASE_BASELINE_2026-03-16.md`.
+15. `P4` закрыт: добавлен snapshot-слой `Verify` (`tests/Replica.VerifyTests`, `5/5 PASS`) и UI/core smoke (`tests/Replica.UiSmokeTests`, `9/9 PASS`).
 
 ### 2.2 В работе
 
-1. `P4` по автотестам: добавлен проект `tests/Replica.UiSmokeTests` и расширен до 9 тестов (`FlaUI smoke + core regression`), `dotnet test` проходит.
-2. `P4` snapshot-слой `Verify`: не начат (ожидает отдельного мини-этапа).
+1. Риск-трек этапа 1: точечная стабилизация по `R1/R2/R3/R4/R5/R8`.
+2. Рабочий документ риск-трека: `Docs/ready/1_STAGE1_RISK_TRACK_AFTER_P_CLOSE.md`.
 
 ### 2.3 Не начато
 
@@ -46,7 +47,7 @@
 | R3 | Средний | Multi-order backend уже есть, UI временно single-only | Разрыв между возможностями модели и интерфейсом |
 | R4 | Средний | Есть string-контракты (имена колонок, статусы, маркеры) | Хрупкость при рефакторинге |
 | R5 | Средний | Остатки legacy-подхода: order-level пути плюс item-level пути | Риск расхождений данных |
-| R6 | Средний | Snapshot-тесты (`Verify`) еще не внедрены; покрытие опирается на smoke/core-regression | Часть регрессий по данным может выявляться вручную |
+| R6 | Низкий | Snapshot + smoke слой внедрен (`Verify` + `FlaUI`) | Базовые регрессии покрыты автоматически |
 | R7 | Низкий | Остаточные проблемы кодировки отдельных UI-строк | UX-шум и поддерживаемость |
 | R8 | Средний | LAN-контур формально не закреплён как отдельный feature-gate | Непредсказуемость при доступе к сетевым папкам |
 
@@ -57,13 +58,13 @@
 | P1 | Реальный user-filter из `users.json` + кеш + offline fallback | Completed | Пользовательский фильтр из сети с безопасной деградацией | При отключении NAS фильтр продолжает работу из кеша, UI показывает offline |
 | P2 | Typed-контракты для `status/stage/column IDs` | Completed | Убраны критичные string-магии в core потоке | Основные сценарии используют централизованные константы/enum |
 | P3 | Финальный single-regression | Completed | Закрыт чеклист `1_SINGLE_ORDER_REGRESSION_CHECKLIST.md` | Нет блокирующих дефектов (`P0/P1`) |
-| P4 | Минимум автотестов (`Verify` + `FlaUI`) | In Progress | Snapshot + UI smoke база | Есть 5+ snapshot и 3-5 UI smoke, проходят стабильно |
+| P4 | Минимум автотестов (`Verify` + `FlaUI`) | Completed | Snapshot + UI smoke база | Выполнено: `Verify` 5/5 + `FlaUI` 9/9 |
 | P5 | Фиксация релизного baseline по single-first | Completed | Release note + known issues + актуальная документация | Baseline зафиксирован в `Docs/ready/1_SINGLE_FIRST_RELEASE_BASELINE_2026-03-16.md` |
 
 ## 5. Приоритет на ближайший цикл
 
-1. Дозавершить `P4` через `Verify` snapshot-тесты (JSON/модели/конфиги).
-2. Перейти к этапу `2_MULTI_ORDER_LOGIC_AND_POSTGRESQL_PLAN.md`.
+1. Перейти к блоку рисков этапа 1 (`R1/R2/R3/R4/R5/R8`) и фиксировать решения в этом документе.
+2. После фиксации рисков перейти к этапу `2_MULTI_ORDER_LOGIC_AND_POSTGRESQL_PLAN.md`.
 
 ## 6. Зафиксированные решения
 
@@ -83,7 +84,7 @@
 
 Статус документа: рабочий, строгий, используется как основной трекер текущего этапа.
 
-Этап 1 (`single-first`) формально закрыт по DoD (`P1+P2+P3` и baseline зафиксированы).
+Этап 1 (`single-first`) закрыт по треку `P1...P5`.
 
 
 ## 8. Передача на следующий этап

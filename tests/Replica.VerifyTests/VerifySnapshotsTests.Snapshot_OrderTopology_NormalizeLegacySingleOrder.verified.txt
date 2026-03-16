@@ -1,0 +1,21 @@
+﻿{
+  Changed: true,
+  Issues: [
+    Legacy-пути заказа перенесены в единый item для single-сценария.,
+    Маркер топологии синхронизирован: Unknown -> SingleOrder.
+  ],
+  FileTopologyMarker: SingleOrder,
+  Status: Ожидание,
+  ItemsCount: 1,
+  Items: [
+    {
+      ClientFileLabel: layout,
+      SourcePath: C:\Replica\Orders\00528\in\layout.pdf,
+      PreparedPath: C:\Replica\Orders\00528\prepress\layout.pdf,
+      PrintPath: C:\Replica\Orders\00528\print\00528.pdf,
+      FileStatus: Ожидание,
+      PitStopAction: CheckBleeds,
+      ImposingAction: A3_2up
+    }
+  ]
+}

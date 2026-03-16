@@ -1,0 +1,43 @@
+﻿{
+  Single: {
+    Id: 00526,
+    StartMode: Simple,
+    FileTopologyMarker: SingleOrder,
+    Status: Завершено,
+    ItemsCount: 1,
+    IsSingleOrderMarked: true,
+    IsMultiOrderMarked: false,
+    Items: [
+      {
+        ClientFileLabel: poster-a3,
+        Variant: A3,
+        SourcePath: \\NAS\Orders\00526\in\poster-a3.pdf,
+        PreparedPath: \\NAS\Orders\00526\prepress\poster-a3.pdf,
+        PrintPath: \\NAS\Orders\00526\print\00526.pdf,
+        FileStatus: Завершено
+      }
+    ]
+  },
+  Multi: {
+    Id: 00527,
+    StartMode: Extended,
+    FileTopologyMarker: MultiOrder,
+    Status: Обрабатывается,
+    ItemsCount: 2,
+    IsSingleOrderMarked: false,
+    IsMultiOrderMarked: true,
+    Items: [
+      {
+        ClientFileLabel: flyer-front,
+        Variant: A4,
+        FileStatus: Обрабатывается
+      },
+      {
+        ClientFileLabel: flyer-back,
+        Variant: A4,
+        FileStatus: Ожидание,
+        SequenceNo: 1
+      }
+    ]
+  }
+}

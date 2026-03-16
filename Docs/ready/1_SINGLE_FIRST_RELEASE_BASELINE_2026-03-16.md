@@ -16,8 +16,7 @@ Baseline покрывает только prepress-сценарии этапа `s
 
 Вне baseline:
 - мониторинг физической печати/спулера,
-- полнофункциональный multi-order UI,
-- snapshot-слой тестов на `Verify`.
+- полнофункциональный multi-order UI.
 
 ## 2. Что вошло в релиз
 
@@ -35,12 +34,13 @@ Baseline покрывает только prepress-сценарии этапа `s
 1. `dotnet build Replica.csproj` -> `0 warnings`, `0 errors`.
 2. `dotnet test tests\Replica.UiSmokeTests\Replica.UiSmokeTests.csproj` -> `9/9 PASS`.
 3. Regression-checklist: `Docs/этапы/1_SINGLE_ORDER_REGRESSION_CHECKLIST.md` -> `Completed`, все `SR-01...SR-12 = PASS`.
+4. `dotnet test tests\Replica.VerifyTests\Replica.VerifyTests.csproj` -> `5/5 PASS`.
 
 ## 4. Known Issues (non-blocking)
 
 1. `R1` MainForm остается крупным aggregate, несмотря на декомпозицию.
 2. `R3` Multi-order backend есть, UI пока single-first.
-3. `R6` Snapshot-тесты `Verify` еще не внедрены.
+3. `R6` Снимковое покрытие есть, но расширение snapshot-набора потребуется на следующих этапах.
 4. `R8` LAN-контур не оформлен как отдельный feature-gate.
 
 Критических дефектов `P0/P1` в рамках этапа `single-first` не выявлено.
@@ -52,9 +52,9 @@ Baseline покрывает только prepress-сценарии этапа `s
 Условия:
 1. Использовать только сценарии single-first.
 2. Multi-order считать следующим этапом разработки.
-3. Доработки `P4 (Verify)` и дальнейшие этапы выполнять без возврата legacy-форм.
+3. Дальнейшие этапы выполнять без возврата legacy-форм.
 
 ## 6. Дальнейшие шаги
 
-1. Закрыть `P4` через `Verify` snapshot-тесты (JSON/модели/конфиги).
-2. Перейти к `2_MULTI_ORDER_LOGIC_AND_POSTGRESQL_PLAN.md`.
+1. Перейти к `2_MULTI_ORDER_LOGIC_AND_POSTGRESQL_PLAN.md`.
+2. Параллельно вести риск-трек этапа 1 (`R1/R2/R3/R4/R5/R8`).

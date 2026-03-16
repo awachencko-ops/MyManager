@@ -1,0 +1,28 @@
+﻿{
+  Source: {
+    LoadedFromSource: true,
+    LoadedFromCache: false,
+    StatusText: Пользователи: источник (users.json),
+    Users: [
+      QA User,
+      Operator
+    ]
+  },
+  Cache: {
+    LoadedFromSource: false,
+    LoadedFromCache: true,
+    StatusText: Пользователи: кэш (users.cache.json),
+    Users: [
+      QA User,
+      Operator
+    ]
+  },
+  Fallback: {
+    LoadedFromSource: false,
+    LoadedFromCache: false,
+    StatusText: Пользователи: fallback (файл не найден; файл не найден),
+    Users: [
+      Fallback User
+    ]
+  }
+}

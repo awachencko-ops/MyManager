@@ -1,0 +1,14 @@
+﻿{
+  Changed: true,
+  Issues: [
+    MultiOrder-заказ содержит пути на уровне order; источником истины считаются item-пути.,
+    Маркер топологии синхронизирован: Unknown -> MultiOrder.
+  ],
+  FileTopologyMarker: MultiOrder,
+  ItemsCount: 2,
+  OrderLevelPaths: {
+    SourcePath: C:\Replica\Orders\00529\in\legacy-order-level.pdf,
+    PreparedPath: ,
+    PrintPath: 
+  }
+}

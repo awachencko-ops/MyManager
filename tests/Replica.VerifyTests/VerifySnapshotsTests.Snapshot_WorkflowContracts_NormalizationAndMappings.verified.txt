@@ -1,0 +1,104 @@
+﻿{
+  QueueStatuses: [
+    Все задания,
+    Обработанные,
+    В архиве,
+    Обрабатывается,
+    Задержанные,
+    Завершено
+  ],
+  FilterableStatuses: [
+    Обработано,
+    В архиве,
+    Выполняется сборка,
+    Обрабатывается,
+    Ожидание,
+    Отменено,
+    Ошибка,
+    Завершено
+  ],
+  Normalized: [
+    {
+      Raw: Обработка заказа 00526...
+    },
+    {
+      Raw: Ошибка,
+      Normalized: Ошибка
+    },
+    {
+      Raw: Выполняется сборка,
+      Normalized: Выполняется сборка
+    },
+    {
+      Raw: в работе,
+      Normalized: Обрабатывается
+    },
+    {
+      Raw: ✅ Готово,
+      Normalized: Завершено
+    },
+    {
+      Raw: Напечатано,
+      Normalized: Завершено
+    },
+    {
+      Raw: Неизвестный статус
+    }
+  ],
+  QueueMappings: [
+    {
+      Queue: В архиве,
+      Statuses: [
+        В архиве
+      ]
+    },
+    {
+      Queue: Завершено,
+      Statuses: [
+        Завершено
+      ]
+    },
+    {
+      Queue: Задержанные,
+      Statuses: [
+        Отменено,
+        Ошибка
+      ]
+    },
+    {
+      Queue: Обрабатывается,
+      Statuses: [
+        Выполняется сборка,
+        Обрабатывается,
+        Ожидание
+      ]
+    },
+    {
+      Queue: Обработанные,
+      Statuses: [
+        Обработано
+      ]
+    }
+  ],
+  ColumnStageMapping: [
+    {
+      Column: colSource,
+      Stage: 1
+    },
+    {
+      Column: colPrep,
+      Stage: 2
+    },
+    {
+      Column: colReady,
+      Stage: 2
+    },
+    {
+      Column: colPrint,
+      Stage: 3
+    },
+    {
+      Column: colStatus
+    }
+  ]
+}
