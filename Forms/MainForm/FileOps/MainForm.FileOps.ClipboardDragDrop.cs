@@ -109,9 +109,18 @@ namespace Replica
             if (string.IsNullOrWhiteSpace(rowTag))
                 return string.Empty;
 
-            var order = GetOrderByRowIndex(rowIndex);
+            var order = ResolveOrderFromRowTag(rowTag, rowIndex);
             if (order == null)
                 return string.Empty;
+
+            if (IsItemTag(rowTag))
+            {
+                var itemId = ExtractItemIdFromTag(rowTag);
+                var item = order.Items?.FirstOrDefault(x => x != null && string.Equals(x.ItemId, itemId, StringComparison.Ordinal));
+                if (item == null)
+                    return string.Empty;
+                return GetItemStagePath(item, stage);
+            }
 
             if (!IsOrderTag(rowTag))
                 return string.Empty;

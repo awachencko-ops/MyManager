@@ -138,7 +138,7 @@ namespace Replica
             if (string.IsNullOrWhiteSpace(clickedRowTag))
                 return;
 
-            if (!IsOrderTag(clickedRowTag))
+            if (!IsOrderTag(clickedRowTag) && !IsItemTag(clickedRowTag))
                 return;
 
             _dragSourceRowIndex = hit.RowIndex;
@@ -733,7 +733,7 @@ namespace Replica
                 return;
             }
 
-            if (!IsOrderTag(rowTag))
+            if (!IsOrderTag(rowTag) && !IsItemTag(rowTag))
             {
                 e.Effect = DragDropEffects.None;
                 return;
@@ -781,12 +781,26 @@ namespace Replica
 
             var row = dgvJobs.Rows[hit.RowIndex];
             var rowTag = row.Tag?.ToString();
-            var order = GetOrderByRowIndex(hit.RowIndex);
+            var order = ResolveOrderFromRowTag(rowTag, hit.RowIndex);
             if (order == null || string.IsNullOrWhiteSpace(rowTag))
                 return;
 
             try
             {
+                if (IsItemTag(rowTag))
+                {
+                    var itemId = ExtractItemIdFromTag(rowTag);
+                    var item = order.Items?.FirstOrDefault(x => x != null && string.Equals(x.ItemId, itemId, StringComparison.Ordinal));
+                    if (item == null)
+                        return;
+
+                    if (!await AddFileToItemAsync(order, item, sourceFile, stage))
+                        return;
+
+                    PersistGridChanges(OrderGridLogic.BuildItemTag(order.InternalId, item.ItemId));
+                    return;
+                }
+
                 if (!IsOrderTag(rowTag))
                     return;
 

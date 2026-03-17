@@ -286,10 +286,10 @@ namespace Replica
             dgvJobs.Rows[orderRowIndex].Tag = OrderGridLogic.BuildOrderTag(order.InternalId);
 
             if (isMultiOrder && isExpanded)
-                AddOrderItemRowsToGrid(order);
+                AddOrderItemRowsToGrid(order, orderRowIndex);
         }
 
-        private void AddOrderItemRowsToGrid(OrderData order)
+        private void AddOrderItemRowsToGrid(OrderData order, int parentRowIndex)
         {
             if (order?.Items == null || order.Items.Count == 0)
                 return;
@@ -323,7 +323,9 @@ namespace Replica
                     ? string.Empty
                     : order.Id.Trim();
 
-                var rowIndex = dgvJobs.Rows.Add(
+                // Insert item rows immediately after parent order container
+                var insertIndex = parentRowIndex + 1 + index;
+                dgvJobs.Rows.Insert(insertIndex,
                     itemStatus,
                     orderNumberDisplay,
                     GetFileName(item.SourcePath),
@@ -334,7 +336,7 @@ namespace Replica
                     FormatDate(order.OrderDate),
                     FormatDate(order.ArrivalDate));
 
-                dgvJobs.Rows[rowIndex].Tag = OrderGridLogic.BuildItemTag(order.InternalId, item.ItemId);
+                dgvJobs.Rows[insertIndex].Tag = OrderGridLogic.BuildItemTag(order.InternalId, item.ItemId);
             }
         }
 
