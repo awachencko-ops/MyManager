@@ -361,15 +361,18 @@ namespace Replica
             }
 
             var rowTag = dgvJobs.Rows[e.RowIndex].Tag?.ToString();
-            var order = GetOrderByRowIndex(e.RowIndex);
+            var order = ResolveOrderFromRowTag(rowTag, e.RowIndex);
             var stage = GetStageByColumnIndex(e.ColumnIndex);
+            var isItemRow = IsItemTag(rowTag);
+            var isOrderRow = IsOrderTag(rowTag);
+            var isLockedGroupContainer = isOrderRow && IsGroupContainerFileStageLocked(order, stage);
             var canInteractWithFileCell =
                 stage != OrderStages.None
-                && IsOrderTag(rowTag)
-                && !IsGroupContainerFileStageLocked(order, stage);
+                && (isOrderRow || isItemRow)
+                && !isLockedGroupContainer;
             dgvJobs.Cursor = canInteractWithFileCell ? Cursors.Hand : Cursors.Default;
 
-            if (!IsOrderTag(rowTag))
+            if (!isOrderRow && !isItemRow)
             {
                 StopGridHoverActivation();
                 ClearGridHoverVisual();
@@ -525,7 +528,7 @@ namespace Replica
 
             var stage = GetStageByColumnIndex(e.ColumnIndex);
             var rowTag = dgvJobs.Rows[e.RowIndex].Tag?.ToString();
-            var order = GetOrderByRowIndex(e.RowIndex);
+            var order = ResolveOrderFromRowTag(rowTag, e.RowIndex);
             if (order == null || string.IsNullOrWhiteSpace(rowTag))
             {
                 ResetGridClickState();
@@ -554,6 +557,24 @@ namespace Replica
 
             try
             {
+                if (IsItemTag(rowTag))
+                {
+                    var itemId = ExtractItemIdFromTag(rowTag);
+                    var item = order.Items?.FirstOrDefault(x => x != null && string.Equals(x.ItemId, itemId, StringComparison.Ordinal));
+                    if (item == null)
+                        return;
+
+                    var itemPath = GetItemStagePath(item, stage);
+                    if (HasExistingFile(itemPath))
+                    {
+                        OpenFileDefault(itemPath);
+                        return;
+                    }
+
+                    await PickAndCopyFileForItemAsync(order, item, stage);
+                    return;
+                }
+
                 if (!IsOrderTag(rowTag))
                     return;
 

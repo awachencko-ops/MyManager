@@ -28,9 +28,11 @@
     <EmbeddedResource Remove="Forms\MainForm\Filters\MainForm.Filters.Evaluation.resx" />
     <EmbeddedResource Remove="Forms\MainForm\Filters\MainForm.Filters.Popups.resx" />
     <EmbeddedResource Remove="Forms\MainForm\Core\MainForm.ArchiveSync.resx" />
+    <EmbeddedResource Remove="Forms\MainForm\FileOps\MainForm.FileOps.GridInteractions.resx" />
     <EmbeddedResource Remove="tests\**\*.resx" />
     <EmbeddedResource Remove=".codex_build_out\**\*.resx" />
     <None Remove="Forms\MainForm\Core\MainForm.ArchiveSync.resx" />
+    <None Remove="Forms\MainForm\FileOps\MainForm.FileOps.GridInteractions.resx" />
   </ItemGroup>
 
   <ItemGroup>
