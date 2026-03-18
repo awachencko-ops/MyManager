@@ -40,7 +40,13 @@
             pictureBox2 = new PictureBox();
             scMain = new SplitContainer();
             treeView1 = new TreeView();
+            pnlUser = new Panel();
+            pnlImageUser = new Panel();
+            pictureUser = new PictureBox();
+            pnlDocSpace = new Panel();
             pnlServerHeader = new Panel();
+            splitServer = new SplitContainer();
+            pictureImageServer = new PictureBox();
             tableLayoutPanel1 = new TableLayoutPanel();
             pnlTable = new Panel();
             dgvJobs = new DataGridView();
@@ -98,6 +104,14 @@
             scMain.Panel1.SuspendLayout();
             scMain.Panel2.SuspendLayout();
             scMain.SuspendLayout();
+            pnlUser.SuspendLayout();
+            pnlImageUser.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)pictureUser).BeginInit();
+            pnlServerHeader.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)splitServer).BeginInit();
+            splitServer.Panel1.SuspendLayout();
+            splitServer.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)pictureImageServer).BeginInit();
             tableLayoutPanel1.SuspendLayout();
             pnlTable.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)dgvJobs).BeginInit();
@@ -205,6 +219,8 @@
             // scMain.Panel1
             // 
             scMain.Panel1.Controls.Add(treeView1);
+            scMain.Panel1.Controls.Add(pnlUser);
+            scMain.Panel1.Controls.Add(pnlDocSpace);
             scMain.Panel1.Controls.Add(pnlServerHeader);
             // 
             // scMain.Panel2
@@ -217,20 +233,85 @@
             // 
             // treeView1
             // 
+            treeView1.BackColor = Color.WhiteSmoke;
             treeView1.Dock = DockStyle.Fill;
             treeView1.HideSelection = false;
             treeView1.Location = new Point(0, 75);
             treeView1.Name = "treeView1";
-            treeView1.Size = new Size(460, 1169);
+            treeView1.Size = new Size(460, 1074);
             treeView1.TabIndex = 1;
+            // 
+            // pnlUser
+            // 
+            pnlUser.BackColor = Color.WhiteSmoke;
+            pnlUser.Controls.Add(pnlImageUser);
+            pnlUser.Dock = DockStyle.Bottom;
+            pnlUser.Location = new Point(0, 1149);
+            pnlUser.Name = "pnlUser";
+            pnlUser.Size = new Size(460, 75);
+            pnlUser.TabIndex = 0;
+            // 
+            // pnlImageUser
+            // 
+            pnlImageUser.BackColor = Color.WhiteSmoke;
+            pnlImageUser.Controls.Add(pictureUser);
+            pnlImageUser.Dock = DockStyle.Left;
+            pnlImageUser.Location = new Point(0, 0);
+            pnlImageUser.Name = "pnlImageUser";
+            pnlImageUser.Size = new Size(75, 75);
+            pnlImageUser.TabIndex = 0;
+            // 
+            // pictureUser
+            // 
+            pictureUser.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            pictureUser.Location = new Point(0, 0);
+            pictureUser.Name = "pictureUser";
+            pictureUser.Size = new Size(75, 75);
+            pictureUser.TabIndex = 0;
+            pictureUser.TabStop = false;
+            // 
+            // pnlDocSpace
+            // 
+            pnlDocSpace.BackColor = Color.WhiteSmoke;
+            pnlDocSpace.Dock = DockStyle.Bottom;
+            pnlDocSpace.Location = new Point(0, 1224);
+            pnlDocSpace.Name = "pnlDocSpace";
+            pnlDocSpace.Size = new Size(460, 20);
+            pnlDocSpace.TabIndex = 1;
             // 
             // pnlServerHeader
             // 
+            pnlServerHeader.BackColor = Color.WhiteSmoke;
+            pnlServerHeader.Controls.Add(splitServer);
             pnlServerHeader.Dock = DockStyle.Top;
             pnlServerHeader.Location = new Point(0, 0);
             pnlServerHeader.Name = "pnlServerHeader";
             pnlServerHeader.Size = new Size(460, 75);
             pnlServerHeader.TabIndex = 2;
+            // 
+            // splitServer
+            // 
+            splitServer.Dock = DockStyle.Fill;
+            splitServer.Location = new Point(0, 0);
+            splitServer.Name = "splitServer";
+            // 
+            // splitServer.Panel1
+            // 
+            splitServer.Panel1.AutoScroll = true;
+            splitServer.Panel1.Controls.Add(pictureImageServer);
+            splitServer.Size = new Size(460, 75);
+            splitServer.SplitterDistance = 75;
+            splitServer.TabIndex = 2;
+            // 
+            // pictureImageServer
+            // 
+            pictureImageServer.Dock = DockStyle.Fill;
+            pictureImageServer.Image = (Image)resources.GetObject("pictureImageServer.Image");
+            pictureImageServer.Location = new Point(0, 0);
+            pictureImageServer.Name = "pictureImageServer";
+            pictureImageServer.Size = new Size(75, 75);
+            pictureImageServer.TabIndex = 0;
+            pictureImageServer.TabStop = false;
             // 
             // tableLayoutPanel1
             // 
@@ -660,6 +741,14 @@
             scMain.Panel2.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)scMain).EndInit();
             scMain.ResumeLayout(false);
+            pnlUser.ResumeLayout(false);
+            pnlImageUser.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)pictureUser).EndInit();
+            pnlServerHeader.ResumeLayout(false);
+            splitServer.Panel1.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)splitServer).EndInit();
+            splitServer.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)pictureImageServer).EndInit();
             tableLayoutPanel1.ResumeLayout(false);
             pnlTable.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)dgvJobs).EndInit();
@@ -736,5 +825,11 @@
         private ToolStripButton toolStripButton1;
         private Panel pnlTable;
         private Panel pnlScrollBar;
+        private Panel pnlUser;
+        private Panel pnlImageUser;
+        private Panel pnlDocSpace;
+        private PictureBox pictureUser;
+        private PictureBox pictureImageServer;
+        private SplitContainer splitServer;
     }
 }
