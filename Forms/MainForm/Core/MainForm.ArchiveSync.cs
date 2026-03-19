@@ -34,7 +34,7 @@ namespace Replica
                             order,
                             WorkflowStatusNames.Archived,
                             "archive-sync",
-                            "Файл найден в архиве",
+                            "Файл найден в папке Готово",
                             persistHistory: false,
                             rebuildGrid: false);
                         continue;

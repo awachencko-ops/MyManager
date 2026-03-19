@@ -69,7 +69,7 @@ namespace Replica
     {
         public const string Processed = "Обработано";
         public const string Archived = "В архиве";
-        public const string Building = "Выполняется сборка";
+        public const string Building = "Сборка";
         public const string Processing = "Обрабатывается";
         public const string Waiting = "Ожидание";
         public const string Cancelled = "Отменено";

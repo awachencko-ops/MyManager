@@ -2177,12 +2177,12 @@ namespace Replica
 
                 if (archived)
                 {
-                    changed |= SetOrderStatus(order, "📦 В архиве", "archive-sync", "Файл найден в архиве", refreshGrid: false, persistHistory: false);
+                    changed |= SetOrderStatus(order, WorkflowStatusNames.Archived, "archive-sync", "Файл найден в папке Готово", refreshGrid: false, persistHistory: false);
                 }
-                else if (string.Equals(order.Status, "📦 В архиве", StringComparison.Ordinal))
+                else if (string.Equals(order.Status, WorkflowStatusNames.Archived, StringComparison.Ordinal))
                 {
                     string nextStatus = (!string.IsNullOrWhiteSpace(order.PrintPath) && FileExistsCached(order.PrintPath))
-                        ? "✅ Готово"
+                        ? WorkflowStatusNames.Archived
                         : "Ожидание";
                     changed |= SetOrderStatus(order, nextStatus, "archive-sync", "Заказ больше не считается архивным", refreshGrid: false, persistHistory: false);
                 }
