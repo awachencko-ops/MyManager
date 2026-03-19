@@ -22,6 +22,8 @@
     <Compile Remove="Forms\Archive\**\*.cs" />
     <Compile Remove="artifacts\**\*.cs" />
     <Compile Remove="tests\**\*.cs" />
+    <Compile Remove="Replica.Api\**\*.cs" />
+    <Compile Remove="Replica.Shared\**\*.cs" />
     <Compile Remove=".codex_build_out\**\*.cs" />
   </ItemGroup>
 
@@ -58,6 +60,10 @@
     <None Update="Icons\**\*.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="Replica.Shared\Replica.Shared.csproj" />
   </ItemGroup>
 
 </Project>

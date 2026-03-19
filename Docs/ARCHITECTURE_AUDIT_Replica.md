@@ -3,12 +3,14 @@
 > Контекст: аудит выполнен по текущему монолитному WinForms-приложению, которое работает с файловой системой/NAS и JSON-файлами конфигурации/истории.
 
 > Актуализация на 2026-03-19 (этап 2): live-проверка PostgreSQL выполнена, `history.json` импортирован в `replica_db` (10 orders / 11 items), marker `history_json_bootstrap_v1` записан в `storage_meta`, orphan-items не обнаружены; добавлен интеграционный PostgreSQL regression-pack (single/group roundtrip, concurrency conflict, event append).
+>
+> Актуализация на 2026-03-19 (этап 3, Step 1): добавлены `Replica.Shared` и `Replica.Api`, поднят LAN API skeleton (`/health`, `/api/users`, `/api/orders` + write endpoints), подтверждён smoke-run API (`200` на health/users/orders). Полный cutover клиента на HTTP boundary и server-side orchestration остаются в Step 2 этапа 3.
 
 ## Executive summary
 
 - Текущая реализация **не готова** к роли транзакционно-безопасной платформы на сотни пользователей.
-- Главные причины: отсутствие выделенного серверного API/worker-контуров, UI-центричная оркестрация, ограниченная observability (без trace/correlation id), отсутствие централизованных authN/authZ границ и идемпотентности API.
-- В коде уже закрыт значимый кусок миграции: введён `IOrdersRepository`, реализован LAN PostgreSQL backend с optimistic concurrency (`StorageVersion` + conflict guard), добавлен `order_events` и one-time bootstrap marker в `storage_meta`. Это снижает риски потери данных, но ещё не делает систему enterprise-ready.
+- Главные причины: API/worker-контур пока не доведён до production-boundary (есть только Step 1 skeleton), UI-центричная оркестрация, ограниченная observability (без trace/correlation id), отсутствие централизованных authN/authZ границ и идемпотентности API.
+- В коде уже закрыт значимый кусок миграции: введён `IOrdersRepository`, реализован LAN PostgreSQL backend с optimistic concurrency (`StorageVersion` + conflict guard), добавлен `order_events` и one-time bootstrap marker в `storage_meta`; на этапе 3 Step 1 добавлен API skeleton (`Replica.Api` + `Replica.Shared`). Это снижает риски потери данных и подготавливает разделение слоёв, но ещё не делает систему enterprise-ready.
 
 ---
 
@@ -18,6 +20,7 @@
 
 - Точка входа поднимает сразу WinForms (`Application.Run(new MainForm())`), без явного composition root для бизнес-слоя/инфраструктуры.
 - `MainForm` агрегирует orchestration, хранение истории, статус-машину, UI-binding, файловые операции и запуск процессора; состояние формы содержит десятки полей и коллекций.
+- Добавлен API-каркас (`Replica.Api`) и shared-контракты (`Replica.Shared`), но клиент пока не переведён на API gateway.
 - Persistence реализован через прямое чтение/запись JSON (`history.json`) из UI-слоя.
 - `ConfigService` и `AppSettings` — статические сервисы/конфиги с прямым file IO, без интерфейсов и DI.
 
@@ -39,7 +42,7 @@
 - Для первичного переноса истории добавлен one-time marker `history_json_bootstrap_v1` в `storage_meta`.
 - Модель конкурентного запуска ограничивается in-memory-словарем `_runTokensByOrder` в рамках одного процесса UI.
 - Межклиентская координация обработки (`run/stop`) на сервер не вынесена; coordination остаётся в клиентском процессе.
-- Идемпотентности API нет, так как серверного API на текущем шаге нет.
+- Идемпотентности API пока нет: серверный API существует как skeleton, но command boundary/idempotency key ещё не внедрены.
 
 ### Вывод
 
@@ -170,3 +173,4 @@
 ## Заключение
 
 Текущий Replica (будущий Replica) хорош как локальный/переходный инструмент, но для enterprise-scale и критичных данных требуется архитектурный pivot: **от UI-центричного file-driven монолита к транзакционному API+worker контуру с наблюдаемостью и строгими границами доверия**.
+
