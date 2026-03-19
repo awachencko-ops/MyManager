@@ -133,4 +133,27 @@ public sealed class OrdersRepositoryTests
         Assert.False(result);
         Assert.Contains("connection string is empty", error, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void PostgreSqlRepository_GetMetaValue_Fails_WhenConnectionStringEmpty()
+    {
+        var repository = new PostgreSqlOrdersRepository(string.Empty);
+
+        var result = repository.TryGetMetaValue("history_json_bootstrap_v1", out var value, out var error);
+
+        Assert.False(result);
+        Assert.Equal(string.Empty, value);
+        Assert.Contains("connection string is empty", error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void PostgreSqlRepository_UpsertMetaValue_Fails_WhenConnectionStringEmpty()
+    {
+        var repository = new PostgreSqlOrdersRepository(string.Empty);
+
+        var result = repository.TryUpsertMetaValue("history_json_bootstrap_v1", "{\"state\":\"imported\"}", out var error);
+
+        Assert.False(result);
+        Assert.Contains("connection string is empty", error, StringComparison.OrdinalIgnoreCase);
+    }
 }

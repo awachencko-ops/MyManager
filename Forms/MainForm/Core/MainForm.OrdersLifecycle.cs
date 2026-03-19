@@ -21,6 +21,8 @@ namespace Replica
 {
     public partial class MainForm
     {
+        private const string HistoryBootstrapMarkerKey = "history_json_bootstrap_v1";
+
         private void RefreshQueuePresentation()
         {
             treeView1.Invalidate();
@@ -126,23 +128,88 @@ namespace Replica
             {
                 if (orders.Count == 0 && _ordersStorageBackend == OrdersStorageMode.LanPostgreSql)
                 {
-                    var bootstrapRepository = OrdersRepositoryFactory.CreateFileSystem(_jsonHistoryFile);
-                    if (bootstrapRepository.TryLoadAll(out var bootstrapOrders, out var bootstrapLoadError)
-                        && bootstrapOrders.Count > 0)
+                    var bootstrapMarkerExists = false;
+                    if (_ordersRepository is PostgreSqlOrdersRepository postgreSqlRepository)
                     {
-                        orders = bootstrapOrders;
-                        Logger.Warn(
-                            $"HISTORY | bootstrap-load | source={bootstrapRepository.BackendName} | target={_ordersRepository.BackendName} | orders={bootstrapOrders.Count}");
-
-                        if (!_ordersRepository.TrySaveAll(bootstrapOrders, out var bootstrapSaveError))
+                        if (postgreSqlRepository.TryGetMetaValue(
+                                HistoryBootstrapMarkerKey,
+                                out var bootstrapMarkerValue,
+                                out var markerReadError))
+                        {
+                            bootstrapMarkerExists = !string.IsNullOrWhiteSpace(bootstrapMarkerValue);
+                            if (bootstrapMarkerExists)
+                            {
+                                Logger.Info(
+                                    $"HISTORY | bootstrap-skip-by-marker | backend={_ordersRepository.BackendName} | marker={HistoryBootstrapMarkerKey}");
+                                return true;
+                            }
+                        }
+                        else if (!string.IsNullOrWhiteSpace(markerReadError))
                         {
                             Logger.Warn(
-                                $"HISTORY | bootstrap-save-failed | backend={_ordersRepository.BackendName} | {bootstrapSaveError}");
+                                $"HISTORY | bootstrap-marker-read-failed | backend={_ordersRepository.BackendName} | marker={HistoryBootstrapMarkerKey} | {markerReadError}");
                         }
-                        else
+                    }
+
+                    var bootstrapRepository = OrdersRepositoryFactory.CreateFileSystem(_jsonHistoryFile);
+                    if (bootstrapRepository.TryLoadAll(out var bootstrapOrders, out var bootstrapLoadError))
+                    {
+                        if (bootstrapOrders.Count > 0)
                         {
-                            Logger.Info(
-                                $"HISTORY | bootstrap-save-success | backend={_ordersRepository.BackendName} | orders={bootstrapOrders.Count}");
+                            orders = bootstrapOrders;
+                            Logger.Warn(
+                                $"HISTORY | bootstrap-load | source={bootstrapRepository.BackendName} | target={_ordersRepository.BackendName} | orders={bootstrapOrders.Count}");
+
+                            if (!_ordersRepository.TrySaveAll(bootstrapOrders, out var bootstrapSaveError))
+                            {
+                                Logger.Warn(
+                                    $"HISTORY | bootstrap-save-failed | backend={_ordersRepository.BackendName} | {bootstrapSaveError}");
+                            }
+                            else
+                            {
+                                Logger.Info(
+                                    $"HISTORY | bootstrap-save-success | backend={_ordersRepository.BackendName} | orders={bootstrapOrders.Count}");
+                                if (_ordersRepository is PostgreSqlOrdersRepository markerRepository)
+                                {
+                                    var markerPayload = JsonSerializer.Serialize(new
+                                    {
+                                        state = "imported",
+                                        imported_orders = bootstrapOrders.Count,
+                                        source = "history.json",
+                                        completed_at = DateTime.Now
+                                    });
+                                    if (!markerRepository.TryUpsertMetaValue(HistoryBootstrapMarkerKey, markerPayload, out var markerWriteError))
+                                    {
+                                        Logger.Warn(
+                                            $"HISTORY | bootstrap-marker-write-failed | backend={_ordersRepository.BackendName} | marker={HistoryBootstrapMarkerKey} | {markerWriteError}");
+                                    }
+                                    else
+                                    {
+                                        Logger.Info(
+                                            $"HISTORY | bootstrap-marker-written | backend={_ordersRepository.BackendName} | marker={HistoryBootstrapMarkerKey} | state=imported");
+                                    }
+                                }
+                            }
+                        }
+                        else if (!bootstrapMarkerExists && _ordersRepository is PostgreSqlOrdersRepository markerRepository)
+                        {
+                            var markerPayload = JsonSerializer.Serialize(new
+                            {
+                                state = "empty-source",
+                                imported_orders = 0,
+                                source = "history.json",
+                                completed_at = DateTime.Now
+                            });
+                            if (!markerRepository.TryUpsertMetaValue(HistoryBootstrapMarkerKey, markerPayload, out var markerWriteError))
+                            {
+                                Logger.Warn(
+                                    $"HISTORY | bootstrap-marker-write-failed | backend={_ordersRepository.BackendName} | marker={HistoryBootstrapMarkerKey} | {markerWriteError}");
+                            }
+                            else
+                            {
+                                Logger.Info(
+                                    $"HISTORY | bootstrap-marker-written | backend={_ordersRepository.BackendName} | marker={HistoryBootstrapMarkerKey} | state=empty-source");
+                            }
                         }
                     }
                     else if (!string.IsNullOrWhiteSpace(bootstrapLoadError))

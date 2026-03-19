@@ -12,6 +12,7 @@ namespace Replica
         private const string ItemsTable = "order_items";
         private const string EventsTable = "order_events";
         private const string UsersTable = "users";
+        private const string MetaTable = "storage_meta";
 
         private readonly string _connectionString;
         private readonly object _snapshotSync = new();
@@ -286,6 +287,90 @@ namespace Replica
                 cmd.Parameters.AddWithValue("event_type", eventType.Trim());
                 cmd.Parameters.AddWithValue("event_source", eventSource.Trim());
                 cmd.Parameters.AddWithValue("payload_json", normalizedPayloadJson);
+                cmd.ExecuteNonQuery();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                return false;
+            }
+        }
+
+        public bool TryGetMetaValue(string key, out string value, out string error)
+        {
+            value = string.Empty;
+            error = string.Empty;
+
+            if (string.IsNullOrWhiteSpace(_connectionString))
+            {
+                error = "connection string is empty";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                error = "meta key is empty";
+                return false;
+            }
+
+            try
+            {
+                using var connection = new NpgsqlConnection(_connectionString);
+                connection.Open();
+                EnsureSchema(connection);
+
+                using var cmd = new NpgsqlCommand(
+                    $"select meta_value from {MetaTable} where meta_key = @meta_key;",
+                    connection);
+                cmd.Parameters.AddWithValue("meta_key", key.Trim());
+                var result = cmd.ExecuteScalar();
+                value = result == null || result == DBNull.Value
+                    ? string.Empty
+                    : Convert.ToString(result) ?? string.Empty;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                return false;
+            }
+        }
+
+        public bool TryUpsertMetaValue(string key, string value, out string error)
+        {
+            error = string.Empty;
+
+            if (string.IsNullOrWhiteSpace(_connectionString))
+            {
+                error = "connection string is empty";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                error = "meta key is empty";
+                return false;
+            }
+
+            var normalizedValue = value ?? string.Empty;
+
+            try
+            {
+                using var connection = new NpgsqlConnection(_connectionString);
+                connection.Open();
+                EnsureSchema(connection);
+
+                using var cmd = new NpgsqlCommand(
+                    $"""
+                    insert into {MetaTable}(meta_key, meta_value, updated_at)
+                    values (@meta_key, @meta_value, now())
+                    on conflict (meta_key) do update
+                    set meta_value = @meta_value, updated_at = now();
+                    """,
+                    connection);
+                cmd.Parameters.AddWithValue("meta_key", key.Trim());
+                cmd.Parameters.AddWithValue("meta_value", normalizedValue);
                 cmd.ExecuteNonQuery();
                 return true;
             }
@@ -758,6 +843,12 @@ namespace Replica
                 (
                     user_name text primary key,
                     is_active boolean not null default true,
+                    updated_at timestamp without time zone not null default now()
+                );
+                create table if not exists {MetaTable}
+                (
+                    meta_key text primary key,
+                    meta_value text not null default '',
                     updated_at timestamp without time zone not null default now()
                 );
                 create index if not exists ix_orders_order_number on {OrdersTable}(order_number);

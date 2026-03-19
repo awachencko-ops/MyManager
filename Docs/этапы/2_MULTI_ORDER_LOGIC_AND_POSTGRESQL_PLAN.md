@@ -67,8 +67,25 @@
    - runtime-role (приложение)
    - admin-role (миграции/сопровождение)
 3. Подключить DBeaver к серверу и зафиксировать рабочие подключения команды.
-4. В DBeaver выполнить начальный SQL-драфт (`orders`, `order_items`, `order_events`, `users`, индексы, FK, unique/check).
+4. В DBeaver выполнить начальный SQL-драфт (`orders`, `order_items`, `order_events`, `users`, `storage_meta`, индексы, FK, unique/check).
 5. Включить регулярный backup БД (ежедневно) и тест восстановления.
+
+### 4.1 Протокол верификации в DBeaver (E2-P4)
+
+1. Проверить наличие bootstrap-marker:
+   - `select meta_key, meta_value, updated_at from storage_meta where meta_key = 'history_json_bootstrap_v1';`
+2. Проверить факт переноса контейнеров и item:
+   - `select count(*) as orders_count from orders;`
+   - `select count(*) as items_count from order_items;`
+3. Проверить связность item -> order:
+   - `select count(*) as orphan_items from order_items i left join orders o on o.internal_id = i.order_internal_id where o.internal_id is null;`
+4. Проверить событийный журнал после запуска/остановки:
+   - `select event_type, event_source, count(*) from order_events group by event_type, event_source order by event_type, event_source;`
+5. Критерий успеха E2-P4:
+   - marker существует (`history_json_bootstrap_v1`);
+   - `orders_count`/`items_count` не нулевые для непустой истории;
+   - `orphan_items = 0`;
+   - в `order_events` присутствуют `run`/`stop`/`status-change` после smoke-прогона клиента.
 
 ## 5. План реализации в коде (этап 2)
 
@@ -105,13 +122,17 @@
 
 Примечание по `E2-P4` (прогресс 2026-03-19):
 1. Добавлен bootstrap-переезд: при пустой PostgreSQL истории выполняется загрузка из `history.json` и первичная запись в БД.
-2. Следующий шаг: формализовать one-time migration marker и протокол верификации в DBeaver.
+2. Добавлена one-time marker-логика: `history_json_bootstrap_v1` в `storage_meta` (state=`imported`/`empty-source`).
+3. При наличии marker bootstrap из `history.json` повторно не запускается.
+4. Протокол SQL-верификации в DBeaver формализован (раздел `4.1`).
+5. Следующий шаг: выполнить live-проверку по протоколу `4.1` на рабочем PostgreSQL и зафиксировать результаты.
 
 Примечание по `E2-P6` (прогресс 2026-03-19):
 1. Добавлены verify-тесты repository-слоя (factory + filesystem roundtrip + connection-string guards).
 2. Добавлены тесты на event-контракт (`TryAppendEvent`) для filesystem no-op и PostgreSQL guard по пустой connection string.
-3. Текущее состояние test-pack: `dotnet test Replica.sln` -> `37/37 PASS`:
-   - `tests/Replica.VerifyTests`: `12/12 PASS`
+3. Добавлены тесты на meta-контракт (`TryGetMetaValue`/`TryUpsertMetaValue`) для PostgreSQL guard по пустой connection string.
+4. Текущее состояние test-pack: `dotnet test Replica.sln` -> `39/39 PASS`:
+   - `tests/Replica.VerifyTests`: `14/14 PASS`
    - `tests/Replica.UiSmokeTests`: `25/25 PASS`
 
 ## 6. Риски и контрмеры
