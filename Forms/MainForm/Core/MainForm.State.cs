@@ -33,6 +33,9 @@ namespace Replica
         private readonly Dictionary<string, int> _runProgressByOrderInternalId = new(StringComparer.Ordinal);
         private readonly HashSet<string> _archivedFileNames = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, List<string>> _archivedFilePathsByName = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, List<string>> _archivedFilePathsByHash = new(StringComparer.OrdinalIgnoreCase);
+        private int _archiveHashIndexBuildVersion;
+        private bool _archiveHashIndexBuildInProgress;
         private readonly Dictionary<string, int> _printTileImageIndexesByExtension = new(StringComparer.OrdinalIgnoreCase);
         private readonly ConcurrentDictionary<string, int> _printTileImageIndexesByPath = new(StringComparer.OrdinalIgnoreCase);
         private string _printTilesCacheFolderPath = AppSettings.DefaultThumbnailCacheFolderPath;

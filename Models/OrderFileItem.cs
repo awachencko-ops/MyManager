@@ -14,10 +14,13 @@ namespace Replica
         // Сквозные стадии
         public string SourcePath { get; set; } = "";
         public long? SourceFileSizeBytes { get; set; }
+        public string SourceFileHash { get; set; } = "";
         public string PreparedPath { get; set; } = "";
         public long? PreparedFileSizeBytes { get; set; }
+        public string PreparedFileHash { get; set; } = "";
         public string PrintPath { get; set; } = "";
         public long? PrintFileSizeBytes { get; set; }
+        public string PrintFileHash { get; set; } = "";
 
         // Технические вложения
         public List<string> TechnicalFiles { get; set; } = new();

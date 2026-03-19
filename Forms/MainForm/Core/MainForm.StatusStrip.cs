@@ -50,6 +50,8 @@ namespace Replica
         private void TrayIndicatorsTimer_Tick(object? sender, EventArgs e)
         {
             RefreshArchivedStatuses();
+            if (BackfillMissingFileHashesIncrementally(maxFilesToHash: 2))
+                SaveHistory();
             RefreshUsersDirectoryIfNeeded();
             UpdateTrayConnectionIndicator();
             UpdateTrayDiskIndicator();

@@ -112,6 +112,7 @@ namespace Replica
             var usersNormalized = false;
             var historyChanged = false;
             var migrationLog = new List<string>();
+            var remainingHashBackfillBudget = 32;
 
             if (File.Exists(_jsonHistoryFile))
             {
@@ -133,6 +134,10 @@ namespace Replica
                     order.InternalId = Guid.NewGuid().ToString("N");
                 if (order.ArrivalDate == default)
                     order.ArrivalDate = order.OrderDate != default ? order.OrderDate : DateTime.Now;
+
+                if (remainingHashBackfillBudget > 0
+                    && PopulateKnownFileHashes(order, migrationLog, ref remainingHashBackfillBudget))
+                    historyChanged = true;
 
                 if (PopulateKnownFileSizes(order, migrationLog))
                     historyChanged = true;
@@ -195,6 +200,24 @@ namespace Replica
         {
             foreach (var order in _orderHistory)
                 PopulateKnownFileSizes(order, null);
+        }
+
+        private bool BackfillMissingFileHashesIncrementally(int maxFilesToHash)
+        {
+            if (maxFilesToHash <= 0 || _orderHistory.Count == 0)
+                return false;
+
+            var remainingBudget = maxFilesToHash;
+            var changed = false;
+            foreach (var order in _orderHistory)
+            {
+                if (remainingBudget <= 0)
+                    break;
+
+                changed |= PopulateKnownFileHashes(order, migrationLog: null, ref remainingBudget);
+            }
+
+            return changed;
         }
 
         private static long? TryGetExistingFileSize(string? path)
@@ -276,6 +299,59 @@ namespace Replica
             }
 
             return changed;
+        }
+
+        private static bool PopulateKnownFileHashes(OrderData order, List<string>? migrationLog, ref int remainingBudget)
+        {
+            if (order == null || remainingBudget <= 0)
+                return false;
+
+            var changed = false;
+            changed |= PopulateHashForPath(order, order.SourcePath, order.SourceFileHash, stageName: "Source", migrationLog, ref remainingBudget, valueSetter: hash => order.SourceFileHash = hash);
+            changed |= PopulateHashForPath(order, order.PreparedPath, order.PreparedFileHash, stageName: "Prepared", migrationLog, ref remainingBudget, valueSetter: hash => order.PreparedFileHash = hash);
+            changed |= PopulateHashForPath(order, order.PrintPath, order.PrintFileHash, stageName: "Print", migrationLog, ref remainingBudget, valueSetter: hash => order.PrintFileHash = hash);
+
+            if (order.Items == null || remainingBudget <= 0)
+                return changed;
+
+            foreach (var item in order.Items)
+            {
+                if (item == null || remainingBudget <= 0)
+                    continue;
+
+                changed |= PopulateHashForPath(order, item.SourcePath, item.SourceFileHash, stageName: $"item={item.ClientFileLabel} | Source", migrationLog, ref remainingBudget, valueSetter: hash => item.SourceFileHash = hash);
+                changed |= PopulateHashForPath(order, item.PreparedPath, item.PreparedFileHash, stageName: $"item={item.ClientFileLabel} | Prepared", migrationLog, ref remainingBudget, valueSetter: hash => item.PreparedFileHash = hash);
+                changed |= PopulateHashForPath(order, item.PrintPath, item.PrintFileHash, stageName: $"item={item.ClientFileLabel} | Print", migrationLog, ref remainingBudget, valueSetter: hash => item.PrintFileHash = hash);
+            }
+
+            return changed;
+        }
+
+        private static bool PopulateHashForPath(
+            OrderData order,
+            string? path,
+            string? currentHash,
+            string stageName,
+            List<string>? migrationLog,
+            ref int remainingBudget,
+            Action<string> valueSetter)
+        {
+            if (remainingBudget <= 0)
+                return false;
+
+            if (!string.IsNullOrWhiteSpace(currentHash))
+                return false;
+
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+                return false;
+
+            if (!FileHashService.TryComputeSha256(path, out var hash, out _))
+                return false;
+
+            valueSetter(hash);
+            remainingBudget--;
+            migrationLog?.Add($"MIGRATION | order={order.Id} | {stageName}FileHash={hash} | path={path}");
+            return true;
         }
 
         private void RebuildOrdersGrid()

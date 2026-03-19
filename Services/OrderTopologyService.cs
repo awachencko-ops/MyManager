@@ -66,6 +66,9 @@ namespace Replica
                     changed |= SyncSingleItemPath(order, item, 1, issues);
                     changed |= SyncSingleItemPath(order, item, 2, issues);
                     changed |= SyncSingleItemPath(order, item, 3, issues);
+                    changed |= SyncSingleItemFileHash(order, item, 1, issues);
+                    changed |= SyncSingleItemFileHash(order, item, 2, issues);
+                    changed |= SyncSingleItemFileHash(order, item, 3, issues);
 
                     if (string.IsNullOrWhiteSpace(item.ClientFileLabel))
                     {
@@ -197,10 +200,13 @@ namespace Replica
                 ClientFileLabel = BuildDefaultItemLabel(order, null),
                 SourcePath = order.SourcePath ?? string.Empty,
                 SourceFileSizeBytes = order.SourceFileSizeBytes,
+                SourceFileHash = order.SourceFileHash ?? string.Empty,
                 PreparedPath = order.PreparedPath ?? string.Empty,
                 PreparedFileSizeBytes = order.PreparedFileSizeBytes,
+                PreparedFileHash = order.PreparedFileHash ?? string.Empty,
                 PrintPath = order.PrintPath ?? string.Empty,
                 PrintFileSizeBytes = order.PrintFileSizeBytes,
+                PrintFileHash = order.PrintFileHash ?? string.Empty,
                 PitStopAction = string.IsNullOrWhiteSpace(order.PitStopAction) ? "-" : order.PitStopAction,
                 ImposingAction = string.IsNullOrWhiteSpace(order.ImposingAction) ? "-" : order.ImposingAction,
                 FileStatus = string.IsNullOrWhiteSpace(order.Status) ? WorkflowStatusNames.Waiting : order.Status,
@@ -274,6 +280,17 @@ namespace Replica
             };
         }
 
+        private static string GetOrderStageHash(OrderData order, int stage)
+        {
+            return stage switch
+            {
+                OrderStages.Source => order.SourceFileHash ?? string.Empty,
+                OrderStages.Prepared => order.PreparedFileHash ?? string.Empty,
+                OrderStages.Print => order.PrintFileHash ?? string.Empty,
+                _ => string.Empty
+            };
+        }
+
         private static void SetOrderStageSize(OrderData order, int stage, long? size)
         {
             if (stage == OrderStages.Source)
@@ -282,6 +299,16 @@ namespace Replica
                 order.PreparedFileSizeBytes = size;
             else if (stage == OrderStages.Print)
                 order.PrintFileSizeBytes = size;
+        }
+
+        private static void SetOrderStageHash(OrderData order, int stage, string? hash)
+        {
+            if (stage == OrderStages.Source)
+                order.SourceFileHash = hash ?? string.Empty;
+            else if (stage == OrderStages.Prepared)
+                order.PreparedFileHash = hash ?? string.Empty;
+            else if (stage == OrderStages.Print)
+                order.PrintFileHash = hash ?? string.Empty;
         }
 
         private static string GetItemStagePath(OrderFileItem item, int stage)
@@ -316,6 +343,17 @@ namespace Replica
             };
         }
 
+        private static string GetItemStageHash(OrderFileItem item, int stage)
+        {
+            return stage switch
+            {
+                OrderStages.Source => item.SourceFileHash ?? string.Empty,
+                OrderStages.Prepared => item.PreparedFileHash ?? string.Empty,
+                OrderStages.Print => item.PrintFileHash ?? string.Empty,
+                _ => string.Empty
+            };
+        }
+
         private static void SetItemStageSize(OrderFileItem item, int stage, long? size)
         {
             if (stage == OrderStages.Source)
@@ -324,6 +362,16 @@ namespace Replica
                 item.PreparedFileSizeBytes = size;
             else if (stage == OrderStages.Print)
                 item.PrintFileSizeBytes = size;
+        }
+
+        private static void SetItemStageHash(OrderFileItem item, int stage, string? hash)
+        {
+            if (stage == OrderStages.Source)
+                item.SourceFileHash = hash ?? string.Empty;
+            else if (stage == OrderStages.Prepared)
+                item.PreparedFileHash = hash ?? string.Empty;
+            else if (stage == OrderStages.Print)
+                item.PrintFileHash = hash ?? string.Empty;
         }
 
         private static bool SyncSingleItemFileSize(OrderData order, OrderFileItem item, int stage, List<string> issues)
@@ -350,6 +398,38 @@ namespace Replica
             if (GetItemStageSize(item, stage) != resolvedSize)
             {
                 SetItemStageSize(item, stage, resolvedSize);
+                changed = true;
+            }
+
+            return changed;
+        }
+
+        private static bool SyncSingleItemFileHash(OrderData order, OrderFileItem item, int stage, List<string> issues)
+        {
+            var orderHash = GetOrderStageHash(order, stage);
+            var itemHash = GetItemStageHash(item, stage);
+
+            if (!string.IsNullOrWhiteSpace(orderHash) &&
+                !string.IsNullOrWhiteSpace(itemHash) &&
+                !string.Equals(orderHash, itemHash, StringComparison.OrdinalIgnoreCase))
+            {
+                issues.Add($"Конфликт stage={stage}: order-hash и item-hash различаются. Применен приоритет существующего хэша.");
+            }
+
+            var resolvedHash = !string.IsNullOrWhiteSpace(orderHash) ? orderHash : itemHash;
+            if (string.IsNullOrWhiteSpace(resolvedHash))
+                return false;
+
+            var changed = false;
+            if (!string.Equals(GetOrderStageHash(order, stage), resolvedHash, StringComparison.OrdinalIgnoreCase))
+            {
+                SetOrderStageHash(order, stage, resolvedHash);
+                changed = true;
+            }
+
+            if (!string.Equals(GetItemStageHash(item, stage), resolvedHash, StringComparison.OrdinalIgnoreCase))
+            {
+                SetItemStageHash(item, stage, resolvedHash);
                 changed = true;
             }
 

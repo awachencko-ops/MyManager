@@ -42,10 +42,13 @@ namespace Replica
         // Храним ПОЛНЫЕ пути к файлам (legacy, для обратной совместимости)
         public string SourcePath { get; set; } = "";
         public long? SourceFileSizeBytes { get; set; }
+        public string SourceFileHash { get; set; } = "";
         public string PreparedPath { get; set; } = "";
         public long? PreparedFileSizeBytes { get; set; }
+        public string PreparedFileHash { get; set; } = "";
         public string PrintPath { get; set; } = "";
         public long? PrintFileSizeBytes { get; set; }
+        public string PrintFileHash { get; set; } = "";
 
         // Настройки автоматизации
         public string PitStopAction { get; set; } = "-";

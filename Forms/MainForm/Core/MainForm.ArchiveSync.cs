@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace Replica
 {
@@ -23,7 +24,7 @@ namespace Replica
                     if (order == null)
                         continue;
 
-                    var archived = TryResolveArchivedPrintPath(order, out var archivedPrintPath, out var matchedLength, out var archiveMissReason);
+                    var archived = TryResolveArchivedPrintPath(order, out var archivedPrintPath, out var matchedLength, out var matchedBy, out var archiveMissReason);
 
                     if (string.Equals(NormalizeStatus(order.Status), WorkflowStatusNames.Error, StringComparison.Ordinal))
                         continue;
@@ -34,7 +35,7 @@ namespace Replica
                             order,
                             WorkflowStatusNames.Archived,
                             "archive-sync",
-                            $"Файл найден в папке Готово: {archivedPrintPath} (совпали имя и размер: {matchedLength} байт)",
+                            $"Файл найден в папке Готово: {archivedPrintPath} (совпало {matchedBy}; размер: {matchedLength} байт)",
                             persistHistory: false,
                             rebuildGrid: false);
                         continue;
@@ -73,13 +74,14 @@ namespace Replica
             if (order == null || string.IsNullOrWhiteSpace(_grandpaFolder))
                 return false;
 
-            return TryResolveArchivedPrintPath(order, out archivedPrintPath, out _, out _);
+            return TryResolveArchivedPrintPath(order, out archivedPrintPath, out _, out _, out _);
         }
 
-        private bool TryResolveArchivedPrintPath(OrderData order, out string archivedPrintPath, out long matchedLength, out string missReason)
+        private bool TryResolveArchivedPrintPath(OrderData order, out string archivedPrintPath, out long matchedLength, out string matchedBy, out string missReason)
         {
             archivedPrintPath = string.Empty;
             matchedLength = 0;
+            matchedBy = string.Empty;
             missReason = string.Empty;
             if (order == null || string.IsNullOrWhiteSpace(_grandpaFolder))
             {
@@ -101,6 +103,25 @@ namespace Replica
                 var fileName = Path.GetFileName(filePath);
                 if (string.IsNullOrWhiteSpace(fileName))
                     continue;
+
+                var hasExpectedHash = TryGetExpectedFileHash(candidate, out var expectedHash);
+                if (hasExpectedHash
+                    && _archivedFilePathsByHash.TryGetValue(expectedHash, out var hashPaths))
+                {
+                    foreach (var candidatePath in hashPaths)
+                    {
+                        if (!HasExistingFile(candidatePath))
+                            continue;
+
+                        if (!TryGetFileLength(candidatePath, out var candidateLength))
+                            continue;
+
+                        archivedPrintPath = candidatePath;
+                        matchedLength = candidateLength;
+                        matchedBy = "hash";
+                        return true;
+                    }
+                }
 
                 if (!_archivedFilePathsByName.TryGetValue(fileName, out var candidatePaths))
                 {
@@ -125,8 +146,12 @@ namespace Replica
                     if (candidateLength != currentLength)
                         continue;
 
+                    if (hasExpectedHash && !ArchiveFileMatchesHash(candidatePath, expectedHash))
+                        continue;
+
                     archivedPrintPath = candidatePath;
                     matchedLength = currentLength;
+                    matchedBy = hasExpectedHash ? "имя, размер и hash" : "имя и размер";
                     return true;
                 }
 
@@ -135,13 +160,19 @@ namespace Replica
                     .Select(path => TryGetFileLength(path, out var len) ? len.ToString() : "?")
                     .Distinct()
                     .ToList();
-                missReason = foundSizes.Count == 0
-                    ? $"в папке Готово есть имя {fileName}, но файлы недоступны"
-                    : $"в папке Готово есть имя {fileName}, но размер не совпал (ожидалось {currentLength} байт, найдено: {string.Join(", ", foundSizes)})";
+                missReason = hasExpectedHash
+                    ? foundSizes.Count == 0
+                        ? $"в папке Готово есть имя {fileName}, но файлы недоступны"
+                        : _archiveHashIndexBuildInProgress
+                            ? $"в папке Готово есть имя {fileName}, но hash пока не совпал (ожидалось {expectedHash}; индекс hash ещё строится)"
+                            : $"в папке Готово есть имя {fileName}, но hash не совпал (ожидалось {expectedHash})"
+                    : foundSizes.Count == 0
+                        ? $"в папке Готово есть имя {fileName}, но файлы недоступны"
+                        : $"в папке Готово есть имя {fileName}, но размер не совпал (ожидалось {currentLength} байт, найдено: {string.Join(", ", foundSizes)})";
             }
 
             if (string.IsNullOrWhiteSpace(missReason))
-                missReason = "совпадение по имени и размеру не найдено";
+                missReason = "совпадение по hash и имени/размеру не найдено";
 
             return false;
         }
@@ -210,10 +241,10 @@ namespace Replica
                 missing.Add(label);
         }
 
-        private static List<(string Path, long? ExpectedLength)> GetOrderArchiveCandidates(OrderData order)
+        private static List<(string Path, long? ExpectedLength, string Hash)> GetOrderArchiveCandidates(OrderData order)
         {
-            var candidates = new List<(string Path, long? ExpectedLength)>();
-            AddCandidate(candidates, order.PrintPath, order.PrintFileSizeBytes);
+            var candidates = new List<(string Path, long? ExpectedLength, string Hash)>();
+            AddCandidate(candidates, order.PrintPath, order.PrintFileSizeBytes, order.PrintFileHash);
 
             if (order.Items == null || order.Items.Count == 0)
                 return candidates;
@@ -223,21 +254,21 @@ namespace Replica
                 if (item == null)
                     continue;
 
-                AddCandidate(candidates, item.PrintPath, item.PrintFileSizeBytes);
+                AddCandidate(candidates, item.PrintPath, item.PrintFileSizeBytes, item.PrintFileHash);
             }
 
             return candidates;
         }
 
-        private static void AddCandidate(List<(string Path, long? ExpectedLength)> candidates, string? path, long? expectedLength)
+        private static void AddCandidate(List<(string Path, long? ExpectedLength, string Hash)> candidates, string? path, long? expectedLength, string? hash)
         {
             if (string.IsNullOrWhiteSpace(path))
                 return;
 
-            candidates.Add((path.Trim(), expectedLength));
+            candidates.Add((path.Trim(), expectedLength, hash ?? string.Empty));
         }
 
-        private static bool TryGetExpectedFileLength((string Path, long? ExpectedLength) candidate, out long length)
+        private static bool TryGetExpectedFileLength((string Path, long? ExpectedLength, string Hash) candidate, out long length)
         {
             if (HasExistingFile(candidate.Path) && TryGetFileLength(candidate.Path, out length))
                 return true;
@@ -250,6 +281,18 @@ namespace Replica
 
             length = 0;
             return false;
+        }
+
+        private static bool TryGetExpectedFileHash((string Path, long? ExpectedLength, string Hash) candidate, out string hash)
+        {
+            hash = candidate.Hash ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(hash))
+                return true;
+
+            if (!HasExistingFile(candidate.Path))
+                return false;
+
+            return FileHashService.TryComputeSha256(candidate.Path, out hash, out _);
         }
 
         private string ResolveStatusWithoutArchive(OrderData order)
@@ -275,18 +318,25 @@ namespace Replica
         {
             if (!force && DateTime.UtcNow - _archiveIndexLoadedAt < ArchiveIndexLifetime)
                 return;
+            if (!force && _archiveHashIndexBuildInProgress)
+                return;
 
             _archiveIndexLoadedAt = DateTime.UtcNow;
+            _archivedFileNames.Clear();
             _archivedFilePathsByName.Clear();
+            _archivedFilePathsByHash.Clear();
+            _archiveHashIndexBuildInProgress = false;
 
             var archiveFolderPath = ResolveArchiveDoneFolderPath();
             if (string.IsNullOrWhiteSpace(archiveFolderPath) || !Directory.Exists(archiveFolderPath))
                 return;
 
+            var archivePdfPaths = new List<string>();
             try
             {
-                foreach (var filePath in Directory.EnumerateFiles(archiveFolderPath, "*", SearchOption.TopDirectoryOnly))
+                foreach (var filePath in Directory.EnumerateFiles(archiveFolderPath, "*.pdf", SearchOption.AllDirectories))
                 {
+                    archivePdfPaths.Add(filePath);
                     var fileName = Path.GetFileName(filePath);
                     if (!string.IsNullOrWhiteSpace(fileName))
                     {
@@ -300,11 +350,77 @@ namespace Replica
                         filePaths.Add(filePath);
                     }
                 }
+
+                StartArchiveHashIndexBuild(archivePdfPaths);
             }
             catch
             {
                 // Ошибки архива не должны блокировать UI и смену статусов.
+                _archiveHashIndexBuildInProgress = false;
             }
+        }
+
+        private static void AddArchiveIndex(Dictionary<string, List<string>> index, string key, string filePath)
+        {
+            if (!index.TryGetValue(key, out var filePaths))
+            {
+                filePaths = new List<string>();
+                index[key] = filePaths;
+            }
+
+            filePaths.Add(filePath);
+        }
+
+        private void StartArchiveHashIndexBuild(List<string> archivePdfPaths)
+        {
+            _archiveHashIndexBuildVersion++;
+            var buildVersion = _archiveHashIndexBuildVersion;
+            _archiveHashIndexBuildInProgress = archivePdfPaths.Count > 0;
+
+            if (archivePdfPaths.Count == 0)
+                return;
+
+            _ = Task.Run(() =>
+            {
+                var hashIndex = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+                foreach (var filePath in archivePdfPaths)
+                {
+                    if (IsDisposed || buildVersion != _archiveHashIndexBuildVersion)
+                        return;
+
+                    if (FileHashService.TryComputeSha256(filePath, out var hash, out _) && !string.IsNullOrWhiteSpace(hash))
+                        AddArchiveIndex(hashIndex, hash, filePath);
+                }
+
+                if (IsDisposed)
+                    return;
+
+                try
+                {
+                    BeginInvoke((Action)(() =>
+                    {
+                        if (IsDisposed || buildVersion != _archiveHashIndexBuildVersion)
+                            return;
+
+                        _archivedFilePathsByHash.Clear();
+                        foreach (var entry in hashIndex)
+                            _archivedFilePathsByHash[entry.Key] = entry.Value;
+
+                        _archiveHashIndexBuildInProgress = false;
+                        RefreshArchivedStatuses(forceArchiveIndexRefresh: false, rebuildGridIfChanged: true);
+                    }));
+                }
+                catch
+                {
+                    // Форма может быть уже закрыта — безопасно игнорируем.
+                }
+            });
+        }
+
+        private static bool ArchiveFileMatchesHash(string archivePath, string expectedHash)
+        {
+            return FileHashService.TryComputeSha256(archivePath, out var actualHash, out _)
+                && string.Equals(actualHash, expectedHash, StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool TryGetFileLength(string path, out long length)

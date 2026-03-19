@@ -114,6 +114,7 @@ namespace Replica
                             string newName = $"{Path.GetFileNameWithoutExtension(fileName)}_pitstop{Path.GetExtension(fileName)}";
                             order.PreparedPath = CopyIntoStage(order, 2, okFile, newName, tempRoot);
                             order.PreparedFileSizeBytes = TryGetFileLength(order.PreparedPath);
+                            order.PreparedFileHash = TryGetFileHash(order.PreparedPath);
                             Notify(order, "🟡 PitStop готово", "Версия сохранена.");
                             ReportProgress(order, 60, "PitStop завершен");
                         }
@@ -155,12 +156,14 @@ namespace Replica
                         {
                             order.PrintPath = CopyIntoStage(order, 3, outFile, printName, tempRoot);
                             order.PrintFileSizeBytes = TryGetFileLength(order.PrintPath);
+                            order.PrintFileHash = TryGetFileHash(order.PrintPath);
                             try { File.Delete(outFile); } catch { }
                         }
                         else
                         {
                             order.PrintPath = CopyToGrandpa(outFile, printName, settings.GrandpaPath);
                             order.PrintFileSizeBytes = TryGetFileLength(order.PrintPath);
+                            order.PrintFileHash = TryGetFileHash(order.PrintPath);
                             try { File.Delete(outFile); } catch { }
                         }
 
@@ -388,6 +391,7 @@ namespace Replica
                         string newName = $"{Path.GetFileNameWithoutExtension(fileName)}_pitstop{Path.GetExtension(fileName)}";
                         item.PreparedPath = CopyIntoStage(order, 2, okFile, newName, tempRoot);
                         item.PreparedFileSizeBytes = TryGetFileLength(item.PreparedPath);
+                        item.PreparedFileHash = TryGetFileHash(item.PreparedPath);
                     }
                 }
                 finally
@@ -425,12 +429,14 @@ namespace Replica
                       {
                           item.PrintPath = CopyIntoStage(order, 3, outFile, printName, tempRoot);
                           item.PrintFileSizeBytes = TryGetFileLength(item.PrintPath);
+                          item.PrintFileHash = TryGetFileHash(item.PrintPath);
                           try { File.Delete(outFile); } catch { }
                       }
                       else
                       {
                           item.PrintPath = CopyToGrandpa(outFile, printName, settings.GrandpaPath);
                           item.PrintFileSizeBytes = TryGetFileLength(item.PrintPath);
+                          item.PrintFileHash = TryGetFileHash(item.PrintPath);
                           try { File.Delete(outFile); } catch { }
                       }
                   }
@@ -537,6 +543,11 @@ namespace Replica
             {
                 return null;
             }
+        }
+
+        private static string TryGetFileHash(string path)
+        {
+            return FileHashService.TryComputeSha256(path, out var hash, out _) ? hash : string.Empty;
         }
 
         private void MoveTempToOrderFolder(OrderData order, string tempRoot)
