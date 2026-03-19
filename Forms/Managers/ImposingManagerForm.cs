@@ -318,12 +318,13 @@ namespace Replica
             {
                 // ОПРЕДЕЛЯЕМ ПРОСТРАНСТВО ИМЕН
                 XNamespace ns = "http://www.quite.com/general/ns/quitexml/";
+                var exportActions = allActions.Select(NormalizeForQuiteExport).ToList();
 
                 // Генерируем список папок
                 XElement foldersItems = new XElement(ns + "ITEMS");
-                for (int i = 0; i < allActions.Count; i++)
+                for (int i = 0; i < exportActions.Count; i++)
                 {
-                    var cfg = allActions[i];
+                    var cfg = exportActions[i];
                     XElement dict = new XElement(ns + "DICT", new XAttribute("N", i.ToString()),
                         new XElement(ns + "ITEMS",
                             new XElement(ns + "A", new XAttribute("N", "ControlMode"), "Sequence"),
@@ -363,6 +364,40 @@ namespace Replica
             {
                 MessageBox.Show("Ошибка при записи файла: " + ex.Message);
             }
+        }
+
+        private static ImposingConfig NormalizeForQuiteExport(ImposingConfig config)
+        {
+            if (config == null)
+                return new ImposingConfig();
+
+            return new ImposingConfig
+            {
+                Name = config.Name,
+                Category = config.Category,
+                BaseFolder = NormalizeHotfolderPath(config.BaseFolder),
+                In = NormalizeHotfolderPath(config.In),
+                Out = NormalizeHotfolderPath(config.Out),
+                Done = NormalizeHotfolderPath(config.Done),
+                Error = NormalizeHotfolderPath(config.Error)
+            };
+        }
+
+        private static string NormalizeHotfolderPath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return string.Empty;
+
+            var trimmed = path.Trim();
+            return ReplaceRoot(trimmed, AppSettings.LegacyDefaultBaseFolderPath, AppSettings.DefaultBaseFolderPath);
+        }
+
+        private static string ReplaceRoot(string path, string oldRoot, string newRoot)
+        {
+            if (!path.StartsWith(oldRoot, StringComparison.OrdinalIgnoreCase))
+                return path;
+
+            return newRoot + path.Substring(oldRoot.Length);
         }
 
         private void UpdateCategoryTree()

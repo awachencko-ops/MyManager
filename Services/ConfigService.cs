@@ -13,7 +13,13 @@ namespace Replica
 
         // --- PitStop ---
         public static List<ActionConfig> GetAllPitStopConfigs()
-            => LoadJson<ActionConfig>(ResolvePitStopConfigPath(forRead: true));
+        {
+            var configs = LoadJson<ActionConfig>(ResolvePitStopConfigPath(forRead: true));
+            if (NormalizePitStopConfigs(configs))
+                SavePitStopConfigs(configs);
+
+            return configs;
+        }
 
         public static ActionConfig? GetPitStopConfigByName(string name)
             => GetAllPitStopConfigs().FirstOrDefault(c => c.Name == name);
@@ -23,7 +29,13 @@ namespace Replica
 
         // --- Imposing ---
         public static List<ImposingConfig> GetAllImposingConfigs()
-            => LoadJson<ImposingConfig>(ResolveImposingConfigPath(forRead: true));
+        {
+            var configs = LoadJson<ImposingConfig>(ResolveImposingConfigPath(forRead: true));
+            if (NormalizeImposingConfigs(configs))
+                SaveImposingConfigs(configs);
+
+            return configs;
+        }
 
         public static ImposingConfig? GetImposingConfigByName(string name)
             => GetAllImposingConfigs().FirstOrDefault(c => c.Name == name);
@@ -71,6 +83,84 @@ namespace Replica
 
             var options = new JsonSerializerOptions { WriteIndented = true };
             File.WriteAllText(resolvedPath, JsonSerializer.Serialize(data, options));
+        }
+
+        private static bool NormalizePitStopConfigs(List<ActionConfig> configs)
+        {
+            var changed = false;
+            foreach (var config in configs)
+                changed |= NormalizeActionConfig(config);
+
+            return changed;
+        }
+
+        private static bool NormalizeImposingConfigs(List<ImposingConfig> configs)
+        {
+            var changed = false;
+            foreach (var config in configs)
+                changed |= NormalizeImposingConfig(config);
+
+            return changed;
+        }
+
+        private static bool NormalizeActionConfig(ActionConfig config)
+        {
+            if (config == null)
+                return false;
+
+            var changed = false;
+            changed |= UpdatePath(config.BaseFolder, value => config.BaseFolder = value);
+            changed |= UpdatePath(config.InputFolder, value => config.InputFolder = value);
+            changed |= UpdatePath(config.ReportSuccess, value => config.ReportSuccess = value);
+            changed |= UpdatePath(config.ReportError, value => config.ReportError = value);
+            changed |= UpdatePath(config.OriginalSuccess, value => config.OriginalSuccess = value);
+            changed |= UpdatePath(config.OriginalError, value => config.OriginalError = value);
+            changed |= UpdatePath(config.ProcessedSuccess, value => config.ProcessedSuccess = value);
+            changed |= UpdatePath(config.ProcessedError, value => config.ProcessedError = value);
+            changed |= UpdatePath(config.NonPdfLogs, value => config.NonPdfLogs = value);
+            changed |= UpdatePath(config.NonPdfFiles, value => config.NonPdfFiles = value);
+            return changed;
+        }
+
+        private static bool NormalizeImposingConfig(ImposingConfig config)
+        {
+            if (config == null)
+                return false;
+
+            var changed = false;
+            changed |= UpdatePath(config.BaseFolder, value => config.BaseFolder = value);
+            changed |= UpdatePath(config.In, value => config.In = value);
+            changed |= UpdatePath(config.Out, value => config.Out = value);
+            changed |= UpdatePath(config.Done, value => config.Done = value);
+            changed |= UpdatePath(config.Error, value => config.Error = value);
+            return changed;
+        }
+
+        private static bool UpdatePath(string value, Action<string> setter)
+        {
+            var normalized = NormalizeLegacyBaseFolderPath(value);
+            if (string.Equals(value, normalized, StringComparison.Ordinal))
+                return false;
+
+            setter(normalized);
+            return true;
+        }
+
+        private static string NormalizeLegacyBaseFolderPath(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return string.Empty;
+
+            var trimmed = path.Trim();
+            return ReplaceRoot(trimmed, AppSettings.LegacyDefaultBaseFolderPath, AppSettings.DefaultBaseFolderPath);
+        }
+
+        private static string ReplaceRoot(string path, string oldRoot, string newRoot)
+        {
+            if (!path.StartsWith(oldRoot, StringComparison.OrdinalIgnoreCase))
+                return path;
+
+            return newRoot + path.Substring(oldRoot.Length);
         }
     }
 }

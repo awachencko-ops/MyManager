@@ -528,6 +528,138 @@ public sealed class MainFormCoreRegressionTests
     }
 
     [Fact]
+    public void SR23_GroupOrder_DragDrop_BetweenItems_CopiesWithoutClearingSource()
+    {
+        MainFormTestHarness.RunWithIsolatedForm((form, _) =>
+        {
+            var tempRootPath = MainFormTestHarness.GetPrivateField<string>(form, "_ordersRootPath");
+            var sourceFile = Path.Combine(tempRootPath, "group-source-a.pdf");
+            var targetFile = Path.Combine(tempRootPath, "group-source-b.pdf");
+            File.WriteAllText(sourceFile, "source-a");
+            File.WriteAllText(targetFile, "source-b");
+            Assert.True(File.Exists(targetFile));
+
+            var groupOrder = CreateGroupOrder("GR-2101", sourceFile, targetFile);
+            MainFormTestHarness.InvokePrivate(form, "AddCreatedOrder", groupOrder);
+            MainFormTestHarness.InvokePrivate(form, "ToggleOrderExpanded", groupOrder.InternalId);
+
+            var dgv = MainFormTestHarness.GetPrivateField<DataGridView>(form, "dgvJobs");
+            var colSource = MainFormTestHarness.GetPrivateField<DataGridViewColumn>(form, "colSource");
+            var itemRows = dgv.Rows
+                .Cast<DataGridViewRow>()
+                .Where(row => (row.Tag?.ToString() ?? string.Empty).StartsWith("item|", StringComparison.Ordinal))
+                .ToList();
+
+            Assert.Equal(2, itemRows.Count);
+
+            var dragData = new DataObject();
+            dragData.SetData(DataFormats.FileDrop, new[] { sourceFile });
+            dragData.SetData("InternalSourceRow", itemRows[0].Index);
+            dragData.SetData("InternalSourceColumn", colSource.Index);
+
+            var task = (Task?)MainFormTestHarness.InvokePrivate(
+                form,
+                "HandleGridFileDropAsync",
+                dragData,
+                itemRows[1].Index,
+                colSource.Index);
+            WaitForTask(task);
+
+            Assert.True(File.Exists(sourceFile));
+            Assert.Equal(sourceFile, groupOrder.Items[0].SourcePath);
+            Assert.True(File.Exists(groupOrder.Items[1].SourcePath));
+            Assert.NotEqual(sourceFile, groupOrder.Items[1].SourcePath);
+            Assert.True(OrderTopologyService.IsMultiOrder(groupOrder));
+        });
+    }
+
+    [Fact]
+    public void SR24_GroupOrder_DragDrop_ToSingleOrder_MovesSourceAndClearsOrigin()
+    {
+        MainFormTestHarness.RunWithIsolatedForm((form, _) =>
+        {
+            var tempRootPath = MainFormTestHarness.GetPrivateField<string>(form, "_ordersRootPath");
+            var sourceFile = Path.Combine(tempRootPath, "group-move-a.pdf");
+            var remainingFile = Path.Combine(tempRootPath, "group-keep-b.pdf");
+            File.WriteAllText(sourceFile, "move-a");
+            File.WriteAllText(remainingFile, "keep-b");
+
+            var groupOrder = CreateGroupOrder("GR-2201", sourceFile, remainingFile);
+            var targetOrder = CreateOrder("SR-2201", WorkflowStatusNames.Waiting, "QA User", new DateTime(2026, 1, 11), new DateTime(2026, 1, 11));
+            MainFormTestHarness.InvokePrivate(form, "AddCreatedOrder", groupOrder);
+            MainFormTestHarness.InvokePrivate(form, "AddCreatedOrder", targetOrder);
+            MainFormTestHarness.InvokePrivate(form, "ToggleOrderExpanded", groupOrder.InternalId);
+
+            var dgv = MainFormTestHarness.GetPrivateField<DataGridView>(form, "dgvJobs");
+            var colSource = MainFormTestHarness.GetPrivateField<DataGridViewColumn>(form, "colSource");
+            var sourceItemRow = dgv.Rows
+                .Cast<DataGridViewRow>()
+                .First(row =>
+                    (row.Tag?.ToString() ?? string.Empty).StartsWith("item|", StringComparison.Ordinal)
+                    && string.Equals(row.Cells[colSource.Index].Value?.ToString(), Path.GetFileName(sourceFile), StringComparison.OrdinalIgnoreCase));
+            var targetOrderRow = dgv.Rows
+                .Cast<DataGridViewRow>()
+                .First(row => string.Equals(row.Tag?.ToString(), $"order|{targetOrder.InternalId}", StringComparison.Ordinal));
+
+            var dragData = new DataObject();
+            dragData.SetData(DataFormats.FileDrop, new[] { sourceFile });
+            dragData.SetData("InternalSourceRow", sourceItemRow.Index);
+            dragData.SetData("InternalSourceColumn", colSource.Index);
+
+            var task = (Task?)MainFormTestHarness.InvokePrivate(
+                form,
+                "HandleGridFileDropAsync",
+                dragData,
+                targetOrderRow.Index,
+                colSource.Index);
+            WaitForTask(task);
+
+            Assert.True(File.Exists(sourceFile));
+            Assert.True(File.Exists(remainingFile));
+            var targetDisplayPath = (string?)MainFormTestHarness.InvokePrivate(
+                form,
+                "ResolveSingleOrderDisplayPath",
+                targetOrder,
+                OrderStages.Source);
+            Assert.False(string.IsNullOrWhiteSpace(targetDisplayPath));
+            Assert.True(File.Exists(targetDisplayPath));
+            Assert.True(OrderTopologyService.IsMultiOrder(groupOrder));
+            Assert.Equal(sourceFile, groupOrder.Items[0].SourcePath);
+            Assert.Equal(remainingFile, groupOrder.Items[1].SourcePath);
+        });
+    }
+
+    [Fact]
+    public void SR25_MissingFileCell_ShowsRedText_WithoutChangingBackground()
+    {
+        MainFormTestHarness.RunWithIsolatedForm((form, tempRootPath) =>
+        {
+            var missingSourcePath = Path.Combine(tempRootPath, "missing-input.pdf");
+            var order = CreateOrder("SR-2501", WorkflowStatusNames.Waiting, "QA User", new DateTime(2026, 1, 12), new DateTime(2026, 1, 12));
+            order.SourcePath = missingSourcePath;
+            MainFormTestHarness.InvokePrivate(form, "AddCreatedOrder", order);
+
+            var dgv = MainFormTestHarness.GetPrivateField<DataGridView>(form, "dgvJobs");
+            var colSource = MainFormTestHarness.GetPrivateField<DataGridViewColumn>(form, "colSource");
+            var row = dgv.Rows
+                .Cast<DataGridViewRow>()
+                .First(row => string.Equals(row.Tag?.ToString(), $"order|{order.InternalId}", StringComparison.Ordinal));
+
+            var args = new DataGridViewCellFormattingEventArgs(
+                colSource.Index,
+                row.Index,
+                row.Cells[colSource.Index].Value,
+                typeof(string),
+                new DataGridViewCellStyle());
+            MainFormTestHarness.InvokePrivate(form, "DgvJobs_CellFormatting", null, args);
+
+            Assert.NotNull(args.CellStyle);
+            Assert.Equal(Color.Firebrick, args.CellStyle!.ForeColor);
+            Assert.NotEqual(Color.Firebrick, args.CellStyle.BackColor);
+        });
+    }
+
+    [Fact]
     public void SR21_GroupStatus_IsTechnicalAndHiddenFromUiFilters()
     {
         MainFormTestHarness.RunWithIsolatedForm((form, _) =>
@@ -644,6 +776,24 @@ public sealed class MainFormCoreRegressionTests
             .Cast<DataGridViewRow>()
             .Where(row => !row.IsNewRow && row.Visible)
             .ToList();
+    }
+
+    private static void WaitForTask(Task? task, int timeoutMs = 30000)
+    {
+        if (task == null)
+            return;
+
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+        while (!task.IsCompleted)
+        {
+            if (DateTime.UtcNow > deadline)
+                throw new TimeoutException($"Task did not complete within {timeoutMs} ms.");
+
+            Application.DoEvents();
+            Thread.Sleep(10);
+        }
+
+        task.GetAwaiter().GetResult();
     }
 
     private static void ResetAllFilters(MainForm form)

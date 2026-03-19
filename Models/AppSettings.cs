@@ -7,7 +7,7 @@ namespace Replica
 {
     public class AppSettings
     {
-        public const string DefaultBaseFolderPath = @"\\NAS\work\Первая Чукотская Типография\Шкалы\Replica BASEFOLDER";
+        public const string DefaultBaseFolderPath = @"C:\Андрей ПК\Replica BASEFOLDER";
         public const string LegacyDefaultBaseFolderPath = @"\\NAS\work\Первая Чукотская Типография\Шкалы\MYMANAGER BASEFOLDER";
         public const string DefaultGrandpaPath = @"\\NAS\work\Temp\!!!Дедушка";
         public const string DefaultTempFolderName = "TempReplica";

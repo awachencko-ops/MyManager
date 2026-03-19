@@ -102,33 +102,20 @@ namespace Replica
 
         private string GetDragSourceFilePath(int rowIndex, int stage)
         {
-            if (rowIndex < 0 || rowIndex >= dgvJobs.Rows.Count)
+            var columnIndex = _dragSourceColumnIndex >= 0
+                ? _dragSourceColumnIndex
+                : dgvJobs.CurrentCell?.ColumnIndex ?? -1;
+
+            if (stage == 0)
                 return string.Empty;
 
-            var rowTag = dgvJobs.Rows[rowIndex].Tag?.ToString();
-            if (string.IsNullOrWhiteSpace(rowTag))
+            if (!TryResolveGridFileCell(rowIndex, columnIndex, requireExistingFile: true, out var cell))
                 return string.Empty;
 
-            var order = ResolveOrderFromRowTag(rowTag, rowIndex);
-            if (order == null)
+            if (cell.Stage != stage)
                 return string.Empty;
 
-            if (IsItemTag(rowTag))
-            {
-                var itemId = ExtractItemIdFromTag(rowTag);
-                var item = order.Items?.FirstOrDefault(x => x != null && string.Equals(x.ItemId, itemId, StringComparison.Ordinal));
-                if (item == null)
-                    return string.Empty;
-                return GetItemStagePath(item, stage);
-            }
-
-            if (!IsOrderTag(rowTag))
-                return string.Empty;
-
-            if (OrderTopologyService.IsMultiOrder(order))
-                return string.Empty;
-
-            return ResolveSingleOrderDisplayPath(order, stage);
+            return cell.Path;
         }
 
         private static void TrySetClipboardText(string? text)

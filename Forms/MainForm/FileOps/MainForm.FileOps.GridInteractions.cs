@@ -21,6 +21,30 @@ namespace Replica
 {
     public partial class MainForm
     {
+        private sealed class GridFileCellInfo
+        {
+            public GridFileCellInfo(int rowIndex, int columnIndex, string rowTag, OrderData order, OrderFileItem? item, int stage, string path)
+            {
+                RowIndex = rowIndex;
+                ColumnIndex = columnIndex;
+                RowTag = rowTag;
+                Order = order;
+                Item = item;
+                Stage = stage;
+                Path = path;
+            }
+
+            public int RowIndex { get; }
+            public int ColumnIndex { get; }
+            public string RowTag { get; }
+            public OrderData Order { get; }
+            public OrderFileItem? Item { get; }
+            public int Stage { get; }
+            public string Path { get; }
+            public bool IsItem => Item != null;
+            public bool IsOrder => Item == null;
+        }
+
         private bool IsGroupOrderContainerRow(string? rowTag, OrderData? order)
         {
             return order != null
@@ -127,18 +151,13 @@ namespace Replica
             if (IsGroupOrderContainerRow(clickedRowTag, clickedOrder) && IsGroupContainerFileStageLocked(clickedOrder, stage))
                 return;
 
-            var canStartFileDrag =
-                clickedRow.Selected
-                && dgvJobs.SelectedRows.Count <= 1
-                && dgvJobs.CurrentCell != null
-                && dgvJobs.CurrentCell.RowIndex == hit.RowIndex;
-            if (!canStartFileDrag)
-                return;
-
             if (string.IsNullOrWhiteSpace(clickedRowTag))
                 return;
 
             if (!IsOrderTag(clickedRowTag) && !IsItemTag(clickedRowTag))
+                return;
+
+            if (!TryResolveGridFileCell(hit.RowIndex, hit.ColumnIndex, requireExistingFile: true, out _))
                 return;
 
             _dragSourceRowIndex = hit.RowIndex;
@@ -333,6 +352,12 @@ namespace Replica
                 && !string.Equals(textValue, "-", StringComparison.Ordinal)
                 && !string.Equals(textValue, "...", StringComparison.Ordinal);
             var foreColor = hasAttachmentText ? OrdersLinkTextColor : Color.Black;
+            if (hasAttachmentText
+                && TryResolveGridFileCell(e.RowIndex, e.ColumnIndex, requireExistingFile: false, out var fileCell)
+                && !HasExistingFile(fileCell.Path))
+            {
+                foreColor = Color.Firebrick;
+            }
             if (isLockedGroupContainerCell)
                 foreColor = Color.FromArgb(128, 128, 128);
 
@@ -718,33 +743,6 @@ namespace Replica
                 return;
             }
 
-            var stage = GetStageByColumnIndex(hit.ColumnIndex);
-            if (stage == 0)
-            {
-                e.Effect = DragDropEffects.None;
-                return;
-            }
-
-            var rowTag = dgvJobs.Rows[hit.RowIndex].Tag?.ToString();
-            var order = GetOrderByRowIndex(hit.RowIndex);
-            if (order == null || string.IsNullOrWhiteSpace(rowTag))
-            {
-                e.Effect = DragDropEffects.None;
-                return;
-            }
-
-            if (!IsOrderTag(rowTag) && !IsItemTag(rowTag))
-            {
-                e.Effect = DragDropEffects.None;
-                return;
-            }
-
-            if (IsGroupOrderContainerRow(rowTag, order) && IsGroupContainerFileStageLocked(order, stage))
-            {
-                e.Effect = DragDropEffects.None;
-                return;
-            }
-
             var draggingFile = (e.Data.GetData(DataFormats.FileDrop) as string[])?.FirstOrDefault();
             draggingFile = CleanPath(draggingFile);
             if (string.IsNullOrWhiteSpace(draggingFile))
@@ -753,9 +751,28 @@ namespace Replica
                 return;
             }
 
-            var existingPath = GetOrderStagePath(order, stage);
+            if (!TryResolveGridFileCell(hit.RowIndex, hit.ColumnIndex, requireExistingFile: false, out var targetCell))
+            {
+                e.Effect = DragDropEffects.None;
+                return;
+            }
 
-            e.Effect = PathsEqual(existingPath, draggingFile)
+            if (TryGetInternalDragSourceIndices(e.Data, out var sourceRowIndex, out var sourceColumnIndex)
+                && TryResolveGridFileCell(sourceRowIndex, sourceColumnIndex, requireExistingFile: true, out var sourceCell))
+            {
+                if (sourceCell.RowIndex == targetCell.RowIndex
+                    && sourceCell.ColumnIndex == targetCell.ColumnIndex
+                    && PathsEqual(sourceCell.Path, draggingFile))
+                {
+                    e.Effect = DragDropEffects.None;
+                    return;
+                }
+
+                e.Effect = DragDropEffects.Copy;
+                return;
+            }
+
+            e.Effect = !string.IsNullOrWhiteSpace(targetCell.Path) && PathsEqual(targetCell.Path, draggingFile)
                 ? DragDropEffects.None
                 : DragDropEffects.Copy;
         }
@@ -772,54 +789,197 @@ namespace Replica
 
             var clientPoint = dgvJobs.PointToClient(new Point(e.X, e.Y));
             var hit = dgvJobs.HitTest(clientPoint.X, clientPoint.Y);
-            if (hit.RowIndex < 0 || hit.ColumnIndex < 0)
-                return;
-
-            var stage = GetStageByColumnIndex(hit.ColumnIndex);
-            if (stage == 0)
-                return;
-
-            var row = dgvJobs.Rows[hit.RowIndex];
-            var rowTag = row.Tag?.ToString();
-            var order = ResolveOrderFromRowTag(rowTag, hit.RowIndex);
-            if (order == null || string.IsNullOrWhiteSpace(rowTag))
-                return;
-
             try
             {
-                if (IsItemTag(rowTag))
-                {
-                    var itemId = ExtractItemIdFromTag(rowTag);
-                    var item = order.Items?.FirstOrDefault(x => x != null && string.Equals(x.ItemId, itemId, StringComparison.Ordinal));
-                    if (item == null)
-                        return;
-
-                    if (!await AddFileToItemAsync(order, item, sourceFile, stage))
-                        return;
-
-                    PersistGridChanges(OrderGridLogic.BuildItemTag(order.InternalId, item.ItemId));
-                    return;
-                }
-
-                if (!IsOrderTag(rowTag))
-                    return;
-
-                if (IsGroupOrderContainerRow(rowTag, order) && IsGroupContainerFileStageLocked(order, stage))
-                {
-                    SetBottomStatus("В group-order добавляйте файлы в строки item");
-                    return;
-                }
-
-                if (!await AddFileToOrderAsync(order, sourceFile, stage))
-                    return;
-
-                PersistGridChanges(OrderGridLogic.BuildOrderTag(order.InternalId));
+                await HandleGridFileDropAsync(e.Data, hit.RowIndex, hit.ColumnIndex);
             }
             catch (Exception ex)
             {
                 SetBottomStatus($"Не удалось добавить файл: {ex.Message}");
                 MessageBox.Show(this, $"Не удалось добавить файл: {ex.Message}", "Drag&Drop", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        private async Task HandleGridFileDropAsync(IDataObject? data, int targetRowIndex, int targetColumnIndex)
+        {
+            if (data?.GetDataPresent(DataFormats.FileDrop) != true)
+                return;
+
+            var files = data.GetData(DataFormats.FileDrop) as string[];
+            var sourceFile = CleanPath(files?.FirstOrDefault());
+            if (string.IsNullOrWhiteSpace(sourceFile) || !File.Exists(sourceFile))
+                return;
+
+            if (!TryResolveGridFileCell(targetRowIndex, targetColumnIndex, requireExistingFile: false, out var targetCell))
+                return;
+
+            if (TryGetInternalDragSourceIndices(data, out var sourceRowIndex, out var sourceColumnIndex)
+                && TryResolveGridFileCell(sourceRowIndex, sourceColumnIndex, requireExistingFile: true, out var sourceCell))
+            {
+                if (sourceCell.RowIndex == targetCell.RowIndex
+                    && sourceCell.ColumnIndex == targetCell.ColumnIndex
+                    && PathsEqual(sourceCell.Path, sourceFile))
+                {
+                    return;
+                }
+
+                if (!await AddDraggedFileToTargetAsync(targetCell, sourceFile))
+                    return;
+
+                PersistGridChanges(BuildSelectedTagForCell(targetCell));
+                return;
+            }
+
+            if (!await AddDraggedFileToTargetAsync(targetCell, sourceFile))
+                return;
+
+            PersistGridChanges(BuildSelectedTagForCell(targetCell));
+        }
+
+        private static bool TryGetInternalDragSourceIndices(IDataObject data, out int rowIndex, out int columnIndex)
+        {
+            rowIndex = -1;
+            columnIndex = -1;
+
+            if (data == null)
+                return false;
+
+            if (data.GetData("InternalSourceRow") is not int sourceRow
+                || data.GetData("InternalSourceColumn") is not int sourceColumn)
+            {
+                return false;
+            }
+
+            rowIndex = sourceRow;
+            columnIndex = sourceColumn;
+            return rowIndex >= 0 && columnIndex >= 0;
+        }
+
+        private async Task<bool> AddDraggedFileToTargetAsync(GridFileCellInfo targetCell, string sourceFile)
+        {
+            if (targetCell.Item != null)
+                return await AddFileToItemAsync(targetCell.Order, targetCell.Item, sourceFile, targetCell.Stage);
+
+            if (IsGroupOrderContainerRow(targetCell.RowTag, targetCell.Order) && IsGroupContainerFileStageLocked(targetCell.Order, targetCell.Stage))
+            {
+                SetBottomStatus("В group-order добавляйте файлы в строки item");
+                return false;
+            }
+
+            return await AddFileToOrderAsync(targetCell.Order, sourceFile, targetCell.Stage);
+        }
+
+        private async Task<bool> ClearDraggedSourceCellAsync(GridFileCellInfo sourceCell, string sourceFile)
+        {
+            _ = sourceCell;
+            _ = sourceFile;
+            return true;
+        }
+
+        private async Task<bool> ClearDraggedSourceOrderAsync(GridFileCellInfo sourceCell, string sourceFile)
+        {
+            try
+            {
+                if (File.Exists(sourceFile))
+                    File.Delete(sourceFile);
+            }
+            catch (Exception ex)
+            {
+                SetBottomStatus($"Не удалось удалить исходный файл: {ex.Message}");
+                MessageBox.Show(this, $"Не удалось удалить исходный файл: {ex.Message}", "Drag&Drop", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
+            }
+
+            UpdateOrderFilePath(sourceCell.Order, sourceCell.Stage, string.Empty);
+            return true;
+        }
+
+        private async Task<bool> ClearDraggedSourceItemAsync(GridFileCellInfo sourceCell, string sourceFile)
+        {
+            var wasMultiOrderBeforeMutation = OrderTopologyService.IsMultiOrder(sourceCell.Order);
+
+            try
+            {
+                if (File.Exists(sourceFile))
+                    File.Delete(sourceFile);
+            }
+            catch (Exception ex)
+            {
+                SetBottomStatus($"Не удалось удалить исходный файл: {ex.Message}");
+                MessageBox.Show(this, $"Не удалось удалить исходный файл: {ex.Message}", "Drag&Drop", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
+            }
+
+            UpdateItemFilePath(sourceCell.Order, sourceCell.Item!, sourceCell.Stage, string.Empty);
+            RemoveItemIfEmpty(sourceCell.Order, sourceCell.Item!);
+            NormalizeOrderTopologyAfterItemMutation(
+                sourceCell.Order,
+                wasMultiOrderBeforeMutation,
+                $"drag-move: {Path.GetFileName(sourceFile)} | stage-{sourceCell.Stage}");
+            return true;
+        }
+
+        private static string BuildSelectedTagForCell(GridFileCellInfo cell)
+        {
+            if (cell.Item != null)
+                return OrderGridLogic.BuildItemTag(cell.Order.InternalId, cell.Item.ItemId);
+
+            return OrderGridLogic.BuildOrderTag(cell.Order.InternalId);
+        }
+
+        private bool TryResolveGridFileCell(int rowIndex, int columnIndex, bool requireExistingFile, out GridFileCellInfo cell)
+        {
+            cell = null!;
+
+            if (rowIndex < 0 || rowIndex >= dgvJobs.Rows.Count)
+                return false;
+
+            if (columnIndex < 0 || columnIndex >= dgvJobs.Columns.Count)
+                return false;
+
+            var stage = GetStageByColumnIndex(columnIndex);
+            if (stage == 0)
+                return false;
+
+            var row = dgvJobs.Rows[rowIndex];
+            var rowTag = row.Tag?.ToString();
+            if (string.IsNullOrWhiteSpace(rowTag))
+                return false;
+
+            var order = ResolveOrderFromRowTag(rowTag, rowIndex);
+            if (order == null)
+                return false;
+
+            if (IsGroupOrderContainerRow(rowTag, order) && IsGroupContainerFileStageLocked(order, stage))
+                return false;
+
+            if (IsItemTag(rowTag))
+            {
+                var itemId = ExtractItemIdFromTag(rowTag);
+                var item = order.Items?.FirstOrDefault(x => x != null && string.Equals(x.ItemId, itemId, StringComparison.Ordinal));
+                if (item == null)
+                    return false;
+
+                var path = GetItemStagePath(item, stage);
+                if (requireExistingFile && !HasExistingFile(path))
+                    return false;
+
+                cell = new GridFileCellInfo(rowIndex, columnIndex, rowTag, order, item, stage, path ?? string.Empty);
+                return true;
+            }
+
+            if (!IsOrderTag(rowTag))
+                return false;
+
+            if (OrderTopologyService.IsMultiOrder(order))
+                return false;
+
+            var orderPath = ResolveSingleOrderDisplayPath(order, stage);
+            if (requireExistingFile && !HasExistingFile(orderPath))
+                return false;
+
+            cell = new GridFileCellInfo(rowIndex, columnIndex, rowTag, order, null, stage, orderPath ?? string.Empty);
+            return true;
         }
 
     }
