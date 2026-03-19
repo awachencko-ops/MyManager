@@ -43,7 +43,7 @@ public sealed class MainFormSmokeTests
             Assert.Contains("Запустить", buttons);
             Assert.Contains("Остановить", buttons);
             Assert.Contains("Удалить", buttons);
-            Assert.Contains("Добавить в группу", buttons);
+            Assert.Contains("Добавить файл", buttons);
             Assert.Contains("Папка", buttons);
             Assert.Contains("Лог", buttons);
             Assert.Contains("Параметры", buttons);

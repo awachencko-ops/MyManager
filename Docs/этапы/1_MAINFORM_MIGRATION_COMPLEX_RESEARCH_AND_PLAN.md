@@ -1,98 +1,93 @@
-﻿# Replica: строгий план на текущий момент
+﻿# Replica: миграция MainForm (финальный статус этапа 1)
 
-Дата актуализации: 2026-03-16
+Дата актуализации: 2026-03-19  
+Статус этапа: **Completed**
 
 ## 1. Область и границы
 
-1. Продукт на текущем этапе: **prepress-manager** (подготовка заказов, статусы, файлы, история, логи).
-2. Мониторинг физической печати/спулера: **вне scope**.
-3. Текущий фокус: завершить `single-first` миграцию и стабилизировать новый `MainForm`.
+1. Продукт в этом этапе: **prepress-manager** (заказы, статусы, файлы, история, логи).
+2. Фокус этапа: завершить миграцию на новый `MainForm` и стабилизировать single/group-контур.
+3. LAN-сервер, PostgreSQL и DBeaver: следующий этап, после закрытия этого документа.
 
-## 2. Статус по факту
+## 2. Фактический результат миграции
 
-### 2.1 Сделано
+1. Вход в приложение полностью через `MainForm`, legacy-форма из рабочего контура выведена.
+2. `MainForm` декомпозирован на partial-блоки и domain-участки (`Core`, `FileOps`, `Filters`, `Views`).
+3. Group-first модель закреплена в рабочем контуре: `single-order` = частный случай `group-order`.
+4. Таблица заказов стабилизирована для single/group сценариев, включая expand/collapse и item-строки.
+5. Добавлен hash-слой для файлов (`Source/Prepared/Print`) в `OrderData` и `OrderFileItem`.
+6. Введён `FileHashService` (SHA-256) и инкрементальный backfill известных хешей на истории.
+7. Синхронизация архива усилена: сопоставление не только по имени/размеру, но и по hash.
+8. `OrderTopologyService` синхронизирует order/item пути, размеры и hash для single-кейса.
+9. Typed-контракты (`WorkflowContracts`) закреплены для статусных, stage и column идентификаторов.
+10. User-filter работает по фактическому `order.UserName` + `users.json` + cache/offline fallback.
+11. StatusStrip, индикаторы подключения/диска/ошибок и прогресса работают стабильно.
+12. Pipeline `OrderProcessor` стабилен для single и multi, включая cleanup PitStop/Imposing артефактов.
+13. Toolbar-контракт актуализирован: кнопка `Добавить файл` в основном сценарии группы.
+14. Сборка подтверждена: `dotnet build Replica.sln` -> `0 warnings`, `0 errors` (2026-03-19).
+15. Регрессия подтверждена: `dotnet test Replica.sln` -> `30/30 PASS` (2026-03-19):
+    - `tests/Replica.VerifyTests`: `5/5 PASS`
+    - `tests/Replica.UiSmokeTests`: `25/25 PASS`
 
-1. Приложение запускается через `MainForm`, legacy `Forms/Archive` исключен из сборки.
-2. `MainForm` декомпозирован по partial-файлам и смысловым папкам.
-3. Рабочий pipeline `OrderProcessor` (PitStop/Imposing/timeout/progress) стабилен.
-4. Внедрена group-first модель (`single-order`/`group-order`) в backend и историю (терминология обновлена для этапного трека).
-5. StatusStrip и нижние индикаторы работают (статус, прогресс, счетчики, связь, диск, алерты).
-6. Статус-колонка в таблице заказов оформлена (иконка + фон + текст), строки подогнаны под квадратный блок статуса.
-7. NAS-cutover выполнен для рабочих путей, temp-структуры и конфигов.
-8. `qihot4.xml` экспортирован с NAS-путями, backup сделан.
-9. Ошибка `Duplicate ... Attribute` устранена исключением `artifacts/**` из компиляции.
-10. Сборка: `0 warnings`, `0 errors`.
-11. Реальный user-filter подключен к `users.json` (source + cache + offline fallback + индикатор состояния в UI).
-12. Введены typed-контракты `status/stage/column IDs` и убраны string-магии в `MainForm`/`UI`/core-сервисах.
-13. Финальный single-regression (`P3`) закрыт по чеклисту `SR-01...SR-12` (автоматизированный прогон).
-14. Зафиксирован release baseline этапа `single-first`: `Docs/ready/1_SINGLE_FIRST_RELEASE_BASELINE_2026-03-16.md`.
-15. `P4` закрыт: добавлен snapshot-слой `Verify` (`tests/Replica.VerifyTests`, `5/5 PASS`) и UI/core smoke (`tests/Replica.UiSmokeTests`, `9/9 PASS`).
-16. Закрыт `R1`: вынесен `OrderGridLogic` и выполнена дополнительная декомпозиция `MainForm.Filters.Popups` на отдельные partial для created/received фильтров дат.
-17. Закрыт `R2`: user-filter подтвержден на фактическом `order.UserName` + source/cache/fallback (`users.json`) и покрыт smoke-тестами.
-18. Закрыт `R3`: минимальный group-order UI стабилизирован и подтвержден регрессионными тестами `SR13/SR14/SR15` (expand/collapse, browse-folder mismatch, container-level actions).
+## 3. Закрытие рисков этапа 1
 
-### 2.2 В работе
+| ID | Статус | Результат |
+|---|---|---|
+| R1 | Closed | Крупные блоки `MainForm` декомпозированы, бизнес-логика вынесена в профильные partial/сервисы |
+| R2 | Closed | Фильтрация пользователей работает по реальным данным заказа и покрыта тестами |
+| R3 | Closed | Group-order UI стабилен и покрыт регрессией (`SR13+`) |
+| R4 | Closed | Строковые контракты централизованы в typed-константах (`WorkflowContracts`, operation/source names) |
+| R5 | Closed | Неоднозначность order/item путей снижена: нормализация topology + синхронизация path/size/hash |
+| R6 | Closed | Snapshot + smoke-контур внедрён и стабилен |
+| R7 | Monitoring | Точечные текстовые/кодировочные артефакты отслеживаются, блокирующих дефектов нет |
+| R8 | Transferred | LAN feature-gate и серверный режим официально перенесены в следующий этап (`2` и `3`) |
 
-1. Риск-трек этапа 1: точечная стабилизация по `R4/R5/R8` (`R1/R2/R3` закрыты).
-2. Рабочий документ риск-трека: `Docs/ready/1_STAGE1_RISK_TRACK_AFTER_P_CLOSE.md`.
-3. `R4` стартован: выполняется дочистка остаточных string-контрактов в активном `MainForm`-контуре; вынесены operation-коды order-лога в `OrderOperationNames` и source-контракты статусов в `OrderStatusSourceNames`.
+## 4. План этапа 1 (финальный)
 
-### 2.3 Не начато
+| ID | Задача | Статус |
+|---|---|---|
+| P1 | User-filter (`users.json` + cache + offline fallback) | Completed |
+| P2 | Typed-контракты `status/stage/column` | Completed |
+| P3 | Single-order regression baseline | Completed |
+| P4 | Автотесты (`Verify` + `UiSmoke`) | Completed |
+| P5 | Release baseline stage-1 документации | Completed |
+| P6 | Hash-слой и hash-ориентированная синхронизация архива | Completed |
+| P7 | Стабилизация таблицы single/group и group UI регрессий | Completed |
+| P8 | Финальный прогон и фиксация статуса миграции | Completed |
 
-1. Полноценный group-order UI (group/item визуализация и item-level действия).
-2. Этап 2: `2_MULTI_ORDER_LOGIC_AND_POSTGRESQL_PLAN.md`.
+## 5. Definition of Done (факт закрытия)
 
-## 3. Ключевые риски (без изменений)
+Этап `MainForm migration` считается закрытым, так как одновременно выполнено:
+1. Все пункты `P1...P8` имеют статус `Completed`.
+2. Нет блокирующих дефектов (`P0/P1`) по regression-пакету этапа.
+3. Технический baseline подтверждён (`build 0/0`, `tests 30/30 PASS`, дата: 2026-03-19).
+4. Документация этапа актуализирована и готова к передаче в LAN/PostgreSQL трек.
 
-| ID | Приоритет | Статус | Наблюдение | Риск |
-|---|---|---|---|---|
-| R1 | Средний | Closed | `MainForm` дополнительно декомпозирован (`OrderGridLogic`, split popup partials) | Снижен: aggregate уменьшен, логика вынесена |
-| R2 | Высокий | Closed | User-filter привязан к фактическому `order.UserName` + `users.json` source/cache/fallback | Снижен: ложные совпадения устранены |
-| R3 | Средний | Closed | Минимальный group-order UI внедрен и закреплен тестами `SR13/SR14/SR15` | Снижен: multi-order сценарий выполняется без переключения на legacy |
-| R4 | Средний | Open | Есть string-контракты (имена колонок, статусы, маркеры) | Хрупкость при рефакторинге |
-| R5 | Средний | Open | Остатки legacy-подхода: order-level пути плюс item-level пути | Риск расхождений данных |
-| R6 | Низкий | Closed | Snapshot + smoke слой внедрен (`Verify` + `FlaUI`) | Базовые регрессии покрыты автоматически |
-| R7 | Низкий | Open | Остаточные проблемы кодировки отдельных UI-строк | UX-шум и поддерживаемость |
-| R8 | Средний | Open | LAN-контур формально не закреплён как отдельный feature-gate | Непредсказуемость при доступе к сетевым папкам |
+## 6. Передача на следующий этап
 
-## 4. Строгий план выполнения (по порядку)
-
-| ID | Задача | Статус | Результат на выходе | Критерий закрытия |
-|---|---|---|---|---|
-| P1 | Реальный user-filter из `users.json` + кеш + offline fallback | Completed | Пользовательский фильтр из сети с безопасной деградацией | При отключении NAS фильтр продолжает работу из кеша, UI показывает offline |
-| P2 | Typed-контракты для `status/stage/column IDs` | Completed | Убраны критичные string-магии в core потоке | Основные сценарии используют централизованные константы/enum |
-| P3 | Финальный single-regression | Completed | Закрыт чеклист `1_SINGLE_ORDER_REGRESSION_CHECKLIST.md` | Нет блокирующих дефектов (`P0/P1`) |
-| P4 | Минимум автотестов (`Verify` + `FlaUI`) | Completed | Snapshot + UI smoke база | Выполнено: `Verify` 5/5 + `FlaUI` 9/9 |
-| P5 | Фиксация релизного baseline по single-first | Completed | Release note + known issues + актуальная документация | Baseline зафиксирован в `Docs/ready/1_SINGLE_FIRST_RELEASE_BASELINE_2026-03-16.md` |
-
-## 5. Приоритет на ближайший цикл
-
-1. Выполнять риск-трек этапа 1 строго по порядку: `R4 -> R5 -> R8` (`R1/R2/R3` закрыты).
-2. После фиксации рисков перейти к этапу `2_MULTI_ORDER_LOGIC_AND_POSTGRESQL_PLAN.md`.
-
-## 6. Зафиксированные решения
-
-1. Внешние референсы для текущей реализации: только `FlaUI` и `Verify`.
-2. `pdfdroplet`, `Rmg.PdfPrinting`, `PrintManager` исключены из практического плана.
-3. UI-библиотеки (`DockPanelSuite`, `ObjectListView`) не внедрять до закрытия стабилизации.
-4. Печатный spooler-мониторинг не внедрять: продукт остается в prepress-scope.
-
-## 7. Definition of Done для текущего этапа
-
-Этап `migration on MainForm (single-first)` считается завершенным, когда одновременно выполнены:
-1. `P1`, `P2`, `P3` закрыты.
-2. Нет блокирующих дефектов по single-checklist.
-3. Документация и baseline зафиксированы (включая этот файл).
-
----
-
-Статус документа: рабочий, строгий, используется как основной трекер текущего этапа.
-
-Этап 1 (`single-first`) закрыт по треку `P1...P5`.
-
-
-## 8. Передача на следующий этап
-
-После закрытия этапа 1 работа идёт по очереди:
+Дальнейшая работа выполняется в следующем порядке:
 1. `2_MULTI_ORDER_LOGIC_AND_POSTGRESQL_PLAN.md`
 2. `3_LAN_CLIENT_SERVER_BRIEF_STEP1.md`
+
+## 7. Финальная проверка полноты (2026-03-19)
+
+### 7.1 Ключевые риски
+
+| Проверка | Статус | Примечание |
+|---|---|---|
+| `R1` декомпозиция MainForm | ✅ | Выполнено |
+| `R2` user-filter по фактическим данным | ✅ | Выполнено |
+| `R3` стабильность group UI | ✅ | Выполнено (`SR13+`) |
+| `R4` string-контракты -> typed-контракты | ✅ | Выполнено |
+| `R5` согласование order/item путей + hash | ✅ | Выполнено |
+| `R8` LAN feature-gate для следующего этапа | ✅ | Передано в этап 2/3 официально |
+
+### 7.2 Технический gate
+
+| Проверка | Статус | Значение |
+|---|---|---|
+| Сборка решения | ✅ | `dotnet build Replica.sln` -> `0 warnings`, `0 errors` |
+| Тесты решения | ✅ | `dotnet test Replica.sln` -> `30/30 PASS` |
+| Документация этапа 1 | ✅ | Актуализирована |
+
+Вывод: для этапа 1 все ключевые риски закрыты/переданы, проверка полноты пройдена.
