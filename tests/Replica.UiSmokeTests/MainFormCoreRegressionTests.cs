@@ -708,6 +708,85 @@ public sealed class MainFormCoreRegressionTests
     }
 
     [Fact]
+    public void SR27_PitStopCleanup_RemovesHotfolderArtifacts()
+    {
+        var tempRootPath = Path.Combine(Path.GetTempPath(), "Replica_PIT_Cleanup_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempRootPath);
+
+        try
+        {
+            var cfg = new ActionConfig
+            {
+                BaseFolder = tempRootPath,
+                InputFolder = Path.Combine(tempRootPath, "Input Folder"),
+                ReportSuccess = Path.Combine(tempRootPath, "Reports on Success"),
+                ReportError = Path.Combine(tempRootPath, "Reports on Error"),
+                OriginalSuccess = Path.Combine(tempRootPath, "Original Docs on Success"),
+                OriginalError = Path.Combine(tempRootPath, "Original Docs on Error"),
+                ProcessedSuccess = Path.Combine(tempRootPath, "Processed Docs on Success"),
+                ProcessedError = Path.Combine(tempRootPath, "Processed Docs on Error")
+            };
+
+            foreach (var folder in new[]
+            {
+                cfg.InputFolder,
+                cfg.ReportSuccess,
+                cfg.ReportError,
+                cfg.OriginalSuccess,
+                cfg.OriginalError,
+                cfg.ProcessedSuccess,
+                cfg.ProcessedError
+            })
+                Directory.CreateDirectory(folder);
+
+            var fileName = "105x148_упокоение.pdf";
+            var reportName = Path.GetFileNameWithoutExtension(fileName) + "_log.pdf";
+
+            foreach (var folder in new[]
+            {
+                cfg.InputFolder,
+                cfg.OriginalSuccess,
+                cfg.OriginalError,
+                cfg.ProcessedSuccess,
+                cfg.ProcessedError
+            })
+            {
+                File.WriteAllText(Path.Combine(folder, fileName), folder);
+            }
+
+            File.WriteAllText(Path.Combine(cfg.ReportSuccess, reportName), "report");
+            File.WriteAllText(Path.Combine(cfg.ReportError, reportName), "report");
+
+            var method = typeof(OrderProcessor).GetMethod(
+                "CleanupPitStopArtifacts",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.NotNull(method);
+
+            method!.Invoke(null, new object?[] { cfg, fileName, Array.Empty<string?>() });
+
+            foreach (var folder in new[]
+            {
+                cfg.InputFolder,
+                cfg.OriginalSuccess,
+                cfg.OriginalError,
+                cfg.ProcessedSuccess,
+                cfg.ProcessedError
+            })
+            {
+                Assert.False(File.Exists(Path.Combine(folder, fileName)));
+            }
+
+            Assert.False(File.Exists(Path.Combine(cfg.ReportSuccess, reportName)));
+            Assert.False(File.Exists(Path.Combine(cfg.ReportError, reportName)));
+        }
+        finally
+        {
+            if (Directory.Exists(tempRootPath))
+                Directory.Delete(tempRootPath, recursive: true);
+        }
+    }
+
+    [Fact]
     public void SR21_GroupStatus_IsTechnicalAndHiddenFromUiFilters()
     {
         MainFormTestHarness.RunWithIsolatedForm((form, _) =>

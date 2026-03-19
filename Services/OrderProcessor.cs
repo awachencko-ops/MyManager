@@ -78,41 +78,48 @@ namespace Replica
                     string fileName = Path.GetFileName(order.PreparedPath);
                     string targetIn = Path.Combine(pitCfg.InputFolder, fileName);
 
-                    Notify(order, "🟡 PitStop: копирование", "Копирую в Hotfolder PitStop...");
-                    Logger.Info($"Копирование: {order.PreparedPath} -> {targetIn}");
-                    File.Copy(order.PreparedPath, targetIn, true);
+                    try
+                    {
+                        Notify(order, "🟡 PitStop: копирование", "Копирую в Hotfolder PitStop...");
+                        Logger.Info($"Копирование: {order.PreparedPath} -> {targetIn}");
+                        File.Copy(order.PreparedPath, targetIn, true);
 
-                    if (impCfg != null)
-                    {
-                        var places = new (string folder, string label)[] {
-                            (pitCfg.ProcessedSuccess, "PitStop Success"),
-                            (pitCfg.ProcessedError,   "PitStop Error"),
-                            (impCfg.In,               "Imposing In"),
-                            (impCfg.Out,              "Imposing Out")
-                        };
-                        var pitWaitReporter = CreateRangedProgressReporter(order, 25, 54, "PitStop: ожидание");
-                        var (foundPath, where) = await WaitForFileInAnyAsync(places, fileName, timeout, ct, pitWaitReporter);
-                        if (foundPath == null) throw new Exception("Таймаут PitStop.");
-                        await CapturePitStopReportAsync(order, pitCfg, fileName, timeout, ct);
-                        if (where == "PitStop Error") throw new Exception("Ошибка PitStop (см. отчет).");
-                        Notify(order, "🟡 PitStop OK", $"PitStop завершен ({where})");
-                        ReportProgress(order, 55, "PitStop завершен");
-                    }
-                    else
-                    {
-                        var pitWaitReporter = CreateRangedProgressReporter(order, 25, 58, "PitStop: ожидание");
-                        var (okFile, where) = await WaitForFileInAnyAsync(new (string folder, string label)[]
+                        if (impCfg != null)
                         {
-                            (pitCfg.ProcessedSuccess, "PitStop Success"),
-                            (pitCfg.ProcessedError,   "PitStop Error")
-                        }, fileName, timeout, ct, pitWaitReporter);
-                        if (okFile == null) throw new Exception("Таймаут PitStop.");
-                        await CapturePitStopReportAsync(order, pitCfg, fileName, timeout, ct);
-                        if (where == "PitStop Error") throw new Exception("Ошибка PitStop (см. отчет).");
-                        string newName = $"{Path.GetFileNameWithoutExtension(fileName)}_pitstop{Path.GetExtension(fileName)}";
-                        order.PreparedPath = CopyIntoStage(order, 2, okFile, newName, tempRoot);
-                        Notify(order, "🟡 PitStop готово", "Версия сохранена.");
-                        ReportProgress(order, 60, "PitStop завершен");
+                            var places = new (string folder, string label)[] {
+                                (pitCfg.ProcessedSuccess, "PitStop Success"),
+                                (pitCfg.ProcessedError,   "PitStop Error"),
+                                (impCfg.In,               "Imposing In"),
+                                (impCfg.Out,              "Imposing Out")
+                            };
+                            var pitWaitReporter = CreateRangedProgressReporter(order, 25, 54, "PitStop: ожидание");
+                            var (foundPath, where) = await WaitForFileInAnyAsync(places, fileName, timeout, ct, pitWaitReporter);
+                            if (foundPath == null) throw new Exception("Таймаут PitStop.");
+                            await CapturePitStopReportAsync(order, pitCfg, fileName, timeout, ct);
+                            if (where == "PitStop Error") throw new Exception("Ошибка PitStop (см. отчет).");
+                            Notify(order, "🟡 PitStop OK", $"PitStop завершен ({where})");
+                            ReportProgress(order, 55, "PitStop завершен");
+                        }
+                        else
+                        {
+                            var pitWaitReporter = CreateRangedProgressReporter(order, 25, 58, "PitStop: ожидание");
+                            var (okFile, where) = await WaitForFileInAnyAsync(new (string folder, string label)[]
+                            {
+                                (pitCfg.ProcessedSuccess, "PitStop Success"),
+                                (pitCfg.ProcessedError,   "PitStop Error")
+                            }, fileName, timeout, ct, pitWaitReporter);
+                            if (okFile == null) throw new Exception("Таймаут PitStop.");
+                            await CapturePitStopReportAsync(order, pitCfg, fileName, timeout, ct);
+                            if (where == "PitStop Error") throw new Exception("Ошибка PitStop (см. отчет).");
+                            string newName = $"{Path.GetFileNameWithoutExtension(fileName)}_pitstop{Path.GetExtension(fileName)}";
+                            order.PreparedPath = CopyIntoStage(order, 2, okFile, newName, tempRoot);
+                            Notify(order, "🟡 PitStop готово", "Версия сохранена.");
+                            ReportProgress(order, 60, "PitStop завершен");
+                        }
+                    }
+                    finally
+                    {
+                        CleanupPitStopArtifacts(pitCfg, fileName, targetIn);
                     }
                 }
                 else
@@ -337,43 +344,51 @@ namespace Replica
                 throw new Exception("Сценарии не выбраны.");
 
             ReportItemProgress(5);
-                if (pitCfg != null)
-                {
-                    ReportItemProgress(12);
-                    if (!File.Exists(item.PreparedPath))
-                        throw new Exception("Файл для PitStop не найден.");
+            if (pitCfg != null)
+            {
+                ReportItemProgress(12);
+                if (!File.Exists(item.PreparedPath))
+                    throw new Exception("Файл для PitStop не найден.");
 
                 string fileName = Path.GetFileName(item.PreparedPath);
                 string targetIn = Path.Combine(pitCfg.InputFolder, fileName);
-                File.Copy(item.PreparedPath, EnsureUniquePath(targetIn), true);
 
-                if (impCfg != null)
+                try
                 {
-                    var places = new (string folder, string label)[] {
-                        (pitCfg.ProcessedSuccess, "PitStop Success"),
-                        (pitCfg.ProcessedError,   "PitStop Error"),
-                        (impCfg.In,               "Imposing In"),
-                        (impCfg.Out,              "Imposing Out")
-                    };
-                    var pitWaitReporter = CreateItemProgressRangeReporter(20, 55);
-                    var (foundPath, where) = await WaitForFileInAnyAsync(places, fileName, timeout, ct, pitWaitReporter);
-                    if (foundPath == null) throw new Exception("Таймаут PitStop.");
-                    await CapturePitStopReportAsync(order, pitCfg, fileName, timeout, ct);
-                    if (where == "PitStop Error") throw new Exception("Ошибка PitStop (см. отчет).");
-                }
-                else
-                {
-                    var pitWaitReporter = CreateItemProgressRangeReporter(20, 58);
-                    var (okFile, where) = await WaitForFileInAnyAsync(new (string folder, string label)[]
+                    File.Copy(item.PreparedPath, EnsureUniquePath(targetIn), true);
+
+                    if (impCfg != null)
                     {
-                        (pitCfg.ProcessedSuccess, "PitStop Success"),
-                        (pitCfg.ProcessedError,   "PitStop Error")
-                    }, fileName, timeout, ct, pitWaitReporter);
-                    if (okFile == null) throw new Exception("Таймаут PitStop.");
-                    await CapturePitStopReportAsync(order, pitCfg, fileName, timeout, ct);
-                    if (where == "PitStop Error") throw new Exception("Ошибка PitStop (см. отчет).");
-                    string newName = $"{Path.GetFileNameWithoutExtension(fileName)}_pitstop{Path.GetExtension(fileName)}";
-                    item.PreparedPath = CopyIntoStage(order, 2, okFile, newName, tempRoot);
+                        var places = new (string folder, string label)[] {
+                            (pitCfg.ProcessedSuccess, "PitStop Success"),
+                            (pitCfg.ProcessedError,   "PitStop Error"),
+                            (impCfg.In,               "Imposing In"),
+                            (impCfg.Out,              "Imposing Out")
+                        };
+                        var pitWaitReporter = CreateItemProgressRangeReporter(20, 55);
+                        var (foundPath, where) = await WaitForFileInAnyAsync(places, fileName, timeout, ct, pitWaitReporter);
+                        if (foundPath == null) throw new Exception("Таймаут PitStop.");
+                        await CapturePitStopReportAsync(order, pitCfg, fileName, timeout, ct);
+                        if (where == "PitStop Error") throw new Exception("Ошибка PitStop (см. отчет).");
+                    }
+                    else
+                    {
+                        var pitWaitReporter = CreateItemProgressRangeReporter(20, 58);
+                        var (okFile, where) = await WaitForFileInAnyAsync(new (string folder, string label)[]
+                        {
+                            (pitCfg.ProcessedSuccess, "PitStop Success"),
+                            (pitCfg.ProcessedError,   "PitStop Error")
+                        }, fileName, timeout, ct, pitWaitReporter);
+                        if (okFile == null) throw new Exception("Таймаут PitStop.");
+                        await CapturePitStopReportAsync(order, pitCfg, fileName, timeout, ct);
+                        if (where == "PitStop Error") throw new Exception("Ошибка PitStop (см. отчет).");
+                        string newName = $"{Path.GetFileNameWithoutExtension(fileName)}_pitstop{Path.GetExtension(fileName)}";
+                        item.PreparedPath = CopyIntoStage(order, 2, okFile, newName, tempRoot);
+                    }
+                }
+                finally
+                {
+                    CleanupPitStopArtifacts(pitCfg, fileName, targetIn);
                 }
 
                 ReportItemProgress(60);
@@ -782,6 +797,40 @@ namespace Replica
             {
                 Logger.Warn($"Не удалось прочитать PDF-лог ({Path.GetFileName(pdfPath)}): {ex.Message}");
             }
+        }
+
+        private static void CleanupPitStopArtifacts(ActionConfig cfg, string fileName, params string?[] extraPaths)
+        {
+            var reportFileName = $"{Path.GetFileNameWithoutExtension(fileName)}_log.pdf";
+            var paths = new List<string?>(extraPaths);
+            AddIfNotEmpty(paths, cfg.InputFolder, fileName);
+            AddIfNotEmpty(paths, cfg.ReportSuccess, reportFileName);
+            AddIfNotEmpty(paths, cfg.ReportError, reportFileName);
+            AddIfNotEmpty(paths, cfg.OriginalSuccess, fileName);
+            AddIfNotEmpty(paths, cfg.OriginalError, fileName);
+            AddIfNotEmpty(paths, cfg.ProcessedSuccess, fileName);
+            AddIfNotEmpty(paths, cfg.ProcessedError, fileName);
+
+            foreach (var path in paths.Where(path => !string.IsNullOrWhiteSpace(path)).Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    if (File.Exists(path))
+                        File.Delete(path);
+                }
+                catch
+                {
+                    // Cleanup must not break processing.
+                }
+            }
+        }
+
+        private static void AddIfNotEmpty(List<string?> paths, string? folder, string fileName)
+        {
+            if (string.IsNullOrWhiteSpace(folder))
+                return;
+
+            paths.Add(Path.Combine(folder, fileName));
         }
 
         private static IEnumerable<string> GetQuiteImposingLogPaths(ImposingConfig cfg, string fileName)
