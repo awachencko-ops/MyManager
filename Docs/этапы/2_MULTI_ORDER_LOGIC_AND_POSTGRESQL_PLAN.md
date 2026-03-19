@@ -1,11 +1,11 @@
 ﻿# Этап 2: group-order логика и PostgreSQL/LAN план
 
 Дата актуализации: 2026-03-19
-Статус: Ready to start (этап 1 закрыт)
+Статус: In progress (`E2-P1`, `E2-P2`, `E2-P5` закрыты)
 
 ## 1. Входные условия (подтверждено)
 
-1. Миграция на `MainForm` закрыта (`build 0/0`, `tests 30/30 PASS`).
+1. Миграция на `MainForm` закрыта (`build 0/0`, baseline tests 30/30 PASS).
 2. Таблица single/group стабилизирована (`SR-13...SR-27`).
 3. Hash-слой (`Source/Prepared/Print`) добавлен в модель заказа и item.
 4. Риск `R8` (LAN feature-gate) перенесён из этапа 1 в этот этап и этап 3.
@@ -74,12 +74,42 @@
 
 | ID | Шаг | Результат | Статус |
 |---|---|---|---|
-| E2-P1 | Ввести data-access abstraction (`IOrdersRepository`) в клиенте | `MainForm` работает через абстракцию источника данных | Planned |
-| E2-P2 | Реализовать PostgreSQL repository + optimistic concurrency | CRUD заказов и item с `version`/conflict handling | Planned |
-| E2-P3 | Перенести `order_events` логирование в серверный слой | Трассируемость операций без потери текущей семантики | Planned |
-| E2-P4 | Миграция данных из `history.json` в PostgreSQL | Исторические заказы и item перенесены с hash-полями | Planned |
-| E2-P5 | Добавить LAN feature-gate в настройки клиента | Явный режим `FileSystem` / `LanPostgreSql` + fallback-поведение | Planned |
-| E2-P6 | Интеграционный regression pack (client + DB) | Автопроверка ключевых single/group сценариев на серверном хранилище | Planned |
+| E2-P1 | Ввести data-access abstraction (`IOrdersRepository`) в клиенте | `MainForm` работает через абстракцию источника данных | Completed |
+| E2-P2 | Реализовать PostgreSQL repository + optimistic concurrency | CRUD заказов и item с `version`/conflict handling | Completed |
+| E2-P3 | Перенести `order_events` логирование в серверный слой | Трассируемость операций без потери текущей семантики | In progress |
+| E2-P4 | Миграция данных из `history.json` в PostgreSQL | Исторические заказы и item перенесены с hash-полями | In progress |
+| E2-P5 | Добавить LAN feature-gate в настройки клиента | Явный режим `FileSystem` / `LanPostgreSql` + fallback-поведение | Completed |
+| E2-P6 | Интеграционный regression pack (client + DB) | Автопроверка ключевых single/group сценариев на серверном хранилище | In progress |
+
+Примечание по `E2-P1` (выполнено 2026-03-19):
+1. Добавлены `OrdersStorageMode` и настройки backend/connection string в `AppSettings`.
+2. Введены `IOrdersRepository`, `FileSystemOrdersRepository`, `PostgreSqlOrdersRepository`, `OrdersRepositoryFactory`.
+3. `MainForm.LoadHistory/SaveHistory` переключены на repository + fallback в файловое хранилище при недоступности LAN/PostgreSQL.
+4. Добавлен пакет `Npgsql`.
+5. В `SettingsDialogForm` добавлены UI-поля feature-gate (`FileSystem` / `LAN PostgreSQL`) и connection string.
+
+Примечание по `E2-P2` (закрыто 2026-03-19):
+1. `PostgreSqlOrdersRepository` переведен на нормализованные таблицы (`orders`, `order_items`, `order_events`, `users`) вместо единой snapshot-таблицы.
+2. Включено чтение/запись заказов и item в PostgreSQL в рамках текущего `SaveHistory/LoadHistory` контура.
+3. Добавлены `StorageVersion` поля в модель (`OrderData`, `OrderFileItem`) и проверка optimistic concurrency перед записью.
+4. Реализован conflict-guard: при изменениях в БД другим клиентом возвращается `concurrency conflict`, без silent overwrite.
+5. Добавлены version-check update/delete операции для container/item.
+6. Для `concurrency conflict` отключён silent fallback в `history.json` (чтобы не маскировать LAN-расхождения).
+
+Примечание по `E2-P3` (прогресс 2026-03-19):
+1. Репозиторий пишет серверные события `add/update/delete-order` и `add/update/remove-item` в `order_events`.
+2. `event_source` фиксируется как `ui`, payload хранится в `jsonb` с `order/item/version`.
+3. Следующий шаг: расширить события на pipeline `run/stop` и file-sync контур.
+
+Примечание по `E2-P4` (прогресс 2026-03-19):
+1. Добавлен bootstrap-переезд: при пустой PostgreSQL истории выполняется загрузка из `history.json` и первичная запись в БД.
+2. Следующий шаг: формализовать one-time migration marker и протокол верификации в DBeaver.
+
+Примечание по `E2-P6` (прогресс 2026-03-19):
+1. Добавлены verify-тесты repository-слоя (factory + filesystem roundtrip + connection-string guards).
+2. Текущее состояние test-pack: `dotnet test Replica.sln` -> `35/35 PASS`:
+   - `tests/Replica.VerifyTests`: `10/10 PASS`
+   - `tests/Replica.UiSmokeTests`: `25/25 PASS`
 
 ## 6. Риски и контрмеры
 

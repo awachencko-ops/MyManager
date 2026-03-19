@@ -25,6 +25,7 @@ namespace Replica
         public static readonly DateTime PlaceholderOrderDate = new DateTime(2000, 1, 1);
 
         public string InternalId { get; set; } = Guid.NewGuid().ToString("N");
+        public long StorageVersion { get; set; }
         public string Id { get; set; } = "";
         public OrderStartMode StartMode { get; set; } = OrderStartMode.Unknown;
         public OrderFileTopologyMarker FileTopologyMarker { get; set; } = OrderFileTopologyMarker.Unknown;

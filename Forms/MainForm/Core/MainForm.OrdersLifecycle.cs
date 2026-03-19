@@ -105,6 +105,114 @@ namespace Replica
             RefreshTrayIndicators();
         }
 
+        private void EnsureOrdersRepository()
+        {
+            if (_ordersRepository != null)
+                return;
+
+            var settings = AppSettings.Load();
+            _ordersStorageBackend = settings.OrdersStorageBackend;
+            _lanPostgreSqlConnectionString = settings.LanPostgreSqlConnectionString;
+            _ordersRepository = OrdersRepositoryFactory.Create(settings, _jsonHistoryFile);
+        }
+
+        private bool TryLoadHistoryFromConfiguredRepository(out List<OrderData> orders)
+        {
+            EnsureOrdersRepository();
+            var primaryError = string.Empty;
+
+            if (_ordersRepository != null
+                && _ordersRepository.TryLoadAll(out orders, out primaryError))
+            {
+                if (orders.Count == 0 && _ordersStorageBackend == OrdersStorageMode.LanPostgreSql)
+                {
+                    var bootstrapRepository = OrdersRepositoryFactory.CreateFileSystem(_jsonHistoryFile);
+                    if (bootstrapRepository.TryLoadAll(out var bootstrapOrders, out var bootstrapLoadError)
+                        && bootstrapOrders.Count > 0)
+                    {
+                        orders = bootstrapOrders;
+                        Logger.Warn(
+                            $"HISTORY | bootstrap-load | source={bootstrapRepository.BackendName} | target={_ordersRepository.BackendName} | orders={bootstrapOrders.Count}");
+
+                        if (!_ordersRepository.TrySaveAll(bootstrapOrders, out var bootstrapSaveError))
+                        {
+                            Logger.Warn(
+                                $"HISTORY | bootstrap-save-failed | backend={_ordersRepository.BackendName} | {bootstrapSaveError}");
+                        }
+                        else
+                        {
+                            Logger.Info(
+                                $"HISTORY | bootstrap-save-success | backend={_ordersRepository.BackendName} | orders={bootstrapOrders.Count}");
+                        }
+                    }
+                    else if (!string.IsNullOrWhiteSpace(bootstrapLoadError))
+                    {
+                        Logger.Warn(
+                            $"HISTORY | bootstrap-load-failed | backend={bootstrapRepository.BackendName} | {bootstrapLoadError}");
+                    }
+                }
+
+                return true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(primaryError))
+            {
+                Logger.Warn(
+                    $"HISTORY | load-failed | backend={_ordersRepository?.BackendName ?? "unknown"} | {primaryError}");
+            }
+
+            var fallbackRepository = OrdersRepositoryFactory.CreateFileSystem(_jsonHistoryFile);
+            if (fallbackRepository.TryLoadAll(out orders, out var fallbackError))
+            {
+                Logger.Warn(
+                    $"HISTORY | fallback-load | backend={fallbackRepository.BackendName}");
+                return true;
+            }
+
+            Logger.Error(
+                $"HISTORY | fallback-load-failed | backend={fallbackRepository.BackendName} | {fallbackError}");
+            orders = new List<OrderData>();
+            return false;
+        }
+
+        private bool TrySaveHistoryToConfiguredRepository(out string error)
+        {
+            EnsureOrdersRepository();
+            var primaryError = string.Empty;
+
+            if (_ordersRepository != null
+                && _ordersRepository.TrySaveAll(_orderHistory, out primaryError))
+            {
+                error = string.Empty;
+                return true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(primaryError))
+            {
+                Logger.Warn(
+                    $"HISTORY | save-failed | backend={_ordersRepository?.BackendName ?? "unknown"} | {primaryError}");
+
+                if (_ordersStorageBackend == OrdersStorageMode.LanPostgreSql
+                    && primaryError.Contains("concurrency conflict", StringComparison.OrdinalIgnoreCase))
+                {
+                    error = primaryError;
+                    return false;
+                }
+            }
+
+            var fallbackRepository = OrdersRepositoryFactory.CreateFileSystem(_jsonHistoryFile);
+            if (fallbackRepository.TrySaveAll(_orderHistory, out var fallbackError))
+            {
+                Logger.Warn(
+                    $"HISTORY | fallback-save | backend={fallbackRepository.BackendName}");
+                error = string.Empty;
+                return true;
+            }
+
+            error = fallbackError;
+            return false;
+        }
+
         private void LoadHistory()
         {
             _orderHistory.Clear();
@@ -114,19 +222,8 @@ namespace Replica
             var migrationLog = new List<string>();
             var remainingHashBackfillBudget = 32;
 
-            if (File.Exists(_jsonHistoryFile))
-            {
-                try
-                {
-                    var parsed = JsonSerializer.Deserialize<List<OrderData>>(File.ReadAllText(_jsonHistoryFile));
-                    if (parsed != null)
-                        _orderHistory.AddRange(parsed);
-                }
-                catch
-                {
-                    _orderHistory.Clear();
-                }
-            }
+            if (TryLoadHistoryFromConfiguredRepository(out var loadedOrders) && loadedOrders.Count > 0)
+                _orderHistory.AddRange(loadedOrders);
 
             foreach (var order in _orderHistory)
             {
@@ -162,16 +259,13 @@ namespace Replica
         {
             NormalizeOrderTopologyInHistory(logIssues: false);
             PopulateKnownFileSizesInHistory();
+            _jsonHistoryFile = StoragePaths.ResolveFilePath(_jsonHistoryFile, "history.json");
 
-            var targetPath = StoragePaths.ResolveFilePath(_jsonHistoryFile, "history.json");
-            var dir = Path.GetDirectoryName(targetPath);
-            if (!string.IsNullOrWhiteSpace(dir))
-                Directory.CreateDirectory(dir);
+            if (TrySaveHistoryToConfiguredRepository(out var saveError))
+                return;
 
-            File.WriteAllText(
-                targetPath,
-                JsonSerializer.Serialize(_orderHistory, new JsonSerializerOptions { WriteIndented = true }));
-            _jsonHistoryFile = targetPath;
+            if (!string.IsNullOrWhiteSpace(saveError))
+                Logger.Error($"HISTORY | save-failed-final | {saveError}");
         }
 
         private bool NormalizeOrderTopologyInHistory(bool logIssues)

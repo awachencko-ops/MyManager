@@ -42,6 +42,7 @@ namespace Replica
         public static string DefaultImposingConfigFilePath => Path.Combine(DefaultBaseFolderPath, "Config", "imposing_configs.json");
         public static string DefaultPitStopHotfoldersRootPath => Path.Combine(DefaultBaseFolderPath, "WARNING NOT DELETE", "PitStop");
         public static string DefaultImposingHotfoldersRootPath => Path.Combine(DefaultBaseFolderPath, "WARNING NOT DELETE", "HotImposing");
+        public const string DefaultLanPostgreSqlConnectionString = "User ID=postgres;Password=1234;Host=localhost;Port=5432;Database=replica_db;";
         public static string DefaultThumbnailCacheFolderPath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Replica",
@@ -75,6 +76,8 @@ namespace Replica
         public string DefaultOrderSortBy { get; set; } = "SequenceNo";
         public List<string> VariantDictionary { get; set; } = new() { "A4", "A3", "Цветной", "Ч/Б", "draft", "final" };
         public bool AutoRenameOnDuplicate { get; set; } = true;
+        public OrdersStorageMode OrdersStorageBackend { get; set; } = OrdersStorageMode.FileSystem;
+        public string LanPostgreSqlConnectionString { get; set; } = DefaultLanPostgreSqlConnectionString;
 
         public static string FileName => StoragePaths.ResolveFilePath("settings.json", "settings.json");
 
@@ -114,6 +117,21 @@ namespace Replica
         private bool NormalizePaths()
         {
             bool changed = false;
+
+            if (!Enum.IsDefined(typeof(OrdersStorageMode), OrdersStorageBackend))
+            {
+                OrdersStorageBackend = OrdersStorageMode.FileSystem;
+                changed = true;
+            }
+
+            var normalizedLanConnectionString = string.IsNullOrWhiteSpace(LanPostgreSqlConnectionString)
+                ? DefaultLanPostgreSqlConnectionString
+                : LanPostgreSqlConnectionString.Trim();
+            if (!string.Equals(LanPostgreSqlConnectionString, normalizedLanConnectionString, StringComparison.Ordinal))
+            {
+                LanPostgreSqlConnectionString = normalizedLanConnectionString;
+                changed = true;
+            }
 
             var normalizedOrdersRootPath = NormalizePathValue(OrdersRootPath, DefaultOrdersRootPath);
             if (PathEquals(normalizedOrdersRootPath, LegacyOrdersRootPath))

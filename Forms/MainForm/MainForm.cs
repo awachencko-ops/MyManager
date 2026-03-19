@@ -232,6 +232,9 @@ namespace Replica
             _grandpaFolder = settings.GrandpaPath;
             _archiveDoneSubfolder = settings.ArchiveDoneSubfolder;
             _jsonHistoryFile = settings.HistoryFilePath;
+            _ordersStorageBackend = settings.OrdersStorageBackend;
+            _lanPostgreSqlConnectionString = settings.LanPostgreSqlConnectionString;
+            _ordersRepository = OrdersRepositoryFactory.Create(settings, _jsonHistoryFile);
             _managerLogFilePath = settings.ManagerLogFilePath;
             _orderLogsFolderPath = settings.OrderLogsFolderPath;
             _usersSourceFilePath = settings.UsersFilePath;
@@ -561,6 +564,8 @@ namespace Replica
                 _orderLogsFolderPath,
                 currentSettings.SharedThumbnailCachePath,
                 currentSettings.FontsFolderPath,
+                _ordersStorageBackend,
+                _lanPostgreSqlConnectionString,
                 currentSettings.MaxParallelism,
                 useExtendedMode: currentSettings.UseExtendedMode);
 
@@ -580,6 +585,8 @@ namespace Replica
                 nextSharedCacheRootPath,
                 StringComparison.OrdinalIgnoreCase);
             _sharedPrintTilesCacheFolderPath = nextSharedCacheRootPath;
+            _ordersStorageBackend = settingsForm.OrdersStorageBackend;
+            _lanPostgreSqlConnectionString = settingsForm.LanPostgreSqlConnectionString;
 
             var settings = AppSettings.Load();
             settings.OrdersRootPath = _ordersRootPath;
@@ -593,7 +600,10 @@ namespace Replica
             settings.FontsFolderPath = settingsForm.FontsFolderPath;
             settings.MaxParallelism = settingsForm.MaxParallelism;
             settings.UseExtendedMode = settingsForm.UseExtendedMode;
+            settings.OrdersStorageBackend = _ordersStorageBackend;
+            settings.LanPostgreSqlConnectionString = _lanPostgreSqlConnectionString;
             settings.Save();
+            _ordersRepository = OrdersRepositoryFactory.Create(settings, _jsonHistoryFile);
 
             Logger.LogFilePath = _managerLogFilePath;
             InitializeProcessor();

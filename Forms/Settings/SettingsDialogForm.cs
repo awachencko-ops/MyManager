@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Drawing;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace Replica
@@ -17,6 +18,8 @@ namespace Replica
         private readonly TextBox _txtOrderLogsFolderPath = new TextBox();
         private readonly TextBox _txtSharedThumbnailCachePath = new TextBox();
         private readonly TextBox _txtFontsFolderPath = new TextBox();
+        private readonly ComboBox _cmbOrdersStorageBackend = new ComboBox();
+        private readonly TextBox _txtLanPostgreSqlConnectionString = new TextBox();
         private readonly NumericUpDown _numMaxParallelism = new NumericUpDown();
         private readonly CheckBox _chkUseExtendedMode = new CheckBox();
 
@@ -32,6 +35,9 @@ namespace Replica
         public string OrderLogsFolderPath => _txtOrderLogsFolderPath.Text.Trim();
         public string SharedThumbnailCachePath => _txtSharedThumbnailCachePath.Text.Trim();
         public string FontsFolderPath => _txtFontsFolderPath.Text.Trim();
+        public OrdersStorageMode OrdersStorageBackend
+            => (_cmbOrdersStorageBackend.SelectedItem as OrdersStorageBackendOption)?.Mode ?? OrdersStorageMode.FileSystem;
+        public string LanPostgreSqlConnectionString => _txtLanPostgreSqlConnectionString.Text.Trim();
         public int MaxParallelism => (int)_numMaxParallelism.Value;
         public bool UseExtendedMode => _chkUseExtendedMode.Checked;
 
@@ -45,6 +51,8 @@ namespace Replica
             string orderLogsFolderPath,
             string sharedThumbnailCachePath,
             string fontsFolderPath,
+            OrdersStorageMode ordersStorageBackend,
+            string lanPostgreSqlConnectionString,
             int maxParallelism,
             bool useExtendedMode = false)
         {
@@ -84,6 +92,8 @@ namespace Replica
                 orderLogsFolderPath,
                 sharedThumbnailCachePath,
                 fontsFolderPath,
+                ordersStorageBackend,
+                lanPostgreSqlConnectionString,
                 maxParallelism,
                 useExtendedMode));
             _tabs.TabPages.Add(CreateEmbeddedManagerTab("Диспетчер PitStop", _pitStopForm));
@@ -108,6 +118,14 @@ namespace Replica
                     || string.IsNullOrWhiteSpace(ManagerLogFilePath))
                 {
                     MessageBox.Show(this, "Заполните обязательные пути в разделе 'Основное'.", "Проверка", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    _tabs.SelectedIndex = 0;
+                    return;
+                }
+
+                if (OrdersStorageBackend == OrdersStorageMode.LanPostgreSql
+                    && string.IsNullOrWhiteSpace(LanPostgreSqlConnectionString))
+                {
+                    MessageBox.Show(this, "Для режима LAN PostgreSQL укажите строку подключения.", "Проверка", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     _tabs.SelectedIndex = 0;
                     return;
                 }
@@ -141,6 +159,8 @@ namespace Replica
             string orderLogsFolderPath,
             string sharedThumbnailCachePath,
             string fontsFolderPath,
+            OrdersStorageMode ordersStorageBackend,
+            string lanPostgreSqlConnectionString,
             int maxParallelism,
             bool useExtendedMode)
         {
@@ -151,14 +171,14 @@ namespace Replica
                 Dock = DockStyle.Top,
                 AutoSize = true,
                 ColumnCount = 3,
-                RowCount = 11,
+                RowCount = 13,
                 Padding = new Padding(18, 18, 18, 0)
             };
 
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 270));
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140));
-            for (int i = 0; i < 11; i++)
+            for (int i = 0; i < 13; i++)
                 panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
 
             AddRow(panel, 0, "Папка хранения заказов", _txtOrdersRoot, ordersRootPath, true);
@@ -170,9 +190,11 @@ namespace Replica
             AddRow(panel, 6, "Папка логов заказов (опц.)", _txtOrderLogsFolderPath, orderLogsFolderPath, true, optional: true);
             AddRow(panel, 7, "Папка шрифтов PDF (опц.)", _txtFontsFolderPath, fontsFolderPath, true, optional: true);
             AddRow(panel, 8, "Общий кэш превью (опц.)", _txtSharedThumbnailCachePath, sharedThumbnailCachePath, true, optional: true);
+            AddStorageBackendRow(panel, 9, "Хранилище заказов", _cmbOrdersStorageBackend, ordersStorageBackend);
+            AddRowTextOnly(panel, 10, "LAN PostgreSQL connection string", _txtLanPostgreSqlConnectionString, lanPostgreSqlConnectionString, optional: true);
 
-            AddNumericRow(panel, 9, "Параллельных файлов (мульти-заказ)", _numMaxParallelism, maxParallelism);
-            AddCheckboxRow(panel, 10, "Форма заказа", _chkUseExtendedMode, useExtendedMode, "Вкл. — расширенная форма; выкл. — простая.");
+            AddNumericRow(panel, 11, "Параллельных файлов (мульти-заказ)", _numMaxParallelism, maxParallelism);
+            AddCheckboxRow(panel, 12, "Форма заказа", _chkUseExtendedMode, useExtendedMode, "Вкл. — расширенная форма; выкл. — простая.");
 
             var hint = new Label
             {
@@ -180,7 +202,7 @@ namespace Replica
                 AutoSize = true,
                 Padding = new Padding(22, 8, 22, 8),
                 ForeColor = Color.DimGray,
-                Text = "Если \"Папка шрифтов PDF\" пустая, используется системная Windows Fonts. Папка логов по умолчанию: ./order-logs рядом с приложением. Путь шрифтов и общий кэш превью полностью применяются после перезапуска приложения."
+                Text = "Если \"Папка шрифтов PDF\" пустая, используется системная Windows Fonts. Папка логов по умолчанию: ./order-logs рядом с приложением. Для режима LAN PostgreSQL строка подключения обязательна. Путь шрифтов и общий кэш превью полностью применяются после перезапуска приложения."
             };
 
             page.Controls.Add(hint);
@@ -221,6 +243,42 @@ namespace Replica
 
             panel.Controls.Add(label, 0, row);
             panel.Controls.Add(boxHost, 1, row);
+            panel.Controls.Add(lblHint, 2, row);
+        }
+
+        private void AddStorageBackendRow(TableLayoutPanel panel, int row, string labelText, ComboBox box, OrdersStorageMode value)
+        {
+            var label = new Label
+            {
+                Text = $"{labelText} *",
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleLeft,
+                AutoSize = false
+            };
+
+            box.Dock = DockStyle.Fill;
+            box.Margin = new Padding(0, 6, 8, 6);
+            box.DropDownStyle = ComboBoxStyle.DropDownList;
+            box.Items.Clear();
+            box.Items.Add(new OrdersStorageBackendOption(OrdersStorageMode.FileSystem, "Локальный файл (history.json)"));
+            box.Items.Add(new OrdersStorageBackendOption(OrdersStorageMode.LanPostgreSql, "LAN PostgreSQL"));
+
+            var selected = box.Items
+                .OfType<OrdersStorageBackendOption>()
+                .FirstOrDefault(option => option.Mode == value);
+            box.SelectedItem = selected ?? box.Items[0];
+
+            var lblHint = new Label
+            {
+                Text = "Feature-gate хранения заказов",
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleLeft,
+                ForeColor = Color.DimGray,
+                AutoSize = false
+            };
+
+            panel.Controls.Add(label, 0, row);
+            panel.Controls.Add(box, 1, row);
             panel.Controls.Add(lblHint, 2, row);
         }
 
@@ -363,6 +421,23 @@ namespace Replica
 
             if (dialog.ShowDialog(this) == DialogResult.OK)
                 target.Text = dialog.FileName;
+        }
+
+        private sealed class OrdersStorageBackendOption
+        {
+            public OrdersStorageBackendOption(OrdersStorageMode mode, string text)
+            {
+                Mode = mode;
+                Text = text;
+            }
+
+            public OrdersStorageMode Mode { get; }
+            public string Text { get; }
+
+            public override string ToString()
+            {
+                return Text;
+            }
         }
     }
 }

@@ -6,6 +6,7 @@ namespace Replica
     public class OrderFileItem
     {
         public string ItemId { get; set; } = Guid.NewGuid().ToString("N");
+        public long StorageVersion { get; set; }
 
         // Бизнес-представление
         public string ClientFileLabel { get; set; } = "";
