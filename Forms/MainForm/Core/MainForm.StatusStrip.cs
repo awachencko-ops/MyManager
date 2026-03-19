@@ -564,7 +564,7 @@ namespace Replica
         {
             try
             {
-                var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} | status: {oldStatus} -> {newStatus} | source: {source} | reason: {reason}";
+                var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} | status: {oldStatus} -> {newStatus} | source: {source} | reason: {reason} | print-weight: {DescribePrintWeight(order)}";
                 File.AppendAllText(GetOrderLogFilePath(order), line + Environment.NewLine);
                 Logger.Info($"ORDER-STATUS | order={GetOrderDisplayId(order)} | {line}");
             }

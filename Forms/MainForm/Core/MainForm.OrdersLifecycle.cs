@@ -1422,19 +1422,20 @@ namespace Replica
             bool persistHistory,
             bool rebuildGrid)
         {
+            var normalizedReason = NormalizeFileSyncReason(source, reason);
             var oldStatus = order.Status ?? string.Empty;
             if (string.Equals(oldStatus, status, StringComparison.Ordinal)
                 && string.Equals(order.LastStatusSource ?? string.Empty, source ?? string.Empty, StringComparison.Ordinal)
-                && string.Equals(order.LastStatusReason ?? string.Empty, reason ?? string.Empty, StringComparison.Ordinal))
+                && string.Equals(order.LastStatusReason ?? string.Empty, normalizedReason ?? string.Empty, StringComparison.Ordinal))
             {
                 return false;
             }
 
             order.Status = status;
             order.LastStatusSource = source ?? string.Empty;
-            order.LastStatusReason = reason ?? string.Empty;
+            order.LastStatusReason = normalizedReason ?? string.Empty;
             order.LastStatusAt = DateTime.Now;
-            AppendOrderStatusLog(order, oldStatus, status, source ?? string.Empty, reason ?? string.Empty);
+            AppendOrderStatusLog(order, oldStatus, status, source ?? string.Empty, normalizedReason ?? string.Empty);
 
             if (persistHistory)
                 SaveHistory();
@@ -1444,6 +1445,30 @@ namespace Replica
             UpdateTrayErrorIndicator();
 
             return true;
+        }
+
+        private static string NormalizeFileSyncReason(string? source, string? reason)
+        {
+            if (!string.Equals(source, OrderStatusSourceNames.FileSync, StringComparison.OrdinalIgnoreCase))
+                return reason ?? string.Empty;
+
+            return (reason ?? string.Empty).Trim() switch
+            {
+                "stage-1" => "Найден исходный файл",
+                "stage-2" => "Найден файл подготовки",
+                "stage-3" => "Найден печатный файл",
+                _ => reason ?? string.Empty
+            };
+        }
+
+        private static string DescribePrintWeight(OrderData order)
+        {
+            var size = order.PrintFileSizeBytes
+                ?? order.Items?.FirstOrDefault(x => x != null && x.PrintFileSizeBytes.HasValue)?.PrintFileSizeBytes;
+
+            return size.HasValue
+                ? $"{size.Value} байт"
+                : "неизвестен";
         }
 
     }

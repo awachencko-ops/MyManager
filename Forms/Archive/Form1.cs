@@ -2182,18 +2182,19 @@ namespace Replica
             if (o == null)
                 return false;
 
+            string normalizedReason = NormalizeFileSyncReason(source, reason);
             string old = o.Status ?? string.Empty;
             if (string.Equals(old, s, StringComparison.Ordinal)
                 && string.Equals(o.LastStatusSource ?? string.Empty, source ?? string.Empty, StringComparison.Ordinal)
-                && string.Equals(o.LastStatusReason ?? string.Empty, reason ?? string.Empty, StringComparison.Ordinal))
+                && string.Equals(o.LastStatusReason ?? string.Empty, normalizedReason ?? string.Empty, StringComparison.Ordinal))
                 return false;
 
             o.Status = s;
             o.LastStatusSource = source;
-            o.LastStatusReason = reason;
+            o.LastStatusReason = normalizedReason;
             o.LastStatusAt = DateTime.Now;
 
-            AppendOrderStatusLog(o, old, s, source, reason);
+            AppendOrderStatusLog(o, old, s, source, normalizedReason);
 
             if (persistHistory)
                 SaveHistory();
@@ -2202,6 +2203,20 @@ namespace Replica
 
             if (InvokeRequired) Invoke(new Action(FillGrid)); else FillGrid();
             return true;
+        }
+
+        private static string NormalizeFileSyncReason(string? source, string? reason)
+        {
+            if (!string.Equals(source, OrderStatusSourceNames.FileSync, StringComparison.OrdinalIgnoreCase))
+                return reason ?? string.Empty;
+
+            return (reason ?? string.Empty).Trim() switch
+            {
+                "stage-1" => "Найден исходный файл",
+                "stage-2" => "Найден файл подготовки",
+                "stage-3" => "Найден печатный файл",
+                _ => reason ?? string.Empty
+            };
         }
         private void SetBottomStatus(string t) { if (InvokeRequired) Invoke(new Action(() => lblBottomStatus.Text = t)); else lblBottomStatus.Text = t; }
 
@@ -2255,13 +2270,23 @@ namespace Replica
         {
             try
             {
-                string line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} | status: {oldStatus} -> {newStatus} | source: {source} | reason: {reason}";
+                string line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} | status: {oldStatus} -> {newStatus} | source: {source} | reason: {reason} | print-weight: {DescribePrintWeight(order)}";
                 File.AppendAllText(GetOrderLogFilePath(order), line + Environment.NewLine);
                 Logger.Info($"ORDER-STATUS | order={GetOrderDisplayId(order)} | {line}");
             }
             catch
             {
             }
+        }
+
+        private static string DescribePrintWeight(OrderData order)
+        {
+            var size = order.PrintFileSizeBytes
+                ?? order.Items?.FirstOrDefault(x => x != null && x.PrintFileSizeBytes.HasValue)?.PrintFileSizeBytes;
+
+            return size.HasValue
+                ? $"{size.Value} байт"
+                : "неизвестен";
         }
 
         private void AppendCapturedProcessorLog(string orderId, string message)

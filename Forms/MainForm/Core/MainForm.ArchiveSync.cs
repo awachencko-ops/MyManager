@@ -23,7 +23,7 @@ namespace Replica
                     if (order == null)
                         continue;
 
-                    var archived = TryResolveArchivedPrintPath(order, out var archivedPrintPath, out var matchedLength);
+                    var archived = TryResolveArchivedPrintPath(order, out var archivedPrintPath, out var matchedLength, out var archiveMissReason);
 
                     if (string.Equals(NormalizeStatus(order.Status), WorkflowStatusNames.Error, StringComparison.Ordinal))
                         continue;
@@ -44,11 +44,12 @@ namespace Replica
                         continue;
 
                     var fallbackStatus = ResolveStatusWithoutArchive(order);
+                    var fallbackReason = DescribeFallbackReason(order, fallbackStatus);
                     changed |= SetOrderStatus(
                         order,
                         fallbackStatus,
                         "archive-sync",
-                        "Заказ больше не считается архивным",
+                        $"Заказ больше не считается архивным: {archiveMissReason}; без архива -> {fallbackStatus} ({fallbackReason})",
                         persistHistory: false,
                         rebuildGrid: false);
                 }
@@ -72,18 +73,29 @@ namespace Replica
             if (order == null || string.IsNullOrWhiteSpace(_grandpaFolder))
                 return false;
 
-            return TryResolveArchivedPrintPath(order, out archivedPrintPath, out _);
+            return TryResolveArchivedPrintPath(order, out archivedPrintPath, out _, out _);
         }
 
-        private bool TryResolveArchivedPrintPath(OrderData order, out string archivedPrintPath, out long matchedLength)
+        private bool TryResolveArchivedPrintPath(OrderData order, out string archivedPrintPath, out long matchedLength, out string missReason)
         {
             archivedPrintPath = string.Empty;
             matchedLength = 0;
+            missReason = string.Empty;
             if (order == null || string.IsNullOrWhiteSpace(_grandpaFolder))
+            {
+                missReason = "не задана папка архива";
                 return false;
+            }
 
             RefreshArchiveIndexIfNeeded();
-            foreach (var candidate in GetOrderArchiveCandidates(order))
+            var candidates = GetOrderArchiveCandidates(order);
+            if (candidates.Count == 0)
+            {
+                missReason = "в заказе нет печатного файла для проверки";
+                return false;
+            }
+
+            foreach (var candidate in candidates)
             {
                 var filePath = candidate.Path;
                 var fileName = Path.GetFileName(filePath);
@@ -91,10 +103,16 @@ namespace Replica
                     continue;
 
                 if (!_archivedFilePathsByName.TryGetValue(fileName, out var candidatePaths))
+                {
+                    missReason = $"в папке Готово не найден файл с именем {fileName}";
                     continue;
+                }
 
                 if (!TryGetExpectedFileLength(candidate, out var currentLength))
+                {
+                    missReason = $"для файла {fileName} не известен ожидаемый размер";
                     continue;
+                }
 
                 foreach (var candidatePath in candidatePaths)
                 {
@@ -111,9 +129,54 @@ namespace Replica
                     matchedLength = currentLength;
                     return true;
                 }
+
+                var foundSizes = candidatePaths
+                    .Where(HasExistingFile)
+                    .Select(path => TryGetFileLength(path, out var len) ? len.ToString() : "?")
+                    .Distinct()
+                    .ToList();
+                missReason = foundSizes.Count == 0
+                    ? $"в папке Готово есть имя {fileName}, но файлы недоступны"
+                    : $"в папке Готово есть имя {fileName}, но размер не совпал (ожидалось {currentLength} байт, найдено: {string.Join(", ", foundSizes)})";
             }
 
+            if (string.IsNullOrWhiteSpace(missReason))
+                missReason = "совпадение по имени и размеру не найдено";
+
             return false;
+        }
+
+        private static string DescribeFallbackReason(OrderData order, string fallbackStatus)
+        {
+            if (order.Items == null || order.Items.Count == 0)
+            {
+                var parts = new List<string>();
+                if (HasExistingFile(order.SourcePath))
+                    parts.Add("есть исходник");
+                if (HasExistingFile(order.PreparedPath))
+                    parts.Add("есть подготовка");
+                if (HasExistingFile(order.PrintPath))
+                    parts.Add("есть печать");
+
+                return parts.Count == 0
+                    ? "все stage-файлы отсутствуют"
+                    : $"stage-файлы: {string.Join(", ", parts)}";
+            }
+
+            var items = order.Items.Where(x => x != null).ToList();
+            if (items.Count == 0)
+                return "в заказе нет item-ов";
+
+            var total = items.Count;
+            var done = items.Count(x => HasExistingFile(x.PrintPath));
+            var active = items.Count(x => HasExistingFile(x.SourcePath) || HasExistingFile(x.PreparedPath) || HasExistingFile(x.PrintPath));
+
+            if (fallbackStatus == WorkflowStatusNames.Completed)
+                return $"все item-печати на месте ({done}/{total})";
+
+            return active > 0
+                ? $"есть активные файлы ({active}/{total})"
+                : "все item-stage файлы отсутствуют";
         }
 
         private static List<(string Path, long? ExpectedLength)> GetOrderArchiveCandidates(OrderData order)
