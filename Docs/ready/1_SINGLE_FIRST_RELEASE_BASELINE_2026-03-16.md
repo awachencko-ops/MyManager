@@ -33,7 +33,7 @@ Baseline покрывает только prepress-сценарии этапа `s
 
 1. `dotnet build Replica.csproj` -> `0 warnings`, `0 errors`.
 2. `dotnet test tests\Replica.UiSmokeTests\Replica.UiSmokeTests.csproj` -> `9/9 PASS`.
-3. Regression-checklist: `Docs/этапы/1_SINGLE_ORDER_REGRESSION_CHECKLIST.md` -> `Completed`, все `SR-01...SR-12 = PASS`.
+3. Regression-checklist: `Docs/ready/1_SINGLE_ORDER_REGRESSION_CHECKLIST.md` -> `Completed`, все `SR-01...SR-12 = PASS`.
 4. `dotnet test tests\Replica.VerifyTests\Replica.VerifyTests.csproj` -> `5/5 PASS`.
 
 ## 4. Known Issues (non-blocking)

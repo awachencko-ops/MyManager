@@ -38,6 +38,6 @@
 
 ## 4. Режим фиксации
 
-1. Каждое изменение по рискам фиксировать в `Docs/этапы/1_MAINFORM_MIGRATION_COMPLEX_RESEARCH_AND_PLAN.md`.
+1. Каждое изменение по рискам фиксировать в `Docs/ready/1_MAINFORM_MIGRATION_COMPLEX_RESEARCH_AND_PLAN.md`.
 2. По каждому риску закрывать минимум один измеримый критерий.
 3. После закрытия рисков переходить на этап 2 (`2_MULTI_ORDER_LOGIC_AND_POSTGRESQL_PLAN.md`).
