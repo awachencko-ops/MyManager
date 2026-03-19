@@ -67,5 +67,17 @@ namespace Replica
                 return false;
             }
         }
+
+        public bool TryAppendEvent(
+            string orderInternalId,
+            string itemId,
+            string eventType,
+            string eventSource,
+            string payloadJson,
+            out string error)
+        {
+            error = string.Empty;
+            return true;
+        }
     }
 }

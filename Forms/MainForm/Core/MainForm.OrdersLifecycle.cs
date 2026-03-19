@@ -213,6 +213,43 @@ namespace Replica
             return false;
         }
 
+        private void TryAppendRepositoryEvent(
+            OrderData order,
+            string itemId,
+            string eventType,
+            string eventSource,
+            object payload)
+        {
+            if (order == null)
+                return;
+
+            EnsureOrdersRepository();
+            if (_ordersRepository == null)
+                return;
+
+            var orderInternalId = order.InternalId ?? string.Empty;
+            var payloadJson = payload == null
+                ? "{}"
+                : JsonSerializer.Serialize(payload);
+
+            if (_ordersRepository.TryAppendEvent(
+                    orderInternalId,
+                    itemId ?? string.Empty,
+                    eventType ?? string.Empty,
+                    eventSource ?? string.Empty,
+                    payloadJson,
+                    out var appendError))
+            {
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(appendError))
+            {
+                Logger.Warn(
+                    $"HISTORY | event-append-failed | backend={_ordersRepository.BackendName} | order={GetOrderDisplayId(order)} | event={eventType} | {appendError}");
+            }
+        }
+
         private void LoadHistory()
         {
             _orderHistory.Clear();
@@ -1592,20 +1629,35 @@ namespace Replica
             bool persistHistory,
             bool rebuildGrid)
         {
-            var normalizedReason = NormalizeFileSyncReason(source, reason);
+            var normalizedSource = string.IsNullOrWhiteSpace(source)
+                ? OrderStatusSourceNames.Ui
+                : source.Trim();
+            var normalizedReason = NormalizeFileSyncReason(normalizedSource, reason);
             var oldStatus = order.Status ?? string.Empty;
             if (string.Equals(oldStatus, status, StringComparison.Ordinal)
-                && string.Equals(order.LastStatusSource ?? string.Empty, source ?? string.Empty, StringComparison.Ordinal)
+                && string.Equals(order.LastStatusSource ?? string.Empty, normalizedSource, StringComparison.Ordinal)
                 && string.Equals(order.LastStatusReason ?? string.Empty, normalizedReason ?? string.Empty, StringComparison.Ordinal))
             {
                 return false;
             }
 
             order.Status = status;
-            order.LastStatusSource = source ?? string.Empty;
+            order.LastStatusSource = normalizedSource;
             order.LastStatusReason = normalizedReason ?? string.Empty;
             order.LastStatusAt = DateTime.Now;
-            AppendOrderStatusLog(order, oldStatus, status, source ?? string.Empty, normalizedReason ?? string.Empty);
+            AppendOrderStatusLog(order, oldStatus, status, normalizedSource, normalizedReason ?? string.Empty);
+            TryAppendRepositoryEvent(
+                order,
+                itemId: string.Empty,
+                eventType: "status-change",
+                eventSource: normalizedSource,
+                payload: new
+                {
+                    old_status = oldStatus,
+                    new_status = status ?? string.Empty,
+                    reason = normalizedReason ?? string.Empty,
+                    status_at = order.LastStatusAt
+                });
 
             if (persistHistory)
                 SaveHistory();

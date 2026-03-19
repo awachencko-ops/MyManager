@@ -237,6 +237,65 @@ namespace Replica
             }
         }
 
+        public bool TryAppendEvent(
+            string orderInternalId,
+            string itemId,
+            string eventType,
+            string eventSource,
+            string payloadJson,
+            out string error)
+        {
+            error = string.Empty;
+
+            if (string.IsNullOrWhiteSpace(_connectionString))
+            {
+                error = "connection string is empty";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(eventType))
+            {
+                error = "event type is empty";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(eventSource))
+            {
+                error = "event source is empty";
+                return false;
+            }
+
+            var normalizedPayloadJson = string.IsNullOrWhiteSpace(payloadJson) ? "{}" : payloadJson.Trim();
+
+            try
+            {
+                using var connection = new NpgsqlConnection(_connectionString);
+                connection.Open();
+                EnsureSchema(connection);
+
+                using var cmd = new NpgsqlCommand(
+                    $"""
+                    insert into {EventsTable}
+                    (order_internal_id, item_id, event_type, event_source, payload_json, created_at)
+                    values
+                    (@order_internal_id, @item_id, @event_type, @event_source, cast(@payload_json as jsonb), now());
+                    """,
+                    connection);
+                cmd.Parameters.AddWithValue("order_internal_id", orderInternalId ?? string.Empty);
+                cmd.Parameters.AddWithValue("item_id", itemId ?? string.Empty);
+                cmd.Parameters.AddWithValue("event_type", eventType.Trim());
+                cmd.Parameters.AddWithValue("event_source", eventSource.Trim());
+                cmd.Parameters.AddWithValue("payload_json", normalizedPayloadJson);
+                cmd.ExecuteNonQuery();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                return false;
+            }
+        }
+
         private static List<OrderData> NormalizeOrders(IReadOnlyCollection<OrderData> orders)
         {
             var normalizedOrders = new List<OrderData>();

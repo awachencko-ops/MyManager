@@ -588,6 +588,18 @@ namespace Replica
                 var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} | op: {opName} | details: {opDetails}";
                 File.AppendAllText(GetOrderLogFilePath(order), line + Environment.NewLine);
                 Logger.Info($"ORDER-OP | order={GetOrderDisplayId(order)} | {line}");
+
+                TryAppendRepositoryEvent(
+                    order,
+                    itemId: string.Empty,
+                    eventType: opName,
+                    eventSource: OrderStatusSourceNames.Ui,
+                    payload: new
+                    {
+                        operation = opName,
+                        details = opDetails,
+                        logged_at = DateTime.Now
+                    });
             }
             catch
             {

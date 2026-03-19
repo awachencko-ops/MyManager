@@ -98,4 +98,39 @@ public sealed class OrdersRepositoryTests
         Assert.False(result);
         Assert.Contains("connection string is empty", error, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void FileSystemRepository_AppendEvent_IsNoOpSuccess()
+    {
+        var historyPath = Path.Combine(Path.GetTempPath(), "Replica", "history-noop.json");
+        var repository = new FileSystemOrdersRepository(historyPath);
+
+        var result = repository.TryAppendEvent(
+            orderInternalId: "order-1",
+            itemId: string.Empty,
+            eventType: "run",
+            eventSource: "ui",
+            payloadJson: "{}",
+            out var error);
+
+        Assert.True(result, error);
+        Assert.True(string.IsNullOrWhiteSpace(error));
+    }
+
+    [Fact]
+    public void PostgreSqlRepository_AppendEvent_Fails_WhenConnectionStringEmpty()
+    {
+        var repository = new PostgreSqlOrdersRepository(string.Empty);
+
+        var result = repository.TryAppendEvent(
+            orderInternalId: "order-1",
+            itemId: string.Empty,
+            eventType: "run",
+            eventSource: "ui",
+            payloadJson: "{}",
+            out var error);
+
+        Assert.False(result);
+        Assert.Contains("connection string is empty", error, StringComparison.OrdinalIgnoreCase);
+    }
 }

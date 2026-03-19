@@ -1,7 +1,7 @@
 ﻿# Этап 2: group-order логика и PostgreSQL/LAN план
 
 Дата актуализации: 2026-03-19
-Статус: In progress (`E2-P1`, `E2-P2`, `E2-P5` закрыты)
+Статус: In progress (`E2-P1`, `E2-P2`, `E2-P3`, `E2-P5` закрыты)
 
 ## 1. Входные условия (подтверждено)
 
@@ -76,7 +76,7 @@
 |---|---|---|---|
 | E2-P1 | Ввести data-access abstraction (`IOrdersRepository`) в клиенте | `MainForm` работает через абстракцию источника данных | Completed |
 | E2-P2 | Реализовать PostgreSQL repository + optimistic concurrency | CRUD заказов и item с `version`/conflict handling | Completed |
-| E2-P3 | Перенести `order_events` логирование в серверный слой | Трассируемость операций без потери текущей семантики | In progress |
+| E2-P3 | Перенести `order_events` логирование в серверный слой | Трассируемость операций без потери текущей семантики | Completed |
 | E2-P4 | Миграция данных из `history.json` в PostgreSQL | Исторические заказы и item перенесены с hash-полями | In progress |
 | E2-P5 | Добавить LAN feature-gate в настройки клиента | Явный режим `FileSystem` / `LanPostgreSql` + fallback-поведение | Completed |
 | E2-P6 | Интеграционный regression pack (client + DB) | Автопроверка ключевых single/group сценариев на серверном хранилище | In progress |
@@ -96,10 +96,12 @@
 5. Добавлены version-check update/delete операции для container/item.
 6. Для `concurrency conflict` отключён silent fallback в `history.json` (чтобы не маскировать LAN-расхождения).
 
-Примечание по `E2-P3` (прогресс 2026-03-19):
+Примечание по `E2-P3` (закрыто 2026-03-19):
 1. Репозиторий пишет серверные события `add/update/delete-order` и `add/update/remove-item` в `order_events`.
-2. `event_source` фиксируется как `ui`, payload хранится в `jsonb` с `order/item/version`.
-3. Следующий шаг: расширить события на pipeline `run/stop` и file-sync контур.
+2. Добавлен контракт `IOrdersRepository.TryAppendEvent(...)` для прямой серверной записи событий из клиентских workflow-точек.
+3. `MainForm` отправляет в `order_events` события `run/stop/delete/topology/add-item/remove-item` через `AppendOrderOperationLog`.
+4. `MainForm` отправляет в `order_events` события `status-change` из `SetOrderStatus` с `source=ui/processor/file-sync`.
+5. `event_source` сохраняется по источнику статуса (`ui`, `processor`, `file-sync`), payload хранится в `jsonb`.
 
 Примечание по `E2-P4` (прогресс 2026-03-19):
 1. Добавлен bootstrap-переезд: при пустой PostgreSQL истории выполняется загрузка из `history.json` и первичная запись в БД.
@@ -107,8 +109,9 @@
 
 Примечание по `E2-P6` (прогресс 2026-03-19):
 1. Добавлены verify-тесты repository-слоя (factory + filesystem roundtrip + connection-string guards).
-2. Текущее состояние test-pack: `dotnet test Replica.sln` -> `35/35 PASS`:
-   - `tests/Replica.VerifyTests`: `10/10 PASS`
+2. Добавлены тесты на event-контракт (`TryAppendEvent`) для filesystem no-op и PostgreSQL guard по пустой connection string.
+3. Текущее состояние test-pack: `dotnet test Replica.sln` -> `37/37 PASS`:
+   - `tests/Replica.VerifyTests`: `12/12 PASS`
    - `tests/Replica.UiSmokeTests`: `25/25 PASS`
 
 ## 6. Риски и контрмеры
