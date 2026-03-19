@@ -93,6 +93,7 @@ namespace Replica
                         var pitWaitReporter = CreateRangedProgressReporter(order, 25, 54, "PitStop: ожидание");
                         var (foundPath, where) = await WaitForFileInAnyAsync(places, fileName, timeout, ct, pitWaitReporter);
                         if (foundPath == null) throw new Exception("Таймаут PitStop.");
+                        await CapturePitStopReportAsync(order, pitCfg, fileName, timeout, ct);
                         if (where == "PitStop Error") throw new Exception("Ошибка PitStop (см. отчет).");
                         Notify(order, "🟡 PitStop OK", $"PitStop завершен ({where})");
                         ReportProgress(order, 55, "PitStop завершен");
@@ -100,8 +101,14 @@ namespace Replica
                     else
                     {
                         var pitWaitReporter = CreateRangedProgressReporter(order, 25, 58, "PitStop: ожидание");
-                        var okFile = await WaitForFileAsync(pitCfg.ProcessedSuccess, fileName, timeout, ct, pitWaitReporter);
+                        var (okFile, where) = await WaitForFileInAnyAsync(new (string folder, string label)[]
+                        {
+                            (pitCfg.ProcessedSuccess, "PitStop Success"),
+                            (pitCfg.ProcessedError,   "PitStop Error")
+                        }, fileName, timeout, ct, pitWaitReporter);
                         if (okFile == null) throw new Exception("Таймаут PitStop.");
+                        await CapturePitStopReportAsync(order, pitCfg, fileName, timeout, ct);
+                        if (where == "PitStop Error") throw new Exception("Ошибка PitStop (см. отчет).");
                         string newName = $"{Path.GetFileNameWithoutExtension(fileName)}_pitstop{Path.GetExtension(fileName)}";
                         order.PreparedPath = CopyIntoStage(order, 2, okFile, newName, tempRoot);
                         Notify(order, "🟡 PitStop готово", "Версия сохранена.");
@@ -330,11 +337,11 @@ namespace Replica
                 throw new Exception("Сценарии не выбраны.");
 
             ReportItemProgress(5);
-            if (pitCfg != null)
-            {
-                ReportItemProgress(12);
-                if (!File.Exists(item.PreparedPath))
-                    throw new Exception("Файл для PitStop не найден.");
+                if (pitCfg != null)
+                {
+                    ReportItemProgress(12);
+                    if (!File.Exists(item.PreparedPath))
+                        throw new Exception("Файл для PitStop не найден.");
 
                 string fileName = Path.GetFileName(item.PreparedPath);
                 string targetIn = Path.Combine(pitCfg.InputFolder, fileName);
@@ -351,13 +358,20 @@ namespace Replica
                     var pitWaitReporter = CreateItemProgressRangeReporter(20, 55);
                     var (foundPath, where) = await WaitForFileInAnyAsync(places, fileName, timeout, ct, pitWaitReporter);
                     if (foundPath == null) throw new Exception("Таймаут PitStop.");
+                    await CapturePitStopReportAsync(order, pitCfg, fileName, timeout, ct);
                     if (where == "PitStop Error") throw new Exception("Ошибка PitStop (см. отчет).");
                 }
                 else
                 {
                     var pitWaitReporter = CreateItemProgressRangeReporter(20, 58);
-                    var okFile = await WaitForFileAsync(pitCfg.ProcessedSuccess, fileName, timeout, ct, pitWaitReporter);
+                    var (okFile, where) = await WaitForFileInAnyAsync(new (string folder, string label)[]
+                    {
+                        (pitCfg.ProcessedSuccess, "PitStop Success"),
+                        (pitCfg.ProcessedError,   "PitStop Error")
+                    }, fileName, timeout, ct, pitWaitReporter);
                     if (okFile == null) throw new Exception("Таймаут PitStop.");
+                    await CapturePitStopReportAsync(order, pitCfg, fileName, timeout, ct);
+                    if (where == "PitStop Error") throw new Exception("Ошибка PitStop (см. отчет).");
                     string newName = $"{Path.GetFileNameWithoutExtension(fileName)}_pitstop{Path.GetExtension(fileName)}";
                     item.PreparedPath = CopyIntoStage(order, 2, okFile, newName, tempRoot);
                 }
@@ -369,7 +383,7 @@ namespace Replica
                 ReportItemProgress(60);
             }
 
-              if (impCfg != null)
+                if (impCfg != null)
               {
                   ReportItemProgress(65);
                   string fileName = Path.GetFileName(item.PreparedPath);
@@ -693,7 +707,7 @@ namespace Replica
                     if (lines.Length == 0)
                         continue;
 
-                    var header = $"Quite Hot Imposing log: {Path.GetFileName(logPath)}";
+                    var header = $"source=quite-imposing | Quite Hot Imposing log: {Path.GetFileName(logPath)}";
                     Logger.Info($"QHI-LOG | order={order.Id} | {header}");
                     OnCapturedOrderLog?.Invoke(order.Id, header);
 
@@ -703,14 +717,70 @@ namespace Replica
                         if (string.IsNullOrWhiteSpace(normalizedLine))
                             continue;
 
-                        Logger.Info($"QHI-LOG | order={order.Id} | {normalizedLine}");
-                        OnCapturedOrderLog?.Invoke(order.Id, normalizedLine);
+                        var taggedLine = $"source=quite-imposing | {normalizedLine}";
+                        Logger.Info($"QHI-LOG | order={order.Id} | {taggedLine}");
+                        OnCapturedOrderLog?.Invoke(order.Id, taggedLine);
                     }
                 }
                 catch (Exception ex)
                 {
                     Logger.Warn($"Не удалось прочитать log Quite Imposing ({Path.GetFileName(logPath)}): {ex.Message}");
                 }
+            }
+        }
+
+        private async Task CapturePitStopReportAsync(OrderData order, ActionConfig pitCfg, string fileName, TimeSpan timeout, CancellationToken ct)
+        {
+            var reportTimeout = timeout > TimeSpan.FromMinutes(2)
+                ? TimeSpan.FromMinutes(2)
+                : timeout;
+
+            var reportFileName = $"{Path.GetFileNameWithoutExtension(fileName)}_log.pdf";
+            var places = new (string folder, string label)[]
+            {
+                (pitCfg.ReportSuccess, "PitStop Report Success"),
+                (pitCfg.ReportError, "PitStop Report Error")
+            };
+
+            var (reportPath, where) = await WaitForFileInAnyAsync(places, reportFileName, reportTimeout, ct);
+            if (reportPath == null)
+            {
+                Logger.Warn($"Не найден отчёт PitStop: order={order.Id} | file={reportFileName}");
+                return;
+            }
+
+            await CapturePdfFirstPageLogAsync(order, reportPath, "pitstop-report", where);
+        }
+
+        private async Task CapturePdfFirstPageLogAsync(OrderData order, string pdfPath, string sourceTag, string? displayName = null)
+        {
+            try
+            {
+                var extraction = await PythonPdfTextExtractor.TryExtractFirstPageTextAsync(pdfPath);
+                if (!extraction.success)
+                {
+                    Logger.Warn($"Не удалось извлечь текст PDF ({Path.GetFileName(pdfPath)}): {extraction.error}");
+                    return;
+                }
+
+                var header = $"source={sourceTag} | {(string.IsNullOrWhiteSpace(displayName) ? Path.GetFileName(pdfPath) : displayName)}";
+                Logger.Info($"PDF-LOG | order={order.Id} | {header}");
+                OnCapturedOrderLog?.Invoke(order.Id, header);
+
+                foreach (var line in extraction.text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var trimmed = line.Trim();
+                    if (string.IsNullOrWhiteSpace(trimmed))
+                        continue;
+
+                    var taggedLine = $"source={sourceTag} | {trimmed}";
+                    Logger.Info($"PDF-LOG | order={order.Id} | {taggedLine}");
+                    OnCapturedOrderLog?.Invoke(order.Id, taggedLine);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn($"Не удалось прочитать PDF-лог ({Path.GetFileName(pdfPath)}): {ex.Message}");
             }
         }
 

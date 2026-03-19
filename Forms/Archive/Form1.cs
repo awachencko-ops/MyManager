@@ -2232,9 +2232,9 @@ namespace Replica
             try
             {
                 var trimmed = message.Trim();
-                var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} | source=quite-imposing | {trimmed}";
+                var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} | {trimmed}";
                 File.AppendAllText(GetOrderLogFilePath(order), line + Environment.NewLine);
-                Logger.Info($"ORDER-QHI | order={GetOrderDisplayId(order)} | {trimmed}");
+                Logger.Info($"ORDER-CAPTURED | order={GetOrderDisplayId(order)} | {trimmed}");
             }
             catch
             {
