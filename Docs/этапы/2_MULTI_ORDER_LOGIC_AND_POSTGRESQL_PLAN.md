@@ -1,7 +1,7 @@
 ﻿# Этап 2: group-order логика и PostgreSQL/LAN план
 
 Дата актуализации: 2026-03-19
-Статус: In progress (`E2-P1`, `E2-P2`, `E2-P3`, `E2-P4`, `E2-P5` закрыты)
+Статус: Completed (`E2-P1`...`E2-P6` закрыты)
 
 ## 1. Входные условия (подтверждено)
 
@@ -170,7 +170,13 @@
 4. Миграция данных из файловой истории выполнена и верифицирована.
 5. Автотесты этапа 2 проходят без `P0/P1` дефектов.
 
+Факт закрытия (2026-03-19):
+1. Все пункты `E2-P1`...`E2-P6` имеют статус `Completed`.
+2. Live-проверка PostgreSQL подтверждена (`orders=10`, `items=11`, `orphan_items=0`, bootstrap-marker присутствует).
+3. Тестовый baseline подтвержден: `dotnet test Replica.sln` -> `42/42 PASS`.
+
 ## 8. Связь с этапами
 
 - Вход: `Docs/ready/1_MAINFORM_MIGRATION_COMPLEX_RESEARCH_AND_PLAN.md`
 - Выход: `3_LAN_CLIENT_SERVER_BRIEF_STEP1.md`
+- Финальный аудит этапа 2: `Docs/ready/2_STAGE2_CONSOLIDATED_AUDIT_AND_GO_NO_GO.md`
