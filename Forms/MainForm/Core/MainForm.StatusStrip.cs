@@ -593,6 +593,24 @@ namespace Replica
             }
         }
 
+        private void AppendCapturedProcessorLog(OrderData order, string message)
+        {
+            if (order == null || string.IsNullOrWhiteSpace(message))
+                return;
+
+            try
+            {
+                var trimmed = message.Trim();
+                var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} | source=quite-imposing | {trimmed}";
+                File.AppendAllText(GetOrderLogFilePath(order), line + Environment.NewLine);
+                Logger.Info($"ORDER-QHI | order={GetOrderDisplayId(order)} | {trimmed}");
+            }
+            catch
+            {
+                // Лог не должен ломать основной поток.
+            }
+        }
+
         private void RunOnUiThread(Action action)
         {
             if (action == null || Disposing || IsDisposed)

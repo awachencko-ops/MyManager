@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Drawing;
+using System.IO;
 using System.Reflection;
 using System.Text.Json;
 using System.Windows.Forms;
@@ -657,6 +658,53 @@ public sealed class MainFormCoreRegressionTests
             Assert.Equal(Color.Firebrick, args.CellStyle!.ForeColor);
             Assert.NotEqual(Color.Firebrick, args.CellStyle.BackColor);
         });
+    }
+
+    [Fact]
+    public void SR26_QuiteCleanup_RemovesHotfolderArtifacts()
+    {
+        var tempRootPath = Path.Combine(Path.GetTempPath(), "Replica_QHI_Cleanup_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempRootPath);
+
+        try
+        {
+            var cfg = new ImposingConfig
+            {
+                BaseFolder = tempRootPath,
+                In = Path.Combine(tempRootPath, "in"),
+                Out = Path.Combine(tempRootPath, "out"),
+                Done = Path.Combine(tempRootPath, "done"),
+                Error = Path.Combine(tempRootPath, "error")
+            };
+
+            foreach (var folder in new[] { cfg.In, cfg.Out, cfg.Done, cfg.Error })
+                Directory.CreateDirectory(folder);
+
+            var fileName = "105x148_упокоение.pdf";
+            foreach (var folder in new[] { cfg.In, cfg.Out, cfg.Done, cfg.Error })
+            {
+                File.WriteAllText(Path.Combine(folder, fileName), folder);
+                File.WriteAllText(Path.Combine(folder, fileName + ".log"), folder + ".log");
+            }
+
+            var method = typeof(OrderProcessor).GetMethod(
+                "CleanupQuiteImposingArtifacts",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.NotNull(method);
+
+            method!.Invoke(null, new object?[] { cfg, fileName, Array.Empty<string?>() });
+
+            foreach (var folder in new[] { cfg.In, cfg.Out, cfg.Done, cfg.Error })
+            {
+                Assert.False(File.Exists(Path.Combine(folder, fileName)));
+                Assert.False(File.Exists(Path.Combine(folder, fileName + ".log")));
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(tempRootPath))
+                Directory.Delete(tempRootPath, recursive: true);
+        }
     }
 
     [Fact]

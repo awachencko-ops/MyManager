@@ -13,6 +13,7 @@ namespace Replica
         public event Action<string, string, string>? OnStatusChanged;
         public event Action<string>? OnLog;
         public event Action<string, int, string>? OnProgressChanged;
+        public event Action<string, string>? OnCapturedOrderLog;
 
         private readonly string _rootPath;
         private const string TempInFolder = "in";
@@ -118,6 +119,7 @@ namespace Replica
                     ReportProgress(order, 70, "Imposing");
                     string fileName = Path.GetFileName(order.PreparedPath);
                     string targetIn = Path.Combine(impCfg.In, fileName);
+                    string? outFile = null;
 
                     if (!File.Exists(targetIn))
                     {
@@ -125,23 +127,32 @@ namespace Replica
                         File.Copy(order.PreparedPath, targetIn, true);
                     }
 
-                    var imposingWaitReporter = CreateRangedProgressReporter(order, 72, 89, "Imposing: ожидание");
-                    var outFile = await WaitForFileAsync(impCfg.Out, fileName, timeout, ct, imposingWaitReporter);
-                    if (outFile == null) throw new Exception("Таймаут Imposing.");
-
-                    string printName = $"{order.Id}.pdf";
-                    if (ShouldStoreInOrderFolder(order))
+                    try
                     {
-                        order.PrintPath = CopyIntoStage(order, 3, outFile, printName, tempRoot);
-                        try { File.Delete(outFile); } catch { }
-                    }
-                    else
-                    {
-                        order.PrintPath = CopyToGrandpa(outFile, printName, settings.GrandpaPath);
-                        try { File.Delete(outFile); } catch { }
-                    }
+                        var imposingWaitReporter = CreateRangedProgressReporter(order, 72, 89, "Imposing: ожидание");
+                        outFile = await WaitForFileAsync(impCfg.Out, fileName, timeout, ct, imposingWaitReporter);
+                        if (outFile == null) throw new Exception("Таймаут Imposing.");
 
-                    ReportProgress(order, 90, "Imposing завершен");
+                        CaptureQuiteImposingLog(order, impCfg, fileName);
+
+                        string printName = $"{order.Id}.pdf";
+                        if (ShouldStoreInOrderFolder(order))
+                        {
+                            order.PrintPath = CopyIntoStage(order, 3, outFile, printName, tempRoot);
+                            try { File.Delete(outFile); } catch { }
+                        }
+                        else
+                        {
+                            order.PrintPath = CopyToGrandpa(outFile, printName, settings.GrandpaPath);
+                            try { File.Delete(outFile); } catch { }
+                        }
+
+                        ReportProgress(order, 90, "Imposing завершен");
+                    }
+                    finally
+                    {
+                        CleanupQuiteImposingArtifacts(impCfg, fileName, targetIn, outFile);
+                    }
                 }
                 else
                 {
@@ -358,31 +369,41 @@ namespace Replica
                 ReportItemProgress(60);
             }
 
-            if (impCfg != null)
-            {
-                ReportItemProgress(65);
-                string fileName = Path.GetFileName(item.PreparedPath);
-                string targetIn = Path.Combine(impCfg.In, fileName);
-                if (!File.Exists(targetIn))
-                    File.Copy(item.PreparedPath, EnsureUniquePath(targetIn), true);
+              if (impCfg != null)
+              {
+                  ReportItemProgress(65);
+                  string fileName = Path.GetFileName(item.PreparedPath);
+                  string targetIn = Path.Combine(impCfg.In, fileName);
+                  string? outFile = null;
+                  if (!File.Exists(targetIn))
+                      File.Copy(item.PreparedPath, EnsureUniquePath(targetIn), true);
 
-                var imposingWaitReporter = CreateItemProgressRangeReporter(72, 95);
-                var outFile = await WaitForFileAsync(impCfg.Out, fileName, timeout, ct, imposingWaitReporter);
-                if (outFile == null) throw new Exception("Таймаут Imposing.");
+                  try
+                  {
+                      var imposingWaitReporter = CreateItemProgressRangeReporter(72, 95);
+                      outFile = await WaitForFileAsync(impCfg.Out, fileName, timeout, ct, imposingWaitReporter);
+                      if (outFile == null) throw new Exception("Таймаут Imposing.");
 
-                string printNameBase = string.IsNullOrWhiteSpace(order.Id) ? "order" : order.Id;
-                string printName = $"{printNameBase}_{itemIndex}.pdf";
-                if (ShouldStoreInOrderFolder(order))
-                {
-                    item.PrintPath = CopyIntoStage(order, 3, outFile, printName, tempRoot);
-                    try { File.Delete(outFile); } catch { }
-                }
-                else
-                {
-                    item.PrintPath = CopyToGrandpa(outFile, printName, settings.GrandpaPath);
-                    try { File.Delete(outFile); } catch { }
-                }
-            }
+                      CaptureQuiteImposingLog(order, impCfg, fileName);
+
+                      string printNameBase = string.IsNullOrWhiteSpace(order.Id) ? "order" : order.Id;
+                      string printName = $"{printNameBase}_{itemIndex}.pdf";
+                      if (ShouldStoreInOrderFolder(order))
+                      {
+                          item.PrintPath = CopyIntoStage(order, 3, outFile, printName, tempRoot);
+                          try { File.Delete(outFile); } catch { }
+                      }
+                      else
+                      {
+                          item.PrintPath = CopyToGrandpa(outFile, printName, settings.GrandpaPath);
+                          try { File.Delete(outFile); } catch { }
+                      }
+                  }
+                  finally
+                  {
+                      CleanupQuiteImposingArtifacts(impCfg, fileName, targetIn, outFile);
+                  }
+              }
             else
             {
                 ReportItemProgress(95);
@@ -660,6 +681,79 @@ namespace Replica
         {
             try { using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None); return true; }
             catch { return false; }
+        }
+
+        private void CaptureQuiteImposingLog(OrderData order, ImposingConfig cfg, string fileName)
+        {
+            foreach (var logPath in GetQuiteImposingLogPaths(cfg, fileName))
+            {
+                try
+                {
+                    var lines = File.ReadAllLines(logPath);
+                    if (lines.Length == 0)
+                        continue;
+
+                    var header = $"Quite Hot Imposing log: {Path.GetFileName(logPath)}";
+                    Logger.Info($"QHI-LOG | order={order.Id} | {header}");
+                    OnCapturedOrderLog?.Invoke(order.Id, header);
+
+                    foreach (var line in lines)
+                    {
+                        var normalizedLine = line?.TrimEnd();
+                        if (string.IsNullOrWhiteSpace(normalizedLine))
+                            continue;
+
+                        Logger.Info($"QHI-LOG | order={order.Id} | {normalizedLine}");
+                        OnCapturedOrderLog?.Invoke(order.Id, normalizedLine);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn($"Не удалось прочитать log Quite Imposing ({Path.GetFileName(logPath)}): {ex.Message}");
+                }
+            }
+        }
+
+        private static IEnumerable<string> GetQuiteImposingLogPaths(ImposingConfig cfg, string fileName)
+        {
+            var candidates = new[]
+            {
+                Path.Combine(cfg.In, fileName + ".log"),
+                Path.Combine(cfg.Out, fileName + ".log"),
+                Path.Combine(cfg.Done, fileName + ".log"),
+                Path.Combine(cfg.Error, fileName + ".log")
+            };
+
+            return candidates.Where(path => !string.IsNullOrWhiteSpace(path) && File.Exists(path))
+                .Distinct(StringComparer.OrdinalIgnoreCase);
+        }
+
+        private static void CleanupQuiteImposingArtifacts(ImposingConfig cfg, string fileName, params string?[] extraPaths)
+        {
+            var paths = new List<string?>(extraPaths)
+            {
+                Path.Combine(cfg.In, fileName),
+                Path.Combine(cfg.Out, fileName),
+                Path.Combine(cfg.Done, fileName),
+                Path.Combine(cfg.Error, fileName),
+                Path.Combine(cfg.In, fileName + ".log"),
+                Path.Combine(cfg.Out, fileName + ".log"),
+                Path.Combine(cfg.Done, fileName + ".log"),
+                Path.Combine(cfg.Error, fileName + ".log")
+            };
+
+            foreach (var path in paths.Where(path => !string.IsNullOrWhiteSpace(path)).Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    if (File.Exists(path))
+                        File.Delete(path);
+                }
+                catch
+                {
+                    // Cleanup must not break processing.
+                }
+            }
         }
     }
 }

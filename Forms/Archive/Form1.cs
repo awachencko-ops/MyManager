@@ -118,6 +118,7 @@ namespace Replica
                 if (order != null) SetOrderStatus(order, status, "processor", reason);
             };
             _processor.OnLog += (msg) => SetBottomStatus(msg);
+            _processor.OnCapturedOrderLog += (orderId, message) => AppendCapturedProcessorLog(orderId, message);
         }
 
         private void SetupContextMenuActions()
@@ -2213,6 +2214,27 @@ namespace Replica
                 string line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} | status: {oldStatus} -> {newStatus} | source: {source} | reason: {reason}";
                 File.AppendAllText(GetOrderLogFilePath(order), line + Environment.NewLine);
                 Logger.Info($"ORDER-STATUS | order={GetOrderDisplayId(order)} | {line}");
+            }
+            catch
+            {
+            }
+        }
+
+        private void AppendCapturedProcessorLog(string orderId, string message)
+        {
+            if (string.IsNullOrWhiteSpace(orderId) || string.IsNullOrWhiteSpace(message))
+                return;
+
+            var order = _orderHistory.FirstOrDefault(x => string.Equals(x.Id, orderId, StringComparison.Ordinal));
+            if (order == null)
+                return;
+
+            try
+            {
+                var trimmed = message.Trim();
+                var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} | source=quite-imposing | {trimmed}";
+                File.AppendAllText(GetOrderLogFilePath(order), line + Environment.NewLine);
+                Logger.Info($"ORDER-QHI | order={GetOrderDisplayId(order)} | {trimmed}");
             }
             catch
             {

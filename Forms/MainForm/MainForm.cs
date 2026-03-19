@@ -261,6 +261,14 @@ namespace Replica
                     Apply();
             };
             _processor.OnLog += message => SetBottomStatus(message);
+            _processor.OnCapturedOrderLog += (orderId, message) =>
+            {
+                var order = _orderHistory.FirstOrDefault(x => string.Equals(x.Id, orderId, StringComparison.Ordinal));
+                if (order == null || string.IsNullOrWhiteSpace(message))
+                    return;
+
+                AppendCapturedProcessorLog(order, message);
+            };
             _processor.OnProgressChanged += (orderId, progressValue, _) =>
             {
                 void Apply()
