@@ -8,7 +8,6 @@ using System.Drawing.Imaging;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -33,8 +32,7 @@ namespace Replica
         private readonly Dictionary<string, CancellationTokenSource> _runTokensByOrder = new(StringComparer.Ordinal);
         private readonly Dictionary<string, int> _runProgressByOrderInternalId = new(StringComparer.Ordinal);
         private readonly HashSet<string> _archivedFileNames = new(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, string> _archivedFilePathsByName = new(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, string> _archivedFilePathsByFingerprint = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, List<string>> _archivedFilePathsByName = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, int> _printTileImageIndexesByExtension = new(StringComparer.OrdinalIgnoreCase);
         private readonly ConcurrentDictionary<string, int> _printTileImageIndexesByPath = new(StringComparer.OrdinalIgnoreCase);
         private string _printTilesCacheFolderPath = AppSettings.DefaultThumbnailCacheFolderPath;

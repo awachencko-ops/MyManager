@@ -4,7 +4,6 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
-using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -30,7 +29,7 @@ namespace Replica
         private bool _sortArrivalDescending = true;
         private readonly Dictionary<string, bool> _fileExistsCache = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _archivedFileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, string> _archivedFilePathsByFingerprint = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, List<string>> _archivedFilePathsByName = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, bool> _orderArchiveStateCache = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         private DateTime _archiveIndexLoadedAt = DateTime.MinValue;
         private static readonly TimeSpan ArchiveIndexLifetime = TimeSpan.FromSeconds(5);
@@ -1327,9 +1326,23 @@ namespace Replica
         private void UpdateOrderFilePath(OrderData o, int s, string p)
         {
             // 1. Обновляем путь в зависимости от стадии
-            if (s == 1) o.SourcePath = p;
-            else if (s == 2) o.PreparedPath = p;
-            else if (s == 3) o.PrintPath = p;
+            if (s == 1)
+            {
+                o.SourcePath = p;
+                o.SourceFileSizeBytes = TryGetFileLength(p, out var sourceSize) ? sourceSize : null;
+            }
+            else if (s == 2)
+            {
+                o.PreparedPath = p;
+                o.PreparedFileSizeBytes = TryGetFileLength(p, out var preparedSize) ? preparedSize : null;
+            }
+            else if (s == 3)
+            {
+                o.PrintPath = p;
+                o.PrintFileSizeBytes = null;
+                if (FileExistsCached(p) && TryGetFileLength(p, out var size))
+                    o.PrintFileSizeBytes = size;
+            }
 
             // 2. ЛОГИКА АВТО-СТАТУСА
             // Если в колонке "Печать" есть существующий файл
@@ -1408,9 +1421,23 @@ namespace Replica
 
         private void UpdateItemFilePath(OrderData order, OrderFileItem item, int stage, string path)
         {
-            if (stage == 1) item.SourcePath = path;
-            else if (stage == 2) item.PreparedPath = path;
-            else if (stage == 3) item.PrintPath = path;
+            if (stage == 1)
+            {
+                item.SourcePath = path;
+                item.SourceFileSizeBytes = TryGetFileLength(path, out var sourceSize) ? sourceSize : null;
+            }
+            else if (stage == 2)
+            {
+                item.PreparedPath = path;
+                item.PreparedFileSizeBytes = TryGetFileLength(path, out var preparedSize) ? preparedSize : null;
+            }
+            else if (stage == 3)
+            {
+                item.PrintPath = path;
+                item.PrintFileSizeBytes = null;
+                if (TryGetFileLength(path, out var size))
+                    item.PrintFileSizeBytes = size;
+            }
 
             if (!string.IsNullOrEmpty(item.PrintPath) && File.Exists(item.PrintPath))
                 item.FileStatus = "✅ Готово";
@@ -1502,8 +1529,11 @@ namespace Replica
                     {
                         ClientFileLabel = Path.GetFileNameWithoutExtension(order.SourcePath),
                         SourcePath = order.SourcePath ?? string.Empty,
+                        SourceFileSizeBytes = order.SourceFileSizeBytes,
                         PreparedPath = order.PreparedPath ?? string.Empty,
+                        PreparedFileSizeBytes = order.PreparedFileSizeBytes,
                         PrintPath = order.PrintPath ?? string.Empty,
+                        PrintFileSizeBytes = order.PrintFileSizeBytes,
                         FileStatus = order.Status ?? "Ожидание",
                         SequenceNo = 0,
                         PitStopAction = string.IsNullOrWhiteSpace(order.PitStopAction) ? "-" : order.PitStopAction,
@@ -1515,8 +1545,11 @@ namespace Replica
             {
                 var firstItem = order.Items[0];
                 firstItem.SourcePath = order.SourcePath ?? string.Empty;
+                firstItem.SourceFileSizeBytes = order.SourceFileSizeBytes;
                 firstItem.PreparedPath = order.PreparedPath ?? string.Empty;
+                firstItem.PreparedFileSizeBytes = order.PreparedFileSizeBytes;
                 firstItem.PrintPath = order.PrintPath ?? string.Empty;
+                firstItem.PrintFileSizeBytes = order.PrintFileSizeBytes;
                 firstItem.FileStatus = order.Status ?? "Ожидание";
                 firstItem.PitStopAction = string.IsNullOrWhiteSpace(firstItem.PitStopAction) || firstItem.PitStopAction == "-"
                     ? (string.IsNullOrWhiteSpace(order.PitStopAction) ? "-" : order.PitStopAction)
@@ -1544,8 +1577,11 @@ namespace Replica
 
             var item = order.Items.OrderBy(x => x.SequenceNo).First();
             order.SourcePath = item.SourcePath ?? string.Empty;
+            order.SourceFileSizeBytes = item.SourceFileSizeBytes;
             order.PreparedPath = item.PreparedPath ?? string.Empty;
+            order.PreparedFileSizeBytes = item.PreparedFileSizeBytes;
             order.PrintPath = item.PrintPath ?? string.Empty;
+            order.PrintFileSizeBytes = item.PrintFileSizeBytes;
             if (!string.IsNullOrWhiteSpace(item.PitStopAction) && item.PitStopAction != "-")
                 order.PitStopAction = item.PitStopAction;
             if (!string.IsNullOrWhiteSpace(item.ImposingAction) && item.ImposingAction != "-")
@@ -1924,7 +1960,13 @@ namespace Replica
         {
             if (string.IsNullOrEmpty(o.SourcePath) || !File.Exists(o.SourcePath)) return;
             using var f = new CopyForm(o.Keyword, Path.GetExtension(o.SourcePath));
-            if (f.ShowDialog() == DialogResult.OK) { o.PreparedPath = CopyIntoStage(o, 2, o.SourcePath, f.ResultName); SaveHistory(); FillGrid(); }
+            if (f.ShowDialog() == DialogResult.OK)
+            {
+                o.PreparedPath = CopyIntoStage(o, 2, o.SourcePath, f.ResultName);
+                o.PreparedFileSizeBytes = TryGetFileLength(o.PreparedPath, out var preparedSize) ? preparedSize : null;
+                SaveHistory();
+                FillGrid();
+            }
         }
 
         private void CopyPreparedToPrint(OrderData o)
@@ -2171,7 +2213,7 @@ namespace Replica
             bool changed = false;
             foreach (var order in _orderHistory)
             {
-                bool archived = IsOrderInArchive(order);
+                bool archived = TryResolveArchivedPrintPath(order, out string archivedPrintPath, out long matchedLength);
                 _orderArchiveStateCache[GetOrderCacheKey(order)] = archived;
 
                 if ((order.Status ?? string.Empty).Contains("Ошибка", StringComparison.OrdinalIgnoreCase))
@@ -2179,7 +2221,7 @@ namespace Replica
 
                 if (archived)
                 {
-                    changed |= SetOrderStatus(order, WorkflowStatusNames.Archived, "archive-sync", "Файл найден в папке Готово (совпадение по содержимому)", refreshGrid: false, persistHistory: false);
+                    changed |= SetOrderStatus(order, WorkflowStatusNames.Archived, "archive-sync", $"Файл найден в папке Готово: {archivedPrintPath} (совпали имя и размер: {matchedLength} байт)", refreshGrid: false, persistHistory: false);
                 }
                 else if (string.Equals(order.Status, WorkflowStatusNames.Archived, StringComparison.Ordinal))
                 {
@@ -2261,20 +2303,79 @@ namespace Replica
             catch { }
         }
 
-        private bool IsOrderInArchive(OrderData order)
+        private bool IsOrderInArchive(OrderData order, out long matchedLength)
         {
+            matchedLength = 0;
             if (string.IsNullOrWhiteSpace(_grandpaFolder))
                 return false;
 
-            var fingerprints = GetOrderArchiveFingerprints(order);
-            if (fingerprints.Count == 0)
+            RefreshArchiveIndexIfNeeded();
+            foreach (var candidate in GetOrderArchiveCandidates(order))
+            {
+                string fileName = Path.GetFileName(candidate.Path);
+                if (string.IsNullOrWhiteSpace(fileName))
+                    continue;
+
+                if (!_archivedFilePathsByName.TryGetValue(fileName, out var candidatePaths))
+                    continue;
+
+                if (!TryGetExpectedFileLength(candidate, out var currentLength))
+                    continue;
+
+                foreach (var candidatePath in candidatePaths)
+                {
+                    if (!FileExistsCached(candidatePath))
+                        continue;
+
+                    if (!TryGetFileLength(candidatePath, out var candidateLength))
+                        continue;
+
+                    if (candidateLength == currentLength)
+                    {
+                        matchedLength = currentLength;
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private bool TryResolveArchivedPrintPath(OrderData order, out string archivedPrintPath, out long matchedLength)
+        {
+            archivedPrintPath = string.Empty;
+            matchedLength = 0;
+            if (string.IsNullOrWhiteSpace(_grandpaFolder))
                 return false;
 
             RefreshArchiveIndexIfNeeded();
-            foreach (var fingerprint in fingerprints)
+            foreach (var candidate in GetOrderArchiveCandidates(order))
             {
-                if (_archivedFilePathsByFingerprint.ContainsKey(fingerprint))
+                string fileName = Path.GetFileName(candidate.Path);
+                if (string.IsNullOrWhiteSpace(fileName))
+                    continue;
+
+                if (!_archivedFilePathsByName.TryGetValue(fileName, out var candidatePaths))
+                    continue;
+
+                if (!TryGetExpectedFileLength(candidate, out long currentLength))
+                    continue;
+
+                foreach (string candidatePath in candidatePaths)
+                {
+                    if (!FileExistsCached(candidatePath))
+                        continue;
+
+                    if (!TryGetFileLength(candidatePath, out long candidateLength))
+                        continue;
+
+                    if (candidateLength != currentLength)
+                        continue;
+
+                    archivedPrintPath = candidatePath;
+                    matchedLength = currentLength;
                     return true;
+                }
             }
 
             return false;
@@ -2286,9 +2387,51 @@ namespace Replica
             if (_orderArchiveStateCache.TryGetValue(key, out bool archived))
                 return archived;
 
-            archived = IsOrderInArchive(order);
+            archived = TryResolveArchivedPrintPath(order, out _, out _);
             _orderArchiveStateCache[key] = archived;
             return archived;
+        }
+
+        private static List<(string Path, long? ExpectedLength)> GetOrderArchiveCandidates(OrderData order)
+        {
+            var candidates = new List<(string Path, long? ExpectedLength)>();
+            AddCandidate(candidates, order.PrintPath, order.PrintFileSizeBytes);
+
+            if (order.Items == null || order.Items.Count == 0)
+                return candidates;
+
+            foreach (var item in order.Items)
+            {
+                if (item == null)
+                    continue;
+
+                AddCandidate(candidates, item.PrintPath, item.PrintFileSizeBytes);
+            }
+
+            return candidates;
+        }
+
+        private static void AddCandidate(List<(string Path, long? ExpectedLength)> candidates, string? path, long? expectedLength)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return;
+
+            candidates.Add((path.Trim(), expectedLength));
+        }
+
+        private bool TryGetExpectedFileLength((string Path, long? ExpectedLength) candidate, out long length)
+        {
+            if (FileExistsCached(candidate.Path) && TryGetFileLength(candidate.Path, out length))
+                return true;
+
+            if (candidate.ExpectedLength.HasValue)
+            {
+                length = candidate.ExpectedLength.Value;
+                return true;
+            }
+
+            length = 0;
+            return false;
         }
 
         private string GetOrderCacheKey(OrderData order)
@@ -2323,7 +2466,7 @@ namespace Replica
                 return;
 
             _archivedFileNames.Clear();
-            _archivedFilePathsByFingerprint.Clear();
+            _archivedFilePathsByName.Clear();
             _archiveIndexLoadedAt = DateTime.UtcNow;
 
             if (string.IsNullOrWhiteSpace(_grandpaFolder))
@@ -2335,17 +2478,20 @@ namespace Replica
 
             try
             {
-                foreach (string filePath in Directory.EnumerateFiles(archivedFolder, "*", SearchOption.AllDirectories))
+                foreach (string filePath in Directory.EnumerateFiles(archivedFolder, "*", SearchOption.TopDirectoryOnly))
                 {
                     string fileName = Path.GetFileName(filePath);
                     if (!string.IsNullOrWhiteSpace(fileName))
+                    {
                         _archivedFileNames.Add(fileName);
+                        if (!_archivedFilePathsByName.TryGetValue(fileName, out var filePaths))
+                        {
+                            filePaths = new List<string>();
+                            _archivedFilePathsByName[fileName] = filePaths;
+                        }
 
-                    if (!TryGetFileFingerprint(filePath, out var fingerprint))
-                        continue;
-
-                    if (!_archivedFilePathsByFingerprint.ContainsKey(fingerprint))
-                        _archivedFilePathsByFingerprint[fingerprint] = filePath;
+                        filePaths.Add(filePath);
+                    }
                 }
             }
             catch
@@ -2354,45 +2500,42 @@ namespace Replica
             }
         }
 
-        private static HashSet<string> GetOrderArchiveFingerprints(OrderData order)
+        private static HashSet<string> GetOrderArchiveFilePaths(OrderData order)
         {
-            var fingerprints = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            AddFileFingerprint(fingerprints, order?.PrintPath);
+            var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            AddFilePath(paths, order.PrintPath);
 
-            if (order?.Items == null || order.Items.Count == 0)
-                return fingerprints;
+            if (order.Items == null || order.Items.Count == 0)
+                return paths;
 
             foreach (var item in order.Items)
             {
                 if (item == null)
                     continue;
 
-                AddFileFingerprint(fingerprints, item.PrintPath);
+                AddFilePath(paths, item.PrintPath);
             }
 
-            return fingerprints;
+            return paths;
         }
 
-        private static void AddFileFingerprint(HashSet<string> fingerprints, string? path)
+        private static void AddFilePath(HashSet<string> paths, string? path)
         {
             if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
                 return;
 
-            if (TryGetFileFingerprint(path, out var fingerprint))
-                fingerprints.Add(fingerprint);
+            paths.Add(path.Trim());
         }
 
-        private static bool TryGetFileFingerprint(string path, out string fingerprint)
+        private static bool TryGetFileLength(string path, out long length)
         {
-            fingerprint = string.Empty;
+            length = 0;
             if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
                 return false;
 
             try
             {
-                using var stream = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                using var sha256 = SHA256.Create();
-                fingerprint = Convert.ToHexString(sha256.ComputeHash(stream));
+                length = new FileInfo(path).Length;
                 return true;
             }
             catch

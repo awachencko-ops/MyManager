@@ -185,6 +185,8 @@ namespace Replica
                 changed = true;
             }
 
+            changed |= SyncSingleItemFileSize(order, item, stage, issues);
+
             return changed;
         }
 
@@ -194,11 +196,14 @@ namespace Replica
             {
                 ClientFileLabel = BuildDefaultItemLabel(order, null),
                 SourcePath = order.SourcePath ?? string.Empty,
+                SourceFileSizeBytes = order.SourceFileSizeBytes,
                 PreparedPath = order.PreparedPath ?? string.Empty,
+                PreparedFileSizeBytes = order.PreparedFileSizeBytes,
                 PrintPath = order.PrintPath ?? string.Empty,
+                PrintFileSizeBytes = order.PrintFileSizeBytes,
                 PitStopAction = string.IsNullOrWhiteSpace(order.PitStopAction) ? "-" : order.PitStopAction,
                 ImposingAction = string.IsNullOrWhiteSpace(order.ImposingAction) ? "-" : order.ImposingAction,
-            FileStatus = string.IsNullOrWhiteSpace(order.Status) ? WorkflowStatusNames.Waiting : order.Status,
+                FileStatus = string.IsNullOrWhiteSpace(order.Status) ? WorkflowStatusNames.Waiting : order.Status,
                 UpdatedAt = DateTime.Now,
                 SequenceNo = 0
             };
@@ -258,6 +263,27 @@ namespace Replica
                 order.PrintPath = path;
         }
 
+        private static long? GetOrderStageSize(OrderData order, int stage)
+        {
+            return stage switch
+            {
+                OrderStages.Source => order.SourceFileSizeBytes,
+                OrderStages.Prepared => order.PreparedFileSizeBytes,
+                OrderStages.Print => order.PrintFileSizeBytes,
+                _ => null
+            };
+        }
+
+        private static void SetOrderStageSize(OrderData order, int stage, long? size)
+        {
+            if (stage == OrderStages.Source)
+                order.SourceFileSizeBytes = size;
+            else if (stage == OrderStages.Prepared)
+                order.PreparedFileSizeBytes = size;
+            else if (stage == OrderStages.Print)
+                order.PrintFileSizeBytes = size;
+        }
+
         private static string GetItemStagePath(OrderFileItem item, int stage)
         {
             return stage switch
@@ -277,6 +303,57 @@ namespace Replica
                 item.PreparedPath = path;
             else if (stage == OrderStages.Print)
                 item.PrintPath = path;
+        }
+
+        private static long? GetItemStageSize(OrderFileItem item, int stage)
+        {
+            return stage switch
+            {
+                OrderStages.Source => item.SourceFileSizeBytes,
+                OrderStages.Prepared => item.PreparedFileSizeBytes,
+                OrderStages.Print => item.PrintFileSizeBytes,
+                _ => null
+            };
+        }
+
+        private static void SetItemStageSize(OrderFileItem item, int stage, long? size)
+        {
+            if (stage == OrderStages.Source)
+                item.SourceFileSizeBytes = size;
+            else if (stage == OrderStages.Prepared)
+                item.PreparedFileSizeBytes = size;
+            else if (stage == OrderStages.Print)
+                item.PrintFileSizeBytes = size;
+        }
+
+        private static bool SyncSingleItemFileSize(OrderData order, OrderFileItem item, int stage, List<string> issues)
+        {
+            var orderSize = GetOrderStageSize(order, stage);
+            var itemSize = GetItemStageSize(item, stage);
+
+            if (orderSize.HasValue && itemSize.HasValue && orderSize.Value != itemSize.Value)
+            {
+                issues.Add($"Конфликт stage={stage}: order-size и item-size различаются. Применен приоритет существующего размера.");
+            }
+
+            var resolvedSize = orderSize ?? itemSize;
+            if (!resolvedSize.HasValue)
+                return false;
+
+            var changed = false;
+            if (GetOrderStageSize(order, stage) != resolvedSize)
+            {
+                SetOrderStageSize(order, stage, resolvedSize);
+                changed = true;
+            }
+
+            if (GetItemStageSize(item, stage) != resolvedSize)
+            {
+                SetItemStageSize(item, stage, resolvedSize);
+                changed = true;
+            }
+
+            return changed;
         }
 
         private static bool PathsEqual(string? left, string? right)

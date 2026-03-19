@@ -110,6 +110,8 @@ namespace Replica
             _orderHistory.Clear();
             _jsonHistoryFile = StoragePaths.ResolveExistingFilePath(_jsonHistoryFile, "history.json");
             var usersNormalized = false;
+            var historyChanged = false;
+            var migrationLog = new List<string>();
 
             if (File.Exists(_jsonHistoryFile))
             {
@@ -132,6 +134,9 @@ namespace Replica
                 if (order.ArrivalDate == default)
                     order.ArrivalDate = order.OrderDate != default ? order.OrderDate : DateTime.Now;
 
+                if (PopulateKnownFileSizes(order, migrationLog))
+                    historyChanged = true;
+
                 var normalizedUserName = NormalizeOrderUserName(order.UserName);
                 if (!string.Equals(order.UserName, normalizedUserName, StringComparison.Ordinal))
                 {
@@ -140,13 +145,18 @@ namespace Replica
                 }
             }
 
-            if (NormalizeOrderTopologyInHistory(logIssues: true) || usersNormalized)
+            if (NormalizeOrderTopologyInHistory(logIssues: true) || usersNormalized || historyChanged)
+            {
+                foreach (var line in migrationLog)
+                    Logger.Info(line);
                 SaveHistory();
+            }
         }
 
         private void SaveHistory()
         {
             NormalizeOrderTopologyInHistory(logIssues: false);
+            PopulateKnownFileSizesInHistory();
 
             var targetPath = StoragePaths.ResolveFilePath(_jsonHistoryFile, "history.json");
             var dir = Path.GetDirectoryName(targetPath);
@@ -176,6 +186,93 @@ namespace Replica
 
                 foreach (var issue in result.Issues)
                     Logger.Warn($"TOPOLOGY | order={GetOrderDisplayId(order)} | {issue}");
+            }
+
+            return changed;
+        }
+
+        private void PopulateKnownFileSizesInHistory()
+        {
+            foreach (var order in _orderHistory)
+                PopulateKnownFileSizes(order, null);
+        }
+
+        private static long? TryGetExistingFileSize(string? path)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+                    return null;
+
+                return new FileInfo(path).Length;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static bool PopulateKnownFileSizes(OrderData order, List<string>? migrationLog)
+        {
+            if (order == null)
+                return false;
+
+            var changed = false;
+            var sourceSize = TryGetExistingFileSize(order.SourcePath);
+            if (sourceSize != null && order.SourceFileSizeBytes != sourceSize)
+            {
+                order.SourceFileSizeBytes = sourceSize;
+                changed = true;
+                migrationLog?.Add($"MIGRATION | order={order.Id} | SourceFileSizeBytes={sourceSize} | path={order.SourcePath}");
+            }
+
+            var preparedSize = TryGetExistingFileSize(order.PreparedPath);
+            if (preparedSize != null && order.PreparedFileSizeBytes != preparedSize)
+            {
+                order.PreparedFileSizeBytes = preparedSize;
+                changed = true;
+                migrationLog?.Add($"MIGRATION | order={order.Id} | PreparedFileSizeBytes={preparedSize} | path={order.PreparedPath}");
+            }
+
+            var printSize = TryGetExistingFileSize(order.PrintPath);
+            if (printSize != null && order.PrintFileSizeBytes != printSize)
+            {
+                order.PrintFileSizeBytes = printSize;
+                changed = true;
+                migrationLog?.Add($"MIGRATION | order={order.Id} | PrintFileSizeBytes={printSize} | path={order.PrintPath}");
+            }
+
+            if (order.Items == null)
+                return changed;
+
+            foreach (var item in order.Items)
+            {
+                if (item == null)
+                    continue;
+
+                var itemSourceSize = TryGetExistingFileSize(item.SourcePath);
+                if (itemSourceSize != null && item.SourceFileSizeBytes != itemSourceSize)
+                {
+                    item.SourceFileSizeBytes = itemSourceSize;
+                    changed = true;
+                    migrationLog?.Add($"MIGRATION | order={order.Id} | item={item.ClientFileLabel} | SourceFileSizeBytes={itemSourceSize} | path={item.SourcePath}");
+                }
+
+                var itemPreparedSize = TryGetExistingFileSize(item.PreparedPath);
+                if (itemPreparedSize != null && item.PreparedFileSizeBytes != itemPreparedSize)
+                {
+                    item.PreparedFileSizeBytes = itemPreparedSize;
+                    changed = true;
+                    migrationLog?.Add($"MIGRATION | order={order.Id} | item={item.ClientFileLabel} | PreparedFileSizeBytes={itemPreparedSize} | path={item.PreparedPath}");
+                }
+
+                var itemPrintSize = TryGetExistingFileSize(item.PrintPath);
+                if (itemPrintSize != null && item.PrintFileSizeBytes != itemPrintSize)
+                {
+                    item.PrintFileSizeBytes = itemPrintSize;
+                    changed = true;
+                    migrationLog?.Add($"MIGRATION | order={order.Id} | item={item.ClientFileLabel} | PrintFileSizeBytes={itemPrintSize} | path={item.PrintPath}");
+                }
             }
 
             return changed;

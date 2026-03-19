@@ -31,73 +31,80 @@ namespace Replica
 
         private void InitializeStatusCellVisuals()
         {
-            DisposeStatusCellVisuals();
+            try
+            {
+                DisposeStatusCellVisuals();
 
-            var iconBackCompleted = Color.FromArgb(198, 234, 198);
-            var iconBackProcessed = Color.FromArgb(255, 232, 205);
-            var iconBackArchive = Color.FromArgb(255, 255, 255);
-            var iconBackBuilding = Color.FromArgb(255, 255, 255);
-            var iconBackProcessing = Color.FromArgb(255, 248, 205);
-            var iconBackWaiting = Color.FromArgb(255, 255, 255);
-            var iconBackCancelled = Color.FromArgb(255, 255, 255);
-            var iconBackError = Color.FromArgb(255, 204, 204);
+                var iconBackCompleted = Color.FromArgb(198, 234, 198);
+                var iconBackProcessed = Color.FromArgb(255, 232, 205);
+                var iconBackArchive = Color.FromArgb(255, 255, 255);
+                var iconBackBuilding = Color.FromArgb(255, 255, 255);
+                var iconBackProcessing = Color.FromArgb(255, 248, 205);
+                var iconBackWaiting = Color.FromArgb(255, 255, 255);
+                var iconBackCancelled = Color.FromArgb(255, 255, 255);
+                var iconBackError = Color.FromArgb(255, 204, 204);
 
-            RegisterStatusCellVisual(
-                status: WorkflowStatusNames.Processed,
-                icon: LoadStatusCellIcon("file export", "file_export"),
-                iconBackgroundColor: iconBackProcessed,
-                textColor: Color.Black);
+                RegisterStatusCellVisual(
+                    status: WorkflowStatusNames.Processed,
+                    icon: LoadStatusCellIcon("file export", "file_export"),
+                    iconBackgroundColor: iconBackProcessed,
+                    textColor: Color.Black);
 
-            RegisterStatusCellVisual(
-                status: WorkflowStatusNames.Archived,
-                icon: LoadStatusCellIcon("archive", "archive"),
-                iconBackgroundColor: iconBackArchive,
-                textColor: Color.Black);
+                RegisterStatusCellVisual(
+                    status: WorkflowStatusNames.Archived,
+                    icon: LoadStatusCellIcon("archive", "archive"),
+                    iconBackgroundColor: iconBackArchive,
+                    textColor: Color.Black);
 
-            RegisterStatusCellVisual(
-                status: WorkflowStatusNames.Building,
-                icon: LoadStatusCellIcon("grid view", "grid_view"),
-                iconBackgroundColor: iconBackBuilding,
-                textColor: Color.Black);
+                RegisterStatusCellVisual(
+                    status: WorkflowStatusNames.Building,
+                    icon: LoadStatusCellIcon("cards", "cards"),
+                    iconBackgroundColor: iconBackBuilding,
+                    textColor: Color.Black);
 
-            RegisterStatusCellVisual(
-                status: WorkflowStatusNames.Processing,
-                icon: LoadStatusCellIcon("upload", "upload"),
-                iconBackgroundColor: iconBackProcessing,
-                textColor: Color.Black);
+                RegisterStatusCellVisual(
+                    status: WorkflowStatusNames.Processing,
+                    icon: LoadStatusCellIcon("upload", "upload"),
+                    iconBackgroundColor: iconBackProcessing,
+                    textColor: Color.Black);
 
-            RegisterStatusCellVisual(
-                status: WorkflowStatusNames.Waiting,
-                icon: LoadStatusCellIcon("file export", "file_export"),
-                iconBackgroundColor: iconBackWaiting,
-                textColor: Color.Black);
+                RegisterStatusCellVisual(
+                    status: WorkflowStatusNames.Waiting,
+                    icon: LoadStatusCellIcon("file export", "file_export"),
+                    iconBackgroundColor: iconBackWaiting,
+                    textColor: Color.Black);
 
-            RegisterStatusCellVisual(
-                status: WorkflowStatusNames.Cancelled,
-                icon: LoadStatusCellIcon("cancel", "cancel", ("file export", "cancel"), ("stop", "stop")),
-                iconBackgroundColor: iconBackCancelled,
-                textColor: Color.Black);
+                RegisterStatusCellVisual(
+                    status: WorkflowStatusNames.Cancelled,
+                    icon: LoadStatusCellIcon("cancel", "cancel", ("file export", "cancel"), ("stop", "stop")),
+                    iconBackgroundColor: iconBackCancelled,
+                    textColor: Color.Black);
 
-            RegisterStatusCellVisual(
-                status: WorkflowStatusNames.Error,
-                icon: LoadStatusCellIcon("error", "error"),
-                iconBackgroundColor: iconBackError,
-                textColor: Color.Black);
+                RegisterStatusCellVisual(
+                    status: WorkflowStatusNames.Error,
+                    icon: LoadStatusCellIcon("error", "error"),
+                    iconBackgroundColor: iconBackError,
+                    textColor: Color.Black);
 
-            RegisterStatusCellVisual(
-                status: WorkflowStatusNames.Completed,
-                icon: LoadStatusCellIcon("check", "check"),
-                iconBackgroundColor: iconBackCompleted,
-                textColor: Color.Black);
+                RegisterStatusCellVisual(
+                    status: WorkflowStatusNames.Completed,
+                    icon: LoadStatusCellIcon("check", "check"),
+                    iconBackgroundColor: iconBackCompleted,
+                    textColor: Color.Black);
 
-            RegisterStatusCellVisual(
-                status: WorkflowStatusNames.Printed,
-                icon: LoadStatusCellIcon("check", "check"),
-                iconBackgroundColor: iconBackCompleted,
-                textColor: Color.Black);
+                RegisterStatusCellVisual(
+                    status: WorkflowStatusNames.Printed,
+                    icon: LoadStatusCellIcon("check", "check"),
+                    iconBackgroundColor: iconBackCompleted,
+                    textColor: Color.Black);
 
-            _groupOrderCellIcon?.Dispose();
-            _groupOrderCellIcon = LoadStatusCellIcon("files", "files", ("files FILES", "files"));
+                _groupOrderCellIcon?.Dispose();
+                _groupOrderCellIcon = LoadStatusCellIcon("files", "files", ("files FILES", "files"));
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn($"Не удалось инициализировать иконки статусов: {ex.Message}");
+            }
         }
 
         private void RegisterStatusCellVisual(string status, Image? icon, Color iconBackgroundColor, Color textColor)

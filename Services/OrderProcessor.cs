@@ -113,6 +113,7 @@ namespace Replica
                             if (where == "PitStop Error") throw new Exception("Ошибка PitStop (см. отчет).");
                             string newName = $"{Path.GetFileNameWithoutExtension(fileName)}_pitstop{Path.GetExtension(fileName)}";
                             order.PreparedPath = CopyIntoStage(order, 2, okFile, newName, tempRoot);
+                            order.PreparedFileSizeBytes = TryGetFileLength(order.PreparedPath);
                             Notify(order, "🟡 PitStop готово", "Версия сохранена.");
                             ReportProgress(order, 60, "PitStop завершен");
                         }
@@ -153,11 +154,13 @@ namespace Replica
                         if (ShouldStoreInOrderFolder(order))
                         {
                             order.PrintPath = CopyIntoStage(order, 3, outFile, printName, tempRoot);
+                            order.PrintFileSizeBytes = TryGetFileLength(order.PrintPath);
                             try { File.Delete(outFile); } catch { }
                         }
                         else
                         {
                             order.PrintPath = CopyToGrandpa(outFile, printName, settings.GrandpaPath);
+                            order.PrintFileSizeBytes = TryGetFileLength(order.PrintPath);
                             try { File.Delete(outFile); } catch { }
                         }
 
@@ -384,6 +387,7 @@ namespace Replica
                         if (where == "PitStop Error") throw new Exception("Ошибка PitStop (см. отчет).");
                         string newName = $"{Path.GetFileNameWithoutExtension(fileName)}_pitstop{Path.GetExtension(fileName)}";
                         item.PreparedPath = CopyIntoStage(order, 2, okFile, newName, tempRoot);
+                        item.PreparedFileSizeBytes = TryGetFileLength(item.PreparedPath);
                     }
                 }
                 finally
@@ -420,11 +424,13 @@ namespace Replica
                       if (ShouldStoreInOrderFolder(order))
                       {
                           item.PrintPath = CopyIntoStage(order, 3, outFile, printName, tempRoot);
+                          item.PrintFileSizeBytes = TryGetFileLength(item.PrintPath);
                           try { File.Delete(outFile); } catch { }
                       }
                       else
                       {
                           item.PrintPath = CopyToGrandpa(outFile, printName, settings.GrandpaPath);
+                          item.PrintFileSizeBytes = TryGetFileLength(item.PrintPath);
                           try { File.Delete(outFile); } catch { }
                       }
                   }
@@ -516,6 +522,21 @@ namespace Replica
             string dest = Path.Combine(path, name);
             File.Copy(src, dest, true);
             return dest;
+        }
+
+        private static long? TryGetFileLength(string path)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+                    return null;
+
+                return new FileInfo(path).Length;
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         private void MoveTempToOrderFolder(OrderData order, string tempRoot)
