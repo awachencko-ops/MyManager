@@ -56,7 +56,7 @@ namespace Replica
 
             RegisterStatusCellVisual(
                 status: WorkflowStatusNames.Building,
-                icon: LoadStatusCellIcon("cards", "cards"),
+                icon: LoadStatusCellIcon("grid view", "grid_view"),
                 iconBackgroundColor: iconBackBuilding,
                 textColor: Color.Black);
 

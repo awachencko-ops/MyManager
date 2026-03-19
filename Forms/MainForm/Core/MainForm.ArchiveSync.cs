@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 
 namespace Replica
 {
@@ -34,7 +35,7 @@ namespace Replica
                             order,
                             WorkflowStatusNames.Archived,
                             "archive-sync",
-                            "Файл найден в папке Готово",
+                            "Файл найден в папке Готово (совпадение по содержимому)",
                             persistHistory: false,
                             rebuildGrid: false);
                         continue;
@@ -71,15 +72,17 @@ namespace Replica
             if (order == null || string.IsNullOrWhiteSpace(_grandpaFolder))
                 return false;
 
-            var fileNames = GetOrderArchiveFileNames(order);
-            if (fileNames.Count == 0)
+            var fingerprints = GetOrderArchiveFingerprints(order);
+            if (fingerprints.Count == 0)
                 return false;
 
             RefreshArchiveIndexIfNeeded();
-            foreach (var fileName in fileNames)
+            foreach (var fingerprint in fingerprints)
             {
-                if (_archivedFileNames.Contains(fileName))
-                    return true;
+                if (!_archivedFilePathsByFingerprint.TryGetValue(fingerprint, out var candidatePath))
+                    continue;
+
+                return true;
             }
 
             return false;
@@ -91,14 +94,14 @@ namespace Replica
             if (order == null || string.IsNullOrWhiteSpace(_grandpaFolder))
                 return false;
 
-            var fileNames = GetOrderArchiveFileNames(order);
-            if (fileNames.Count == 0)
+            var fingerprints = GetOrderArchiveFingerprints(order);
+            if (fingerprints.Count == 0)
                 return false;
 
             RefreshArchiveIndexIfNeeded();
-            foreach (var fileName in fileNames)
+            foreach (var fingerprint in fingerprints)
             {
-                if (!_archivedFilePathsByName.TryGetValue(fileName, out var candidatePath))
+                if (!_archivedFilePathsByFingerprint.TryGetValue(fingerprint, out var candidatePath))
                     continue;
 
                 if (!HasExistingFile(candidatePath))
@@ -111,33 +114,32 @@ namespace Replica
             return false;
         }
 
-        private static HashSet<string> GetOrderArchiveFileNames(OrderData order)
+        private static HashSet<string> GetOrderArchiveFingerprints(OrderData order)
         {
-            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            AddFileName(names, order.PrintPath);
+            var fingerprints = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            AddFileFingerprint(fingerprints, order.PrintPath);
 
             if (order.Items == null || order.Items.Count == 0)
-                return names;
+                return fingerprints;
 
             foreach (var item in order.Items)
             {
                 if (item == null)
                     continue;
 
-                AddFileName(names, item.PrintPath);
+                AddFileFingerprint(fingerprints, item.PrintPath);
             }
 
-            return names;
+            return fingerprints;
         }
 
-        private static void AddFileName(HashSet<string> names, string? path)
+        private static void AddFileFingerprint(HashSet<string> fingerprints, string? path)
         {
-            if (string.IsNullOrWhiteSpace(path))
+            if (string.IsNullOrWhiteSpace(path) || !HasExistingFile(path))
                 return;
 
-            var fileName = Path.GetFileName(path.Trim());
-            if (!string.IsNullOrWhiteSpace(fileName))
-                names.Add(fileName);
+            if (TryGetFileFingerprint(path, out var fingerprint))
+                fingerprints.Add(fingerprint);
         }
 
         private string ResolveStatusWithoutArchive(OrderData order)
@@ -165,8 +167,8 @@ namespace Replica
                 return;
 
             _archiveIndexLoadedAt = DateTime.UtcNow;
-            _archivedFileNames.Clear();
             _archivedFilePathsByName.Clear();
+            _archivedFilePathsByFingerprint.Clear();
 
             var archiveFolderPath = ResolveArchiveDoneFolderPath();
             if (string.IsNullOrWhiteSpace(archiveFolderPath) || !Directory.Exists(archiveFolderPath))
@@ -174,15 +176,13 @@ namespace Replica
 
             try
             {
-                foreach (var filePath in Directory.EnumerateFiles(archiveFolderPath, "*", SearchOption.TopDirectoryOnly))
+                foreach (var filePath in Directory.EnumerateFiles(archiveFolderPath, "*", SearchOption.AllDirectories))
                 {
-                    var fileName = Path.GetFileName(filePath);
-                    if (!string.IsNullOrWhiteSpace(fileName))
-                    {
-                        _archivedFileNames.Add(fileName);
-                        if (!_archivedFilePathsByName.ContainsKey(fileName))
-                            _archivedFilePathsByName[fileName] = filePath;
-                    }
+                    if (!TryGetFileFingerprint(filePath, out var fingerprint))
+                        continue;
+
+                    if (!_archivedFilePathsByFingerprint.ContainsKey(fingerprint))
+                        _archivedFilePathsByFingerprint[fingerprint] = filePath;
                 }
             }
             catch
@@ -225,6 +225,25 @@ namespace Replica
 
             var lastSegment = Path.GetFileName(normalizedPath);
             return string.Equals(lastSegment, normalizedName, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool TryGetFileFingerprint(string path, out string fingerprint)
+        {
+            fingerprint = string.Empty;
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+                return false;
+
+            try
+            {
+                using var stream = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                using var sha256 = SHA256.Create();
+                fingerprint = Convert.ToHexString(sha256.ComputeHash(stream));
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
         }
     }
 }

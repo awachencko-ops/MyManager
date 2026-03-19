@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -29,6 +30,7 @@ namespace Replica
         private bool _sortArrivalDescending = true;
         private readonly Dictionary<string, bool> _fileExistsCache = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _archivedFileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, string> _archivedFilePathsByFingerprint = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, bool> _orderArchiveStateCache = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         private DateTime _archiveIndexLoadedAt = DateTime.MinValue;
         private static readonly TimeSpan ArchiveIndexLifetime = TimeSpan.FromSeconds(5);
@@ -2177,7 +2179,7 @@ namespace Replica
 
                 if (archived)
                 {
-                    changed |= SetOrderStatus(order, WorkflowStatusNames.Archived, "archive-sync", "Файл найден в папке Готово", refreshGrid: false, persistHistory: false);
+                    changed |= SetOrderStatus(order, WorkflowStatusNames.Archived, "archive-sync", "Файл найден в папке Готово (совпадение по содержимому)", refreshGrid: false, persistHistory: false);
                 }
                 else if (string.Equals(order.Status, WorkflowStatusNames.Archived, StringComparison.Ordinal))
                 {
@@ -2261,15 +2263,21 @@ namespace Replica
 
         private bool IsOrderInArchive(OrderData order)
         {
-            if (string.IsNullOrWhiteSpace(order.PrintPath))
+            if (string.IsNullOrWhiteSpace(_grandpaFolder))
                 return false;
 
-            string fileName = Path.GetFileName(order.PrintPath);
-            if (string.IsNullOrWhiteSpace(fileName) || string.IsNullOrWhiteSpace(_grandpaFolder))
+            var fingerprints = GetOrderArchiveFingerprints(order);
+            if (fingerprints.Count == 0)
                 return false;
 
             RefreshArchiveIndexIfNeeded();
-            return _archivedFileNames.Contains(fileName);
+            foreach (var fingerprint in fingerprints)
+            {
+                if (_archivedFilePathsByFingerprint.ContainsKey(fingerprint))
+                    return true;
+            }
+
+            return false;
         }
 
         private bool IsOrderArchivedCached(OrderData order)
@@ -2315,6 +2323,7 @@ namespace Replica
                 return;
 
             _archivedFileNames.Clear();
+            _archivedFilePathsByFingerprint.Clear();
             _archiveIndexLoadedAt = DateTime.UtcNow;
 
             if (string.IsNullOrWhiteSpace(_grandpaFolder))
@@ -2326,16 +2335,69 @@ namespace Replica
 
             try
             {
-                foreach (string filePath in Directory.EnumerateFiles(archivedFolder, "*", SearchOption.TopDirectoryOnly))
+                foreach (string filePath in Directory.EnumerateFiles(archivedFolder, "*", SearchOption.AllDirectories))
                 {
                     string fileName = Path.GetFileName(filePath);
                     if (!string.IsNullOrWhiteSpace(fileName))
                         _archivedFileNames.Add(fileName);
+
+                    if (!TryGetFileFingerprint(filePath, out var fingerprint))
+                        continue;
+
+                    if (!_archivedFilePathsByFingerprint.ContainsKey(fingerprint))
+                        _archivedFilePathsByFingerprint[fingerprint] = filePath;
                 }
             }
             catch
             {
                 // Игнорируем ошибки чтения архива, чтобы не блокировать отрисовку таблицы.
+            }
+        }
+
+        private static HashSet<string> GetOrderArchiveFingerprints(OrderData order)
+        {
+            var fingerprints = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            AddFileFingerprint(fingerprints, order?.PrintPath);
+
+            if (order?.Items == null || order.Items.Count == 0)
+                return fingerprints;
+
+            foreach (var item in order.Items)
+            {
+                if (item == null)
+                    continue;
+
+                AddFileFingerprint(fingerprints, item.PrintPath);
+            }
+
+            return fingerprints;
+        }
+
+        private static void AddFileFingerprint(HashSet<string> fingerprints, string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+                return;
+
+            if (TryGetFileFingerprint(path, out var fingerprint))
+                fingerprints.Add(fingerprint);
+        }
+
+        private static bool TryGetFileFingerprint(string path, out string fingerprint)
+        {
+            fingerprint = string.Empty;
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+                return false;
+
+            try
+            {
+                using var stream = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                using var sha256 = SHA256.Create();
+                fingerprint = Convert.ToHexString(sha256.ComputeHash(stream));
+                return true;
+            }
+            catch
+            {
+                return false;
             }
         }
 
