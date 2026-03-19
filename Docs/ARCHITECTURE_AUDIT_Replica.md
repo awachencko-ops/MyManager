@@ -2,11 +2,13 @@
 
 > Контекст: аудит выполнен по текущему монолитному WinForms-приложению, которое работает с файловой системой/NAS и JSON-файлами конфигурации/истории.
 
+> Актуализация на 2026-03-19 (этап 2): live-проверка PostgreSQL выполнена, `history.json` импортирован в `replica_db` (10 orders / 11 items), marker `history_json_bootstrap_v1` записан в `storage_meta`, orphan-items не обнаружены.
+
 ## Executive summary
 
 - Текущая реализация **не готова** к роли транзакционно-безопасной платформы на сотни пользователей.
-- Главные причины: отсутствие серверного слоя и ACID-хранилища, отсутствие конкурентного контроля версий, weak audit trail, логирование без корреляции и структурирования, а также сильная связанность UI и доменной/инфраструктурной логики.
-- В коде уже есть полезная база для миграции (нормализация топологии заказов, частичная декомпозиция `MainForm` на partial-файлы, базовые статусные логи), но это еще не enterprise-архитектура.
+- Главные причины: отсутствие выделенного серверного API/worker-контуров, UI-центричная оркестрация, ограниченная observability (без trace/correlation id), отсутствие централизованных authN/authZ границ и идемпотентности API.
+- В коде уже закрыт значимый кусок миграции: введён `IOrdersRepository`, реализован LAN PostgreSQL backend с optimistic concurrency (`StorageVersion` + conflict guard), добавлен `order_events` и one-time bootstrap marker в `storage_meta`. Это снижает риски потери данных, но ещё не делает систему enterprise-ready.
 
 ---
 
@@ -31,16 +33,18 @@
 
 ### Наблюдения
 
-- История заказов хранится в одном JSON-файле через `File.WriteAllText` без optimistic/pessimistic concurrency.
-- Нет версии сущности (`Version`/`RowVersion`) в runtime-модели `OrderData`; есть только статусные поля времени/причины.
+- Введён слой хранения через `IOrdersRepository` с режимами `FileSystem` и `LanPostgreSql` (feature-gate в настройках).
+- В модели добавлены version-поля (`OrderData.StorageVersion`, `OrderFileItem.StorageVersion`).
+- В `PostgreSqlOrdersRepository` реализован optimistic concurrency: version-check на update/delete и внешний conflict-guard перед save.
+- Для первичного переноса истории добавлен one-time marker `history_json_bootstrap_v1` в `storage_meta`.
 - Модель конкурентного запуска ограничивается in-memory-словарем `_runTokensByOrder` в рамках одного процесса UI.
-- Блокировок на межпроцессный/межклиентский доступ к данным нет.
+- Межклиентская координация обработки (`run/stop`) на сервер не вынесена; coordination остаётся в клиентском процессе.
 - Идемпотентности API нет, так как серверного API на текущем шаге нет.
 
 ### Вывод
 
-- Для multi-user и сетевых сбоев текущая модель не обеспечивает атомарность бизнес-операций.
-- Возможны lost updates/last-write-wins при параллельных экземплярах клиента.
+- Риск `lost update` существенно снижен в LAN-режиме за счёт optimistic concurrency и запрета silent overwrite при конфликте.
+- Полной транзакционной модели уровня API/command handling пока нет (нет server-side use-case boundary и idempotency keys).
 - Повторные команды со стороны клиента не имеют глобальных idempotency key и дедупликации на сервере.
 
 ---
@@ -67,12 +71,13 @@
 
 - Логгер пишет plain-text строки в файл, без структурированных полей, trace/span/correlation id.
 - Лог статусов заказа (`AppendOrderStatusLog`) текстовый, best-effort, с глушением ошибок записи.
+- В PostgreSQL введён событийный журнал `order_events` (CRUD-события репозитория + `run/stop/delete/topology/add-item/remove-item/status-change` из клиентских workflow-точек).
 - Распределенной трассировки нет (и отсутствует распределенная архитектура на текущем этапе).
-- Полноценного неизменяемого event store (`order_events`) нет; есть файл-лог на заказ, который теоретически может быть изменен/перезаписан на файловом уровне.
+- `order_events` хранится в БД и снижает риск mutable file-audit, но пока отсутствуют корреляция запросов, actor identity и формализованные audit-дашборды.
 
 ### Вывод
 
-- Для форензики инцидентов и SLA-аудита текущая observability недостаточна.
+- Для форензики инцидентов ситуация улучшилась (есть DB event log), но observability всё ещё недостаточна для SLA/SRE-уровня.
 - Нет надежной корреляции «кто/когда/какой запрос/какой этап пайплайна» в стандартизированном виде.
 
 ---
@@ -97,13 +102,13 @@
 | Компонент | Риск | Критичность | Рекомендация |
 |---|---|---|---|
 | `MainForm` orchestration | God Object, смешение UI + domain + persistence + file IO | **High** | Выделить use-case слой (`IOrderApplicationService`), UI оставить как presenter/view; внедрить DI/composition root. |
-| История заказов (`history.json`) | Lost updates и race при параллельных клиентах | **High** | Перенести в PostgreSQL, добавить транзакции и optimistic concurrency (`row_version`). |
-| `SetOrderStatus` + `SaveHistory` | Неатомарность перехода статуса и фиксации состояния | **High** | Командная модель + unit of work (DB transaction), запись состояния и события в одной транзакции. |
+| История заказов (`history.json` / LAN PostgreSQL) | В FileSystem-режиме остаётся риск race; в LAN-режиме риск снижен через version-check | **Med** | Оставить FileSystem только как fallback; целевой режим — PostgreSQL + server-side command boundary. |
+| `SetOrderStatus` + `SaveHistory` | Клиентская неатомарность между UI-операцией и persistence | **Med/High** | Перенести статусные команды в API/worker с unit of work и server-side invariants. |
 | `_runTokensByOrder` (in-memory) | Контроль выполнения только в рамках процесса | **High** | Вынести coordination в backend (job table/queue), статус/lock хранить централизованно. |
 | `OrderProcessor` file workflow | Нет retry/backoff на сетевые ошибки | **High** | Политики resilience (Polly): retry with jitter, timeout budget, fallback. |
 | Ожидание hotfolder | Polling без circuit breaker | **Med** | Добавить circuit breaker + health state для внешних зависимостей (PitStop/Imposing/NAS). |
 | Логирование (`Logger`) | Неструктурированные логи без correlation | **High** | Перейти на structured logging (Serilog + sink), обязательные поля: `order_id`, `actor`, `operation`, `trace_id`. |
-| Order status log file | best-effort append, mutable file | **High** | Event store `order_events` (append-only), контроль целостности, retention policy. |
+| Order status log file | best-effort append, mutable file (частично компенсировано `order_events`) | **Med** | Сделать `order_events` primary audit source, добавить retention/архив и SQL-аудит отчёты. |
 | Ошибки с `catch { }` | Потеря диагностических сигналов | **Med** | Запретить silent catch без метрик/логов; ввести error budget и алерты. |
 | ConfigService/AppSettings static IO | Сильная связность с файловой системой, сложная тестируемость | **Med** | Абстрагировать через `IConfigRepository`, `ISettingsProvider`, внедрить mockable adapters. |
 | Отсутствие API идемпотентности | Дубли заказов при повторной отправке | **High** | В API-командах использовать `Idempotency-Key` + таблицу дедупликации. |

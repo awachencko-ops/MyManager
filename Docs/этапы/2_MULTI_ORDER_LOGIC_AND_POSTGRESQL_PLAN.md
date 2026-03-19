@@ -1,7 +1,7 @@
 ﻿# Этап 2: group-order логика и PostgreSQL/LAN план
 
 Дата актуализации: 2026-03-19
-Статус: In progress (`E2-P1`, `E2-P2`, `E2-P3`, `E2-P5` закрыты)
+Статус: In progress (`E2-P1`, `E2-P2`, `E2-P3`, `E2-P4`, `E2-P5` закрыты)
 
 ## 1. Входные условия (подтверждено)
 
@@ -79,13 +79,25 @@
    - `select count(*) as items_count from order_items;`
 3. Проверить связность item -> order:
    - `select count(*) as orphan_items from order_items i left join orders o on o.internal_id = i.order_internal_id where o.internal_id is null;`
-4. Проверить событийный журнал после запуска/остановки:
+4. Проверить событийный журнал после bootstrap и smoke-прогона:
    - `select event_type, event_source, count(*) from order_events group by event_type, event_source order by event_type, event_source;`
 5. Критерий успеха E2-P4:
    - marker существует (`history_json_bootstrap_v1`);
    - `orders_count`/`items_count` не нулевые для непустой истории;
    - `orphan_items = 0`;
-   - в `order_events` присутствуют `run`/`stop`/`status-change` после smoke-прогона клиента.
+   - в `order_events` есть bootstrap-события `add-order`/`add-item`.
+
+### 4.2 Live-результат верификации (2026-03-19)
+
+1. Подключение: `Host=localhost;Port=5432;Database=replica_db;User ID=postgres`.
+2. Фактические значения:
+   - `orders_count = 10`
+   - `items_count = 11`
+   - `orphan_items = 0`
+   - marker `history_json_bootstrap_v1` присутствует (`state=imported`, `imported_orders=10`)
+3. События bootstrap:
+   - `add-order | ui | 10`
+   - `add-item | ui | 11`
 
 ## 5. План реализации в коде (этап 2)
 
@@ -94,7 +106,7 @@
 | E2-P1 | Ввести data-access abstraction (`IOrdersRepository`) в клиенте | `MainForm` работает через абстракцию источника данных | Completed |
 | E2-P2 | Реализовать PostgreSQL repository + optimistic concurrency | CRUD заказов и item с `version`/conflict handling | Completed |
 | E2-P3 | Перенести `order_events` логирование в серверный слой | Трассируемость операций без потери текущей семантики | Completed |
-| E2-P4 | Миграция данных из `history.json` в PostgreSQL | Исторические заказы и item перенесены с hash-полями | In progress |
+| E2-P4 | Миграция данных из `history.json` в PostgreSQL | Исторические заказы и item перенесены с hash-полями | Completed |
 | E2-P5 | Добавить LAN feature-gate в настройки клиента | Явный режим `FileSystem` / `LanPostgreSql` + fallback-поведение | Completed |
 | E2-P6 | Интеграционный regression pack (client + DB) | Автопроверка ключевых single/group сценариев на серверном хранилище | In progress |
 
@@ -120,12 +132,13 @@
 4. `MainForm` отправляет в `order_events` события `status-change` из `SetOrderStatus` с `source=ui/processor/file-sync`.
 5. `event_source` сохраняется по источнику статуса (`ui`, `processor`, `file-sync`), payload хранится в `jsonb`.
 
-Примечание по `E2-P4` (прогресс 2026-03-19):
+Примечание по `E2-P4` (закрыто 2026-03-19):
 1. Добавлен bootstrap-переезд: при пустой PostgreSQL истории выполняется загрузка из `history.json` и первичная запись в БД.
 2. Добавлена one-time marker-логика: `history_json_bootstrap_v1` в `storage_meta` (state=`imported`/`empty-source`).
 3. При наличии marker bootstrap из `history.json` повторно не запускается.
 4. Протокол SQL-верификации в DBeaver формализован (раздел `4.1`).
-5. Следующий шаг: выполнить live-проверку по протоколу `4.1` на рабочем PostgreSQL и зафиксировать результаты.
+5. Выполнена live-проверка (локальный PostgreSQL `localhost:5432`, БД `replica_db`): `orders=10`, `order_items=11`, `orphan_items=0`, marker записан (`state=imported`).
+6. В `order_events` после bootstrap: `add-order|ui=10`, `add-item|ui=11` (всего `21` событий).
 
 Примечание по `E2-P6` (прогресс 2026-03-19):
 1. Добавлены verify-тесты repository-слоя (factory + filesystem roundtrip + connection-string guards).
