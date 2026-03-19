@@ -150,17 +150,7 @@ namespace Replica
         {
             if (order.Items == null || order.Items.Count == 0)
             {
-                var parts = new List<string>();
-                if (HasExistingFile(order.SourcePath))
-                    parts.Add("есть исходник");
-                if (HasExistingFile(order.PreparedPath))
-                    parts.Add("есть подготовка");
-                if (HasExistingFile(order.PrintPath))
-                    parts.Add("есть печать");
-
-                return parts.Count == 0
-                    ? "все stage-файлы отсутствуют"
-                    : $"stage-файлы: {string.Join(", ", parts)}";
+                return DescribePathState(order.SourcePath, order.PreparedPath, order.PrintPath);
             }
 
             var items = order.Items.Where(x => x != null).ToList();
@@ -174,9 +164,50 @@ namespace Replica
             if (fallbackStatus == WorkflowStatusNames.Completed)
                 return $"все item-печати на месте ({done}/{total})";
 
+            var itemDetails = items
+                .Select((item, index) => DescribeItemPathState(item, index + 1))
+                .ToList();
+
             return active > 0
-                ? $"есть активные файлы ({active}/{total})"
-                : "все item-stage файлы отсутствуют";
+                ? $"есть активные файлы ({active}/{total}); {string.Join("; ", itemDetails)}"
+                : $"все item-stage файлы отсутствуют; {string.Join("; ", itemDetails)}";
+        }
+
+        private static string DescribePathState(string? sourcePath, string? preparedPath, string? printPath)
+        {
+            var present = new List<string>();
+            var missing = new List<string>();
+
+            AddPathState(sourcePath, "исходник", present, missing);
+            AddPathState(preparedPath, "подготовка", present, missing);
+            AddPathState(printPath, "печать", present, missing);
+
+            if (missing.Count == 0)
+                return $"все пути заполнены ({string.Join(", ", present)})";
+
+            if (present.Count == 0)
+                return $"пустые пути: {string.Join(", ", missing)}";
+
+            return $"есть пути: {string.Join(", ", present)}; пустые пути: {string.Join(", ", missing)}";
+        }
+
+        private static string DescribeItemPathState(OrderFileItem item, int index)
+        {
+            var label = string.IsNullOrWhiteSpace(item.ClientFileLabel)
+                ? !string.IsNullOrWhiteSpace(item.ItemId)
+                    ? item.ItemId!
+                    : $"item-{index}"
+                : item.ClientFileLabel;
+
+            return $"{label}: {DescribePathState(item.SourcePath, item.PreparedPath, item.PrintPath)}";
+        }
+
+        private static void AddPathState(string? path, string label, List<string> present, List<string> missing)
+        {
+            if (HasExistingFile(path))
+                present.Add(label);
+            else
+                missing.Add(label);
         }
 
         private static List<(string Path, long? ExpectedLength)> GetOrderArchiveCandidates(OrderData order)
