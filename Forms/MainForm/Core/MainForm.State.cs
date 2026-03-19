@@ -34,6 +34,7 @@ namespace Replica
         private readonly HashSet<string> _expandedOrderIds = new(StringComparer.Ordinal);
         private readonly Dictionary<string, CancellationTokenSource> _runTokensByOrder = new(StringComparer.Ordinal);
         private readonly Dictionary<string, int> _runProgressByOrderInternalId = new(StringComparer.Ordinal);
+        private readonly OrderRunStateService _orderRunStateService = new();
         private readonly HashSet<string> _archivedFileNames = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, List<string>> _archivedFilePathsByName = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, List<string>> _archivedFilePathsByHash = new(StringComparer.OrdinalIgnoreCase);

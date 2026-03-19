@@ -735,27 +735,12 @@ namespace Replica
                 return;
             }
 
-            var ordersWithoutNumber = selectedOrders
-                .Where(order => string.IsNullOrWhiteSpace(order.Id))
-                .ToList();
-            var alreadyRunningOrders = selectedOrders
-                .Where(order => _runTokensByOrder.ContainsKey(order.InternalId))
-                .ToList();
-
-            var runnableOrders = selectedOrders
-                .Except(ordersWithoutNumber)
-                .Except(alreadyRunningOrders)
-                .ToList();
+            var runPlan = _orderRunStateService.BuildRunPlan(selectedOrders, _runTokensByOrder);
+            var runnableOrders = runPlan.RunnableOrders;
 
             if (runnableOrders.Count == 0)
             {
-                var reasons = new List<string>();
-                if (ordersWithoutNumber.Count > 0)
-                    reasons.Add($"без номера: {ordersWithoutNumber.Count}");
-                if (alreadyRunningOrders.Count > 0)
-                    reasons.Add($"уже запущены: {alreadyRunningOrders.Count}");
-
-                var details = reasons.Count == 0 ? "не удалось определить причину" : string.Join(", ", reasons);
+                var details = OrderRunStateService.BuildNoRunnableDetails(runPlan);
                 SetBottomStatus($"Нет заказов для запуска ({details})");
                 MessageBox.Show(
                     this,
@@ -769,14 +754,14 @@ namespace Replica
             if (_processor == null)
                 InitializeProcessor();
 
-            var runSessions = new List<(OrderData Order, CancellationTokenSource Cts)>();
-            foreach (var order in runnableOrders)
-            {
-                var cts = new CancellationTokenSource();
-                _runTokensByOrder[order.InternalId] = cts;
-                _runProgressByOrderInternalId[order.InternalId] = 0;
-                runSessions.Add((order, cts));
+            var runSessions = _orderRunStateService.BeginRunSessions(
+                runnableOrders,
+                _runTokensByOrder,
+                _runProgressByOrderInternalId);
 
+            foreach (var session in runSessions)
+            {
+                var order = session.Order;
                 AppendOrderOperationLog(
                     order,
                     OrderOperationNames.Run,
@@ -802,15 +787,10 @@ namespace Replica
             else
                 SetBottomStatus($"Запущено заказов: {runnableOrders.Count}");
 
-            if (ordersWithoutNumber.Count > 0 || alreadyRunningOrders.Count > 0)
+            if (runPlan.OrdersWithoutNumber.Count > 0 || runPlan.AlreadyRunningOrders.Count > 0)
             {
-                var skippedReasons = new List<string>();
-                if (ordersWithoutNumber.Count > 0)
-                    skippedReasons.Add($"без номера: {ordersWithoutNumber.Count}");
-                if (alreadyRunningOrders.Count > 0)
-                    skippedReasons.Add($"уже запущены: {alreadyRunningOrders.Count}");
-
-                SetBottomStatus($"Часть заказов пропущена ({string.Join(", ", skippedReasons)})");
+                var skippedDetails = OrderRunStateService.BuildSkippedDetails(runPlan);
+                SetBottomStatus($"Часть заказов пропущена ({skippedDetails})");
             }
 
             var runErrors = new ConcurrentQueue<string>();
@@ -843,8 +823,10 @@ namespace Replica
                 }
                 finally
                 {
-                    _runTokensByOrder.Remove(session.Order.InternalId);
-                    _runProgressByOrderInternalId.Remove(session.Order.InternalId);
+                    _orderRunStateService.CompleteRunSession(
+                        session.Order,
+                        _runTokensByOrder,
+                        _runProgressByOrderInternalId);
                     UpdateTrayProgressIndicator();
                 }
             }).ToList();
@@ -886,7 +868,7 @@ namespace Replica
                 return;
             }
 
-            if (!_runTokensByOrder.TryGetValue(order.InternalId, out var cts))
+            if (!_orderRunStateService.TryStopOrder(order, _runTokensByOrder, _runProgressByOrderInternalId, out var cts))
             {
                 SetBottomStatus($"Заказ {GetOrderDisplayId(order)} сейчас не выполняется");
                 MessageBox.Show(this, $"Заказ {GetOrderDisplayId(order)} сейчас не выполняется.", "Остановка", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -894,8 +876,6 @@ namespace Replica
             }
 
             cts.Cancel();
-            _runTokensByOrder.Remove(order.InternalId);
-            _runProgressByOrderInternalId.Remove(order.InternalId);
             UpdateTrayProgressIndicator();
             AppendOrderOperationLog(order, OrderOperationNames.Stop, "Остановлено пользователем");
             SetOrderStatus(order, WorkflowStatusNames.Cancelled, OrderStatusSourceNames.Ui, "Остановлено пользователем", persistHistory: true, rebuildGrid: true);

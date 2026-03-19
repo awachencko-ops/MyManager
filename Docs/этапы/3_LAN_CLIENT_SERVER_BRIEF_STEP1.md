@@ -31,7 +31,7 @@
    - fallback: `InMemory`.
 5. `/health` теперь возвращает фактический store/mode.
 
-### 3.2 Снижение God Object в MainForm (первый срез)
+### 3.2 Снижение God Object в MainForm (второй срез)
 
 1. Создан `OrdersHistoryRepositoryCoordinator` в `Services/`.
 2. Из `MainForm` вынесены тяжёлые блоки:
@@ -39,12 +39,17 @@
    - bootstrap `history.json` -> PostgreSQL + marker-логика;
    - save/fallback/concurrency обработка;
    - append repository events.
-3. `MainForm` оставлен как orchestration/UI-слой с thin wrappers к coordinator.
+3. Добавлен `OrderRunStateService`:
+   - планирование runnable/skipped заказов;
+   - управление run-state (`BeginRunSessions`, `CompleteRunSession`, `TryStopOrder`);
+   - формирование reason-строк для batch-run пропусков.
+4. `RunSelectedOrderAsync` и `StopSelectedOrder` в `MainForm` переведены на сервисные операции run-state.
+5. `MainForm` остаётся orchestration/UI-слоем, но логика persistence и run-state уже вынесена в отдельные сервисы.
 
 ## 4. Техническая верификация (2026-03-20)
 
 1. `dotnet build Replica.sln` -> PASS (`0 warnings`, `0 errors`).
-2. `dotnet test Replica.sln` -> PASS (`42/42`).
+2. `dotnet test Replica.sln` -> PASS (`45/45`).
 3. `REPLICA_RUN_PG_INTEGRATION=1 dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj` -> PASS.
 4. Smoke API:
    - `GET /health` -> `200`, `store=PostgreSqlLanOrderStore`, `mode=PostgreSql`;
@@ -58,7 +63,7 @@
 3. Вынести клиентский HTTP gateway и уменьшить прямой repository-доступ из UI.
 4. Ввести authN/authZ boundary и обязательную actor validation.
 5. Добавить structured logging + correlation id.
-6. Продолжить декомпозицию `MainForm`: выделить application service для order workflow (`run/stop/status transitions`).
+6. Продолжить декомпозицию `MainForm`: вынести `SetOrderStatus`/status-transition policy в отдельный application service.
 
 ## 6. DoD этапа 3 (без изменений)
 

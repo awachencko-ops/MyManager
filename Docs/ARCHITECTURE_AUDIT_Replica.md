@@ -7,6 +7,8 @@
 > Актуализация на 2026-03-19 (этап 3, Step 1): добавлены `Replica.Shared` и `Replica.Api`, поднят LAN API skeleton (`/health`, `/api/users`, `/api/orders` + write endpoints), подтверждён smoke-run API (`200` на health/users/orders). Полный cutover клиента на HTTP boundary и server-side orchestration остаются в Step 2 этапа 3.
 >
 > Актуализация на 2026-03-20 (этап 3, Step 2 progress): API переключён на `PostgreSqlLanOrderStore` (основной режим `ReplicaApi:StoreMode=PostgreSql`, health подтверждает store mode), а в клиенте вынесена repository/bootstrap логика из `MainForm` в `OrdersHistoryRepositoryCoordinator` как первый шаг декомпозиции god-object.
+>
+> Актуализация на 2026-03-20 (этап 3, Step 2 progress, срез 2): добавлен `OrderRunStateService`, а методы `RunSelectedOrderAsync`/`StopSelectedOrder` переведены на сервисное управление run-state (план runnable/skipped + lifecycle токенов).
 
 ## Executive summary
 
@@ -24,6 +26,7 @@
 - `MainForm` агрегирует orchestration, хранение истории, статус-машину, UI-binding, файловые операции и запуск процессора; состояние формы содержит десятки полей и коллекций.
 - Добавлен API-каркас (`Replica.Api`) и shared-контракты (`Replica.Shared`), но клиент пока не переведён на API gateway.
 - Из `MainForm` выделен `OrdersHistoryRepositoryCoordinator` (инициализация repository, bootstrap/fallback/event append), что уменьшило размер и связность части persistence-логики.
+- Из `MainForm` выделен `OrderRunStateService` (run-state lifecycle и фильтрация runnable/skipped заказов), что уменьшило связность части run/stop orchestration.
 - Persistence реализован через прямое чтение/запись JSON (`history.json`) из UI-слоя.
 - `ConfigService` и `AppSettings` — статические сервисы/конфиги с прямым file IO, без интерфейсов и DI.
 
