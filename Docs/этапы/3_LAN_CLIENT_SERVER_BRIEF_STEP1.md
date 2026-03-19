@@ -1,7 +1,7 @@
 ﻿# Этап 3: LAN client-server brief (Step 1 + Step 2 progress)
 
 Дата актуализации: 2026-03-20
-Статус: In progress (`Step 1` закрыт, `Step 2` начат)
+Статус: In progress (`Step 1` закрыт, `Step 2` в активной реализации)
 
 ## 1. Вход в этап 3
 
@@ -17,53 +17,55 @@
 
 ## 3. Step 2 (прогресс на 2026-03-20)
 
-### 3.1 API storage cutover
+### 3.1 API storage cutover (EF Core)
 
 1. Введён контракт `ILanOrderStore`.
-2. In-memory store переведён на интерфейс и оставлен как fallback.
-3. Добавлен `PostgreSqlLanOrderStore` (Npgsql) для серверного хранения:
+2. In-memory store оставлен как fallback.
+3. Добавлен `EfCoreLanOrderStore`:
    - чтение/запись orders/items/events/users;
    - optimistic concurrency (`ExpectedVersion`, `ExpectedItemVersion` -> `409 Conflict`);
-   - topology reorder с проверкой дублей item id;
+   - reorder c валидацией дублей `item_id`;
    - server-side append событий (`add/update-order`, `add/update-item`, `topology`).
-4. В `Program.cs` реализован выбор storage mode:
+4. Добавлен EF Core контур `ReplicaDbContext` + entity mappings (`orders`, `order_items`, `order_events`, `users`, `storage_meta`).
+5. Добавлена baseline migration `20260320000100_BaselineSchema` с idempotent SQL (`create table/index if not exists`).
+6. В `Program.cs`:
    - `ReplicaApi:StoreMode=PostgreSql` + `ConnectionStrings:ReplicaDb`;
-   - fallback: `InMemory`.
-5. `/health` теперь возвращает фактический store/mode.
+   - регистрация `DbContextFactory`;
+   - `Database.Migrate()` на старте в PostgreSQL-режиме.
+7. `/health` возвращает фактический store/mode.
 
-### 3.2 Снижение God Object в MainForm (второй срез)
+### 3.2 Снижение God Object в MainForm (третий срез)
 
-1. Создан `OrdersHistoryRepositoryCoordinator` в `Services/`.
-2. Из `MainForm` вынесены тяжёлые блоки:
-   - настройка/инициализация repository;
-   - bootstrap `history.json` -> PostgreSQL + marker-логика;
+1. Вынесен `OrdersHistoryRepositoryCoordinator`:
+   - инициализация repository;
+   - bootstrap `history.json` -> PostgreSQL + marker;
    - save/fallback/concurrency обработка;
    - append repository events.
-3. Добавлен `OrderRunStateService`:
-   - планирование runnable/skipped заказов;
-   - управление run-state (`BeginRunSessions`, `CompleteRunSession`, `TryStopOrder`);
-   - формирование reason-строк для batch-run пропусков.
-4. `RunSelectedOrderAsync` и `StopSelectedOrder` в `MainForm` переведены на сервисные операции run-state.
-5. `MainForm` остаётся orchestration/UI-слоем, но логика persistence и run-state уже вынесена в отдельные сервисы.
+2. Вынесен `OrderRunStateService`:
+   - план runnable/skipped заказов;
+   - управление run-state (`BeginRunSessions`, `CompleteRunSession`, `TryStopOrder`).
+3. Вынесен `OrderStatusTransitionService`:
+   - нормализация `source/reason`;
+   - атомарное применение status-transition к `OrderData`.
+4. `MainForm` переведён на сервисные операции для history/run-state/status-transition.
 
 ## 4. Техническая верификация (2026-03-20)
 
 1. `dotnet build Replica.sln` -> PASS (`0 warnings`, `0 errors`).
-2. `dotnet test Replica.sln` -> PASS (`45/45`).
+2. `dotnet test Replica.sln` -> PASS (`50/50`).
 3. `REPLICA_RUN_PG_INTEGRATION=1 dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj` -> PASS.
 4. Smoke API:
-   - `GET /health` -> `200`, `store=PostgreSqlLanOrderStore`, `mode=PostgreSql`;
+   - `GET /health` -> `200`, `store=EfCoreLanOrderStore`, `mode=PostgreSql`;
    - `GET /api/users` -> `200`;
    - `GET /api/orders` -> `200`.
 
 ## 5. Что остаётся в Step 2 этапа 3
 
-1. Перевести API-store на EF Core migrations (сейчас PostgreSQL store на Npgsql SQL).
-2. Перенести run/stop orchestration в server-side coordination.
-3. Вынести клиентский HTTP gateway и уменьшить прямой repository-доступ из UI.
-4. Ввести authN/authZ boundary и обязательную actor validation.
-5. Добавить structured logging + correlation id.
-6. Продолжить декомпозицию `MainForm`: вынести `SetOrderStatus`/status-transition policy в отдельный application service.
+1. Перенести run/stop orchestration в server-side coordination.
+2. Вынести клиентский HTTP gateway и уменьшить прямой repository-доступ из UI.
+3. Ввести authN/authZ boundary и обязательную actor validation.
+4. Добавить structured logging + correlation id.
+5. Продолжить декомпозицию `MainForm`: выделить application service для order workflow (use-case слой поверх UI).
 
 ## 6. DoD этапа 3 (без изменений)
 

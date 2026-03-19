@@ -1,4 +1,6 @@
 ﻿using System;
+using Microsoft.EntityFrameworkCore;
+using Replica.Api.Data;
 using Replica.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -20,7 +22,9 @@ if (string.Equals(effectiveStoreMode, "PostgreSql", StringComparison.OrdinalIgno
     if (string.IsNullOrWhiteSpace(replicaDbConnectionString))
         throw new InvalidOperationException("ReplicaApi:StoreMode=PostgreSql requires ConnectionStrings:ReplicaDb");
 
-    builder.Services.AddSingleton<ILanOrderStore>(_ => new PostgreSqlLanOrderStore(replicaDbConnectionString));
+    builder.Services.AddDbContextFactory<ReplicaDbContext>(options =>
+        options.UseNpgsql(replicaDbConnectionString));
+    builder.Services.AddSingleton<ILanOrderStore, EfCoreLanOrderStore>();
 }
 else
 {
@@ -32,6 +36,14 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
+
+if (string.Equals(effectiveStoreMode, "PostgreSql", StringComparison.OrdinalIgnoreCase))
+{
+    using var scope = app.Services.CreateScope();
+    var dbContextFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<ReplicaDbContext>>();
+    using var db = dbContextFactory.CreateDbContext();
+    db.Database.Migrate();
+}
 
 if (app.Environment.IsDevelopment())
 {

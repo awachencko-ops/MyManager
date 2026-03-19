@@ -6,15 +6,17 @@
 >
 > Актуализация на 2026-03-19 (этап 3, Step 1): добавлены `Replica.Shared` и `Replica.Api`, поднят LAN API skeleton (`/health`, `/api/users`, `/api/orders` + write endpoints), подтверждён smoke-run API (`200` на health/users/orders). Полный cutover клиента на HTTP boundary и server-side orchestration остаются в Step 2 этапа 3.
 >
-> Актуализация на 2026-03-20 (этап 3, Step 2 progress): API переключён на `PostgreSqlLanOrderStore` (основной режим `ReplicaApi:StoreMode=PostgreSql`, health подтверждает store mode), а в клиенте вынесена repository/bootstrap логика из `MainForm` в `OrdersHistoryRepositoryCoordinator` как первый шаг декомпозиции god-object.
+> Актуализация на 2026-03-20 (этап 3, Step 2 progress): API переключён на `EfCoreLanOrderStore` + `ReplicaDbContext` (EF Core), добавлена baseline migration `20260320000100_BaselineSchema`, health подтверждает store mode `PostgreSql`; в клиенте вынесена repository/bootstrap логика из `MainForm` в `OrdersHistoryRepositoryCoordinator`.
 >
 > Актуализация на 2026-03-20 (этап 3, Step 2 progress, срез 2): добавлен `OrderRunStateService`, а методы `RunSelectedOrderAsync`/`StopSelectedOrder` переведены на сервисное управление run-state (план runnable/skipped + lifecycle токенов).
+>
+> Актуализация на 2026-03-20 (этап 3, Step 2 progress, срез 3): добавлен `OrderStatusTransitionService`, а `SetOrderStatus` переведён на сервисное применение status-transition policy (нормализация source/reason, единое условие no-op).
 
 ## Executive summary
 
 - Текущая реализация **не готова** к роли транзакционно-безопасной платформы на сотни пользователей.
-- Главные причины: API/worker-контур пока не доведён до production-boundary (есть только Step 1 skeleton), UI-центричная оркестрация, ограниченная observability (без trace/correlation id), отсутствие централизованных authN/authZ границ и идемпотентности API.
-- В коде уже закрыт значимый кусок миграции: введён `IOrdersRepository`, реализован LAN PostgreSQL backend с optimistic concurrency (`StorageVersion` + conflict guard), добавлен `order_events` и one-time bootstrap marker в `storage_meta`; на этапе 3 Step 1 добавлен API skeleton (`Replica.Api` + `Replica.Shared`). Это снижает риски потери данных и подготавливает разделение слоёв, но ещё не делает систему enterprise-ready.
+- Главные причины: API/worker-контур пока не доведён до production-boundary (server-side orchestration, authN/authZ, idempotency и observability всё ещё неполные), UI-центричная оркестрация остаётся значимой.
+- В коде уже закрыт значимый кусок миграции: введён `IOrdersRepository`, реализован LAN PostgreSQL backend с optimistic concurrency (`StorageVersion` + conflict guard), добавлен `order_events` и one-time bootstrap marker в `storage_meta`; на этапе 3 добавлены API skeleton, EF Core storage слой и первые выносы из `MainForm` в сервисы (`OrdersHistoryRepositoryCoordinator`, `OrderRunStateService`, `OrderStatusTransitionService`).
 
 ---
 
@@ -27,6 +29,7 @@
 - Добавлен API-каркас (`Replica.Api`) и shared-контракты (`Replica.Shared`), но клиент пока не переведён на API gateway.
 - Из `MainForm` выделен `OrdersHistoryRepositoryCoordinator` (инициализация repository, bootstrap/fallback/event append), что уменьшило размер и связность части persistence-логики.
 - Из `MainForm` выделен `OrderRunStateService` (run-state lifecycle и фильтрация runnable/skipped заказов), что уменьшило связность части run/stop orchestration.
+- Из `MainForm` выделен `OrderStatusTransitionService` (policy status-transition и нормализация reason/source), что уменьшило связность статусной логики.
 - Persistence реализован через прямое чтение/запись JSON (`history.json`) из UI-слоя.
 - `ConfigService` и `AppSettings` — статические сервисы/конфиги с прямым file IO, без интерфейсов и DI.
 

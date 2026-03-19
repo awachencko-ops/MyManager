@@ -1,7 +1,7 @@
 ﻿# Этап 4: EF migrations, API endpoints и автообновление клиента
 
-Дата актуализации: 2026-03-13
-Статус: рабочий план этапа 4
+Дата актуализации: 2026-03-20
+Статус: In progress (EF Core baseline уже внедрён на этапе 3 Step 2)
 
 ## 1. Цель этапа
 
@@ -12,6 +12,14 @@
 4. Запустить автообновление WinForms-клиента в LAN (без ручных обновлений на 5 ПК).
 
 ## 2. EF Core и миграции (PostgreSQL)
+
+## 2.0 Что уже сделано (факт 2026-03-20)
+
+1. Добавлен `ReplicaDbContext` в `Replica.Api`.
+2. Добавлены entity mappings для `orders`, `order_items`, `order_events`, `users`, `storage_meta`.
+3. Добавлена baseline migration: `20260320000100_BaselineSchema` (idempotent SQL).
+4. На старте API (PostgreSQL mode) выполняется `Database.Migrate()`.
+5. `ILanOrderStore` переведён на `EfCoreLanOrderStore` (PostgreSQL mode), in-memory оставлен как fallback.
 
 ## 2.1 Что внедряем
 

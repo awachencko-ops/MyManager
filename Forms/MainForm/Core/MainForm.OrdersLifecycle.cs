@@ -1515,34 +1515,22 @@ namespace Replica
             bool persistHistory,
             bool rebuildGrid)
         {
-            var normalizedSource = string.IsNullOrWhiteSpace(source)
-                ? OrderStatusSourceNames.Ui
-                : source.Trim();
-            var normalizedReason = NormalizeFileSyncReason(normalizedSource, reason);
-            var oldStatus = order.Status ?? string.Empty;
-            if (string.Equals(oldStatus, status, StringComparison.Ordinal)
-                && string.Equals(order.LastStatusSource ?? string.Empty, normalizedSource, StringComparison.Ordinal)
-                && string.Equals(order.LastStatusReason ?? string.Empty, normalizedReason ?? string.Empty, StringComparison.Ordinal))
-            {
+            var transition = _orderStatusTransitionService.Apply(order, status, source, reason);
+            if (!transition.Changed)
                 return false;
-            }
 
-            order.Status = status;
-            order.LastStatusSource = normalizedSource;
-            order.LastStatusReason = normalizedReason ?? string.Empty;
-            order.LastStatusAt = DateTime.Now;
-            AppendOrderStatusLog(order, oldStatus, status, normalizedSource, normalizedReason ?? string.Empty);
+            AppendOrderStatusLog(order, transition.OldStatus, transition.NewStatus, transition.Source, transition.Reason);
             TryAppendRepositoryEvent(
                 order,
                 itemId: string.Empty,
                 eventType: "status-change",
-                eventSource: normalizedSource,
+                eventSource: transition.Source,
                 payload: new
                 {
-                    old_status = oldStatus,
-                    new_status = status ?? string.Empty,
-                    reason = normalizedReason ?? string.Empty,
-                    status_at = order.LastStatusAt
+                    old_status = transition.OldStatus,
+                    new_status = transition.NewStatus,
+                    reason = transition.Reason,
+                    status_at = transition.StatusAt
                 });
 
             if (persistHistory)
@@ -1553,20 +1541,6 @@ namespace Replica
             UpdateTrayErrorIndicator();
 
             return true;
-        }
-
-        private static string NormalizeFileSyncReason(string? source, string? reason)
-        {
-            if (!string.Equals(source, OrderStatusSourceNames.FileSync, StringComparison.OrdinalIgnoreCase))
-                return reason ?? string.Empty;
-
-            return (reason ?? string.Empty).Trim() switch
-            {
-                "stage-1" => "Найден исходный файл",
-                "stage-2" => "Найден файл подготовки",
-                "stage-3" => "Найден печатный файл",
-                _ => reason ?? string.Empty
-            };
         }
 
         private static string DescribePrintWeight(OrderData order)
