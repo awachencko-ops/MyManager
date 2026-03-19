@@ -234,7 +234,7 @@ namespace Replica
             _jsonHistoryFile = settings.HistoryFilePath;
             _ordersStorageBackend = settings.OrdersStorageBackend;
             _lanPostgreSqlConnectionString = settings.LanPostgreSqlConnectionString;
-            _ordersRepository = OrdersRepositoryFactory.Create(settings, _jsonHistoryFile);
+            _ordersHistoryCoordinator.Configure(_ordersStorageBackend, _lanPostgreSqlConnectionString, _jsonHistoryFile);
             _managerLogFilePath = settings.ManagerLogFilePath;
             _orderLogsFolderPath = settings.OrderLogsFolderPath;
             _usersSourceFilePath = settings.UsersFilePath;
@@ -603,7 +603,7 @@ namespace Replica
             settings.OrdersStorageBackend = _ordersStorageBackend;
             settings.LanPostgreSqlConnectionString = _lanPostgreSqlConnectionString;
             settings.Save();
-            _ordersRepository = OrdersRepositoryFactory.Create(settings, _jsonHistoryFile);
+            _ordersHistoryCoordinator.Configure(_ordersStorageBackend, _lanPostgreSqlConnectionString, _jsonHistoryFile);
 
             Logger.LogFilePath = _managerLogFilePath;
             InitializeProcessor();

@@ -5,6 +5,8 @@
 > Актуализация на 2026-03-19 (этап 2): live-проверка PostgreSQL выполнена, `history.json` импортирован в `replica_db` (10 orders / 11 items), marker `history_json_bootstrap_v1` записан в `storage_meta`, orphan-items не обнаружены; добавлен интеграционный PostgreSQL regression-pack (single/group roundtrip, concurrency conflict, event append).
 >
 > Актуализация на 2026-03-19 (этап 3, Step 1): добавлены `Replica.Shared` и `Replica.Api`, поднят LAN API skeleton (`/health`, `/api/users`, `/api/orders` + write endpoints), подтверждён smoke-run API (`200` на health/users/orders). Полный cutover клиента на HTTP boundary и server-side orchestration остаются в Step 2 этапа 3.
+>
+> Актуализация на 2026-03-20 (этап 3, Step 2 progress): API переключён на `PostgreSqlLanOrderStore` (основной режим `ReplicaApi:StoreMode=PostgreSql`, health подтверждает store mode), а в клиенте вынесена repository/bootstrap логика из `MainForm` в `OrdersHistoryRepositoryCoordinator` как первый шаг декомпозиции god-object.
 
 ## Executive summary
 
@@ -21,13 +23,14 @@
 - Точка входа поднимает сразу WinForms (`Application.Run(new MainForm())`), без явного composition root для бизнес-слоя/инфраструктуры.
 - `MainForm` агрегирует orchestration, хранение истории, статус-машину, UI-binding, файловые операции и запуск процессора; состояние формы содержит десятки полей и коллекций.
 - Добавлен API-каркас (`Replica.Api`) и shared-контракты (`Replica.Shared`), но клиент пока не переведён на API gateway.
+- Из `MainForm` выделен `OrdersHistoryRepositoryCoordinator` (инициализация repository, bootstrap/fallback/event append), что уменьшило размер и связность части persistence-логики.
 - Persistence реализован через прямое чтение/запись JSON (`history.json`) из UI-слоя.
 - `ConfigService` и `AppSettings` — статические сервисы/конфиги с прямым file IO, без интерфейсов и DI.
 
 ### Вывод
 
 - SoC нарушен: UI-layer контролирует use-case/persistence.
-- Налицо «God Object» в виде `MainForm` (+ partial-файлы как физическое разделение, но не архитектурное).
+- Налицо «God Object» в виде `MainForm` (+ partial-файлы как физическое разделение, но не архитектурное), хотя декомпозиция уже начата (persistence-coordinator вынесен).
 - Замена persistence/API слоя потребует массового рефакторинга из-за сильной связности и отсутствия портов/адаптеров.
 
 ---

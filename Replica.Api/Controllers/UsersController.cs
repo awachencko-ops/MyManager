@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Replica.Api.Services;
 using Replica.Shared.Models;
 
@@ -8,9 +8,9 @@ namespace Replica.Api.Controllers;
 [Route("api/users")]
 public sealed class UsersController : ControllerBase
 {
-    private readonly InMemoryLanOrderStore _store;
+    private readonly ILanOrderStore _store;
 
-    public UsersController(InMemoryLanOrderStore store)
+    public UsersController(ILanOrderStore store)
     {
         _store = store;
     }
@@ -22,3 +22,4 @@ public sealed class UsersController : ControllerBase
         return Ok(_store.GetUsers());
     }
 }
+

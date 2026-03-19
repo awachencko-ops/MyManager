@@ -7,7 +7,7 @@ using Replica.Shared.Models;
 
 namespace Replica.Api.Services;
 
-public sealed class InMemoryLanOrderStore
+public sealed class InMemoryLanOrderStore : ILanOrderStore
 {
     private readonly object _sync = new();
     private readonly Dictionary<string, SharedOrder> _ordersById = new(StringComparer.Ordinal);

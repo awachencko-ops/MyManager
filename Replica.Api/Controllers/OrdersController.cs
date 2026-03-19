@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Replica.Api.Contracts;
 using Replica.Api.Services;
 using Replica.Shared.Models;
@@ -9,9 +9,9 @@ namespace Replica.Api.Controllers;
 [Route("api/orders")]
 public sealed class OrdersController : ControllerBase
 {
-    private readonly InMemoryLanOrderStore _store;
+    private readonly ILanOrderStore _store;
 
-    public OrdersController(InMemoryLanOrderStore store)
+    public OrdersController(ILanOrderStore store)
     {
         _store = store;
     }
@@ -143,3 +143,4 @@ public sealed class OrdersController : ControllerBase
         return "api-anonymous";
     }
 }
+
