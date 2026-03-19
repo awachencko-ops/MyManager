@@ -108,7 +108,7 @@
 | E2-P3 | Перенести `order_events` логирование в серверный слой | Трассируемость операций без потери текущей семантики | Completed |
 | E2-P4 | Миграция данных из `history.json` в PostgreSQL | Исторические заказы и item перенесены с hash-полями | Completed |
 | E2-P5 | Добавить LAN feature-gate в настройки клиента | Явный режим `FileSystem` / `LanPostgreSql` + fallback-поведение | Completed |
-| E2-P6 | Интеграционный regression pack (client + DB) | Автопроверка ключевых single/group сценариев на серверном хранилище | In progress |
+| E2-P6 | Интеграционный regression pack (client + DB) | Автопроверка ключевых single/group сценариев на серверном хранилище | Completed |
 
 Примечание по `E2-P1` (выполнено 2026-03-19):
 1. Добавлены `OrdersStorageMode` и настройки backend/connection string в `AppSettings`.
@@ -140,12 +140,17 @@
 5. Выполнена live-проверка (локальный PostgreSQL `localhost:5432`, БД `replica_db`): `orders=10`, `order_items=11`, `orphan_items=0`, marker записан (`state=imported`).
 6. В `order_events` после bootstrap: `add-order|ui=10`, `add-item|ui=11` (всего `21` событий).
 
-Примечание по `E2-P6` (прогресс 2026-03-19):
+Примечание по `E2-P6` (закрыто 2026-03-19):
 1. Добавлены verify-тесты repository-слоя (factory + filesystem roundtrip + connection-string guards).
 2. Добавлены тесты на event-контракт (`TryAppendEvent`) для filesystem no-op и PostgreSQL guard по пустой connection string.
 3. Добавлены тесты на meta-контракт (`TryGetMetaValue`/`TryUpsertMetaValue`) для PostgreSQL guard по пустой connection string.
-4. Текущее состояние test-pack: `dotnet test Replica.sln` -> `39/39 PASS`:
-   - `tests/Replica.VerifyTests`: `14/14 PASS`
+4. Добавлен PostgreSQL integration pack (`PostgreSqlIntegrationTests`) с временной БД:
+   - roundtrip single/group заказов + валидация `add-order/add-item` в `order_events`;
+   - детект `concurrency conflict` между двумя writer-репозиториями;
+   - проверка `run/stop/status-change` через `TryAppendEvent`.
+5. Интеграционные тесты запускаются в opt-in режиме (`REPLICA_RUN_PG_INTEGRATION=1`) для стабильности локального/CI прогона.
+6. Текущее состояние test-pack: `dotnet test Replica.sln` -> `42/42 PASS`:
+   - `tests/Replica.VerifyTests`: `17/17 PASS`
    - `tests/Replica.UiSmokeTests`: `25/25 PASS`
 
 ## 6. Риски и контрмеры
