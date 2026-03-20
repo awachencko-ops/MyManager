@@ -1,6 +1,7 @@
 ﻿using System;
 using Microsoft.EntityFrameworkCore;
 using Replica.Api.Data;
+using Replica.Api.Infrastructure;
 using Replica.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -51,6 +52,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseCorrelationContext();
 app.UseStaticFiles();
 app.UseAuthorization();
 app.MapControllers();

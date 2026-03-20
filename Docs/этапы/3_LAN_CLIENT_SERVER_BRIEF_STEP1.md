@@ -1,7 +1,7 @@
-﻿# Этап 3: LAN client-server brief (Step 1 + Step 2 progress)
+﻿# Этап 3: LAN client-server brief (Step 1 + Step 2)
 
 Дата актуализации: 2026-03-20
-Статус: In progress (`Step 1` закрыт, `Step 2` в активной реализации)
+Статус: Completed (`Step 1` и `Step 2` закрыты)
 
 ## 1. Вход в этап 3
 
@@ -15,7 +15,7 @@
 2. Вынесены shared-контракты (`SharedOrder`, `SharedOrderItem`, `SharedUser`, `SharedOrderEvent`).
 3. Поднят HTTP boundary (`/health`, `/api/users`, `/api/orders`, write endpoints для orders/items).
 
-## 3. Step 2 (прогресс на 2026-03-20)
+## 3. Step 2 (закрыт, факт на 2026-03-20)
 
 ### 3.1 API storage cutover (EF Core)
 
@@ -28,17 +28,16 @@
    - server-side append событий (`add/update-order`, `add/update-item`, `topology`).
 4. Добавлен EF Core контур `ReplicaDbContext` + entity mappings (`orders`, `order_items`, `order_events`, `users`, `storage_meta`).
 5. Добавлена baseline migration `20260320000100_BaselineSchema` с idempotent SQL (`create table/index if not exists`).
-6. В `Program.cs`:
-   - `ReplicaApi:StoreMode=PostgreSql` + `ConnectionStrings:ReplicaDb`;
-   - регистрация `DbContextFactory`;
-   - `Database.Migrate()` на старте в PostgreSQL-режиме.
-7. Добавлена server-side координация `run/stop`:
-   - контракт `RunOrderRequest`/`StopOrderRequest` и endpoints `POST /api/orders/{id}/run|stop`;
-   - таблица `order_run_locks` + migration `20260320000200_OrderRunLocks`;
-   - конфликт активного запуска возвращается как `409 Conflict` (`run already active`).
-8. `/health` возвращает фактический store/mode.
+6. Добавлена миграция `20260320000200_OrderRunLocks`.
+7. На старте API в PostgreSQL mode выполняется `Database.Migrate()`.
+8. Добавлены endpoints `POST /api/orders/{id}/run|stop` с `409 Conflict` при активном запуске.
+9. Для write-endpoints введена обязательная actor-проверка:
+   - требуется `X-Current-User`;
+   - если users-directory уже заполнен, actor должен существовать и быть активным.
+10. Введён middleware `X-Correlation-Id` + request logging scope (correlation id, method, path, status, elapsed).
+11. `/health` возвращает фактический store/mode.
 
-### 3.2 Снижение God Object в MainForm (четвертый срез)
+### 3.2 Снижение God Object в MainForm (пятый срез)
 
 1. Вынесен `OrdersHistoryRepositoryCoordinator`:
    - инициализация repository;
@@ -47,61 +46,48 @@
    - append repository events.
 2. Вынесен `OrderRunStateService`:
    - план runnable/skipped заказов;
-   - управление run-state (`BeginRunSessions`, `CompleteRunSession`, `TryStopOrder`).
-3. Вынесен `OrderStatusTransitionService`:
-   - нормализация `source/reason`;
-   - атомарное применение status-transition к `OrderData`.
-4. `MainForm` переведён на сервисные операции для history/run-state/status-transition.
-5. Добавлен `LanOrderRunApiGateway` и URL-настройка `LAN API base URL`:
-   - в режиме `LanPostgreSql` кнопки `Run/Stop` сначала вызывают `POST /api/orders/{id}/run|stop`;
-   - локальный `_runTokensByOrder` оставлен как runtime-state активной сессии обработки;
-   - после server-command выполняется snapshot-refresh (`TryLoadAll`) для предотвращения false `concurrency conflict` в следующем `SaveHistory`.
-6. Добавлен `LanRunCommandCoordinator`:
-   - `MainForm` больше не оркестрирует LAN `run/stop` напрямую через gateway;
-   - orchestration вынесена в отдельный сервисный слой (`LanRunCommandCoordinator` + `ILanOrderRunApiGateway`);
-   - добавлены unit-тесты coordinator на ветки success/conflict/fatal и stop-flow.
-7. Добавлен `OrderRunExecutionService`:
-   - конкурентное выполнение run-сессий (`Task.WhenAll`), обработка `cancel/error` и lifecycle-callbacks вынесены из `MainForm`;
-   - `MainForm` теперь вызывает сервисный use-case для выполнения run-пачки и отображает результат;
-   - добавлены unit-тесты на `success/cancel/failure/mixed` сценарии выполнения.
-8. Добавлена двусторонняя sync-логика history:
-   - при `LanPostgreSql` load coordinator выполняет безопасную синхронизацию `history.json <-> PostgreSQL`;
-   - `file -> db`: импортируются отсутствующие в БД заказы (по `InternalId`);
-   - `db -> file`: после load/merge актуальный LAN-снимок зеркалится обратно в `history.json`;
-   - conflict-policy для пересечений `InternalId`: DB-first (без silent overwrite существующих серверных записей).
+   - управление run-state (`BeginRunSessions`, `CompleteRunSession`, `TryStopOrder`, `BuildStopPlan`).
+3. Вынесен `OrderStatusTransitionService`.
+4. Добавлены `LanOrderRunApiGateway` + `LanRunCommandCoordinator`.
+5. Добавлен `OrderRunExecutionService`.
+6. Добавлена двусторонняя sync-логика history (`history.json <-> PostgreSQL`, DB-first на конфликтах).
+7. Закрыт client cutover для run/stop в LAN-режиме:
+   - локальный `_runTokensByOrder` больше не источник истины для server run-state;
+   - при старте в LAN `BuildRunPlan(..., useLocalRunState: false)` не блокирует повторный запуск только по локальному токену;
+   - stop в LAN отправляется на сервер даже без локальной сессии;
+   - `tsbStop` активируется по `Processing`-статусу в LAN, даже если локального токена нет.
 
 ## 4. Техническая верификация (2026-03-20)
 
 1. `dotnet build Replica.sln` -> PASS (`0 warnings`, `0 errors`).
-2. `dotnet test Replica.sln` -> PASS (`65/65`).
-3. `REPLICA_RUN_PG_INTEGRATION=1 dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj` -> PASS (`40/40`).
-4. Расширен PostgreSQL integration pack:
+2. `dotnet test Replica.sln` -> PASS (`73/73`).
+3. `REPLICA_RUN_PG_INTEGRATION=1 dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj` -> PASS (`48/48`).
+4. Расширен test pack:
    - `PostgreSqlIntegration_EfCoreStore_RunStopLifecycle_PersistsLockAndEvents`;
-   - `PostgreSqlIntegration_EfCoreStore_RunStop_RejectsVersionMismatch`.
-   - `LanOrderRunApiGatewayTests` (client-side HTTP `run/stop`).
-   - `LanRunCommandCoordinatorTests` (client-side coordinator behavior).
-   - `OrderRunExecutionServiceTests` (client-side run execution use-case behavior).
-   - `PostgreSqlIntegration_Coordinator_SynchronizesFileAndLanHistories` (двусторонняя sync history).
-5. Smoke API:
-   - `GET /health` -> `200`, `store=EfCoreLanOrderStore`, `mode=PostgreSql`;
-   - `GET /api/users` -> `200`;
-   - `GET /api/orders` -> `200`.
+   - `PostgreSqlIntegration_EfCoreStore_RunStop_RejectsVersionMismatch`;
+   - `PostgreSqlIntegration_Coordinator_SynchronizesFileAndLanHistories`;
+   - `LanOrderRunApiGatewayTests`;
+   - `LanRunCommandCoordinatorTests`;
+   - `OrderRunExecutionServiceTests`;
+   - `OrderRunStateServiceTests` (LAN cutover cases);
+   - `OrdersControllerActorValidationTests`;
+   - `CorrelationContextMiddlewareTests`.
 
-## 5. Что остаётся в Step 2 этапа 3
+## 5. Итог Step 2
 
-1. Завершить полный client cutover: убрать локальный `_runTokensByOrder` как источник истины в LAN-режиме и оставить его только как UI/runtime-session state.
-2. Продолжить вынос application-логики из UI: следующий кандидат — сервисный use-case слой поверх order workflow.
-3. Ввести authN/authZ boundary и обязательную actor validation.
-4. Добавить structured logging + correlation id.
-5. Продолжить декомпозицию `MainForm`: выделить отдельные orchestration-сервисы для file/workflow операций (следом за history/run/status/LAN-run).
+Решение: **Step 2 Closed**.
 
-## 6. DoD этапа 3 (без изменений)
+Что перенесено в следующий архитектурный слой:
+1. Дальнейший вынос file/workflow orchestration из `MainForm` (следующие декомпозиционные срезы).
+2. Расширение security boundary до полноценного authN/authZ контура (на текущем шаге реализована actor validation для write path).
 
-Этап 3 закрыт, когда одновременно выполнено:
+## 6. DoD этапа 3
+
+Этап 3 закрыт по критериям:
 1. Клиент работает через API-контракт без прямой записи UI в PostgreSQL.
 2. Сервер управляет конкурентностью и `run/stop` координацией.
-3. Введена базовая security boundary (actor identity + server validation).
-4. Наблюдаемость покрывает ключевые операции (events + structured logs).
+3. Введена базовая security boundary (actor identity + server validation write path).
+4. Добавлена наблюдаемость request-уровня (`X-Correlation-Id`, structured request logs).
 
 ---
 

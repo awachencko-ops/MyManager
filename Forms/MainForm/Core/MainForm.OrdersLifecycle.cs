@@ -735,7 +735,11 @@ namespace Replica
                 return;
             }
 
-            var runPlan = _orderRunStateService.BuildRunPlan(selectedOrders, _runTokensByOrder);
+            var useLanApi = ShouldUseLanRunApi();
+            var runPlan = _orderRunStateService.BuildRunPlan(
+                selectedOrders,
+                _runTokensByOrder,
+                useLocalRunState: !useLanApi);
             var runnableOrders = runPlan.RunnableOrders;
 
             if (runnableOrders.Count == 0)
@@ -756,7 +760,7 @@ namespace Replica
 
             var lanRunBatchResult = await _lanRunCommandCoordinator.TryStartRunsAsync(
                 runnableOrders,
-                useLanApi: ShouldUseLanRunApi(),
+                useLanApi: useLanApi,
                 lanApiBaseUrl: _lanApiBaseUrl,
                 actor: ResolveLanApiActor(),
                 orderDisplayIdResolver: GetOrderDisplayId);
@@ -934,27 +938,40 @@ namespace Replica
                 return;
             }
 
-            if (!_orderRunStateService.TryStopOrder(order, _runTokensByOrder, _runProgressByOrderInternalId, out var cts))
+            var useLanApi = ShouldUseLanRunApi();
+            var stopPlan = _orderRunStateService.BuildStopPlan(
+                order,
+                useLanApi,
+                _runTokensByOrder,
+                _runProgressByOrderInternalId);
+
+            if (!stopPlan.CanProceed)
             {
                 SetBottomStatus($"Заказ {GetOrderDisplayId(order)} сейчас не выполняется");
                 MessageBox.Show(this, $"Заказ {GetOrderDisplayId(order)} сейчас не выполняется.", "Остановка", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
-            cts.Cancel();
-            UpdateTrayProgressIndicator();
+            if (stopPlan.LocalCancellationTokenSource != null)
+            {
+                stopPlan.LocalCancellationTokenSource.Cancel();
+                UpdateTrayProgressIndicator();
+            }
 
             var stopCommandResult = await _lanRunCommandCoordinator.TryStopRunAsync(
                 order,
-                useLanApi: ShouldUseLanRunApi(),
+                useLanApi: stopPlan.ShouldSendServerStop,
                 lanApiBaseUrl: _lanApiBaseUrl,
                 actor: ResolveLanApiActor());
+
+            var canApplyLocalStopStatus = stopPlan.HasLocalRunSession;
 
             if (stopCommandResult.UsedLanApi)
             {
                 var stopResult = stopCommandResult.ApiResult!;
                 if (stopResult.IsSuccess)
                 {
+                    canApplyLocalStopStatus = true;
                     if (!TryRefreshRepositorySnapshotFromStorage(new[] { order }, "run-stop"))
                     {
                         Logger.Warn($"RUN | snapshot-refresh-failed | reason=run-stop | order={GetOrderDisplayId(order)}");
@@ -983,10 +1000,32 @@ namespace Replica
                 }
             }
 
-            AppendOrderOperationLog(order, OrderOperationNames.Stop, "Остановлено пользователем");
-            SetOrderStatus(order, WorkflowStatusNames.Cancelled, OrderStatusSourceNames.Ui, "Остановлено пользователем", persistHistory: true, rebuildGrid: true);
-            UpdateActionButtonsState();
-            SetBottomStatus($"Остановлен заказ {GetOrderDisplayId(order)}");
+            if (canApplyLocalStopStatus)
+            {
+                AppendOrderOperationLog(order, OrderOperationNames.Stop, "Остановлено пользователем");
+                SetOrderStatus(order, WorkflowStatusNames.Cancelled, OrderStatusSourceNames.Ui, "Остановлено пользователем", persistHistory: true, rebuildGrid: true);
+                UpdateActionButtonsState();
+                SetBottomStatus($"Остановлен заказ {GetOrderDisplayId(order)}");
+                return;
+            }
+
+            if (stopCommandResult.UsedLanApi)
+            {
+                var stopResult = stopCommandResult.ApiResult!;
+                if (stopResult.IsConflict)
+                {
+                    SetBottomStatus($"Остановка не подтверждена: конфликт версии ({GetOrderDisplayId(order)})");
+                    MessageBox.Show(
+                        this,
+                        "Сервер отклонил остановку из-за конфликта версии. Обновите заказ и повторите операцию.",
+                        "Остановка",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+                    return;
+                }
+            }
+
+            SetBottomStatus($"Сервер не подтвердил остановку {GetOrderDisplayId(order)}");
         }
 
         private bool ShouldUseLanRunApi()

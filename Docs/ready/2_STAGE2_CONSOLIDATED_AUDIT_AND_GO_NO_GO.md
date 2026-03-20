@@ -20,7 +20,8 @@
    - на момент закрытия этапа 2: `42/42 PASS` (`17/17 Verify`, `25/25 UiSmoke`);
    - повторная проверка на 2026-03-20: `55/55 PASS` (`30/30 Verify`, `25/25 UiSmoke`);
    - расширенная проверка после Step 2 этапа 3 (2026-03-20): `65/65 PASS` (`40/40 Verify`, `25/25 UiSmoke`);
-   - PostgreSQL integration tests запускаются opt-in: `REPLICA_RUN_PG_INTEGRATION=1` (`40/40 PASS`).
+   - дополнительная проверка после закрытия Step 2 этапа 3 (2026-03-20): `73/73 PASS` (`48/48 Verify`, `25/25 UiSmoke`);
+   - PostgreSQL integration tests запускаются opt-in: `REPLICA_RUN_PG_INTEGRATION=1` (`48/48 PASS`).
 
 ## 2. Что остается (вход в Stage 3)
 
@@ -30,6 +31,10 @@
 4. Закрыть операционные контуры Stage 3:
    - LAN client-server контракт;
    - deployment/backup/restore/runbook.
+
+Примечание по актуальному статусу:
+1. Пункты 1 и 3 закрыты в Stage 3 Step 2 (2026-03-20).
+2. Пункт 2 закрыт частично (actor validation write-path), полный authN/authZ контур перенесён в следующий срез.
 
 ## 3. Go / No-Go для Stage 3
 

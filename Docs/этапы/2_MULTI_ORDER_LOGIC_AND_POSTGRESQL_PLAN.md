@@ -158,6 +158,9 @@
 8. Дополнительная регрессия после сервисного выноса LAN run/stop orchestration, run-execution use-case и двусторонней history-sync (2026-03-20):
    - `dotnet test Replica.sln` -> `65/65 PASS` (`40/40 Verify`, `25/25 UiSmoke`);
    - `REPLICA_RUN_PG_INTEGRATION=1 dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj` -> `40/40 PASS`.
+9. Контрольная регрессия после закрытия Step 2 этапа 3 (LAN run-state cutover + actor validation + correlation middleware, 2026-03-20):
+   - `dotnet test Replica.sln` -> `73/73 PASS` (`48/48 Verify`, `25/25 UiSmoke`);
+   - `REPLICA_RUN_PG_INTEGRATION=1 dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj` -> `48/48 PASS`.
 
 ## 6. Риски и контрмеры
 
@@ -182,6 +185,7 @@
 3. Тестовый baseline подтвержден: `dotnet test Replica.sln` -> `42/42 PASS`.
 4. Актуальный повторный baseline (2026-03-20): `dotnet test Replica.sln` -> `55/55 PASS`.
 5. Дополнительный baseline после сервисного выноса LAN run/stop orchestration, run-execution use-case и двусторонней history-sync (2026-03-20): `dotnet test Replica.sln` -> `65/65 PASS`.
+6. Контрольный baseline после закрытия Step 2 этапа 3 (2026-03-20): `dotnet test Replica.sln` -> `73/73 PASS`.
 
 ## 8. Связь с этапами
 

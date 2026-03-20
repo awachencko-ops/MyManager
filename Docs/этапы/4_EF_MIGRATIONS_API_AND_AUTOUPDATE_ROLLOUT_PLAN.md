@@ -1,19 +1,19 @@
 ﻿# Этап 4: EF migrations, API endpoints и автообновление клиента
 
 Дата актуализации: 2026-03-20
-Статус: In progress (EF Core baseline уже внедрён на этапе 3 Step 2)
+Статус: In progress (этап 3 закрыт, этап 4 выполняется)
 
 ## 1. Цель этапа
 
-Завершить технический контур после Step 1 архитектурного разделения:
+Завершить технический контур после архитектурного разделения:
 1. Поднять EF Core + миграции PostgreSQL.
 2. Реализовать рабочие API endpoints для пользователей и заказов.
-3. Включить аудит изменений и контроль конкурентности.
+3. Закрыть аудит изменений и контроль конкурентности.
 4. Запустить автообновление WinForms-клиента в LAN (без ручных обновлений на 5 ПК).
 
 ## 2. EF Core и миграции (PostgreSQL)
 
-## 2.0 Что уже сделано (факт 2026-03-20)
+### 2.0 Что уже сделано (факт 2026-03-20)
 
 1. Добавлен `ReplicaDbContext` в `Replica.Api`.
 2. Добавлены entity mappings для `orders`, `order_items`, `order_events`, `users`, `storage_meta`.
@@ -22,34 +22,23 @@
 5. На старте API (PostgreSQL mode) выполняется `Database.Migrate()`.
 6. `ILanOrderStore` переведён на `EfCoreLanOrderStore` (PostgreSQL mode), in-memory оставлен как fallback.
 7. Реализованы endpoints `POST /api/orders/{id}/run` и `POST /api/orders/{id}/stop` с optimistic concurrency и `409 Conflict` при активном запуске.
-8. Добавлены PostgreSQL integration tests для `run/stop` (`EfCoreLanOrderStore` + `order_run_locks` + event journal).
-9. Клиентский `MainForm` в режиме `LanPostgreSql` отправляет `run/stop` через сервисный слой (`LanRunCommandCoordinator` -> `LanOrderRunApiGateway`).
-10. В настройках клиента добавлен параметр `LAN API base URL` (по умолчанию `http://localhost:5000/`).
+8. Клиентский `MainForm` в режиме `LanPostgreSql` отправляет `run/stop` через сервисный слой (`LanRunCommandCoordinator` -> `LanOrderRunApiGateway`).
+9. Для write-endpoints включена обязательная actor validation (`X-Current-User`, проверка активного пользователя при непустой users-directory).
+10. Введён request-level `X-Correlation-Id` middleware + structured request logging scope.
+11. Добавлены и проходят тесты на actor validation и middleware correlation (`Replica.VerifyTests`).
 
-## 2.1 Что внедряем
+### 2.1 Что ещё нужно внедрить
 
-1. `DbContext` в `Replica.Api`.
-2. Конфигурации сущностей: `Order`, `OrderItem`, `OrderEvent`, `User`.
-3. `Version` как concurrency token.
-4. Индексы и ограничения:
-   - `unique(order_id, sequence_no)`;
-   - `check(sequence_no > 0)`;
-   - индекс по `CreatedById`/`CreatedByUser`.
-
-## 2.2 Миграции
-
-1. Создать `InitialCreate`.
-2. Прогнать миграцию на тестовой БД.
-3. Проверить схему и индексы.
-4. Подготовить rollback-скрипт (минимум для последней миграции).
+1. Финализировать migration/rollback runbook для эксплуатации.
+2. Подтвердить индексы/ограничения на целевой БД (включая `unique(order_id, sequence_no)`, `check(sequence_no > 0)`).
 
 ## 3. API endpoints (минимум прод-готовности)
 
-## 3.1 Users
+### 3.1 Users
 
 1. `GET /users` — список сотрудников для Login.
 
-## 3.2 Orders
+### 3.2 Orders
 
 1. `GET /orders?createdBy=...` — список с фильтрацией по автору.
 2. `GET /orders/{id}` — карточка контейнера + items.
@@ -61,36 +50,32 @@
 8. `POST /orders/{id}/run` — серверный старт обработки заказа.
 9. `POST /orders/{id}/stop` — серверная остановка обработки заказа.
 
-## 3.3 Требования к обработке
+### 3.3 Требования к обработке
 
-1. Автор заказа берётся из `X-Current-User` и валидируется по `Users`.
-2. Конфликт версий возвращает `409 Conflict`.
-3. Ошибки валидации возвращают структурированный `400`.
+1. `X-Current-User` обязателен для write-path.
+2. При наличии users-directory actor должен быть известным и активным.
+3. Конфликт версий возвращает `409 Conflict`.
+4. Ошибки валидации возвращают структурированный `400`.
 
 ## 4. Аудит и конкурентность
 
-1. Включить перехват `SaveChanges`/pipeline для записи `order_events`.
-2. Логировать операции insert/update/delete для `Order` и `OrderItem`.
-3. Для каждого события сохранять:
-   - `actor` (кто изменил),
-   - `event_type`,
-   - `payload` (jsonb),
-   - timestamp.
-4. В клиенте при 409 показывать понятное уведомление и перезагружать запись.
+1. `order_events` наполняется на ключевых write/run/stop операциях.
+2. Требуется финально зафиксировать эксплуатационный протокол аудита (какие события обязательны, какие проверяем на релизе).
+3. В клиенте при 409 выполняется корректная обработка и refresh-сценарий.
 
 ## 5. Автообновление клиента (LAN)
 
-## 5.1 Сервер (`Replica.Api`)
+### 5.1 Сервер (`Replica.Api`)
 
 1. Папка: `wwwroot/updates/`.
 2. Раздача статических файлов через `app.UseStaticFiles()`.
 3. API bind на `0.0.0.0:5000`.
 4. Артефакты:
-   - `update.xml`,
-   - `ReplicaClient.zip`,
+   - `update.xml`;
+   - `ReplicaClient.zip`;
    - `changelog.txt` (опционально).
 
-## 5.2 Клиент (`Replica.Client`)
+### 5.2 Клиент (`Replica.Client`)
 
 1. NuGet: `Autoupdater.NET.Official`.
 2. Запуск проверки до `Application.Run(MainForm)`:
@@ -99,7 +84,7 @@
    - для критичных релизов — mandatory;
    - для обычных — уведомление с подтверждением.
 
-## 5.3 Релизный цикл
+### 5.3 Релизный цикл
 
 1. `dotnet publish` клиента (Release).
 2. Упаковка publish в ZIP.
@@ -115,8 +100,9 @@
 4. При конкурентном конфликте API возвращает 409, клиент корректно реагирует.
 5. `order_events` наполняется при изменениях.
 6. `run/stop` проходит через `order_run_locks`, повторный `run` даёт `409 Conflict`.
-7. Кнопки `Run/Stop` в WinForms (`LanPostgreSql` mode) используют API boundary (`/api/orders/{id}/run|stop`).
-8. Автообновление подхватывает новую версию по `update.xml`.
+7. Write-endpoints отклоняют запросы без валидного `X-Current-User`.
+8. Ответы API содержат `X-Correlation-Id`.
+9. Автообновление подхватывает новую версию по `update.xml`.
 
 ## 7. Definition of Done этапа 4
 
@@ -129,6 +115,6 @@
 ---
 
 Связь с этапами:
-- Вход: `3_LAN_CLIENT_SERVER_BRIEF_STEP1.md`
+- Вход: `3_LAN_CLIENT_SERVER_BRIEF_STEP1.md`.
 - Выход: рабочий цикл релизов и поддержка LAN-клиентов без ручной установки.
 - Следующий этап: `5_INSTALLER_AND_DEPENDENCIES_PACKAGING_PLAN.md`.

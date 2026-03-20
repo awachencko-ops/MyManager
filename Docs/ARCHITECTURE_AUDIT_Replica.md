@@ -21,6 +21,8 @@
 > Актуализация на 2026-03-20 (этап 3, Step 2 progress, срез 7): добавлен `OrderRunExecutionService`; конкурентное выполнение run-сессий (`Task.WhenAll`, cancel/error handling, completion callbacks) вынесено из `MainForm` в сервисный use-case слой, покрыто unit-тестами (`success/cancel/failure/mixed`).
 >
 > Актуализация на 2026-03-20 (этап 3, Step 2 progress, срез 8): добавлена двусторонняя sync-логика history в `OrdersHistoryRepositoryCoordinator` (`history.json <-> PostgreSQL`): `file->db` импорт отсутствующих заказов по `InternalId`, `db->file` зеркалирование актуального снимка; подтверждено integration-тестом coordinator sync.
+>
+> Актуализация на 2026-03-20 (этап 3, Step 2 close, срез 9): закрыт client cutover `run/stop` в LAN-режиме (локальный `_runTokensByOrder` больше не источник истины для server run-state), добавлена обязательная actor validation для write-endpoints (`X-Current-User`) и request-level `X-Correlation-Id` middleware.
 
 ## Executive summary
 
@@ -100,7 +102,7 @@
 - Лог статусов заказа (`AppendOrderStatusLog`) текстовый, best-effort, с глушением ошибок записи.
 - В PostgreSQL введён событийный журнал `order_events` (CRUD-события репозитория + `run/stop/delete/topology/add-item/remove-item/status-change` из клиентских workflow-точек).
 - Распределенной трассировки нет (и отсутствует распределенная архитектура на текущем этапе).
-- `order_events` хранится в БД и снижает риск mutable file-audit, но пока отсутствуют корреляция запросов, actor identity и формализованные audit-дашборды.
+- `order_events` хранится в БД и снижает риск mutable file-audit; добавлены базовые actor identity (write path) и request correlation id, но end-to-end трассировка и формализованные audit-дашборды пока отсутствуют.
 
 ### Вывод
 
@@ -131,15 +133,15 @@
 | `MainForm` orchestration | God Object, смешение UI + domain + persistence + file IO (частично снижено сервисными выносами) | **High** | Продолжить декомпозицию: выделить use-case слой (`IOrderApplicationService`), UI оставить как presenter/view; внедрить DI/composition root. |
 | История заказов (`history.json` / LAN PostgreSQL) | В FileSystem-режиме остаётся риск race; в LAN-режиме риск снижен через version-check | **Med** | Оставить FileSystem только как fallback; целевой режим — PostgreSQL + server-side command boundary. |
 | `SetOrderStatus` + `SaveHistory` | Клиентская неатомарность между UI-операцией и persistence | **Med/High** | Перенести статусные команды в API/worker с unit of work и server-side invariants. |
-| `_runTokensByOrder` (in-memory) | В LAN уже не источник истины для `run/stop`, но всё ещё влияет на локальный lifecycle | **Med** | Довести модель: in-memory только runtime-session state, server lock/state — единственный источник истины. |
+| `_runTokensByOrder` (in-memory) | Переведён в runtime-session state; риск смещён в сторону UX-согласованности между клиентами | **Low/Med** | Сохранить server lock/state единственным источником истины и расширять server-driven refresh-сценарии. |
 | `OrderProcessor` file workflow | Нет retry/backoff на сетевые ошибки | **High** | Политики resilience (Polly): retry with jitter, timeout budget, fallback. |
 | Ожидание hotfolder | Polling без circuit breaker | **Med** | Добавить circuit breaker + health state для внешних зависимостей (PitStop/Imposing/NAS). |
-| Логирование (`Logger`) | Неструктурированные логи без correlation | **High** | Перейти на structured logging (Serilog + sink), обязательные поля: `order_id`, `actor`, `operation`, `trace_id`. |
+| Логирование (`Logger`) | В API введён базовый request correlation (`X-Correlation-Id`), но нет полного end-to-end structured telemetry | **Med/High** | Довести до единого structured logging/tracing контура (client+api+worker). |
 | Order status log file | best-effort append, mutable file (частично компенсировано `order_events`) | **Med** | Сделать `order_events` primary audit source, добавить retention/архив и SQL-аудит отчёты. |
 | Ошибки с `catch { }` | Потеря диагностических сигналов | **Med** | Запретить silent catch без метрик/логов; ввести error budget и алерты. |
 | ConfigService/AppSettings static IO | Сильная связность с файловой системой, сложная тестируемость | **Med** | Абстрагировать через `IConfigRepository`, `ISettingsProvider`, внедрить mockable adapters. |
 | Отсутствие API идемпотентности | Дубли заказов при повторной отправке | **High** | В API-командах использовать `Idempotency-Key` + таблицу дедупликации. |
-| Отсутствие authN/authZ границ | Невозможно enforce policy на сервере | **High** | Ввести API gateway + JWT/SSO + role/claim-based authorization. |
+| Отсутствие полного authN/authZ контура | Базовая actor validation write-path уже есть, но role/claim policy и полноценная authN не внедрены | **Med/High** | Ввести API authN/authZ (JWT/SSO + role/claim-based authorization). |
 | Валидация входных данных | Локальная и фрагментарная | **Med** | Централизовать validation на command DTO/domain rules, добавить schema/contract validation. |
 | Хардкод дефолтных путей NAS | Сложность portability/segmentation | **Low/Med** | Вынести в environment-specific config profiles, добавить проверку доступности на старте. |
 | Отсутствие распределенной трассировки | Невозможно проследить end-to-end через сервисы | **Med (сейчас), High (после разделения)** | Внедрить OpenTelemetry tracing заранее в новом API/worker-контуре. |

@@ -512,11 +512,16 @@ namespace Replica
                 }
             }
 
+            var canStopByLocalRunSession = hasOrder && _runTokensByOrder.ContainsKey(order!.InternalId);
+            var canStopByLanStatus = hasOrder
+                && ShouldUseLanRunApi()
+                && string.Equals(NormalizeStatus(order!.Status), WorkflowStatusNames.Processing, StringComparison.OrdinalIgnoreCase);
+
             tsbRun.Enabled = hasOrder;
             tsbRemove.Enabled = hasOrder;
             tsbBrowse.Enabled = canOpenOrderFolder;
             tsbConsole.Enabled = hasOrder;
-            tsbStop.Enabled = hasOrder && _runTokensByOrder.ContainsKey(order!.InternalId);
+            tsbStop.Enabled = canStopByLocalRunSession || canStopByLanStatus;
             tsbAddFile.Enabled = canAddFileToSelectedOrder;
 
             tsbBrowse.ToolTipText = browseTooltipText;

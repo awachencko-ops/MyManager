@@ -34,6 +34,25 @@ public sealed class OrderRunStateServiceTests
     }
 
     [Fact]
+    public void BuildRunPlan_WhenLocalRunStateDisabled_DoesNotSkipByLocalTokens()
+    {
+        var service = new OrderRunStateService();
+        var order = new OrderData { InternalId = "run-1", Id = "1001" };
+        var runningTokens = new Dictionary<string, CancellationTokenSource>(StringComparer.Ordinal)
+        {
+            [order.InternalId] = new()
+        };
+
+        var plan = service.BuildRunPlan(
+            new List<OrderData> { order },
+            runningTokens,
+            useLocalRunState: false);
+
+        Assert.Single(plan.RunnableOrders);
+        Assert.Empty(plan.AlreadyRunningOrders);
+    }
+
+    [Fact]
     public void BeginRunSessions_InitializesTokensAndProgress()
     {
         var service = new OrderRunStateService();
@@ -85,5 +104,26 @@ public sealed class OrderRunStateServiceTests
 
         var stoppedAgain = service.TryStopOrder(order, runTokens, runProgress, out _);
         Assert.False(stoppedAgain);
+    }
+
+    [Fact]
+    public void BuildStopPlan_WhenLanApiEnabled_ProceedsWithoutLocalSession()
+    {
+        var service = new OrderRunStateService();
+        var order = new OrderData { InternalId = "run-1", Id = "1001" };
+
+        var runTokens = new Dictionary<string, CancellationTokenSource>(StringComparer.Ordinal);
+        var runProgress = new Dictionary<string, int>(StringComparer.Ordinal);
+
+        var plan = service.BuildStopPlan(
+            order,
+            useLanApi: true,
+            runTokens,
+            runProgress);
+
+        Assert.True(plan.CanProceed);
+        Assert.False(plan.HasLocalRunSession);
+        Assert.True(plan.ShouldSendServerStop);
+        Assert.Null(plan.LocalCancellationTokenSource);
     }
 }

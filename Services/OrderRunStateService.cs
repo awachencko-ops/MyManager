@@ -9,7 +9,8 @@ public sealed class OrderRunStateService
 {
     public RunPlan BuildRunPlan(
         IReadOnlyCollection<OrderData> selectedOrders,
-        IReadOnlyDictionary<string, CancellationTokenSource> runningTokens)
+        IReadOnlyDictionary<string, CancellationTokenSource> runningTokens,
+        bool useLocalRunState = true)
     {
         var safeSelected = selectedOrders ?? Array.Empty<OrderData>();
         var safeRunning = runningTokens ?? new Dictionary<string, CancellationTokenSource>(StringComparer.Ordinal);
@@ -18,9 +19,11 @@ public sealed class OrderRunStateService
             .Where(order => order != null && string.IsNullOrWhiteSpace(order.Id))
             .ToList();
 
-        var alreadyRunningOrders = safeSelected
-            .Where(order => order != null && !string.IsNullOrWhiteSpace(order.InternalId) && safeRunning.ContainsKey(order.InternalId))
-            .ToList();
+        var alreadyRunningOrders = useLocalRunState
+            ? safeSelected
+                .Where(order => order != null && !string.IsNullOrWhiteSpace(order.InternalId) && safeRunning.ContainsKey(order.InternalId))
+                .ToList()
+            : new List<OrderData>();
 
         var runnableOrders = safeSelected
             .Where(order => order != null)
@@ -71,6 +74,29 @@ public sealed class OrderRunStateService
         return true;
     }
 
+    public StopPlan BuildStopPlan(
+        OrderData order,
+        bool useLanApi,
+        IDictionary<string, CancellationTokenSource> runTokensByOrder,
+        IDictionary<string, int> runProgressByOrderInternalId)
+    {
+        if (order == null || string.IsNullOrWhiteSpace(order.InternalId))
+            return StopPlan.InvalidOrder();
+
+        var hasLocalRunSession = TryStopOrder(
+            order,
+            runTokensByOrder,
+            runProgressByOrderInternalId,
+            out var localCancellationTokenSource);
+
+        var canProceed = hasLocalRunSession || useLanApi;
+        return new StopPlan(
+            canProceed,
+            hasLocalRunSession,
+            useLanApi,
+            localCancellationTokenSource);
+    }
+
     public void CompleteRunSession(
         OrderData order,
         IDictionary<string, CancellationTokenSource> runTokensByOrder,
@@ -113,4 +139,20 @@ public sealed class OrderRunStateService
         List<OrderData> AlreadyRunningOrders);
 
     public sealed record RunSession(OrderData Order, CancellationTokenSource Cts);
+
+    public sealed record StopPlan(
+        bool CanProceed,
+        bool HasLocalRunSession,
+        bool ShouldSendServerStop,
+        CancellationTokenSource? LocalCancellationTokenSource)
+    {
+        public static StopPlan InvalidOrder()
+        {
+            return new StopPlan(
+                CanProceed: false,
+                HasLocalRunSession: false,
+                ShouldSendServerStop: false,
+                LocalCancellationTokenSource: null);
+        }
+    }
 }
