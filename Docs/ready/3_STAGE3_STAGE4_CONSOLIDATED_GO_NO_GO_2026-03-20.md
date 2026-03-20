@@ -33,8 +33,11 @@
 ## 3. Техническое подтверждение
 
 1. `dotnet build Replica.sln` -> PASS (`0 warnings`, `0 errors`).
-2. `dotnet test Replica.sln` -> PASS (`77/77`).
-3. `REPLICA_RUN_PG_INTEGRATION=1 dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj` -> PASS (`52/52`).
+2. `dotnet test Replica.sln` -> PASS (`162/162`: `137/137 Verify`, `25/25 UiSmoke`).
+3. `REPLICA_RUN_PG_INTEGRATION=1 dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj` -> PASS (`137/137`).
+
+Примечание по revalidation (финальный срез на 2026-03-20):
+1. `OrdersWorkspaceForm` переведен на единый `IOrderApplicationService` boundary (включая history/folder orchestration) без регрессий в full/PG regression.
 
 ## 4. Общий вывод
 

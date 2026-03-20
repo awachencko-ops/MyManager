@@ -107,19 +107,19 @@ namespace Replica
 
         private void EnsureOrdersRepository()
         {
-            _ordersHistoryCoordinator.Configure(_ordersStorageBackend, _lanPostgreSqlConnectionString, _jsonHistoryFile);
+            _orderApplicationService.ConfigureHistoryRepository(_ordersStorageBackend, _lanPostgreSqlConnectionString, _jsonHistoryFile);
         }
 
         private bool TryLoadHistoryFromConfiguredRepository(out List<OrderData> orders)
         {
             EnsureOrdersRepository();
-            return _ordersHistoryCoordinator.TryLoadAll(out orders);
+            return _orderApplicationService.TryLoadHistory(out orders);
         }
 
         private bool TrySaveHistoryToConfiguredRepository(out string error)
         {
             EnsureOrdersRepository();
-            return _ordersHistoryCoordinator.TrySaveAll(_orderHistory, out error);
+            return _orderApplicationService.TrySaveHistory(_orderHistory, out error);
         }
 
         private void TryAppendRepositoryEvent(
@@ -138,7 +138,7 @@ namespace Replica
                 ? "{}"
                 : JsonSerializer.Serialize(payload);
 
-            if (_ordersHistoryCoordinator.TryAppendEvent(
+            if (_orderApplicationService.TryAppendHistoryEvent(
                     orderInternalId,
                     itemId ?? string.Empty,
                     eventType ?? string.Empty,
@@ -152,7 +152,7 @@ namespace Replica
             if (!string.IsNullOrWhiteSpace(appendError))
             {
                 Logger.Warn(
-                    $"HISTORY | event-append-failed | backend={_ordersHistoryCoordinator.BackendName} | order={GetOrderDisplayId(order)} | event={eventType} | {appendError}");
+                    $"HISTORY | event-append-failed | backend={_orderApplicationService.OrdersRepositoryBackendName} | order={GetOrderDisplayId(order)} | event={eventType} | {appendError}");
             }
         }
 
@@ -164,7 +164,7 @@ namespace Replica
             if (TryLoadHistoryFromConfiguredRepository(out var loadedOrders) && loadedOrders.Count > 0)
                 _orderHistory.AddRange(loadedOrders);
 
-            var postLoad = _ordersHistoryMaintenanceService.ApplyPostLoad(
+            var postLoad = _orderApplicationService.ApplyHistoryPostLoad(
                 _orderHistory,
                 NormalizeOrderUserName,
                 hashBackfillBudget: 32,
@@ -180,7 +180,7 @@ namespace Replica
 
         private void SaveHistory()
         {
-            _ordersHistoryMaintenanceService.ApplyPreSave(_orderHistory);
+            _orderApplicationService.ApplyHistoryPreSave(_orderHistory);
             _jsonHistoryFile = StoragePaths.ResolveFilePath(_jsonHistoryFile, "history.json");
 
             if (TrySaveHistoryToConfiguredRepository(out var saveError))
@@ -192,7 +192,7 @@ namespace Replica
 
         private bool NormalizeOrderTopologyInHistory(bool logIssues)
         {
-            return _ordersHistoryMaintenanceService.NormalizeOrderTopologyInHistory(
+            return _orderApplicationService.NormalizeHistoryTopology(
                 _orderHistory,
                 logIssues
                     ? (order, issue) => Logger.Warn($"TOPOLOGY | order={GetOrderDisplayId(order)} | {issue}")
@@ -201,7 +201,7 @@ namespace Replica
 
         private bool BackfillMissingFileHashesIncrementally(int maxFilesToHash)
         {
-            return _ordersHistoryMaintenanceService.BackfillMissingFileHashesIncrementally(
+            return _orderApplicationService.BackfillMissingHistoryFileHashes(
                 _orderHistory,
                 maxFilesToHash);
         }
@@ -859,7 +859,7 @@ namespace Replica
 
             if (!TryLoadHistoryFromConfiguredRepository(out var reloadedOrders))
             {
-                Logger.Warn($"HISTORY | snapshot-refresh-failed | reason={reason} | backend={_ordersHistoryCoordinator.BackendName}");
+                Logger.Warn($"HISTORY | snapshot-refresh-failed | reason={reason} | backend={_orderApplicationService.OrdersRepositoryBackendName}");
                 return false;
             }
 
@@ -1151,7 +1151,7 @@ namespace Replica
 
         private bool TryGetBrowseFolderPathForOrder(OrderData order, out string folderPath, out string reason)
         {
-            var resolution = _orderFolderPathResolutionService.ResolveBrowseFolderPath(
+            var resolution = _orderApplicationService.ResolveBrowseFolderPath(
                 order,
                 _ordersRootPath,
                 _tempRootPath);
@@ -1188,7 +1188,7 @@ namespace Replica
 
         private string GetPreferredOrderFolder(OrderData order)
         {
-            return _orderFolderPathResolutionService.ResolvePreferredOrderFolder(
+            return _orderApplicationService.ResolvePreferredOrderFolder(
                 order,
                 _ordersRootPath,
                 _tempRootPath);

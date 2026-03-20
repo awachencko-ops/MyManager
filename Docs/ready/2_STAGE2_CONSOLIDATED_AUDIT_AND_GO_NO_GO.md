@@ -21,7 +21,8 @@
    - повторная проверка на 2026-03-20: `55/55 PASS` (`30/30 Verify`, `25/25 UiSmoke`);
    - расширенная проверка после Step 2 этапа 3 (2026-03-20): `65/65 PASS` (`40/40 Verify`, `25/25 UiSmoke`);
    - дополнительная проверка после закрытия Step 2 этапа 3 (2026-03-20): `73/73 PASS` (`48/48 Verify`, `25/25 UiSmoke`);
-   - PostgreSQL integration tests запускаются opt-in: `REPLICA_RUN_PG_INTEGRATION=1` (`48/48 PASS`).
+   - PostgreSQL integration tests запускаются opt-in: `REPLICA_RUN_PG_INTEGRATION=1` (`48/48 PASS`);
+   - финальная revalidation после risk-burndown/decomposition (2026-03-20): `162/162 PASS` (`137/137 Verify`, `25/25 UiSmoke`), PostgreSQL integration `137/137 PASS`.
 
 ## 2. Что остается (вход в Stage 3)
 

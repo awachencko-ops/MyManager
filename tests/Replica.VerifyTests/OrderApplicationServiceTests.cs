@@ -85,6 +85,17 @@ public sealed class OrderApplicationServiceTests
         }
     }
 
+    [Fact]
+    public void ResolvePreferredOrderFolder_UsesOrderFolderName()
+    {
+        var service = CreateService();
+        var order = new OrderData { FolderName = "A-100" };
+
+        var resolved = service.ResolvePreferredOrderFolder(order, @"C:\orders", @"C:\temp");
+
+        Assert.Equal(Path.Combine(@"C:\orders", "A-100"), resolved);
+    }
+
     private static OrderApplicationService CreateService()
     {
         var now = new DateTime(2026, 3, 20, 12, 0, 0, DateTimeKind.Local);
@@ -106,6 +117,9 @@ public sealed class OrderApplicationServiceTests
         return new OrderApplicationService(
             orderRunCommandService: orderRunCommandService,
             orderRunFeedbackService: new OrderRunFeedbackService(),
+            ordersHistoryRepositoryCoordinator: new OrdersHistoryRepositoryCoordinator(),
+            ordersHistoryMaintenanceService: new OrdersHistoryMaintenanceService(() => now),
+            orderFolderPathResolutionService: new OrderFolderPathResolutionService(),
             orderEditorMutationService: new OrderEditorMutationService(() => now),
             orderItemMutationService: orderItemMutationService,
             orderFileStageCommandService: new OrderFileStageCommandService(),

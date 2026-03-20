@@ -10,7 +10,7 @@
 
 | Область | Текущее состояние | Что переписываем | Критерий закрытия |
 |---|---|---|---|
-| `MainForm` (god-object orchestration) | Переименован shell в `OrdersWorkspaceForm`, код `Orders` перенесён в `Features/Orders/UI/*`, `run/stop` preflight вынесен; общий orchestration ещё в UI | Довынести order workflow orchestration в application/use-case сервис + DI composition root | `OrdersWorkspaceForm` не управляет бизнес-циклами напрямую, только UI/presenter |
+| `MainForm` (god-object orchestration) | Shell переименован в `OrdersWorkspaceForm`, код `Orders` перенесён в `Features/Orders/UI/*`, введён единый `IOrderApplicationService` (включая run/create/edit/delete/item/file + history/folder orchestration) | Дожать presenter-only слой: убрать остаточные orchestration ветки из UI и завершить DI cutover | `OrdersWorkspaceForm` не управляет бизнес-циклами напрямую, только UI/presenter |
 | Write-command boundary | `run/stop` уже server-side + idempotency, остальные write-flow частично клиентские | Перевести `create/update/items/reorder/status` в server command handling | Все mutating операции идут через API-команды и server invariants |
 | JSON/file как рабочее хранилище | LAN sync работает, но file fallback влияет на поведение | Зафиксировать PostgreSQL как primary source of truth, file оставить только import/export fallback | Runtime в LAN режиме не зависит от `history.json` для актуального состояния |
 | Audit/observability | Есть `order_events` + correlation, но нет единой схемы и метрик | Ввести единый structured schema + метрики/дашборды | Инцидент можно отследить end-to-end по `correlation_id` + есть базовые SLO графики |
@@ -26,9 +26,9 @@
 
 ## Следующие 3 итерации
 
-1. Вынести order workflow orchestration из `MainForm` в application-service.
-2. Расширить `Idempotency-Key` на `create/update/items/reorder`.
-3. Довести API boundary для status/update flow и убрать прямые клиентские mutate-path.
+1. Довести server command boundary для `create/update/items/reorder/status`.
+2. Расширить `Idempotency-Key` на все mutating endpoints (не только `run/stop`).
+3. Финализировать observability baseline (единая схема логов + SLO метрики + dashboard).
 
 ## Правило завершения блока «сжечь и переписать»
 

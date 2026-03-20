@@ -5,20 +5,11 @@ namespace Replica;
 internal sealed class OrdersWorkspaceRuntimeServices
 {
     public OrdersWorkspaceRuntimeServices(
-        OrdersHistoryRepositoryCoordinator ordersHistoryCoordinator,
-        OrdersHistoryMaintenanceService ordersHistoryMaintenanceService,
-        OrderFolderPathResolutionService orderFolderPathResolutionService,
         IOrderApplicationService orderApplicationService)
     {
-        OrdersHistoryCoordinator = ordersHistoryCoordinator ?? throw new ArgumentNullException(nameof(ordersHistoryCoordinator));
-        OrdersHistoryMaintenanceService = ordersHistoryMaintenanceService ?? throw new ArgumentNullException(nameof(ordersHistoryMaintenanceService));
-        OrderFolderPathResolutionService = orderFolderPathResolutionService ?? throw new ArgumentNullException(nameof(orderFolderPathResolutionService));
         OrderApplicationService = orderApplicationService ?? throw new ArgumentNullException(nameof(orderApplicationService));
     }
 
-    public OrdersHistoryRepositoryCoordinator OrdersHistoryCoordinator { get; }
-    public OrdersHistoryMaintenanceService OrdersHistoryMaintenanceService { get; }
-    public OrderFolderPathResolutionService OrderFolderPathResolutionService { get; }
     public IOrderApplicationService OrderApplicationService { get; }
 }
 
@@ -40,9 +31,15 @@ internal static class OrdersWorkspaceCompositionRoot
         var orderFileRenameRemoveCommandService = new OrderFileRenameRemoveCommandService(
             orderFilePathMutationService,
             orderItemMutationService);
+        var ordersHistoryRepositoryCoordinator = new OrdersHistoryRepositoryCoordinator();
+        var ordersHistoryMaintenanceService = new OrdersHistoryMaintenanceService();
+        var orderFolderPathResolutionService = new OrderFolderPathResolutionService();
         var orderApplicationService = new OrderApplicationService(
             orderRunCommandService: orderRunCommandService,
             orderRunFeedbackService: new OrderRunFeedbackService(),
+            ordersHistoryRepositoryCoordinator: ordersHistoryRepositoryCoordinator,
+            ordersHistoryMaintenanceService: ordersHistoryMaintenanceService,
+            orderFolderPathResolutionService: orderFolderPathResolutionService,
             orderEditorMutationService: new OrderEditorMutationService(),
             orderItemMutationService: orderItemMutationService,
             orderFileStageCommandService: new OrderFileStageCommandService(),
@@ -54,9 +51,6 @@ internal static class OrdersWorkspaceCompositionRoot
             orderStorageVersionSyncService: new OrderStorageVersionSyncService());
 
         return new OrdersWorkspaceRuntimeServices(
-            ordersHistoryCoordinator: new OrdersHistoryRepositoryCoordinator(),
-            ordersHistoryMaintenanceService: new OrdersHistoryMaintenanceService(),
-            orderFolderPathResolutionService: new OrderFolderPathResolutionService(),
             orderApplicationService: orderApplicationService);
     }
 }

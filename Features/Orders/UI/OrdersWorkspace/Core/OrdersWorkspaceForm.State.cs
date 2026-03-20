@@ -28,9 +28,6 @@ namespace Replica
         private OrdersStorageMode _ordersStorageBackend = OrdersStorageMode.FileSystem;
         private string _lanPostgreSqlConnectionString = AppSettings.DefaultLanPostgreSqlConnectionString;
         private string _lanApiBaseUrl = AppSettings.DefaultLanApiBaseUrl;
-        private readonly OrdersHistoryRepositoryCoordinator _ordersHistoryCoordinator;
-        private readonly OrdersHistoryMaintenanceService _ordersHistoryMaintenanceService;
-        private readonly OrderFolderPathResolutionService _orderFolderPathResolutionService;
         private readonly IOrderApplicationService _orderApplicationService;
         private string _managerLogFilePath = AppSettings.DefaultManagerLogFilePath;
         private string _orderLogsFolderPath = AppSettings.DefaultOrderLogsFolderPath;

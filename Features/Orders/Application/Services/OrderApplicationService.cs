@@ -7,6 +7,30 @@ namespace Replica;
 
 public interface IOrderApplicationService
 {
+    string OrdersRepositoryBackendName { get; }
+
+    void ConfigureHistoryRepository(OrdersStorageMode storageBackend, string lanPostgreSqlConnectionString, string historyFilePath);
+    bool TryLoadHistory(out List<OrderData> orders);
+    bool TrySaveHistory(IReadOnlyCollection<OrderData> orders, out string error);
+    bool TryAppendHistoryEvent(
+        string orderInternalId,
+        string itemId,
+        string eventType,
+        string eventSource,
+        string payloadJson,
+        out string error);
+    OrdersHistoryPostLoadResult ApplyHistoryPostLoad(
+        IList<OrderData> orders,
+        Func<string?, string> normalizeUserName,
+        int hashBackfillBudget = 32,
+        Action<OrderData, string>? onTopologyIssue = null);
+    OrdersHistoryPreSaveResult ApplyHistoryPreSave(IList<OrderData> orders);
+    bool NormalizeHistoryTopology(IList<OrderData> orders, Action<OrderData, string>? onTopologyIssue);
+    bool BackfillMissingHistoryFileHashes(IList<OrderData> orders, int maxFilesToHash);
+
+    OrderBrowseFolderResolution ResolveBrowseFolderPath(OrderData order, string ordersRootPath, string tempRootPath);
+    string ResolvePreferredOrderFolder(OrderData order, string ordersRootPath, string tempRootPath);
+
     string AddCreatedOrder(ICollection<OrderData> orderHistory, OrderData order, Func<string, string> normalizeUserName);
     void ApplySimpleEdit(OrderData order, string orderNumber, DateTime orderDate);
     void ApplyExtendedEdit(OrderData targetOrder, OrderData updatedOrder);
@@ -110,6 +134,9 @@ public sealed class OrderApplicationService : IOrderApplicationService
 {
     private readonly OrderRunCommandService _orderRunCommandService;
     private readonly OrderRunFeedbackService _orderRunFeedbackService;
+    private readonly OrdersHistoryRepositoryCoordinator _ordersHistoryRepositoryCoordinator;
+    private readonly OrdersHistoryMaintenanceService _ordersHistoryMaintenanceService;
+    private readonly OrderFolderPathResolutionService _orderFolderPathResolutionService;
     private readonly OrderEditorMutationService _orderEditorMutationService;
     private readonly OrderItemMutationService _orderItemMutationService;
     private readonly OrderFileStageCommandService _orderFileStageCommandService;
@@ -123,6 +150,9 @@ public sealed class OrderApplicationService : IOrderApplicationService
     public OrderApplicationService(
         OrderRunCommandService orderRunCommandService,
         OrderRunFeedbackService orderRunFeedbackService,
+        OrdersHistoryRepositoryCoordinator ordersHistoryRepositoryCoordinator,
+        OrdersHistoryMaintenanceService ordersHistoryMaintenanceService,
+        OrderFolderPathResolutionService orderFolderPathResolutionService,
         OrderEditorMutationService orderEditorMutationService,
         OrderItemMutationService orderItemMutationService,
         OrderFileStageCommandService orderFileStageCommandService,
@@ -135,6 +165,9 @@ public sealed class OrderApplicationService : IOrderApplicationService
     {
         _orderRunCommandService = orderRunCommandService ?? throw new ArgumentNullException(nameof(orderRunCommandService));
         _orderRunFeedbackService = orderRunFeedbackService ?? throw new ArgumentNullException(nameof(orderRunFeedbackService));
+        _ordersHistoryRepositoryCoordinator = ordersHistoryRepositoryCoordinator ?? throw new ArgumentNullException(nameof(ordersHistoryRepositoryCoordinator));
+        _ordersHistoryMaintenanceService = ordersHistoryMaintenanceService ?? throw new ArgumentNullException(nameof(ordersHistoryMaintenanceService));
+        _orderFolderPathResolutionService = orderFolderPathResolutionService ?? throw new ArgumentNullException(nameof(orderFolderPathResolutionService));
         _orderEditorMutationService = orderEditorMutationService ?? throw new ArgumentNullException(nameof(orderEditorMutationService));
         _orderItemMutationService = orderItemMutationService ?? throw new ArgumentNullException(nameof(orderItemMutationService));
         _orderFileStageCommandService = orderFileStageCommandService ?? throw new ArgumentNullException(nameof(orderFileStageCommandService));
@@ -145,6 +178,58 @@ public sealed class OrderApplicationService : IOrderApplicationService
         _orderStatusTransitionService = orderStatusTransitionService ?? throw new ArgumentNullException(nameof(orderStatusTransitionService));
         _orderStorageVersionSyncService = orderStorageVersionSyncService ?? throw new ArgumentNullException(nameof(orderStorageVersionSyncService));
     }
+
+    public string OrdersRepositoryBackendName => _ordersHistoryRepositoryCoordinator.BackendName;
+
+    public void ConfigureHistoryRepository(OrdersStorageMode storageBackend, string lanPostgreSqlConnectionString, string historyFilePath)
+        => _ordersHistoryRepositoryCoordinator.Configure(storageBackend, lanPostgreSqlConnectionString, historyFilePath);
+
+    public bool TryLoadHistory(out List<OrderData> orders)
+        => _ordersHistoryRepositoryCoordinator.TryLoadAll(out orders);
+
+    public bool TrySaveHistory(IReadOnlyCollection<OrderData> orders, out string error)
+        => _ordersHistoryRepositoryCoordinator.TrySaveAll(orders, out error);
+
+    public bool TryAppendHistoryEvent(
+        string orderInternalId,
+        string itemId,
+        string eventType,
+        string eventSource,
+        string payloadJson,
+        out string error)
+        => _ordersHistoryRepositoryCoordinator.TryAppendEvent(
+            orderInternalId,
+            itemId,
+            eventType,
+            eventSource,
+            payloadJson,
+            out error);
+
+    public OrdersHistoryPostLoadResult ApplyHistoryPostLoad(
+        IList<OrderData> orders,
+        Func<string?, string> normalizeUserName,
+        int hashBackfillBudget = 32,
+        Action<OrderData, string>? onTopologyIssue = null)
+        => _ordersHistoryMaintenanceService.ApplyPostLoad(
+            orders,
+            normalizeUserName,
+            hashBackfillBudget,
+            onTopologyIssue);
+
+    public OrdersHistoryPreSaveResult ApplyHistoryPreSave(IList<OrderData> orders)
+        => _ordersHistoryMaintenanceService.ApplyPreSave(orders);
+
+    public bool NormalizeHistoryTopology(IList<OrderData> orders, Action<OrderData, string>? onTopologyIssue)
+        => _ordersHistoryMaintenanceService.NormalizeOrderTopologyInHistory(orders, onTopologyIssue);
+
+    public bool BackfillMissingHistoryFileHashes(IList<OrderData> orders, int maxFilesToHash)
+        => _ordersHistoryMaintenanceService.BackfillMissingFileHashesIncrementally(orders, maxFilesToHash);
+
+    public OrderBrowseFolderResolution ResolveBrowseFolderPath(OrderData order, string ordersRootPath, string tempRootPath)
+        => _orderFolderPathResolutionService.ResolveBrowseFolderPath(order, ordersRootPath, tempRootPath);
+
+    public string ResolvePreferredOrderFolder(OrderData order, string ordersRootPath, string tempRootPath)
+        => _orderFolderPathResolutionService.ResolvePreferredOrderFolder(order, ordersRootPath, tempRootPath);
 
     public string AddCreatedOrder(ICollection<OrderData> orderHistory, OrderData order, Func<string, string> normalizeUserName)
         => _orderEditorMutationService.AddCreatedOrder(orderHistory, order, normalizeUserName);

@@ -35,9 +35,6 @@ namespace Replica
         {
             _settingsProvider = settingsProvider ?? throw new ArgumentNullException(nameof(settingsProvider));
             var services = runtimeServices ?? throw new ArgumentNullException(nameof(runtimeServices));
-            _ordersHistoryCoordinator = services.OrdersHistoryCoordinator;
-            _ordersHistoryMaintenanceService = services.OrdersHistoryMaintenanceService;
-            _orderFolderPathResolutionService = services.OrderFolderPathResolutionService;
             _orderApplicationService = services.OrderApplicationService;
             InitializeComponent();
             InitializeDockSidebar();
@@ -232,7 +229,7 @@ namespace Replica
             _ordersStorageBackend = settings.OrdersStorageBackend;
             _lanPostgreSqlConnectionString = settings.LanPostgreSqlConnectionString;
             _lanApiBaseUrl = settings.LanApiBaseUrl;
-            _ordersHistoryCoordinator.Configure(_ordersStorageBackend, _lanPostgreSqlConnectionString, _jsonHistoryFile);
+            _orderApplicationService.ConfigureHistoryRepository(_ordersStorageBackend, _lanPostgreSqlConnectionString, _jsonHistoryFile);
             _managerLogFilePath = settings.ManagerLogFilePath;
             _orderLogsFolderPath = settings.OrderLogsFolderPath;
             _usersSourceFilePath = settings.UsersFilePath;
@@ -622,7 +619,7 @@ namespace Replica
             settings.LanPostgreSqlConnectionString = _lanPostgreSqlConnectionString;
             settings.LanApiBaseUrl = _lanApiBaseUrl;
             _settingsProvider.Save(settings);
-            _ordersHistoryCoordinator.Configure(_ordersStorageBackend, _lanPostgreSqlConnectionString, _jsonHistoryFile);
+            _orderApplicationService.ConfigureHistoryRepository(_ordersStorageBackend, _lanPostgreSqlConnectionString, _jsonHistoryFile);
 
             Logger.LogFilePath = _managerLogFilePath;
             InitializeProcessor();
