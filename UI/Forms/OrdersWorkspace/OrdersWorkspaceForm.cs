@@ -19,14 +19,14 @@ using Svg;
 
 namespace Replica
 {
-    public partial class MainForm : Form
+    public partial class OrdersWorkspaceForm : Form
     {
-        public MainForm()
+        public OrdersWorkspaceForm()
             : this(new FileSettingsProvider())
         {
         }
 
-        internal MainForm(ISettingsProvider settingsProvider)
+        internal OrdersWorkspaceForm(ISettingsProvider settingsProvider)
         {
             _settingsProvider = settingsProvider ?? throw new ArgumentNullException(nameof(settingsProvider));
             _orderRunWorkflowOrchestrationService = new OrderRunWorkflowOrchestrationService(_orderRunStateService, _lanRunCommandCoordinator);
@@ -642,7 +642,7 @@ namespace Replica
                 : "Настройки сохранены";
             RefreshArchivedStatuses(forceArchiveIndexRefresh: true, rebuildGridIfChanged: true);
             SetBottomStatus(settingsSavedMessage);
-            MessageBox.Show(this, settingsSavedMessage, "MainForm", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(this, settingsSavedMessage, "OrdersWorkspaceForm", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private static string ResolveLocalThumbnailCacheFolderPath()
@@ -674,3 +674,4 @@ namespace Replica
 
     }
 }
+

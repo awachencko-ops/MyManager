@@ -304,8 +304,10 @@ public sealed class MainFormCoreRegressionTests
                 @"D:\Orders\GR-1401\in\back.pdf");
             MainFormTestHarness.InvokePrivate(form, "AddCreatedOrder", groupOrder);
 
-            var method = form.GetType().GetMethod("TryGetBrowseFolderPathForOrder", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(form.GetType().FullName, "TryGetBrowseFolderPathForOrder");
+            var method = MainFormTestHarness.GetPrivateMethod(
+                form,
+                "TryGetBrowseFolderPathForOrder",
+                BindingFlags.Instance);
 
             object[] args = { groupOrder, string.Empty, string.Empty };
             var canBrowse = (bool)(method.Invoke(form, args) ?? false);
@@ -371,14 +373,18 @@ public sealed class MainFormCoreRegressionTests
             removedItem.PreparedPath = string.Empty;
             removedItem.PrintPath = string.Empty;
 
-            var removeItemMethod = form.GetType().GetMethod("RemoveItemIfEmpty", BindingFlags.Static | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(form.GetType().FullName, "RemoveItemIfEmpty");
+            var removeItemMethod = MainFormTestHarness.GetPrivateMethod(
+                form,
+                "RemoveItemIfEmpty",
+                BindingFlags.Static);
             var removed = (bool)(removeItemMethod.Invoke(null, new object[] { groupOrder, removedItem }) ?? false);
             Assert.True(removed);
             Assert.Single(groupOrder.Items);
 
-            var normalizeMethod = form.GetType().GetMethod("NormalizeOrderTopologyAfterItemMutation", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(form.GetType().FullName, "NormalizeOrderTopologyAfterItemMutation");
+            var normalizeMethod = MainFormTestHarness.GetPrivateMethod(
+                form,
+                "NormalizeOrderTopologyAfterItemMutation",
+                BindingFlags.Instance);
             var demoted = (bool)(normalizeMethod.Invoke(form, new object[] { groupOrder, true, "sr16-remove-item" }) ?? false);
 
             Assert.True(demoted);
@@ -477,8 +483,10 @@ public sealed class MainFormCoreRegressionTests
             MainFormTestHarness.SetPrivateField(form, "_ctxRow", itemRow.Index);
             MainFormTestHarness.SetPrivateField(form, "_ctxCol", 0);
 
-            var tryGetContextItemMethod = form.GetType().GetMethod("TryGetContextOrderItem", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(form.GetType().FullName, "TryGetContextOrderItem");
+            var tryGetContextItemMethod = MainFormTestHarness.GetPrivateMethod(
+                form,
+                "TryGetContextOrderItem",
+                BindingFlags.Instance);
 
             object?[] args = { null, null };
             var resolved = (bool)(tryGetContextItemMethod.Invoke(form, args) ?? false);
@@ -519,8 +527,10 @@ public sealed class MainFormCoreRegressionTests
             var expectedFieldName = itemRow.Index % 2 == 0
                 ? "GroupOrderItemRowBaseBackColor"
                 : "GroupOrderItemRowZebraBackColor";
-            var expectedField = form.GetType().GetField(expectedFieldName, BindingFlags.Static | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(form.GetType().FullName, expectedFieldName);
+            var expectedField = MainFormTestHarness.GetPrivateFieldInfo(
+                form,
+                expectedFieldName,
+                BindingFlags.Static);
             var expectedColor = (Color)(expectedField.GetValue(null) ?? Color.Empty);
 
             Assert.NotNull(args.CellStyle);

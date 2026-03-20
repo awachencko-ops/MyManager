@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace Replica
 {
-    public partial class MainForm
+    public partial class OrdersWorkspaceForm
     {
         private void RefreshArchivedStatuses(bool forceArchiveIndexRefresh = false, bool rebuildGridIfChanged = true)
         {
@@ -478,3 +478,4 @@ namespace Replica
 
     }
 }
+

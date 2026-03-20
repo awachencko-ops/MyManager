@@ -445,10 +445,11 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
 
     public StoreOperationResult TryStartRun(string orderId, RunOrderRequest request, string actor, string? idempotencyKey)
     {
+        request ??= new RunOrderRequest();
         return ExecuteRunCommandWithOptionalIdempotency(
             commandName: RunCommandName,
             orderId: orderId,
-            expectedOrderVersion: request?.ExpectedOrderVersion ?? 0,
+            expectedOrderVersion: request.ExpectedOrderVersion,
             actor: actor,
             idempotencyKey: idempotencyKey,
             executeCore: () => TryStartRunCore(orderId, request, actor));
@@ -456,10 +457,11 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
 
     public StoreOperationResult TryStopRun(string orderId, StopOrderRequest request, string actor, string? idempotencyKey)
     {
+        request ??= new StopOrderRequest();
         return ExecuteRunCommandWithOptionalIdempotency(
             commandName: StopCommandName,
             orderId: orderId,
-            expectedOrderVersion: request?.ExpectedOrderVersion ?? 0,
+            expectedOrderVersion: request.ExpectedOrderVersion,
             actor: actor,
             idempotencyKey: idempotencyKey,
             executeCore: () => TryStopRunCore(orderId, request, actor));

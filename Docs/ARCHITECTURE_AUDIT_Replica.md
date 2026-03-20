@@ -43,6 +43,8 @@
 > Актуализация на 2026-03-20 (risk-burndown, срез 18): для server `run/stop` внедрена идемпотентность команд (`Idempotency-Key` в client gateway + API header-resolve, таблица `order_run_idempotency`, migration `20260320000300_OrderRunIdempotency`, дедупликация с request fingerprint), покрыто unit/integration тестами PostgreSQL.
 >
 > Актуализация на 2026-03-20 (risk-burndown, срез 19): добавлен `OrderRunWorkflowOrchestrationService`; подготовка `run/stop` workflow (run-plan, LAN command preflight, snapshot refresh, stop preflight/cancel) вынесена из `MainForm` в application-service слой, добавлены unit-тесты orchestration (`OrderRunWorkflowOrchestrationServiceTests`).
+>
+> Актуализация на 2026-03-20 (risk-burndown, срез 20): выполнен rename и модульный перенос UI-ядра формы: entrypoint переведён на `OrdersWorkspaceForm`, код формы перемещён в `UI/Forms/OrdersWorkspace/*` (Core/FileOps/Filters/Views/Controls), сохранён переходный shim `MainForm` для обратной совместимости автотестов.
 
 ## Executive summary
 
@@ -67,6 +69,7 @@
 - Из `MainForm` выделен `OrderRunExecutionService`: конкурентное выполнение run-сессий и error/cancel lifecycle больше не оркестрируются внутри формы.
 - Из `MainForm` выделен `OrderRunWorkflowOrchestrationService`: run/stop preflight (plan, LAN approval, snapshot refresh, local cancel) теперь в сервисном use-case слое.
 - Из `MainForm` выделен `OrderDeletionWorkflowService`: batch-удаление orders/items (включая disk-cleanup, fallback на known paths и reindex item-ов) переведено в use-case сервис.
+- Выполнен rename UI-shell: рабочая форма теперь `OrdersWorkspaceForm`, а код разложен в модульную структуру `UI/Forms/OrdersWorkspace/*`; `MainForm` оставлен как compatibility shim.
 - Введён интерфейсный слой настроек (`ISettingsProvider`), а core runtime-flow (`Program`, `MainForm`, `OrderProcessor`, `ConfigService`) переведён с прямого static-IO на provider boundary.
 - В `OrderProcessor` добавлены dependency health-сигналы и circuit-breaker (`DependencyCircuitBreaker`) для внешних file-зависимостей; `MainForm` получает сигналы и отражает degraded/unavailable статус в UI.
 - В `OrdersHistoryRepositoryCoordinator` добавлена двусторонняя sync-стратегия `history.json <-> PostgreSQL` (импорт file-only заказов + mirror LAN snapshot обратно в файл).
@@ -210,6 +213,9 @@
 10. Итерация 10 (2026-03-20, адресная): закрыт следующий срез `MainForm` God Object по `run/stop` orchestration preflight.
    - Что сделано: добавлен `OrderRunWorkflowOrchestrationService`; подготовка `run/stop` цепочки (run-plan, LAN preflight, local cancel, snapshot refresh decisions) вынесена из `MainForm` в сервисный слой; добавлены unit-тесты orchestration.
    - Эффект: уменьшена связность формы и повышена тестируемость критичного run/stop workflow без UI-зависимости.
+11. Итерация 11 (2026-03-20, адресная): закрыт rename/decomposition срез UI-shell (`MainForm -> OrdersWorkspaceForm`).
+   - Что сделано: точка входа переведена на `OrdersWorkspaceForm`, файлы формы перенесены в `UI/Forms/OrdersWorkspace/*` с модульным делением, оставлен совместимый shim `MainForm` для тестов и плавной миграции.
+   - Эффект: снижена архитектурная «тяжесть» legacy-нейминга, упорядочена навигация по UI-коду, подготовлена база для дальнейшей поэтапной декомпозиции формы.
 
 ---
 
@@ -219,7 +225,7 @@
 
 1. **Persistence-модель на JSON в UI** — `PARTIAL`: LAN PostgreSQL + двусторонняя sync работают, но FileSystem-ветка ещё жива как fallback.
 2. **Статусные переходы и аудит «мимо транзакций»** — `PARTIAL`: status policy вынесена, `order_events` есть, но полный server-side command handling для всех write-flow не завершён.
-3. **God Object (MainForm как бизнес-оркестратор)** — `IN PROGRESS`: вынесены history/run-state/status-transition/run-execution/delete-workflow/run-stop-preflight; следующий фокус — общий order workflow orchestration и DI/composition root.
+3. **God Object (MainForm/OrdersWorkspaceForm как бизнес-оркестратор)** — `IN PROGRESS`: вынесены history/run-state/status-transition/run-execution/delete-workflow/run-stop-preflight + выполнен rename shell и модульный перенос UI-кода; следующий фокус — общий order workflow orchestration и DI/composition root.
 4. **Неструктурированное логирование и mutable file-audit** — `PARTIAL`: correlation + structured scopes внедрены, `order_events` работает; остаётся унификация схемы и централизованный observability stack.
 
 ### P1 (сразу после P0)

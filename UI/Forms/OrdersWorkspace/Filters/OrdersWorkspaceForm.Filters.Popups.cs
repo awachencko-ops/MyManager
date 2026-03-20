@@ -12,7 +12,7 @@ using Svg;
 
 namespace Replica
 {
-    public partial class MainForm
+    public partial class OrdersWorkspaceForm
     {
         private void LblFStatus_Click(object? sender, EventArgs e)
         {
@@ -454,3 +454,4 @@ namespace Replica
 
     }
 }
+

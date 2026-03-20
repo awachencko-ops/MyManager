@@ -5,7 +5,7 @@ using Manina.Windows.Forms;
 
 namespace Replica
 {
-    public partial class MainForm
+    public partial class OrdersWorkspaceForm
     {
         private const int OrdersViewScrollBarWidth = 25;
 
@@ -303,3 +303,4 @@ namespace Replica
         }
     }
 }
+

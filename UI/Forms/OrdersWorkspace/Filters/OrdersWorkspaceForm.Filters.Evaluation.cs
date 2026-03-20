@@ -12,7 +12,7 @@ using Svg;
 
 namespace Replica
 {
-    public partial class MainForm
+    public partial class OrdersWorkspaceForm
     {
         private void ShowStatusFilterDropDown()
         {
@@ -510,3 +510,4 @@ namespace Replica
         }
     }
 }
+

@@ -29,14 +29,14 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Remove="Forms\MainForm\Filters\MainForm.Filters.Evaluation.resx" />
-    <EmbeddedResource Remove="Forms\MainForm\Filters\MainForm.Filters.Popups.resx" />
-    <EmbeddedResource Remove="Forms\MainForm\Core\MainForm.ArchiveSync.resx" />
-    <EmbeddedResource Remove="Forms\MainForm\FileOps\MainForm.FileOps.GridInteractions.resx" />
+    <EmbeddedResource Remove="UI\Forms\OrdersWorkspace\Filters\OrdersWorkspaceForm.Filters.Evaluation.resx" />
+    <EmbeddedResource Remove="UI\Forms\OrdersWorkspace\Filters\OrdersWorkspaceForm.Filters.Popups.resx" />
+    <EmbeddedResource Remove="UI\Forms\OrdersWorkspace\Core\OrdersWorkspaceForm.ArchiveSync.resx" />
+    <EmbeddedResource Remove="UI\Forms\OrdersWorkspace\FileOps\OrdersWorkspaceForm.FileOps.GridInteractions.resx" />
     <EmbeddedResource Remove="tests\**\*.resx" />
     <EmbeddedResource Remove=".codex_build_out\**\*.resx" />
-    <None Remove="Forms\MainForm\Core\MainForm.ArchiveSync.resx" />
-    <None Remove="Forms\MainForm\FileOps\MainForm.FileOps.GridInteractions.resx" />
+    <None Remove="UI\Forms\OrdersWorkspace\Core\OrdersWorkspaceForm.ArchiveSync.resx" />
+    <None Remove="UI\Forms\OrdersWorkspace\FileOps\OrdersWorkspaceForm.FileOps.GridInteractions.resx" />
   </ItemGroup>
 
   <ItemGroup>

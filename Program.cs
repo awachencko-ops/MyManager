@@ -19,7 +19,7 @@ namespace Replica
             ConfigurePdfSharpFonts(settings);
             ApplicationConfiguration.Initialize();
             AutoUpdateBootstrapper.TryStart(settings);
-            Application.Run(new MainForm(settingsProvider));
+            Application.Run(new OrdersWorkspaceForm(settingsProvider));
         }
 
         private static void ConfigurePdfSharpFonts(AppSettings settings)

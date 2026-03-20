@@ -6,7 +6,7 @@ using System.Windows.Forms;
 
 namespace Replica
 {
-    public partial class MainForm
+    public partial class OrdersWorkspaceForm
     {
         private enum DockWorkspaceGroup
         {
@@ -395,3 +395,4 @@ namespace Replica
         }
     }
 }
+

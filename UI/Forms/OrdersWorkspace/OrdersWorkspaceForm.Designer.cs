@@ -1,6 +1,6 @@
 ﻿namespace Replica
 {
-    partial class MainForm
+    partial class OrdersWorkspaceForm
     {
         /// <summary>
         /// Required designer variable.
@@ -28,7 +28,7 @@
         /// </summary>
         private void InitializeComponent()
         {
-            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(MainForm));
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(OrdersWorkspaceForm));
             pnlSidebar = new Panel();
             pnlDockLiterature = new Panel();
             pictureBox4 = new PictureBox();
@@ -717,7 +717,7 @@
             toolStripButton1.Size = new Size(138, 29);
             toolStripButton1.Text = "Параметры";
             // 
-            // MainForm
+            // OrdersWorkspaceForm
             // 
             AutoScaleDimensions = new SizeF(10F, 25F);
             AutoScaleMode = AutoScaleMode.Font;
@@ -725,7 +725,7 @@
             Controls.Add(scMain);
             Controls.Add(pnlSidebar);
             Icon = (Icon)resources.GetObject("$this.Icon");
-            Name = "MainForm";
+            Name = "OrdersWorkspaceForm";
             Text = "Replica";
             pnlSidebar.ResumeLayout(false);
             pnlDockLiterature.ResumeLayout(false);
@@ -833,3 +833,4 @@
         private SplitContainer splitServer;
     }
 }
+

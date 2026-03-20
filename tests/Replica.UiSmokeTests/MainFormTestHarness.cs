@@ -72,14 +72,28 @@ internal static class MainFormTestHarness
 
     public static object? InvokePrivate(object target, string methodName, params object?[]? args)
     {
-        var method = target.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic)
+        var method = FindMethod(target.GetType(), methodName, BindingFlags.Instance | BindingFlags.NonPublic)
             ?? throw new MissingMethodException(target.GetType().FullName, methodName);
         return method.Invoke(target, args);
     }
 
+    public static MethodInfo GetPrivateMethod(object target, string methodName, BindingFlags scopeFlags)
+    {
+        var method = FindMethod(target.GetType(), methodName, scopeFlags | BindingFlags.NonPublic)
+            ?? throw new MissingMethodException(target.GetType().FullName, methodName);
+        return method;
+    }
+
+    public static FieldInfo GetPrivateFieldInfo(object target, string fieldName, BindingFlags scopeFlags)
+    {
+        var field = FindField(target.GetType(), fieldName, scopeFlags | BindingFlags.NonPublic)
+            ?? throw new MissingFieldException(target.GetType().FullName, fieldName);
+        return field;
+    }
+
     public static T GetPrivateField<T>(object target, string fieldName)
     {
-        var field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
+        var field = FindField(target.GetType(), fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
             ?? throw new MissingFieldException(target.GetType().FullName, fieldName);
         var value = field.GetValue(target);
         if (value is T typed)
@@ -90,17 +104,43 @@ internal static class MainFormTestHarness
 
     public static void SetPrivateField(object target, string fieldName, object? value)
     {
-        var field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
+        var field = FindField(target.GetType(), fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
             ?? throw new MissingFieldException(target.GetType().FullName, fieldName);
         field.SetValue(target, value);
     }
 
     public static void SetPrivateEnumFieldByValue(object target, string fieldName, int enumValue)
     {
-        var field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
+        var field = FindField(target.GetType(), fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
             ?? throw new MissingFieldException(target.GetType().FullName, fieldName);
         var typedValue = Enum.ToObject(field.FieldType, enumValue);
         field.SetValue(target, typedValue);
+    }
+
+    private static MethodInfo? FindMethod(Type? type, string methodName, BindingFlags flags)
+    {
+        while (type != null)
+        {
+            var method = type.GetMethod(methodName, flags | BindingFlags.DeclaredOnly);
+            if (method != null)
+                return method;
+            type = type.BaseType;
+        }
+
+        return null;
+    }
+
+    private static FieldInfo? FindField(Type? type, string fieldName, BindingFlags flags)
+    {
+        while (type != null)
+        {
+            var field = type.GetField(fieldName, flags | BindingFlags.DeclaredOnly);
+            if (field != null)
+                return field;
+            type = type.BaseType;
+        }
+
+        return null;
     }
 
     private static void ConfigureIsolatedSettings(string tempRootPath)

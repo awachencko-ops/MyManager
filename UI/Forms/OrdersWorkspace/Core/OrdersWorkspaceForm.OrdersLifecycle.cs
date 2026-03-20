@@ -19,7 +19,7 @@ using Svg;
 
 namespace Replica
 {
-    public partial class MainForm
+    public partial class OrdersWorkspaceForm
     {
         private void RefreshQueuePresentation()
         {
@@ -828,14 +828,14 @@ namespace Replica
                     order,
                     OrderOperationNames.Run,
                     runnableOrders.Count > 1
-                        ? "Пакетный запуск заказа из MainForm"
-                        : "Запуск заказа из MainForm");
+                        ? "Пакетный запуск заказа из OrdersWorkspaceForm"
+                        : "Запуск заказа из OrdersWorkspaceForm");
 
                 SetOrderStatus(
                     order,
                     WorkflowStatusNames.Processing,
                     OrderStatusSourceNames.Ui,
-                    runnableOrders.Count > 1 ? "Пакетный запуск из MainForm" : "Запуск из MainForm",
+                    runnableOrders.Count > 1 ? "Пакетный запуск из OrdersWorkspaceForm" : "Запуск из OrdersWorkspaceForm",
                     persistHistory: false,
                     rebuildGrid: false);
             }
@@ -1637,3 +1637,4 @@ namespace Replica
 
     }
 }
+

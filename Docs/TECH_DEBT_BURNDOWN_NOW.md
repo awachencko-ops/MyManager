@@ -10,7 +10,7 @@
 
 | Область | Текущее состояние | Что переписываем | Критерий закрытия |
 |---|---|---|---|
-| `MainForm` (god-object orchestration) | Частично разгружен сервисами, `run/stop` preflight уже вынесен в `OrderRunWorkflowOrchestrationService`, но общий orchestration ещё в UI | Довынести order workflow orchestration в application/use-case сервис + DI composition root | `MainForm` не управляет бизнес-циклами напрямую, только UI/presenter |
+| `MainForm` (god-object orchestration) | Переименован shell в `OrdersWorkspaceForm`, код перенесён в `UI/Forms/OrdersWorkspace/*`, `run/stop` preflight вынесен; общий orchestration ещё в UI | Довынести order workflow orchestration в application/use-case сервис + DI composition root | `OrdersWorkspaceForm` не управляет бизнес-циклами напрямую, только UI/presenter |
 | Write-command boundary | `run/stop` уже server-side + idempotency, остальные write-flow частично клиентские | Перевести `create/update/items/reorder/status` в server command handling | Все mutating операции идут через API-команды и server invariants |
 | JSON/file как рабочее хранилище | LAN sync работает, но file fallback влияет на поведение | Зафиксировать PostgreSQL как primary source of truth, file оставить только import/export fallback | Runtime в LAN режиме не зависит от `history.json` для актуального состояния |
 | Audit/observability | Есть `order_events` + correlation, но нет единой схемы и метрик | Ввести единый structured schema + метрики/дашборды | Инцидент можно отследить end-to-end по `correlation_id` + есть базовые SLO графики |

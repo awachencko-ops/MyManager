@@ -19,7 +19,7 @@ using Svg;
 
 namespace Replica
 {
-    public partial class MainForm
+    public partial class OrdersWorkspaceForm
     {
         private static readonly FieldInfo? ImageListViewDefaultAdaptorField = typeof(ImageListView).GetField(
             "defaultAdaptor",
@@ -1267,3 +1267,4 @@ namespace Replica
 
     }
 }
+

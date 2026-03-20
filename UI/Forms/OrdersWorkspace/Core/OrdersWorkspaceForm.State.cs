@@ -18,7 +18,7 @@ using Svg;
 
 namespace Replica
 {
-    public partial class MainForm : Form
+    public partial class OrdersWorkspaceForm : Form
     {
         private string _ordersRootPath = AppSettings.DefaultOrdersRootPath;
         private string _tempRootPath = AppSettings.DefaultTempFolderPath;
@@ -327,3 +327,4 @@ namespace Replica
 
     }
 }
+

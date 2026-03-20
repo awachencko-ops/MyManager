@@ -124,7 +124,7 @@ namespace Replica
 
         private static (string OrderNumber, string FileName) GetTexts(ImageListViewItem item)
         {
-            if (item.Tag is MainForm.PrintTileTag tag)
+            if (item.Tag is OrdersWorkspaceForm.PrintTileTag tag)
             {
                 var order = string.IsNullOrWhiteSpace(tag.OrderNumber) ? "—" : tag.OrderNumber.Trim();
                 var file = string.IsNullOrWhiteSpace(tag.PrintFileName) ? item.Text : tag.PrintFileName.Trim();
@@ -162,3 +162,4 @@ namespace Replica
         }
     }
 }
+

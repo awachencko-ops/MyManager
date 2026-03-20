@@ -19,7 +19,7 @@ using Svg;
 
 namespace Replica
 {
-    public partial class MainForm
+    public partial class OrdersWorkspaceForm
     {
         private async Task PickAndCopyFileForOrderAsync(OrderData order, int stage)
         {
@@ -1056,3 +1056,4 @@ namespace Replica
         }
     }
 }
+
