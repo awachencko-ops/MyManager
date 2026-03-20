@@ -1216,18 +1216,7 @@ namespace Replica
             }
 
             var removeFilesFromDisk = decision == DialogResult.Yes;
-            var affectedOrders = new Dictionary<string, (OrderData Order, bool WasMultiBefore)>(StringComparer.Ordinal);
-
-            foreach (var (order, item) in selectedOrderItems)
-            {
-                if (order == null || item == null)
-                    continue;
-
-                if (!affectedOrders.ContainsKey(order.InternalId))
-                    affectedOrders[order.InternalId] = (order, OrderTopologyService.IsMultiOrder(order));
-            }
-
-            var deleteResult = _orderDeletionWorkflowService.DeleteOrderItems(
+            var commandResult = _orderItemDeleteCommandService.Execute(
                 selectedOrderItems.Select(x => new OrderItemSelection(x.Order, x.Item)).ToList(),
                 removeFilesFromDisk,
                 (order, _, itemName) =>
@@ -1240,14 +1229,15 @@ namespace Replica
                             : $"Удален файл: {itemName} (из группы)");
                 });
 
-            foreach (var (_, payload) in affectedOrders)
+            foreach (var topologyMutation in commandResult.TopologyMutations)
             {
-                NormalizeOrderTopologyAfterItemMutation(
-                    payload.Order,
-                    payload.WasMultiBefore,
+                ApplyTopologyMutationResult(
+                    topologyMutation.Order,
+                    topologyMutation.MutationResult,
                     "remove-item-row");
             }
 
+            var deleteResult = commandResult.DeleteResult;
             if (deleteResult.RemovedCount > 0)
             {
                 SaveHistory();

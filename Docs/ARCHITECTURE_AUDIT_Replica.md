@@ -57,6 +57,8 @@
 > Актуализация на 2026-03-20 (risk-burndown, срез 25): добавлен `OrderEditorMutationService`; create/edit mutation logic (`AddCreatedOrder`, `ApplySimpleEdit`, `ApplyExtendedEdit`) переведена из `OrdersWorkspaceForm` в application-service слой, форма оставлена как UI-shell для диалогов и refresh-потока (`SaveHistory`/`RebuildOrdersGrid`); добавлены unit-тесты `OrderEditorMutationServiceTests`, подтверждены build + full test + PostgreSQL integration regression.
 >
 > Актуализация на 2026-03-20 (risk-burndown, срез 26): добавлен `OrderItemMutationService`; item-mutation logic (`PrepareAddItem`, `RollbackPreparedItem`, `RemoveItemIfEmpty`, `ApplyTopologyAfterItemMutation`) переведена из `OrdersWorkspaceForm` в application-service слой, форма оставлена как UI/presenter для диалогов, selection-state и operation-log; добавлены unit-тесты `OrderItemMutationServiceTests`, подтверждены build + full test + PostgreSQL integration regression.
+>
+> Актуализация на 2026-03-20 (risk-burndown, срез 27): добавлен `OrderItemDeleteCommandService`; orchestration удаления выбранных item-ов (`capture affected orders + delete batch + topology post-mutation`) переведена из `OrdersWorkspaceForm` в application-service слой, форма оставлена как UI-shell для confirm/status/ошибок; добавлены unit-тесты `OrderItemDeleteCommandServiceTests`, подтверждены build + full test + PostgreSQL integration regression.
 
 ## Executive summary
 
@@ -84,6 +86,7 @@
 - Stop/status persistence orchestration переведён на `OrderRunCommandService.ExecuteStopAsync`; форма больше не управляет stop-ветвлением на уровне run-state/invariants.
 - Create/edit mutation logic переведена на `OrderEditorMutationService`; форма больше не содержит прямое присваивание полей заказа при simple/extended edit.
 - Item mutation/topology logic переведена на `OrderItemMutationService`; форма больше не содержит правила подготовки item при add/rollback/remove-empty/reindex.
+- Item-delete orchestration переведена на `OrderItemDeleteCommandService`; форма больше не содержит batch-удаление item-ов с pre/post-topology шагами.
 - Из `MainForm` выделен `OrderDeletionWorkflowService`: batch-удаление orders/items (включая disk-cleanup, fallback на known paths и reindex item-ов) переведено в use-case сервис.
 - Выполнен rename UI-shell: рабочая форма теперь `OrdersWorkspaceForm`; после следующего шага декомпозиции код `Orders` разложен в feature-slice структуру `Features/Orders/UI|Application|Domain`, `MainForm` оставлен как compatibility shim.
 - Введён интерфейсный слой настроек (`ISettingsProvider`), а core runtime-flow (`Program`, `MainForm`, `OrderProcessor`, `ConfigService`) переведён с прямого static-IO на provider boundary.
@@ -179,7 +182,7 @@
 
 | Компонент | Риск | Критичность | Рекомендация |
 |---|---|---|---|
-| `MainForm` orchestration | God Object, смешение UI + domain + persistence + file IO (снижено сервисными выносами, включая delete + run/stop + create/edit/item-mutation orchestration) | **Med** | Продолжить декомпозицию: выделить use-case слой (`IOrderApplicationService`), UI оставить как presenter/view; внедрить DI/composition root. |
+| `MainForm` orchestration | God Object, смешение UI + domain + persistence + file IO (снижено сервисными выносами, включая delete + run/stop + create/edit/item-mutation + item-delete orchestration) | **Med** | Продолжить декомпозицию: выделить use-case слой (`IOrderApplicationService`), UI оставить как presenter/view; внедрить DI/composition root. |
 | История заказов (`history.json` / LAN PostgreSQL) | В FileSystem-режиме остаётся риск race; в LAN-режиме риск снижен через version-check | **Med** | Оставить FileSystem только как fallback; целевой режим — PostgreSQL + server-side command boundary. |
 | `SetOrderStatus` + `SaveHistory` | Клиентская неатомарность между UI-операцией и persistence | **Med/High** | Перенести статусные команды в API/worker с unit of work и server-side invariants. |
 | `_runTokensByOrder` (in-memory) | Переведён в runtime-session state; риск смещён в сторону UX-согласованности между клиентами | **Low/Med** | Сохранить server lock/state единственным источником истины и расширять server-driven refresh-сценарии. |
@@ -252,6 +255,9 @@
 17. Итерация 17 (2026-03-20, адресная): закрыт следующий срез `OrdersWorkspaceForm` God Object по item mutation/topology orchestration.
    - Что сделано: добавлен `OrderItemMutationService`; цепочки `PrepareAddItem`, `RollbackPreparedItem`, `RemoveItemIfEmpty`, `ApplyTopologyAfterItemMutation` вынесены в application-service слой, `OrdersWorkspaceForm` переведён на сервисные вызовы в add/remove/drag сценариях, добавлены unit-тесты `OrderItemMutationServiceTests`.
    - Эффект: уменьшена связность формы с mutation-инвариантами item-уровня и topology-normalization, повышена тестируемость file/item write-flow без UI-зависимостей.
+18. Итерация 18 (2026-03-20, адресная): закрыт следующий срез `OrdersWorkspaceForm` God Object по item-delete command orchestration.
+   - Что сделано: добавлен `OrderItemDeleteCommandService`; цепочка `capture affected orders -> delete items batch -> topology post-mutation` вынесена в application-service слой, `RemoveSelectedOrderItems` в `OrdersWorkspaceForm` переключён на сервисный вызов, добавлены unit-тесты `OrderItemDeleteCommandServiceTests`.
+   - Эффект: уменьшена связность формы с batch-delete orchestration и post-delete topology-ветвлением, повышена тестируемость удаления item-ов без UI-зависимостей.
 
 ---
 
@@ -261,7 +267,7 @@
 
 1. **Persistence-модель на JSON в UI** — `PARTIAL`: LAN PostgreSQL + двусторонняя sync работают, но FileSystem-ветка ещё жива как fallback.
 2. **Статусные переходы и аудит «мимо транзакций»** — `PARTIAL`: status policy вынесена, `order_events` есть, но полный server-side command handling для всех write-flow не завершён.
-3. **God Object (MainForm/OrdersWorkspaceForm как бизнес-оркестратор)** — `IN PROGRESS`: вынесены history/run-state/status-transition/run-execution/delete-workflow/run-stop-preflight/create-edit/item-mutation + выполнен rename shell и модульный перенос UI-кода; следующий фокус — общий order workflow orchestration и DI/composition root.
+3. **God Object (MainForm/OrdersWorkspaceForm как бизнес-оркестратор)** — `IN PROGRESS`: вынесены history/run-state/status-transition/run-execution/delete-workflow/run-stop-preflight/create-edit/item-mutation/item-delete-command + выполнен rename shell и модульный перенос UI-кода; следующий фокус — общий order workflow orchestration и DI/composition root.
 4. **Неструктурированное логирование и mutable file-audit** — `PARTIAL`: correlation + structured scopes внедрены, `order_events` работает; остаётся унификация схемы и централизованный observability stack.
 
 ### P1 (сразу после P0)

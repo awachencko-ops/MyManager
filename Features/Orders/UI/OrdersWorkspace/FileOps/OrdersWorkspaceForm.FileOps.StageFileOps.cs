@@ -395,6 +395,14 @@ namespace Replica
                 return false;
 
             var result = _orderItemMutationService.ApplyTopologyAfterItemMutation(order, wasMultiOrderBeforeMutation);
+            return ApplyTopologyMutationResult(order, result, details);
+        }
+
+        private bool ApplyTopologyMutationResult(OrderData order, OrderItemTopologyMutationResult result, string details)
+        {
+            if (order == null || result == null)
+                return false;
+
             LogTopologyIssues(order, result.Normalization.Changed, result.Normalization.Issues);
             if (!result.DemotedToSingleOrder)
                 return false;
@@ -403,7 +411,7 @@ namespace Replica
             AppendOrderOperationLog(
                 order,
                 OrderOperationNames.Topology,
-                $"group-order -> single-order | {details}");
+                $"group-order -> single-order | {details ?? string.Empty}");
             return true;
         }
 
