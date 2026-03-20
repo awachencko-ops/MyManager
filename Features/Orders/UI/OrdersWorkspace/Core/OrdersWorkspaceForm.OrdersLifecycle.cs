@@ -1122,29 +1122,25 @@ namespace Replica
             }
 
             var removeFilesFromDisk = decision == DialogResult.Yes;
-            var deleteResult = _orderDeletionWorkflowService.DeleteOrders(
+            var commandResult = _orderDeleteCommandService.Execute(
                 _orderHistory,
                 selectedOrders,
                 removeFilesFromDisk,
                 _ordersRootPath,
-                order =>
+                _runTokensByOrder,
+                _runProgressByOrderInternalId,
+                _expandedOrderIds,
+                (order, removeFromDisk) =>
                 {
-                    if (_runTokensByOrder.TryGetValue(order.InternalId, out var cts))
-                    {
-                        cts.Cancel();
-                        _runTokensByOrder.Remove(order.InternalId);
-                        _runProgressByOrderInternalId.Remove(order.InternalId);
-                    }
-
-                    _expandedOrderIds.Remove(order.InternalId);
                     AppendOrderOperationLog(
                         order,
                         OrderOperationNames.Delete,
-                        removeFilesFromDisk
+                        removeFromDisk
                             ? "Удален из списка и с диска"
                             : "Удален из списка");
                 });
 
+            var deleteResult = commandResult.DeleteResult;
             UpdateTrayProgressIndicator();
 
             if (deleteResult.RemovedCount > 0)

@@ -42,7 +42,7 @@ namespace Replica
         private readonly OrderRunCommandService _orderRunCommandService;
         private readonly OrderEditorMutationService _orderEditorMutationService = new();
         private readonly OrderItemMutationService _orderItemMutationService = new();
-        private readonly OrderDeletionWorkflowService _orderDeletionWorkflowService = new();
+        private readonly OrderDeleteCommandService _orderDeleteCommandService = new();
         private readonly OrderItemDeleteCommandService _orderItemDeleteCommandService = new();
         private readonly OrderStatusTransitionService _orderStatusTransitionService = new();
         private readonly HashSet<string> _archivedFileNames = new(StringComparer.OrdinalIgnoreCase);
