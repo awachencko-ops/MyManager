@@ -13,6 +13,14 @@ public enum OrderRunStartPhaseStatus
     ReadyToExecute = 3
 }
 
+public enum OrderRunStopPhaseStatus
+{
+    NotRunning = 0,
+    LocalStatusApplied = 1,
+    Conflict = 2,
+    Unconfirmed = 3
+}
+
 public sealed class OrderRunStartPhaseResult
 {
     private OrderRunStartPhaseResult(
@@ -70,6 +78,78 @@ public sealed class OrderRunStartPhaseResult
             preparation,
             runSessions,
             noRunnableDetails: string.Empty);
+    }
+}
+
+public sealed class OrderRunStopPhaseResult
+{
+    private OrderRunStopPhaseResult(
+        OrderRunStopPhaseStatus status,
+        RunStopPreparationResult preparation,
+        bool shouldWarnServerUnavailable,
+        bool shouldLogServerFailure,
+        string serverReason)
+    {
+        Status = status;
+        Preparation = preparation ?? throw new ArgumentNullException(nameof(preparation));
+        ShouldWarnServerUnavailable = shouldWarnServerUnavailable;
+        ShouldLogServerFailure = shouldLogServerFailure;
+        ServerReason = serverReason ?? string.Empty;
+    }
+
+    public OrderRunStopPhaseStatus Status { get; }
+    public RunStopPreparationResult Preparation { get; }
+    public bool ShouldWarnServerUnavailable { get; }
+    public bool ShouldLogServerFailure { get; }
+    public string ServerReason { get; }
+
+    public static OrderRunStopPhaseResult NotRunning(RunStopPreparationResult preparation)
+    {
+        return new OrderRunStopPhaseResult(
+            OrderRunStopPhaseStatus.NotRunning,
+            preparation,
+            shouldWarnServerUnavailable: false,
+            shouldLogServerFailure: false,
+            serverReason: string.Empty);
+    }
+
+    public static OrderRunStopPhaseResult LocalStatusApplied(
+        RunStopPreparationResult preparation,
+        bool shouldWarnServerUnavailable,
+        bool shouldLogServerFailure,
+        string serverReason)
+    {
+        return new OrderRunStopPhaseResult(
+            OrderRunStopPhaseStatus.LocalStatusApplied,
+            preparation,
+            shouldWarnServerUnavailable,
+            shouldLogServerFailure,
+            serverReason);
+    }
+
+    public static OrderRunStopPhaseResult Conflict(
+        RunStopPreparationResult preparation,
+        string serverReason)
+    {
+        return new OrderRunStopPhaseResult(
+            OrderRunStopPhaseStatus.Conflict,
+            preparation,
+            shouldWarnServerUnavailable: false,
+            shouldLogServerFailure: false,
+            serverReason);
+    }
+
+    public static OrderRunStopPhaseResult Unconfirmed(
+        RunStopPreparationResult preparation,
+        bool shouldLogServerFailure,
+        string serverReason)
+    {
+        return new OrderRunStopPhaseResult(
+            OrderRunStopPhaseStatus.Unconfirmed,
+            preparation,
+            shouldWarnServerUnavailable: false,
+            shouldLogServerFailure,
+            serverReason);
     }
 }
 
@@ -179,5 +259,67 @@ public sealed class OrderRunCommandService
                     runProgressByOrderInternalId);
                 onCompleted(order);
             });
+    }
+
+    public async Task<OrderRunStopPhaseResult> ExecuteStopAsync(
+        OrderData order,
+        bool useLanApi,
+        string lanApiBaseUrl,
+        string actor,
+        IDictionary<string, CancellationTokenSource> runTokensByOrder,
+        IDictionary<string, int> runProgressByOrderInternalId,
+        Func<IReadOnlyCollection<OrderData>, string, bool>? tryRefreshSnapshotFromStorage,
+        Action<OrderData>? applyLocalStopStatus = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (order == null)
+            throw new ArgumentNullException(nameof(order));
+        if (runTokensByOrder == null)
+            throw new ArgumentNullException(nameof(runTokensByOrder));
+        if (runProgressByOrderInternalId == null)
+            throw new ArgumentNullException(nameof(runProgressByOrderInternalId));
+
+        var stopPreparation = await _workflowOrchestrationService.PrepareStopAsync(
+            order: order,
+            useLanApi: useLanApi,
+            lanApiBaseUrl: lanApiBaseUrl,
+            actor: actor,
+            runTokensByOrder: runTokensByOrder,
+            runProgressByOrderInternalId: runProgressByOrderInternalId,
+            tryRefreshSnapshotFromStorage: tryRefreshSnapshotFromStorage,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (!stopPreparation.CanProceed)
+            return OrderRunStopPhaseResult.NotRunning(stopPreparation);
+
+        var stopCommandResult = stopPreparation.StopCommandResult;
+        var stopResult = stopCommandResult.UsedLanApi ? stopCommandResult.ApiResult : null;
+        var stopReason = string.IsNullOrWhiteSpace(stopResult?.Error)
+            ? "сервер не подтвердил остановку"
+            : stopResult!.Error;
+
+        var shouldWarnServerUnavailable = stopCommandResult.UsedLanApi
+            && stopResult is { IsSuccess: false, IsUnavailable: true };
+
+        var shouldLogServerFailure = stopCommandResult.UsedLanApi
+            && stopResult is { IsSuccess: false, IsNotFound: false, IsBadRequest: false, IsConflict: false, IsUnavailable: false };
+
+        if (stopPreparation.CanApplyLocalStopStatus)
+        {
+            applyLocalStopStatus?.Invoke(order);
+            return OrderRunStopPhaseResult.LocalStatusApplied(
+                stopPreparation,
+                shouldWarnServerUnavailable,
+                shouldLogServerFailure,
+                stopReason);
+        }
+
+        if (stopCommandResult.UsedLanApi && stopResult?.IsConflict == true)
+            return OrderRunStopPhaseResult.Conflict(stopPreparation, stopReason);
+
+        return OrderRunStopPhaseResult.Unconfirmed(
+            stopPreparation,
+            shouldLogServerFailure,
+            stopReason);
     }
 }

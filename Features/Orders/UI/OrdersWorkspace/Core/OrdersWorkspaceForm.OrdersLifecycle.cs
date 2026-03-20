@@ -953,14 +953,27 @@ namespace Replica
                 ("use_lan_api", useLanApi ? "1" : "0"));
             Logger.Info("RUN | stop-command-start");
 
-            var stopPreparation = await _orderRunWorkflowOrchestrationService.PrepareStopAsync(
+            var stopPhase = await _orderRunCommandService.ExecuteStopAsync(
                 order: order,
                 useLanApi: useLanApi,
                 lanApiBaseUrl: _lanApiBaseUrl,
                 actor: ResolveLanApiActor(),
                 runTokensByOrder: _runTokensByOrder,
                 runProgressByOrderInternalId: _runProgressByOrderInternalId,
-                tryRefreshSnapshotFromStorage: TryRefreshRepositorySnapshotFromStorage);
+                tryRefreshSnapshotFromStorage: TryRefreshRepositorySnapshotFromStorage,
+                applyLocalStopStatus: localOrder =>
+                {
+                    AppendOrderOperationLog(localOrder, OrderOperationNames.Stop, "Остановлено пользователем");
+                    SetOrderStatus(
+                        localOrder,
+                        WorkflowStatusNames.Cancelled,
+                        OrderStatusSourceNames.Ui,
+                        "Остановлено пользователем",
+                        persistHistory: true,
+                        rebuildGrid: true);
+                });
+
+            var stopPreparation = stopPhase.Preparation;
 
             if (!stopPreparation.CanProceed)
             {
@@ -975,64 +988,48 @@ namespace Replica
                 UpdateTrayProgressIndicator();
             }
 
-            var stopCommandResult = stopPreparation.StopCommandResult;
-            var canApplyLocalStopStatus = stopPreparation.CanApplyLocalStopStatus;
-
             if (stopPreparation.SnapshotRefreshFailed)
             {
                 Logger.Warn($"RUN | snapshot-refresh-failed | reason=run-stop | order={GetOrderDisplayId(order)}");
             }
 
-            if (stopCommandResult.UsedLanApi)
+            if (stopPhase.ShouldWarnServerUnavailable)
             {
-                var stopResult = stopCommandResult.ApiResult!;
-                if (!stopResult.IsSuccess)
-                {
-                    var stopReason = string.IsNullOrWhiteSpace(stopResult.Error)
-                        ? "сервер не подтвердил остановку"
-                        : stopResult.Error;
-
-                    if (stopResult.IsUnavailable)
-                    {
-                        Logger.Warn($"RUN | stop-server-unavailable | order={GetOrderDisplayId(order)} | {stopReason}");
-                        MessageBox.Show(
-                            this,
-                            $"Остановка на сервере не подтверждена ({stopReason}).{Environment.NewLine}Локальная остановка будет выполнена, но серверный lock может остаться активным.",
-                            "Остановка",
-                            MessageBoxButtons.OK,
-                            MessageBoxIcon.Warning);
-                    }
-                    else if (!stopResult.IsNotFound && !stopResult.IsBadRequest && !stopResult.IsConflict)
-                    {
-                        Logger.Warn($"RUN | stop-server-failed | order={GetOrderDisplayId(order)} | {stopReason}");
-                    }
-                }
+                Logger.Warn($"RUN | stop-server-unavailable | order={GetOrderDisplayId(order)} | {stopPhase.ServerReason}");
+                var unavailableMessage = stopPhase.Status == OrderRunStopPhaseStatus.LocalStatusApplied
+                    ? $"Остановка на сервере не подтверждена ({stopPhase.ServerReason}).{Environment.NewLine}Локальная остановка будет выполнена, но серверный lock может остаться активным."
+                    : $"Остановка на сервере не подтверждена ({stopPhase.ServerReason}).";
+                MessageBox.Show(
+                    this,
+                    unavailableMessage,
+                    "Остановка",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
             }
 
-            if (canApplyLocalStopStatus)
+            if (stopPhase.ShouldLogServerFailure)
             {
-                AppendOrderOperationLog(order, OrderOperationNames.Stop, "Остановлено пользователем");
-                SetOrderStatus(order, WorkflowStatusNames.Cancelled, OrderStatusSourceNames.Ui, "Остановлено пользователем", persistHistory: true, rebuildGrid: true);
+                Logger.Warn($"RUN | stop-server-failed | order={GetOrderDisplayId(order)} | {stopPhase.ServerReason}");
+            }
+
+            if (stopPhase.Status == OrderRunStopPhaseStatus.LocalStatusApplied)
+            {
                 UpdateActionButtonsState();
                 SetBottomStatus($"Остановлен заказ {GetOrderDisplayId(order)}");
                 Logger.Info("RUN | stop-command-finish | local-status-applied=1");
                 return;
             }
 
-            if (stopCommandResult.UsedLanApi)
+            if (stopPhase.Status == OrderRunStopPhaseStatus.Conflict)
             {
-                var stopResult = stopCommandResult.ApiResult!;
-                if (stopResult.IsConflict)
-                {
-                    SetBottomStatus($"Остановка не подтверждена: конфликт версии ({GetOrderDisplayId(order)})");
-                    MessageBox.Show(
-                        this,
-                        "Сервер отклонил остановку из-за конфликта версии. Обновите заказ и повторите операцию.",
-                        "Остановка",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Information);
-                    return;
-                }
+                SetBottomStatus($"Остановка не подтверждена: конфликт версии ({GetOrderDisplayId(order)})");
+                MessageBox.Show(
+                    this,
+                    "Сервер отклонил остановку из-за конфликта версии. Обновите заказ и повторите операцию.",
+                    "Остановка",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+                return;
             }
 
             SetBottomStatus($"Сервер не подтвердил остановку {GetOrderDisplayId(order)}");

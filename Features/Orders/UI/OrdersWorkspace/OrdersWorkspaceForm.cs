@@ -29,8 +29,8 @@ namespace Replica
         internal OrdersWorkspaceForm(ISettingsProvider settingsProvider)
         {
             _settingsProvider = settingsProvider ?? throw new ArgumentNullException(nameof(settingsProvider));
-            _orderRunWorkflowOrchestrationService = new OrderRunWorkflowOrchestrationService(_orderRunStateService, _lanRunCommandCoordinator);
-            _orderRunCommandService = new OrderRunCommandService(_orderRunWorkflowOrchestrationService, _orderRunStateService, new OrderRunExecutionService());
+            var orderRunWorkflowOrchestrationService = new OrderRunWorkflowOrchestrationService(_orderRunStateService, _lanRunCommandCoordinator);
+            _orderRunCommandService = new OrderRunCommandService(orderRunWorkflowOrchestrationService, _orderRunStateService, new OrderRunExecutionService());
             InitializeComponent();
             InitializeDockSidebar();
             InitializeStatusCellVisuals();

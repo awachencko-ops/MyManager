@@ -167,6 +167,138 @@ public sealed class OrderRunCommandServiceTests
         Assert.Empty(runProgress);
     }
 
+    [Fact]
+    public async Task ExecuteStopAsync_WhenOrderIsNotRunning_ReturnsNotRunning()
+    {
+        var gateway = new StubLanGateway();
+        var service = CreateService(gateway, out _);
+        var order = new OrderData
+        {
+            InternalId = "order-stop-1",
+            Id = "2001"
+        };
+
+        var result = await service.ExecuteStopAsync(
+            order: order,
+            useLanApi: false,
+            lanApiBaseUrl: "http://localhost:5000/",
+            actor: "operator-1",
+            runTokensByOrder: new Dictionary<string, CancellationTokenSource>(),
+            runProgressByOrderInternalId: new Dictionary<string, int>(),
+            tryRefreshSnapshotFromStorage: (_, _) => true,
+            applyLocalStopStatus: _ => throw new InvalidOperationException("should not be called"));
+
+        Assert.Equal(OrderRunStopPhaseStatus.NotRunning, result.Status);
+        Assert.False(result.Preparation.CanProceed);
+        Assert.Equal(0, gateway.StopCalls);
+    }
+
+    [Fact]
+    public async Task ExecuteStopAsync_WhenLocalSessionExists_AppliesLocalStatus()
+    {
+        var gateway = new StubLanGateway();
+        var service = CreateService(gateway, out _);
+        var order = new OrderData
+        {
+            InternalId = "order-stop-2",
+            Id = "2002"
+        };
+        var runTokens = new Dictionary<string, CancellationTokenSource>
+        {
+            [order.InternalId] = new CancellationTokenSource()
+        };
+        var runProgress = new Dictionary<string, int>
+        {
+            [order.InternalId] = 25
+        };
+        var appliedCount = 0;
+
+        var result = await service.ExecuteStopAsync(
+            order: order,
+            useLanApi: false,
+            lanApiBaseUrl: "http://localhost:5000/",
+            actor: "operator-1",
+            runTokensByOrder: runTokens,
+            runProgressByOrderInternalId: runProgress,
+            tryRefreshSnapshotFromStorage: (_, _) => true,
+            applyLocalStopStatus: _ => appliedCount++);
+
+        Assert.Equal(OrderRunStopPhaseStatus.LocalStatusApplied, result.Status);
+        Assert.True(result.Preparation.CanProceed);
+        Assert.True(result.Preparation.LocalCancellationRequested);
+        Assert.Equal(1, appliedCount);
+        Assert.Empty(runTokens);
+        Assert.Empty(runProgress);
+        Assert.Equal(0, gateway.StopCalls);
+    }
+
+    [Fact]
+    public async Task ExecuteStopAsync_WhenLanUnavailableAndLocalSessionExists_ReturnsWarningFlag()
+    {
+        var gateway = new StubLanGateway();
+        gateway.StopResponses.Enqueue(LanOrderRunApiResult.Unavailable("gateway timeout"));
+        var service = CreateService(gateway, out _);
+        var order = new OrderData
+        {
+            InternalId = "order-stop-3",
+            Id = "2003"
+        };
+        var runTokens = new Dictionary<string, CancellationTokenSource>
+        {
+            [order.InternalId] = new CancellationTokenSource()
+        };
+        var runProgress = new Dictionary<string, int>
+        {
+            [order.InternalId] = 10
+        };
+
+        var result = await service.ExecuteStopAsync(
+            order: order,
+            useLanApi: true,
+            lanApiBaseUrl: "http://localhost:5000/",
+            actor: "operator-1",
+            runTokensByOrder: runTokens,
+            runProgressByOrderInternalId: runProgress,
+            tryRefreshSnapshotFromStorage: (_, _) => true,
+            applyLocalStopStatus: _ => { });
+
+        Assert.Equal(OrderRunStopPhaseStatus.LocalStatusApplied, result.Status);
+        Assert.True(result.ShouldWarnServerUnavailable);
+        Assert.False(result.ShouldLogServerFailure);
+        Assert.Contains("timeout", result.ServerReason, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(1, gateway.StopCalls);
+    }
+
+    [Fact]
+    public async Task ExecuteStopAsync_WhenLanConflictWithoutLocalSession_ReturnsConflict()
+    {
+        var gateway = new StubLanGateway();
+        gateway.StopResponses.Enqueue(LanOrderRunApiResult.Conflict("version mismatch", currentVersion: 56));
+        var service = CreateService(gateway, out _);
+        var order = new OrderData
+        {
+            InternalId = "order-stop-4",
+            Id = "2004",
+            StorageVersion = 12
+        };
+
+        var result = await service.ExecuteStopAsync(
+            order: order,
+            useLanApi: true,
+            lanApiBaseUrl: "http://localhost:5000/",
+            actor: "operator-1",
+            runTokensByOrder: new Dictionary<string, CancellationTokenSource>(),
+            runProgressByOrderInternalId: new Dictionary<string, int>(),
+            tryRefreshSnapshotFromStorage: (_, _) => true,
+            applyLocalStopStatus: _ => throw new InvalidOperationException("should not be called"));
+
+        Assert.Equal(OrderRunStopPhaseStatus.Conflict, result.Status);
+        Assert.False(result.Preparation.CanApplyLocalStopStatus);
+        Assert.Contains("version", result.ServerReason, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(56, order.StorageVersion);
+        Assert.Equal(1, gateway.StopCalls);
+    }
+
     private static OrderRunCommandService CreateService(StubLanGateway gateway, out OrderRunStateService runStateService)
     {
         runStateService = new OrderRunStateService();
