@@ -154,18 +154,13 @@ namespace Replica
             if (order == null)
                 return;
 
-            if (string.IsNullOrWhiteSpace(order.InternalId))
-                order.InternalId = Guid.NewGuid().ToString("N");
-            if (order.OrderDate == default)
-                order.OrderDate = OrderData.PlaceholderOrderDate;
-            if (order.ArrivalDate == default)
-                order.ArrivalDate = DateTime.Now;
-            order.UserName = NormalizeOrderUserName(order.UserName);
-
-            _orderHistory.Add(order);
+            var orderInternalId = _orderEditorMutationService.AddCreatedOrder(
+                _orderHistory,
+                order,
+                NormalizeOrderUserName);
             SaveHistory();
             RebuildOrdersGrid();
-            TryRestoreSelectedRowByTag(OrderGridLogic.BuildOrderTag(order.InternalId));
+            TryRestoreSelectedRowByTag(OrderGridLogic.BuildOrderTag(orderInternalId));
         }
 
         private void EditOrderFromGrid(int rowIndex)
@@ -198,10 +193,7 @@ namespace Replica
             if (form.ShowDialog(this) != DialogResult.OK)
                 return;
 
-            order.Id = form.OrderNumber.Trim();
-            order.OrderDate = form.OrderDate;
-            if (order.ArrivalDate == default)
-                order.ArrivalDate = DateTime.Now;
+            _orderEditorMutationService.ApplySimpleEdit(order, form.OrderNumber, form.OrderDate);
 
             SaveHistory();
             RebuildOrdersGrid();
@@ -214,18 +206,7 @@ namespace Replica
             if (form.ShowDialog(this) != DialogResult.OK || form.ResultOrder == null)
                 return;
 
-            var updated = form.ResultOrder;
-            order.Id = updated.Id;
-            order.StartMode = updated.StartMode;
-            order.Keyword = updated.Keyword;
-            order.ArrivalDate = updated.ArrivalDate;
-            order.OrderDate = updated.OrderDate;
-            order.FolderName = updated.FolderName;
-            order.SourcePath = updated.SourcePath;
-            order.PreparedPath = updated.PreparedPath;
-            order.PrintPath = updated.PrintPath;
-            order.PitStopAction = updated.PitStopAction;
-            order.ImposingAction = updated.ImposingAction;
+            _orderEditorMutationService.ApplyExtendedEdit(order, form.ResultOrder);
 
             SaveHistory();
             RebuildOrdersGrid();

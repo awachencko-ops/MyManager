@@ -53,6 +53,8 @@
 > Актуализация на 2026-03-20 (risk-burndown, срез 23): добавлен `OrderRunCommandService`; run-start/run-execution orchestration (`PrepareStart + BeginRunSessions + Execute + CompleteRunSession`) переведена из `OrdersWorkspaceForm` в application-service boundary, форма оставлена как UI/presenter слой для статусов и диалогов; добавлены unit-тесты `OrderRunCommandServiceTests`, подтверждены build + full test + PostgreSQL integration regression.
 >
 > Актуализация на 2026-03-20 (risk-burndown, срез 24): `OrderRunCommandService` расширен stop-boundary (`ExecuteStopAsync`); stop/status persistence orchestration (`PrepareStop + local status apply + conflict/unconfirmed ветки`) переведена из `OrdersWorkspaceForm` в application-service слой, форма оставлена как UI-обработчик user-feedback; добавлены stop-сценарии в `OrderRunCommandServiceTests`, подтверждены build + full test + PostgreSQL integration regression.
+>
+> Актуализация на 2026-03-20 (risk-burndown, срез 25): добавлен `OrderEditorMutationService`; create/edit mutation logic (`AddCreatedOrder`, `ApplySimpleEdit`, `ApplyExtendedEdit`) переведена из `OrdersWorkspaceForm` в application-service слой, форма оставлена как UI-shell для диалогов и refresh-потока (`SaveHistory`/`RebuildOrdersGrid`); добавлены unit-тесты `OrderEditorMutationServiceTests`, подтверждены build + full test + PostgreSQL integration regression.
 
 ## Executive summary
 
@@ -78,6 +80,7 @@
 - Из `MainForm` выделен `OrderRunWorkflowOrchestrationService`: run/stop preflight (plan, LAN approval, snapshot refresh, local cancel) теперь в сервисном use-case слое.
 - Из `MainForm` выделен `OrderRunCommandService`: единая orchestration-цепочка запуска (`prepare/begin/execute/complete`) переведена в application-service, UI управляет только user-feedback.
 - Stop/status persistence orchestration переведён на `OrderRunCommandService.ExecuteStopAsync`; форма больше не управляет stop-ветвлением на уровне run-state/invariants.
+- Create/edit mutation logic переведена на `OrderEditorMutationService`; форма больше не содержит прямое присваивание полей заказа при simple/extended edit.
 - Из `MainForm` выделен `OrderDeletionWorkflowService`: batch-удаление orders/items (включая disk-cleanup, fallback на known paths и reindex item-ов) переведено в use-case сервис.
 - Выполнен rename UI-shell: рабочая форма теперь `OrdersWorkspaceForm`; после следующего шага декомпозиции код `Orders` разложен в feature-slice структуру `Features/Orders/UI|Application|Domain`, `MainForm` оставлен как compatibility shim.
 - Введён интерфейсный слой настроек (`ISettingsProvider`), а core runtime-flow (`Program`, `MainForm`, `OrderProcessor`, `ConfigService`) переведён с прямого static-IO на provider boundary.
@@ -240,6 +243,9 @@
 15. Итерация 15 (2026-03-20, адресная): закрыт следующий срез `OrdersWorkspaceForm` God Object по stop/status persistence orchestration.
    - Что сделано: в `OrderRunCommandService` добавлен `ExecuteStopAsync`; stop-цепочка `PrepareStopAsync -> local stop-status apply -> conflict/unconfirmed resolution` вынесена из формы в application-service слой, `StopSelectedOrderAsync` переключён на сервисный вызов, расширены unit-тесты `OrderRunCommandServiceTests` (not-running/local stop/lan unavailable/conflict).
    - Эффект: уменьшена связность формы с stop-state lifecycle и server result branching, повышена тестируемость stop-workflow без UI-зависимости.
+16. Итерация 16 (2026-03-20, адресная): закрыт следующий срез `OrdersWorkspaceForm` God Object по create/edit mutation logic.
+   - Что сделано: добавлен `OrderEditorMutationService`; мутации `AddCreatedOrder`, `ApplySimpleEdit`, `ApplyExtendedEdit` вынесены в application-service слой, `OrdersWorkspaceForm` переведён на сервисные вызовы, добавлены unit-тесты `OrderEditorMutationServiceTests`.
+   - Эффект: уменьшена связность UI-формы с прямой доменной мутацией `OrderData`, улучшена тестируемость create/edit сценариев и подготовлена база для дальнейшего выноса write-flow в единый orchestration сервис.
 
 ---
 
