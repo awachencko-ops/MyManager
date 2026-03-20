@@ -29,14 +29,14 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Remove="UI\Forms\OrdersWorkspace\Filters\OrdersWorkspaceForm.Filters.Evaluation.resx" />
-    <EmbeddedResource Remove="UI\Forms\OrdersWorkspace\Filters\OrdersWorkspaceForm.Filters.Popups.resx" />
-    <EmbeddedResource Remove="UI\Forms\OrdersWorkspace\Core\OrdersWorkspaceForm.ArchiveSync.resx" />
-    <EmbeddedResource Remove="UI\Forms\OrdersWorkspace\FileOps\OrdersWorkspaceForm.FileOps.GridInteractions.resx" />
+    <EmbeddedResource Remove="Features\Orders\UI\OrdersWorkspace\Filters\OrdersWorkspaceForm.Filters.Evaluation.resx" />
+    <EmbeddedResource Remove="Features\Orders\UI\OrdersWorkspace\Filters\OrdersWorkspaceForm.Filters.Popups.resx" />
+    <EmbeddedResource Remove="Features\Orders\UI\OrdersWorkspace\Core\OrdersWorkspaceForm.ArchiveSync.resx" />
+    <EmbeddedResource Remove="Features\Orders\UI\OrdersWorkspace\FileOps\OrdersWorkspaceForm.FileOps.GridInteractions.resx" />
     <EmbeddedResource Remove="tests\**\*.resx" />
     <EmbeddedResource Remove=".codex_build_out\**\*.resx" />
-    <None Remove="UI\Forms\OrdersWorkspace\Core\OrdersWorkspaceForm.ArchiveSync.resx" />
-    <None Remove="UI\Forms\OrdersWorkspace\FileOps\OrdersWorkspaceForm.FileOps.GridInteractions.resx" />
+    <None Remove="Features\Orders\UI\OrdersWorkspace\Core\OrdersWorkspaceForm.ArchiveSync.resx" />
+    <None Remove="Features\Orders\UI\OrdersWorkspace\FileOps\OrdersWorkspaceForm.FileOps.GridInteractions.resx" />
   </ItemGroup>
 
   <ItemGroup>

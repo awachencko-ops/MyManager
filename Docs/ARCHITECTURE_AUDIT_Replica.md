@@ -45,6 +45,8 @@
 > Актуализация на 2026-03-20 (risk-burndown, срез 19): добавлен `OrderRunWorkflowOrchestrationService`; подготовка `run/stop` workflow (run-plan, LAN command preflight, snapshot refresh, stop preflight/cancel) вынесена из `MainForm` в application-service слой, добавлены unit-тесты orchestration (`OrderRunWorkflowOrchestrationServiceTests`).
 >
 > Актуализация на 2026-03-20 (risk-burndown, срез 20): выполнен rename и модульный перенос UI-ядра формы: entrypoint переведён на `OrdersWorkspaceForm`, код формы перемещён в `UI/Forms/OrdersWorkspace/*` (Core/FileOps/Filters/Views/Controls), сохранён переходный shim `MainForm` для обратной совместимости автотестов.
+>
+> Актуализация на 2026-03-20 (risk-burndown, срез 21): введён каркас гибридной структуры (`Features/*`, `Infrastructure/*`, `SharedKernel/*`, `Legacy/*`), выполнен первый feature-slice перенос `Orders` (`Features/Orders/UI|Application|Domain`) и storage adapters в `Infrastructure/Storage/Orders`; зафиксированы правила quarantine/exit для `Legacy`.
 
 ## Executive summary
 
@@ -69,7 +71,7 @@
 - Из `MainForm` выделен `OrderRunExecutionService`: конкурентное выполнение run-сессий и error/cancel lifecycle больше не оркестрируются внутри формы.
 - Из `MainForm` выделен `OrderRunWorkflowOrchestrationService`: run/stop preflight (plan, LAN approval, snapshot refresh, local cancel) теперь в сервисном use-case слое.
 - Из `MainForm` выделен `OrderDeletionWorkflowService`: batch-удаление orders/items (включая disk-cleanup, fallback на known paths и reindex item-ов) переведено в use-case сервис.
-- Выполнен rename UI-shell: рабочая форма теперь `OrdersWorkspaceForm`, а код разложен в модульную структуру `UI/Forms/OrdersWorkspace/*`; `MainForm` оставлен как compatibility shim.
+- Выполнен rename UI-shell: рабочая форма теперь `OrdersWorkspaceForm`; после следующего шага декомпозиции код `Orders` разложен в feature-slice структуру `Features/Orders/UI|Application|Domain`, `MainForm` оставлен как compatibility shim.
 - Введён интерфейсный слой настроек (`ISettingsProvider`), а core runtime-flow (`Program`, `MainForm`, `OrderProcessor`, `ConfigService`) переведён с прямого static-IO на provider boundary.
 - В `OrderProcessor` добавлены dependency health-сигналы и circuit-breaker (`DependencyCircuitBreaker`) для внешних file-зависимостей; `MainForm` получает сигналы и отражает degraded/unavailable статус в UI.
 - В `OrdersHistoryRepositoryCoordinator` добавлена двусторонняя sync-стратегия `history.json <-> PostgreSQL` (импорт file-only заказов + mirror LAN snapshot обратно в файл).
@@ -216,6 +218,9 @@
 11. Итерация 11 (2026-03-20, адресная): закрыт rename/decomposition срез UI-shell (`MainForm -> OrdersWorkspaceForm`).
    - Что сделано: точка входа переведена на `OrdersWorkspaceForm`, файлы формы перенесены в `UI/Forms/OrdersWorkspace/*` с модульным делением, оставлен совместимый shim `MainForm` для тестов и плавной миграции.
    - Эффект: снижена архитектурная «тяжесть» legacy-нейминга, упорядочена навигация по UI-коду, подготовлена база для дальнейшей поэтапной декомпозиции формы.
+12. Итерация 12 (2026-03-20, адресная): закрыт первый шаг hybrid-layout migration.
+   - Что сделано: созданы и задействованы каталоги `Features`, `Infrastructure`, `SharedKernel`, `Legacy`; выполнен перенос `Orders` UI/application/domain кода в `Features/Orders/*`, а `FileSystem/PostgreSql` репозиторных адаптеров — в `Infrastructure/Storage/Orders`; добавлены правила `Legacy` quarantine/exit.
+   - Эффект: повышена эргономика разработки по модульным срезам, упорядочены границы слоёв и подготовлен безопасный маршрут к полной ликвидации legacy-контуров.
 
 ---
 
