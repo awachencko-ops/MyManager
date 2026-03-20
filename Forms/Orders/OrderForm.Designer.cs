@@ -322,6 +322,7 @@
             Controls.Add(dateCreate);
             Name = "OrderForm";
             Text = "OrderForm";
+            Load += OrderForm_Load;
             ResumeLayout(false);
             PerformLayout();
         }
