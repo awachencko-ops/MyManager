@@ -33,6 +33,8 @@
 > Актуализация на 2026-03-20 (risk-burndown, срез 13): в `OrderProcessor` внедрён `FileOperationRetryPolicy` (retry+backoff для copy/move/delete/create/read), file-операции переведены на policy boundary с retry-telemetry (`FILE-RETRY`), добавлены unit-тесты policy и обновлены UI smoke-тесты cleanup-сценариев.
 >
 > Актуализация на 2026-03-20 (risk-burndown, срез 14): добавлен `DependencyCircuitBreaker` и dependency health-сигналы в `OrderProcessor` (PitStop/Imposing/Storage), операции переведены на dependency-guard (`circuit-open` + retry-after), в `MainForm` добавлена UI-индикация degraded/unavailable в `toolConnection` и server-header статусе.
+>
+> Актуализация на 2026-03-20 (risk-burndown, срез 15): внедрён `DependencyBulkheadPolicy` (load shedding per dependency) и readiness-проверки в `OrderProcessor` перед стартом workflow (storage/hotfolder availability для выбранных сценариев), запуск блокируется до восстановления критичных контуров.
 
 ## Executive summary
 
@@ -98,13 +100,14 @@
 - Есть polling-ожидание файлов с timeout (`WaitForFileAsync`, `WaitForFileInAnyAsync`) и отмена по `CancellationToken`.
 - В `OrderProcessor` добавлен retry/backoff policy (`FileOperationRetryPolicy`) для file-операций (copy/move/delete/create/read) с логированием попыток и exhausted-событий.
 - Добавлен circuit-breaker (`DependencyCircuitBreaker`) и dependency health-state для PitStop/Imposing/Storage с UI-индикацией degraded/unavailable.
+- Добавлен bulkhead/load shedding (`DependencyBulkheadPolicy`) и readiness-контур на старте workflow (проверка storage/hotfolder-директорий по активным сценариям до запуска обработки).
 - В нескольких местах ошибки suppress-ятся (`catch { }`), что скрывает деградации.
-- Bulkhead/load shedding пока не внедрены.
 - Архитектура single-process: падение/фриз UI-компонента критично для всего потока выполнения.
 
 ### Вывод
 
-- Устойчивость к «дрожащей» инфраструктуре улучшена: есть retry/backoff + dependency circuit-breaker и health-state, но до production-resilience ещё нужны bulkhead/load shedding и формализованный dependency readiness-контур.
+- Устойчивость к «дрожащей» инфраструктуре существенно улучшена: есть retry/backoff + circuit-breaker + bulkhead/load shedding + readiness-проверки зависимостей на старте.
+- До production-resilience остаются timeout-budget tuning per stage, event-driven orchestration и снижение single-process blast radius.
 
 ---
 
@@ -148,8 +151,8 @@
 | История заказов (`history.json` / LAN PostgreSQL) | В FileSystem-режиме остаётся риск race; в LAN-режиме риск снижен через version-check | **Med** | Оставить FileSystem только как fallback; целевой режим — PostgreSQL + server-side command boundary. |
 | `SetOrderStatus` + `SaveHistory` | Клиентская неатомарность между UI-операцией и persistence | **Med/High** | Перенести статусные команды в API/worker с unit of work и server-side invariants. |
 | `_runTokensByOrder` (in-memory) | Переведён в runtime-session state; риск смещён в сторону UX-согласованности между клиентами | **Low/Med** | Сохранить server lock/state единственным источником истины и расширять server-driven refresh-сценарии. |
-| `OrderProcessor` file workflow | Retry/backoff внедрён в core file-операции; остаточный риск — отсутствие circuit breaker/bulkhead | **Med** | Следующий шаг: circuit-breaker + dependency health-state + timeout budget per stage. |
-| Ожидание hotfolder | Circuit-breaker и health-state внедрены; остаточный риск — polling model без bulkhead/load shedding | **Low/Med** | Следующий шаг: dependency readiness + bulkhead/load shedding policy для пиковых сценариев. |
+| `OrderProcessor` file workflow | Retry/backoff + circuit-breaker + bulkhead/readiness внедрены; остаточный риск — polling-timeouts и single-process blast radius | **Low/Med** | Следующий шаг: timeout budget per stage, расширение server-side orchestration и queue boundary. |
+| Ожидание hotfolder | Circuit-breaker + bulkhead + readiness внедрены; остаточный риск — polling model и latency детекции недоступности | **Low** | Следующий шаг: переход к event/queue-сигналам и proactive dependency telemetry. |
 | Логирование (`Logger`) | В API введён базовый request correlation (`X-Correlation-Id`), но нет полного end-to-end structured telemetry | **Med/High** | Довести до единого structured logging/tracing контура (client+api+worker). |
 | Order status log file | best-effort append, mutable file (частично компенсировано `order_events`) | **Med** | Сделать `order_events` primary audit source, добавить retention/архив и SQL-аудит отчёты. |
 | Ошибки с `catch { }` | В критическом runtime-пути silent catches устранены; остаточный риск остаётся в legacy/UI-участках | **Low/Med** | Поддерживать policy: без silent catch в production-path; остаточные блоки вычищать по итерациям. |
@@ -179,8 +182,9 @@
 5. Итерация 5 (2026-03-20): закрыт срез dependency health-state + circuit-breaker для hotfolder-интеграций.
    - Что сделано: добавлен `DependencyCircuitBreaker`; операции в `OrderProcessor` обёрнуты dependency-guard (`circuit-open`, `retry-after`), введены сигналы `OnDependencyHealthChanged`, `MainForm` показывает degraded/unavailable состояние в tray и server-header.
    - Эффект: снижена вероятность каскадных ошибок при недоступности внешних hotfolder-зависимостей, улучшена оперативная диагностика через UI-индикаторы.
-6. На очереди (итерация 6): bulkhead/load shedding + dependency readiness policy.
-   - План следующего среза: добавить ограничение параллелизма по dependency и явный readiness-state для блокировки запуска до восстановления критичных контуров.
+6. Итерация 6 (2026-03-20): закрыт срез bulkhead/load shedding + dependency readiness policy.
+   - Что сделано: добавлен `DependencyBulkheadPolicy` и подключён в dependency boundary `OrderProcessor`; при перегрузе включается load shedding (`bulkhead-reject`) с деградацией health-state. Добавлены readiness-проверки storage/hotfolder-контуров по активным сценариям перед стартом workflow.
+   - Эффект: снижен риск каскадного перегруза и «слепых» запусков при недоступных dependency; запуск блокируется до восстановления критичных директорий.
 
 ---
 

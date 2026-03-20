@@ -20,6 +20,7 @@ namespace Replica
         private readonly string _rootPath;
         private readonly ISettingsProvider _settingsProvider;
         private readonly FileOperationRetryPolicy _fileRetryPolicy;
+        private readonly DependencyBulkheadPolicy _dependencyBulkhead;
         private readonly Dictionary<string, DependencyCircuitBreaker> _dependencyCircuitBreakers = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, DependencyHealthLevel> _dependencyHealthLevels = new(StringComparer.OrdinalIgnoreCase);
         private const string TempInFolder = "in";
@@ -29,6 +30,13 @@ namespace Replica
         private const string DependencyImposing = "imposing";
         private const string DependencyStorage = "storage";
         private const int DependencyFailureThreshold = 3;
+        private const int DependencyBulkheadDefaultLimit = 4;
+        private static readonly IReadOnlyDictionary<string, int> DependencyBulkheadLimits = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        {
+            [DependencyPitStop] = 3,
+            [DependencyImposing] = 3,
+            [DependencyStorage] = 6
+        };
         private static readonly TimeSpan DependencyOpenDuration = TimeSpan.FromSeconds(30);
 
         public OrderProcessor(
@@ -41,6 +49,7 @@ namespace Replica
             _fileRetryPolicy = fileRetryPolicy ?? new FileOperationRetryPolicy(
                 warnLogger: Logger.Warn,
                 errorLogger: Logger.Error);
+            _dependencyBulkhead = new DependencyBulkheadPolicy(DependencyBulkheadDefaultLimit, DependencyBulkheadLimits);
         }
 
         public async Task RunAsync(OrderData order, CancellationToken ct, IEnumerable<string>? selectedItemIds = null)
@@ -57,7 +66,6 @@ namespace Replica
             string tempRoot = string.IsNullOrWhiteSpace(settings.TempFolderPath)
                 ? Path.Combine(_rootPath, settings.TempFolderName)
                 : settings.TempFolderPath;
-            EnsureTempFolders(tempRoot);
 
             var selectedSet = selectedItemIds == null
                 ? null
@@ -76,6 +84,7 @@ namespace Replica
                 Logger.Info($">>> СТАРТ: Заказ {order.Id}");
                 Notify(order, "🟡 Запуск…", "Поиск конфигов...");
                 ReportProgress(order, 5, "Поиск конфигов");
+                EnsureWorkflowDependenciesReady(order, selectedSet, tempRoot);
 
                 var pitCfg = ConfigService.GetPitStopConfigByName(order.PitStopAction);
                 var impCfg = ConfigService.GetImposingConfigByName(order.ImposingAction);
@@ -824,6 +833,118 @@ namespace Replica
             return Math.Clamp(ratio, 0d, 1d);
         }
 
+        private void EnsureWorkflowDependenciesReady(OrderData order, HashSet<string>? selectedSet, string tempRoot)
+        {
+            EnsureStorageDependencyReady(tempRoot);
+
+            var pitActions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var imposingActions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            CollectRequiredDependencyActions(order, selectedSet, pitActions, imposingActions);
+
+            foreach (var actionName in pitActions)
+            {
+                var pitCfg = ConfigService.GetPitStopConfigByName(actionName);
+                if (pitCfg == null)
+                    continue;
+
+                EnsureDependencyDirectoryReady(DependencyPitStop, "readiness-pitstop-in", pitCfg.InputFolder);
+                EnsureDependencyDirectoryReady(DependencyPitStop, "readiness-pitstop-success", pitCfg.ProcessedSuccess);
+                EnsureDependencyDirectoryReady(DependencyPitStop, "readiness-pitstop-error", pitCfg.ProcessedError);
+            }
+
+            foreach (var actionName in imposingActions)
+            {
+                var impCfg = ConfigService.GetImposingConfigByName(actionName);
+                if (impCfg == null)
+                    continue;
+
+                EnsureDependencyDirectoryReady(DependencyImposing, "readiness-imposing-in", impCfg.In);
+                EnsureDependencyDirectoryReady(DependencyImposing, "readiness-imposing-out", impCfg.Out);
+            }
+        }
+
+        private void EnsureStorageDependencyReady(string tempRoot)
+        {
+            if (string.IsNullOrWhiteSpace(_rootPath))
+                throw new InvalidOperationException("Не задан корневой путь хранилища заказов.");
+
+            ExecuteWithDependencyRetry(
+                dependencyName: DependencyStorage,
+                operation: "readiness-storage-root-create",
+                path: _rootPath,
+                action: () => Directory.CreateDirectory(_rootPath));
+            EnsureDependencyDirectoryReady(DependencyStorage, "readiness-storage-root-access", _rootPath);
+
+            if (string.IsNullOrWhiteSpace(tempRoot))
+                throw new InvalidOperationException("Не задан временный путь для обработки заказов.");
+
+            ExecuteWithDependencyRetry(
+                dependencyName: DependencyStorage,
+                operation: "readiness-temp-root-create",
+                path: tempRoot,
+                action: () => Directory.CreateDirectory(tempRoot));
+            EnsureTempFolders(tempRoot);
+        }
+
+        private static void CollectRequiredDependencyActions(
+            OrderData order,
+            HashSet<string>? selectedSet,
+            HashSet<string> pitActions,
+            HashSet<string> imposingActions)
+        {
+            if (OrderTopologyService.IsMultiOrder(order))
+            {
+                var runItems = order.Items.Where(x => x != null);
+                if (selectedSet != null && selectedSet.Count > 0)
+                    runItems = runItems.Where(x => selectedSet.Contains(x.ItemId));
+
+                foreach (var item in runItems)
+                {
+                    var pitAction = string.IsNullOrWhiteSpace(item.PitStopAction) || item.PitStopAction == "-"
+                        ? order.PitStopAction
+                        : item.PitStopAction;
+                    var impAction = string.IsNullOrWhiteSpace(item.ImposingAction) || item.ImposingAction == "-"
+                        ? order.ImposingAction
+                        : item.ImposingAction;
+
+                    AddConfiguredAction(pitActions, pitAction);
+                    AddConfiguredAction(imposingActions, impAction);
+                }
+
+                return;
+            }
+
+            AddConfiguredAction(pitActions, order.PitStopAction);
+            AddConfiguredAction(imposingActions, order.ImposingAction);
+        }
+
+        private static void AddConfiguredAction(HashSet<string> target, string? actionName)
+        {
+            if (string.IsNullOrWhiteSpace(actionName) || actionName == "-")
+                return;
+
+            target.Add(actionName);
+        }
+
+        private void EnsureDependencyDirectoryReady(string dependencyName, string operation, string? directoryPath)
+        {
+            if (string.IsNullOrWhiteSpace(directoryPath))
+                throw new InvalidOperationException($"Dependency '{dependencyName}' path is empty for operation '{operation}'.");
+
+            ExecuteWithDependencyRetry(
+                dependencyName: dependencyName,
+                operation: operation,
+                path: directoryPath,
+                action: () =>
+                {
+                    if (!Directory.Exists(directoryPath))
+                        throw new DirectoryNotFoundException($"Dependency '{dependencyName}' directory not found: {directoryPath}");
+
+                    using var enumerator = Directory.EnumerateFileSystemEntries(directoryPath).GetEnumerator();
+                    _ = enumerator.MoveNext();
+                });
+        }
+
         private bool IsFileReady(string path)
         {
             try
@@ -879,8 +1000,24 @@ namespace Replica
                 $"failure | op={operation} | path={path} | {ex.Message}");
         }
 
+        private IDisposable EnterDependencyBulkhead(string dependencyName, string operation, string path)
+        {
+            if (_dependencyBulkhead.TryEnter(dependencyName, out var lease, out var inFlightAfterEnter, out var limit)
+                && lease != null)
+            {
+                return lease;
+            }
+
+            PublishDependencyHealth(
+                dependencyName,
+                DependencyHealthLevel.Degraded,
+                $"bulkhead-reject | op={operation} | path={path} | in-flight={inFlightAfterEnter}/{limit}");
+            throw new IOException($"Dependency '{dependencyName}' is overloaded for operation '{operation}' (in-flight {inFlightAfterEnter}/{limit}).");
+        }
+
         private void ExecuteWithDependencyRetry(string dependencyName, string operation, string path, Action action)
         {
+            using var lease = EnterDependencyBulkhead(dependencyName, operation, path);
             EnsureDependencyAvailable(dependencyName, operation, path);
             try
             {
@@ -896,6 +1033,7 @@ namespace Replica
 
         private T ExecuteWithDependencyRetry<T>(string dependencyName, string operation, string path, Func<T> action)
         {
+            using var lease = EnterDependencyBulkhead(dependencyName, operation, path);
             EnsureDependencyAvailable(dependencyName, operation, path);
             try
             {
