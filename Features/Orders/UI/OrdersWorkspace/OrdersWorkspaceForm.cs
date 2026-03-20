@@ -35,22 +35,10 @@ namespace Replica
         {
             _settingsProvider = settingsProvider ?? throw new ArgumentNullException(nameof(settingsProvider));
             var services = runtimeServices ?? throw new ArgumentNullException(nameof(runtimeServices));
-            _lanRunCommandCoordinator = services.LanRunCommandCoordinator;
             _ordersHistoryCoordinator = services.OrdersHistoryCoordinator;
             _ordersHistoryMaintenanceService = services.OrdersHistoryMaintenanceService;
             _orderFolderPathResolutionService = services.OrderFolderPathResolutionService;
-            _orderStorageVersionSyncService = services.OrderStorageVersionSyncService;
-            _orderRunStateService = services.OrderRunStateService;
-            _orderRunFeedbackService = services.OrderRunFeedbackService;
-            _orderRunCommandService = services.OrderRunCommandService;
-            _orderEditorMutationService = services.OrderEditorMutationService;
-            _orderItemMutationService = services.OrderItemMutationService;
-            _orderFileStageCommandService = services.OrderFileStageCommandService;
-            _orderFilePathMutationService = services.OrderFilePathMutationService;
-            _orderFileRenameRemoveCommandService = services.OrderFileRenameRemoveCommandService;
-            _orderDeleteCommandService = services.OrderDeleteCommandService;
-            _orderItemDeleteCommandService = services.OrderItemDeleteCommandService;
-            _orderStatusTransitionService = services.OrderStatusTransitionService;
+            _orderApplicationService = services.OrderApplicationService;
             InitializeComponent();
             InitializeDockSidebar();
             InitializeStatusCellVisuals();
@@ -174,7 +162,7 @@ namespace Replica
             if (order == null)
                 return;
 
-            var orderInternalId = _orderEditorMutationService.AddCreatedOrder(
+            var orderInternalId = _orderApplicationService.AddCreatedOrder(
                 _orderHistory,
                 order,
                 NormalizeOrderUserName);
@@ -213,7 +201,7 @@ namespace Replica
             if (form.ShowDialog(this) != DialogResult.OK)
                 return;
 
-            _orderEditorMutationService.ApplySimpleEdit(order, form.OrderNumber, form.OrderDate);
+            _orderApplicationService.ApplySimpleEdit(order, form.OrderNumber, form.OrderDate);
 
             SaveHistory();
             RebuildOrdersGrid();
@@ -226,7 +214,7 @@ namespace Replica
             if (form.ShowDialog(this) != DialogResult.OK || form.ResultOrder == null)
                 return;
 
-            _orderEditorMutationService.ApplyExtendedEdit(order, form.ResultOrder);
+            _orderApplicationService.ApplyExtendedEdit(order, form.ResultOrder);
 
             SaveHistory();
             RebuildOrdersGrid();

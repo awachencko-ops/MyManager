@@ -132,7 +132,7 @@ namespace Replica
             if (ofd.ShowDialog(this) != DialogResult.OK)
                 return;
 
-            var addPreparation = _orderItemMutationService.PrepareAddItem(
+            var addPreparation = _orderApplicationService.PrepareAddItem(
                 order,
                 ofd.FileName,
                 NormalizeAction(order.PitStopAction),
@@ -152,7 +152,7 @@ namespace Replica
             }
             catch (Exception ex)
             {
-                _orderItemMutationService.RollbackPreparedItem(order, newItem);
+                _orderApplicationService.RollbackPreparedItem(order, newItem);
                 SetBottomStatus($"Не удалось добавить файл: {ex.Message}");
                 MessageBox.Show(this, $"Не удалось добавить файл: {ex.Message}", "Добавление файла", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
@@ -160,7 +160,7 @@ namespace Replica
 
             if (!addSucceeded)
             {
-                _orderItemMutationService.RollbackPreparedItem(order, newItem);
+                _orderApplicationService.RollbackPreparedItem(order, newItem);
                 SetBottomStatus("Файл не добавлен");
                 return;
             }
@@ -192,7 +192,7 @@ namespace Replica
             if (stage == OrderStages.Print && !await EnsureSimpleOrderInfoForPrintAsync(order))
                 return false;
 
-            if (!_orderFileStageCommandService.TryPrepareOrderAdd(
+            if (!_orderApplicationService.TryPrepareOrderFileAdd(
                     order,
                     sourceFile,
                     stage,
@@ -218,7 +218,7 @@ namespace Replica
             if (stage == OrderStages.Print && !await EnsureSimpleOrderInfoForPrintAsync(order))
                 return false;
 
-            if (!_orderFileStageCommandService.TryPrepareItemAdd(
+            if (!_orderApplicationService.TryPrepareItemFileAdd(
                     order,
                     item,
                     sourceFile,
@@ -314,7 +314,7 @@ namespace Replica
                 return;
             }
 
-            var statusUpdate = _orderFileRenameRemoveCommandService.ApplyOrderFileRemoved(order, stage);
+            var statusUpdate = _orderApplicationService.ApplyOrderFileRemoved(order, stage);
             SetOrderStatus(
                 order,
                 statusUpdate.Status,
@@ -356,7 +356,7 @@ namespace Replica
             }
 
             var removedFileName = Path.GetFileName(currentPath);
-            var removeOutcome = _orderFileRenameRemoveCommandService.ApplyItemFileRemoved(
+            var removeOutcome = _orderApplicationService.ApplyItemFileRemoved(
                 order,
                 item,
                 stage,
@@ -407,7 +407,7 @@ namespace Replica
             if (order == null)
                 return false;
 
-            var result = _orderItemMutationService.ApplyTopologyAfterItemMutation(order, wasMultiOrderBeforeMutation);
+            var result = _orderApplicationService.ApplyTopologyAfterItemMutation(order, wasMultiOrderBeforeMutation);
             return ApplyTopologyMutationResult(order, result, details);
         }
 
@@ -430,7 +430,7 @@ namespace Replica
 
         private bool ContainsOrderItem(OrderData order, string? itemId)
         {
-            return _orderItemMutationService.ContainsOrderItem(order, itemId);
+            return _orderApplicationService.ContainsOrderItem(order, itemId);
         }
 
         private static bool RemoveItemIfEmpty(OrderData order, OrderFileItem item)
@@ -467,7 +467,7 @@ namespace Replica
                 return;
             }
 
-            var statusUpdate = _orderFileRenameRemoveCommandService.ApplyOrderFileRenamed(order, stage, renamedPath);
+            var statusUpdate = _orderApplicationService.ApplyOrderFileRenamed(order, stage, renamedPath);
             SetOrderStatus(
                 order,
                 statusUpdate.Status,
@@ -499,7 +499,7 @@ namespace Replica
                 return;
             }
 
-            var statusUpdate = _orderFileRenameRemoveCommandService.ApplyItemFileRenamed(order, item, stage, renamedPath);
+            var statusUpdate = _orderApplicationService.ApplyItemFileRenamed(order, item, stage, renamedPath);
             SetOrderStatus(
                 order,
                 statusUpdate.Status,
@@ -519,7 +519,7 @@ namespace Replica
 
             var oldName = Path.GetFileNameWithoutExtension(currentPath);
             var nextName = ShowInputDialog("Переименование", "Введите новое имя файла:", oldName);
-            var buildResult = _orderFileRenameRemoveCommandService.TryBuildRenamedPath(currentPath, nextName);
+            var buildResult = _orderApplicationService.TryBuildRenamedPath(currentPath, nextName);
             if (buildResult.Status == RenamePathBuildStatus.TargetExists)
             {
                 SetBottomStatus("Файл с таким именем уже существует");
@@ -575,7 +575,7 @@ namespace Replica
 
         private void UpdateOrderFilePath(OrderData order, int stage, string path)
         {
-            var statusUpdate = _orderFilePathMutationService.ApplyOrderFilePath(order, stage, path);
+            var statusUpdate = _orderApplicationService.ApplyOrderFilePath(order, stage, path);
             SetOrderStatus(
                 order,
                 statusUpdate.Status,
@@ -587,7 +587,7 @@ namespace Replica
 
         private void UpdateItemFilePath(OrderData order, OrderFileItem item, int stage, string path)
         {
-            var statusUpdate = _orderFilePathMutationService.ApplyItemFilePath(order, item, stage, path);
+            var statusUpdate = _orderApplicationService.ApplyItemFilePath(order, item, stage, path);
             SetOrderStatus(
                 order,
                 statusUpdate.Status,
@@ -599,7 +599,7 @@ namespace Replica
 
         private void RefreshOrderStatusFromItems(OrderData order)
         {
-            var statusUpdate = _orderFilePathMutationService.CalculateOrderStatusFromItems(order);
+            var statusUpdate = _orderApplicationService.CalculateOrderStatusFromItems(order);
             SetOrderStatus(
                 order,
                 statusUpdate.Status,

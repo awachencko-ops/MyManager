@@ -5,57 +5,21 @@ namespace Replica;
 internal sealed class OrdersWorkspaceRuntimeServices
 {
     public OrdersWorkspaceRuntimeServices(
-        LanRunCommandCoordinator lanRunCommandCoordinator,
         OrdersHistoryRepositoryCoordinator ordersHistoryCoordinator,
         OrdersHistoryMaintenanceService ordersHistoryMaintenanceService,
         OrderFolderPathResolutionService orderFolderPathResolutionService,
-        OrderStorageVersionSyncService orderStorageVersionSyncService,
-        OrderRunStateService orderRunStateService,
-        OrderRunFeedbackService orderRunFeedbackService,
-        OrderRunCommandService orderRunCommandService,
-        OrderEditorMutationService orderEditorMutationService,
-        OrderItemMutationService orderItemMutationService,
-        OrderFileStageCommandService orderFileStageCommandService,
-        OrderFilePathMutationService orderFilePathMutationService,
-        OrderFileRenameRemoveCommandService orderFileRenameRemoveCommandService,
-        OrderDeleteCommandService orderDeleteCommandService,
-        OrderItemDeleteCommandService orderItemDeleteCommandService,
-        OrderStatusTransitionService orderStatusTransitionService)
+        IOrderApplicationService orderApplicationService)
     {
-        LanRunCommandCoordinator = lanRunCommandCoordinator ?? throw new ArgumentNullException(nameof(lanRunCommandCoordinator));
         OrdersHistoryCoordinator = ordersHistoryCoordinator ?? throw new ArgumentNullException(nameof(ordersHistoryCoordinator));
         OrdersHistoryMaintenanceService = ordersHistoryMaintenanceService ?? throw new ArgumentNullException(nameof(ordersHistoryMaintenanceService));
         OrderFolderPathResolutionService = orderFolderPathResolutionService ?? throw new ArgumentNullException(nameof(orderFolderPathResolutionService));
-        OrderStorageVersionSyncService = orderStorageVersionSyncService ?? throw new ArgumentNullException(nameof(orderStorageVersionSyncService));
-        OrderRunStateService = orderRunStateService ?? throw new ArgumentNullException(nameof(orderRunStateService));
-        OrderRunFeedbackService = orderRunFeedbackService ?? throw new ArgumentNullException(nameof(orderRunFeedbackService));
-        OrderRunCommandService = orderRunCommandService ?? throw new ArgumentNullException(nameof(orderRunCommandService));
-        OrderEditorMutationService = orderEditorMutationService ?? throw new ArgumentNullException(nameof(orderEditorMutationService));
-        OrderItemMutationService = orderItemMutationService ?? throw new ArgumentNullException(nameof(orderItemMutationService));
-        OrderFileStageCommandService = orderFileStageCommandService ?? throw new ArgumentNullException(nameof(orderFileStageCommandService));
-        OrderFilePathMutationService = orderFilePathMutationService ?? throw new ArgumentNullException(nameof(orderFilePathMutationService));
-        OrderFileRenameRemoveCommandService = orderFileRenameRemoveCommandService ?? throw new ArgumentNullException(nameof(orderFileRenameRemoveCommandService));
-        OrderDeleteCommandService = orderDeleteCommandService ?? throw new ArgumentNullException(nameof(orderDeleteCommandService));
-        OrderItemDeleteCommandService = orderItemDeleteCommandService ?? throw new ArgumentNullException(nameof(orderItemDeleteCommandService));
-        OrderStatusTransitionService = orderStatusTransitionService ?? throw new ArgumentNullException(nameof(orderStatusTransitionService));
+        OrderApplicationService = orderApplicationService ?? throw new ArgumentNullException(nameof(orderApplicationService));
     }
 
-    public LanRunCommandCoordinator LanRunCommandCoordinator { get; }
     public OrdersHistoryRepositoryCoordinator OrdersHistoryCoordinator { get; }
     public OrdersHistoryMaintenanceService OrdersHistoryMaintenanceService { get; }
     public OrderFolderPathResolutionService OrderFolderPathResolutionService { get; }
-    public OrderStorageVersionSyncService OrderStorageVersionSyncService { get; }
-    public OrderRunStateService OrderRunStateService { get; }
-    public OrderRunFeedbackService OrderRunFeedbackService { get; }
-    public OrderRunCommandService OrderRunCommandService { get; }
-    public OrderEditorMutationService OrderEditorMutationService { get; }
-    public OrderItemMutationService OrderItemMutationService { get; }
-    public OrderFileStageCommandService OrderFileStageCommandService { get; }
-    public OrderFilePathMutationService OrderFilePathMutationService { get; }
-    public OrderFileRenameRemoveCommandService OrderFileRenameRemoveCommandService { get; }
-    public OrderDeleteCommandService OrderDeleteCommandService { get; }
-    public OrderItemDeleteCommandService OrderItemDeleteCommandService { get; }
-    public OrderStatusTransitionService OrderStatusTransitionService { get; }
+    public IOrderApplicationService OrderApplicationService { get; }
 }
 
 internal static class OrdersWorkspaceCompositionRoot
@@ -71,23 +35,28 @@ internal static class OrdersWorkspaceCompositionRoot
             orderRunWorkflowOrchestrationService,
             orderRunStateService,
             new OrderRunExecutionService());
+        var orderItemMutationService = new OrderItemMutationService();
+        var orderFilePathMutationService = new OrderFilePathMutationService();
+        var orderFileRenameRemoveCommandService = new OrderFileRenameRemoveCommandService(
+            orderFilePathMutationService,
+            orderItemMutationService);
+        var orderApplicationService = new OrderApplicationService(
+            orderRunCommandService: orderRunCommandService,
+            orderRunFeedbackService: new OrderRunFeedbackService(),
+            orderEditorMutationService: new OrderEditorMutationService(),
+            orderItemMutationService: orderItemMutationService,
+            orderFileStageCommandService: new OrderFileStageCommandService(),
+            orderFilePathMutationService: orderFilePathMutationService,
+            orderFileRenameRemoveCommandService: orderFileRenameRemoveCommandService,
+            orderDeleteCommandService: new OrderDeleteCommandService(),
+            orderItemDeleteCommandService: new OrderItemDeleteCommandService(itemMutationService: orderItemMutationService),
+            orderStatusTransitionService: new OrderStatusTransitionService(),
+            orderStorageVersionSyncService: new OrderStorageVersionSyncService());
 
         return new OrdersWorkspaceRuntimeServices(
-            lanRunCommandCoordinator: lanRunCommandCoordinator,
             ordersHistoryCoordinator: new OrdersHistoryRepositoryCoordinator(),
             ordersHistoryMaintenanceService: new OrdersHistoryMaintenanceService(),
             orderFolderPathResolutionService: new OrderFolderPathResolutionService(),
-            orderStorageVersionSyncService: new OrderStorageVersionSyncService(),
-            orderRunStateService: orderRunStateService,
-            orderRunFeedbackService: new OrderRunFeedbackService(),
-            orderRunCommandService: orderRunCommandService,
-            orderEditorMutationService: new OrderEditorMutationService(),
-            orderItemMutationService: new OrderItemMutationService(),
-            orderFileStageCommandService: new OrderFileStageCommandService(),
-            orderFilePathMutationService: new OrderFilePathMutationService(),
-            orderFileRenameRemoveCommandService: new OrderFileRenameRemoveCommandService(),
-            orderDeleteCommandService: new OrderDeleteCommandService(),
-            orderItemDeleteCommandService: new OrderItemDeleteCommandService(),
-            orderStatusTransitionService: new OrderStatusTransitionService());
+            orderApplicationService: orderApplicationService);
     }
 }

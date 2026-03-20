@@ -559,7 +559,7 @@ namespace Replica
                 ("use_lan_api", useLanApi ? "1" : "0"));
             Logger.Info("RUN | command-start");
 
-            var startPhase = await _orderRunCommandService.PrepareAndBeginAsync(
+            var startPhase = await _orderApplicationService.PrepareAndBeginRunAsync(
                 selectedOrders,
                 _runTokensByOrder,
                 _runProgressByOrderInternalId,
@@ -608,7 +608,7 @@ namespace Replica
             if (startPhase.Status == OrderRunStartPhaseStatus.ServerRejected)
             {
                 Logger.Warn("RUN | command-rejected-by-server");
-                var skippedPreview = _orderRunFeedbackService.BuildServerSkippedPreview(serverSkipped);
+                var skippedPreview = _orderApplicationService.BuildRunServerSkippedPreview(serverSkipped);
 
                 SetBottomStatus("Сервер не подтвердил запуск выбранных заказов");
                 MessageBox.Show(
@@ -662,14 +662,14 @@ namespace Replica
 
             if (runPlan.OrdersWithoutNumber.Count > 0 || runPlan.AlreadyRunningOrders.Count > 0 || serverSkipped.Count > 0)
             {
-                var skippedDetails = _orderRunFeedbackService.BuildSkippedDetails(runPlan, serverSkipped);
+                var skippedDetails = _orderApplicationService.BuildRunSkippedDetails(runPlan, serverSkipped);
                 SetBottomStatus(string.IsNullOrWhiteSpace(skippedDetails)
                     ? "Часть заказов пропущена"
                     : $"Часть заказов пропущена ({skippedDetails})");
 
                 if (serverSkipped.Count > 0)
                 {
-                    var skippedPreview = _orderRunFeedbackService.BuildServerSkippedPreview(serverSkipped);
+                    var skippedPreview = _orderApplicationService.BuildRunServerSkippedPreview(serverSkipped);
 
                     MessageBox.Show(
                         this,
@@ -682,7 +682,7 @@ namespace Replica
                 }
             }
 
-            var runExecutionResult = await _orderRunCommandService.ExecuteAsync(
+            var runExecutionResult = await _orderApplicationService.ExecuteRunAsync(
                 runSessions,
                 _runTokensByOrder,
                 _runProgressByOrderInternalId,
@@ -718,7 +718,7 @@ namespace Replica
 
             if (runExecutionResult.Errors.Count > 0)
             {
-                var errorsPreview = _orderRunFeedbackService.BuildExecutionErrorsPreview(runExecutionResult.Errors, GetOrderDisplayId);
+                var errorsPreview = _orderApplicationService.BuildRunExecutionErrorsPreview(runExecutionResult.Errors, GetOrderDisplayId);
 
                 SetBottomStatus($"Ошибок запуска: {runExecutionResult.Errors.Count}");
                 MessageBox.Show(
@@ -756,7 +756,7 @@ namespace Replica
                 ("use_lan_api", useLanApi ? "1" : "0"));
             Logger.Info("RUN | stop-command-start");
 
-            var stopPhase = await _orderRunCommandService.ExecuteStopAsync(
+            var stopPhase = await _orderApplicationService.ExecuteStopAsync(
                 order: order,
                 useLanApi: useLanApi,
                 lanApiBaseUrl: _lanApiBaseUrl,
@@ -863,7 +863,7 @@ namespace Replica
                 return false;
             }
 
-            _orderStorageVersionSyncService.SyncLocalVersions(localOrders, reloadedOrders);
+            _orderApplicationService.SyncStorageVersions(localOrders, reloadedOrders);
             return true;
         }
 
@@ -913,7 +913,7 @@ namespace Replica
             }
 
             var removeFilesFromDisk = decision == DialogResult.Yes;
-            var commandResult = _orderDeleteCommandService.Execute(
+            var commandResult = _orderApplicationService.DeleteOrders(
                 _orderHistory,
                 selectedOrders,
                 removeFilesFromDisk,
@@ -1003,7 +1003,7 @@ namespace Replica
             }
 
             var removeFilesFromDisk = decision == DialogResult.Yes;
-            var commandResult = _orderItemDeleteCommandService.Execute(
+            var commandResult = _orderApplicationService.DeleteOrderItems(
                 selectedOrderItems.Select(x => new OrderItemSelection(x.Order, x.Item)).ToList(),
                 removeFilesFromDisk,
                 (order, _, itemName) =>
@@ -1213,7 +1213,7 @@ namespace Replica
             bool persistHistory,
             bool rebuildGrid)
         {
-            var transition = _orderStatusTransitionService.Apply(order, status, source, reason);
+            var transition = _orderApplicationService.ApplyStatusTransition(order, status, source, reason);
             if (!transition.Changed)
                 return false;
 

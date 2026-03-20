@@ -404,7 +404,7 @@ namespace Replica
                 return;
             }
 
-            var statusUpdate = _orderFileRenameRemoveCommandService.ApplyPrintTileFileRenamed(order, currentPath, renamedPath);
+            var statusUpdate = _orderApplicationService.ApplyPrintTileFileRenamed(order, currentPath, renamedPath);
             SetOrderStatus(
                 order,
                 statusUpdate.Status,

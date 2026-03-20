@@ -79,12 +79,14 @@
 > Актуализация на 2026-03-20 (risk-burndown, срез 36): добавлен `OrderRunFeedbackService`; planning run-feedback (`server-skipped preview`, `skipped details`, `execution errors preview`) вынесен из `OrdersWorkspaceForm` в application-service слой, удалены дубли локального preview-formatting в `RunSelectedOrderAsync`, добавлены unit-тесты `OrderRunFeedbackServiceTests`, подтверждены build + full test + PostgreSQL integration regression.
 >
 > Актуализация на 2026-03-20 (risk-burndown, срез 37): введён `OrdersWorkspaceCompositionRoot` + `OrdersWorkspaceRuntimeServices`; создание ключевых runtime-зависимостей формы (run/history/mutation services) вынесено из конструктора `OrdersWorkspaceForm` в composition root, что снижает ручную связность и подготавливает поэтапный DI cutover, подтверждены build + full test + PostgreSQL integration regression.
+>
+> Актуализация на 2026-03-20 (risk-burndown, срез 38): добавлены `IOrderApplicationService` + `OrderApplicationService`; `OrdersWorkspaceForm` переключён с набора точечных service-полей на единый application boundary для run/create/edit/delete/item/file команд (включая run-feedback/status-transition/storage-version sync), подтверждены unit-тесты `OrderApplicationServiceTests` + build + full test + PostgreSQL integration regression.
 
 ## Executive summary
 
 - Текущая реализация **не готова** к роли транзакционно-безопасной платформы на сотни пользователей.
 - Главные причины: API/worker-контур пока не доведён до production-boundary (full authN/authZ, полный cutover всех write-flow и observability/SLO контур ещё неполные), UI-центричная оркестрация остаётся значимой.
-- В коде уже закрыт значимый кусок миграции: введён `IOrdersRepository`, реализован LAN PostgreSQL backend с optimistic concurrency (`StorageVersion` + conflict guard), добавлен `order_events` и one-time bootstrap marker в `storage_meta`; на этапе 3 добавлены API skeleton, EF Core storage слой, server-side `run/stop` lock-координация (`order_run_locks`), идемпотентность `run/stop` (`Idempotency-Key` + `order_run_idempotency`), клиентские `LanOrderRunApiGateway` + `LanRunCommandCoordinator`, bootstrap composition root (`OrdersWorkspaceCompositionRoot`) и выносы из `MainForm` в сервисы (`OrdersHistoryRepositoryCoordinator`, `OrderRunStateService`, `OrderStatusTransitionService`, `OrderRunExecutionService`, `OrderRunFeedbackService`, `OrderDeletionWorkflowService`) + двусторонняя sync `history.json <-> PostgreSQL`.
+- В коде уже закрыт значимый кусок миграции: введён `IOrdersRepository`, реализован LAN PostgreSQL backend с optimistic concurrency (`StorageVersion` + conflict guard), добавлен `order_events` и one-time bootstrap marker в `storage_meta`; на этапе 3 добавлены API skeleton, EF Core storage слой, server-side `run/stop` lock-координация (`order_run_locks`), идемпотентность `run/stop` (`Idempotency-Key` + `order_run_idempotency`), клиентские `LanOrderRunApiGateway` + `LanRunCommandCoordinator`, bootstrap composition root (`OrdersWorkspaceCompositionRoot`), unified application boundary (`IOrderApplicationService`) и выносы из `MainForm` в сервисы (`OrdersHistoryRepositoryCoordinator`, `OrderRunStateService`, `OrderStatusTransitionService`, `OrderRunExecutionService`, `OrderRunFeedbackService`, `OrderDeletionWorkflowService`) + двусторонняя sync `history.json <-> PostgreSQL`.
 
 ---
 
@@ -103,6 +105,7 @@
 - Из `MainForm` выделен `OrderRunExecutionService`: конкурентное выполнение run-сессий и error/cancel lifecycle больше не оркестрируются внутри формы.
 - Из `MainForm` выделен `OrderRunWorkflowOrchestrationService`: run/stop preflight (plan, LAN approval, snapshot refresh, local cancel) теперь в сервисном use-case слое.
 - Из `MainForm` выделен `OrderRunCommandService`: единая orchestration-цепочка запуска (`prepare/begin/execute/complete`) переведена в application-service, UI управляет только user-feedback.
+- Введён единый фасад `IOrderApplicationService`/`OrderApplicationService`: `OrdersWorkspaceForm` использует один orchestration boundary для run/create/edit/delete/item/file команд вместо прямой связки с множеством mutation/command сервисов.
 - Stop/status persistence orchestration переведён на `OrderRunCommandService.ExecuteStopAsync`; форма больше не управляет stop-ветвлением на уровне run-state/invariants.
 - Create/edit mutation logic переведена на `OrderEditorMutationService`; форма больше не содержит прямое присваивание полей заказа при simple/extended edit.
 - Item mutation/topology logic переведена на `OrderItemMutationService`; форма больше не содержит правила подготовки item при add/rollback/remove-empty/reindex.
@@ -210,7 +213,7 @@
 
 | Компонент | Риск | Критичность | Рекомендация |
 |---|---|---|---|
-| `MainForm` orchestration | God Object, смешение UI + domain + persistence + file IO (снижено сервисными выносами, включая delete + run/stop + create/edit/item-mutation + item/order-delete + file-path-status + stage-command + rename/remove + print-tiles rename path sync + history lifecycle maintenance + folder-path resolution + storage-version sync + run-feedback orchestration) | **Med** | Продолжить декомпозицию: выделить use-case слой (`IOrderApplicationService`), UI оставить как presenter/view; внедрить DI/composition root. |
+| `MainForm` orchestration | God Object, смешение UI + domain + persistence + file IO (снижено сервисными выносами, включая delete + run/stop + create/edit/item-mutation + item/order-delete + file-path-status + stage-command + rename/remove + print-tiles rename path sync + history lifecycle maintenance + folder-path resolution + storage-version sync + run-feedback orchestration; введён unified boundary `IOrderApplicationService`) | **Med** | Продолжить декомпозицию: UI оставить как presenter/view, расширять `IOrderApplicationService` до полного use-case orchestration, довести DI/composition root до production-контура. |
 | История заказов (`history.json` / LAN PostgreSQL) | В FileSystem-режиме остаётся риск race; в LAN-режиме риск снижен через version-check | **Med** | Оставить FileSystem только как fallback; целевой режим — PostgreSQL + server-side command boundary. |
 | `SetOrderStatus` + `SaveHistory` | Клиентская неатомарность между UI-операцией и persistence | **Med/High** | Перенести статусные команды в API/worker с unit of work и server-side invariants. |
 | `_runTokensByOrder` (in-memory) | Переведён в runtime-session state; риск смещён в сторону UX-согласованности между клиентами | **Low/Med** | Сохранить server lock/state единственным источником истины и расширять server-driven refresh-сценарии. |
@@ -316,6 +319,9 @@
 28. Итерация 28 (2026-03-20, адресная): закрыт следующий срез DI/composition root для `OrdersWorkspaceForm`.
    - Что сделано: добавлены `OrdersWorkspaceCompositionRoot` и `OrdersWorkspaceRuntimeServices`; конструктор формы переведён на получение runtime-зависимостей через composition root (вместо ручной сборки `new ...` внутри `OrdersWorkspaceForm`), сохранив совместимость текущих entrypoint/тестов.
    - Эффект: снижена ручная связность UI-конструктора и подготовлена безопасная база для следующего этапа — инъекционного `IOrderApplicationService`/use-case orchestration.
+29. Итерация 29 (2026-03-20, адресная): закрыт следующий срез общего order workflow orchestration boundary.
+   - Что сделано: добавлены `IOrderApplicationService` + `OrderApplicationService`; `OrdersWorkspaceForm` переведён с прямых зависимостей (`OrderRunCommandService`, `OrderRunFeedbackService`, `OrderEditorMutationService`, `OrderItemMutationService`, `OrderFile*`, `OrderDelete*`, `OrderStatusTransitionService`) на единый application-service boundary; добавлены unit-тесты `OrderApplicationServiceTests`.
+   - Эффект: дополнительно снижена связность формы и подготовлен безопасный путь к следующему этапу DI-cutover (вынесение оставшихся history/folder UI-shell операций за boundary).
 
 ---
 
@@ -325,7 +331,7 @@
 
 1. **Persistence-модель на JSON в UI** — `PARTIAL`: LAN PostgreSQL + двусторонняя sync работают, но FileSystem-ветка ещё жива как fallback.
 2. **Статусные переходы и аудит «мимо транзакций»** — `PARTIAL`: status policy вынесена, `order_events` есть, но полный server-side command handling для всех write-flow не завершён.
-3. **God Object (MainForm/OrdersWorkspaceForm как бизнес-оркестратор)** — `IN PROGRESS`: вынесены history/run-state/status-transition/run-execution/delete-workflow/run-stop-preflight/create-edit/item-mutation/item-delete-command/order-delete-command/file-path-status-mutation/file-stage-command-planning/file-rename-remove-command/print-tiles-rename-sync/history-lifecycle-maintenance/folder-path-resolution/storage-version-sync/run-feedback + выполнен rename shell, модульный перенос UI-кода и старт DI/composition-root bootstrap (`OrdersWorkspaceCompositionRoot`); следующий фокус — общий order workflow orchestration (`IOrderApplicationService`) и поэтапный DI cutover.
+3. **God Object (MainForm/OrdersWorkspaceForm как бизнес-оркестратор)** — `IN PROGRESS`: вынесены history/run-state/status-transition/run-execution/delete-workflow/run-stop-preflight/create-edit/item-mutation/item-delete-command/order-delete-command/file-path-status-mutation/file-stage-command-planning/file-rename-remove-command/print-tiles-rename-sync/history-lifecycle-maintenance/folder-path-resolution/storage-version-sync/run-feedback; выполнен rename shell, модульный перенос UI-кода, старт DI/composition-root bootstrap (`OrdersWorkspaceCompositionRoot`) и введён unified orchestration boundary (`IOrderApplicationService`); следующий фокус — довести за boundary оставшиеся history/folder orchestration точки и сократить UI-shell до presenter.
 4. **Неструктурированное логирование и mutable file-audit** — `PARTIAL`: correlation + structured scopes внедрены, `order_events` работает; остаётся унификация схемы и централизованный observability stack.
 
 ### P1 (сразу после P0)
