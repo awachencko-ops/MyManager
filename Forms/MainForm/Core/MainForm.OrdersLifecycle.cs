@@ -865,53 +865,47 @@ namespace Replica
                 }
             }
 
-            var runErrors = new ConcurrentQueue<string>();
-            var runTasks = runSessions.Select(async session =>
-            {
-                try
-                {
-                    await _processor!.RunAsync(session.Order, session.Cts.Token, selectedItemIds: null);
-                }
-                catch (OperationCanceledException)
+            var runExecutionResult = await _orderRunExecutionService.ExecuteAsync(
+                runSessions,
+                runOrderAsync: (order, cancellationToken) => _processor!.RunAsync(order, cancellationToken, selectedItemIds: null),
+                onCancelled: order =>
                 {
                     SetOrderStatus(
-                        session.Order,
+                        order,
                         WorkflowStatusNames.Cancelled,
                         OrderStatusSourceNames.Ui,
                         "Остановлено пользователем",
                         persistHistory: false,
                         rebuildGrid: false);
-                }
-                catch (Exception ex)
+                },
+                onFailed: (order, ex) =>
                 {
                     SetOrderStatus(
-                        session.Order,
+                        order,
                         WorkflowStatusNames.Error,
                         OrderStatusSourceNames.Ui,
                         ex.Message,
                         persistHistory: false,
                         rebuildGrid: false);
-                    runErrors.Enqueue($"{GetOrderDisplayId(session.Order)}: {ex.Message}");
-                }
-                finally
+                },
+                onCompleted: order =>
                 {
                     _orderRunStateService.CompleteRunSession(
-                        session.Order,
+                        order,
                         _runTokensByOrder,
                         _runProgressByOrderInternalId);
                     UpdateTrayProgressIndicator();
-                }
-            }).ToList();
-
-            await Task.WhenAll(runTasks);
+                });
 
             SaveHistory();
             RebuildOrdersGrid();
             UpdateActionButtonsState();
 
-            if (!runErrors.IsEmpty)
+            if (runExecutionResult.Errors.Count > 0)
             {
-                var errors = runErrors.ToArray();
+                var errors = runExecutionResult.Errors
+                    .Select(error => $"{GetOrderDisplayId(error.Order)}: {error.Message}")
+                    .ToArray();
                 var errorsPreview = string.Join(Environment.NewLine, errors.Take(5));
                 if (errors.Length > 5)
                     errorsPreview += $"{Environment.NewLine}... ещё: {errors.Length - 5}";

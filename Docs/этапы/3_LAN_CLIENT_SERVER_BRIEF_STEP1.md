@@ -60,17 +60,22 @@
    - `MainForm` больше не оркестрирует LAN `run/stop` напрямую через gateway;
    - orchestration вынесена в отдельный сервисный слой (`LanRunCommandCoordinator` + `ILanOrderRunApiGateway`);
    - добавлены unit-тесты coordinator на ветки success/conflict/fatal и stop-flow.
+7. Добавлен `OrderRunExecutionService`:
+   - конкурентное выполнение run-сессий (`Task.WhenAll`), обработка `cancel/error` и lifecycle-callbacks вынесены из `MainForm`;
+   - `MainForm` теперь вызывает сервисный use-case для выполнения run-пачки и отображает результат;
+   - добавлены unit-тесты на `success/cancel/failure/mixed` сценарии выполнения.
 
 ## 4. Техническая верификация (2026-03-20)
 
 1. `dotnet build Replica.sln` -> PASS (`0 warnings`, `0 errors`).
-2. `dotnet test Replica.sln` -> PASS (`60/60`).
-3. `REPLICA_RUN_PG_INTEGRATION=1 dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj` -> PASS (`35/35`).
+2. `dotnet test Replica.sln` -> PASS (`64/64`).
+3. `REPLICA_RUN_PG_INTEGRATION=1 dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj` -> PASS (`39/39`).
 4. Расширен PostgreSQL integration pack:
    - `PostgreSqlIntegration_EfCoreStore_RunStopLifecycle_PersistsLockAndEvents`;
    - `PostgreSqlIntegration_EfCoreStore_RunStop_RejectsVersionMismatch`.
    - `LanOrderRunApiGatewayTests` (client-side HTTP `run/stop`).
    - `LanRunCommandCoordinatorTests` (client-side coordinator behavior).
+   - `OrderRunExecutionServiceTests` (client-side run execution use-case behavior).
 5. Smoke API:
    - `GET /health` -> `200`, `store=EfCoreLanOrderStore`, `mode=PostgreSql`;
    - `GET /api/users` -> `200`;

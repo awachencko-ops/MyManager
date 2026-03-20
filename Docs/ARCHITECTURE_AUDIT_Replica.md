@@ -17,12 +17,14 @@
 > Актуализация на 2026-03-20 (этап 3, Step 2 progress, срез 5): в клиенте добавлен `LanOrderRunApiGateway`; в режиме `LanPostgreSql` команды `Run/Stop` идут через API boundary (`/api/orders/{id}/run|stop`) с локальным snapshot-refresh перед следующим `SaveHistory`.
 >
 > Актуализация на 2026-03-20 (этап 3, Step 2 progress, срез 6): добавлен `LanRunCommandCoordinator` и интерфейсный контракт `ILanOrderRunApiGateway`; orchestration LAN `run/stop` вынесена из `MainForm` в сервисный слой, покрыта unit-тестами coordinator (`success/conflict/fatal/stop`).
+>
+> Актуализация на 2026-03-20 (этап 3, Step 2 progress, срез 7): добавлен `OrderRunExecutionService`; конкурентное выполнение run-сессий (`Task.WhenAll`, cancel/error handling, completion callbacks) вынесено из `MainForm` в сервисный use-case слой, покрыто unit-тестами (`success/cancel/failure/mixed`).
 
 ## Executive summary
 
 - Текущая реализация **не готова** к роли транзакционно-безопасной платформы на сотни пользователей.
 - Главные причины: API/worker-контур пока не доведён до production-boundary (authN/authZ, idempotency, full client cutover и observability всё ещё неполные), UI-центричная оркестрация остаётся значимой.
-- В коде уже закрыт значимый кусок миграции: введён `IOrdersRepository`, реализован LAN PostgreSQL backend с optimistic concurrency (`StorageVersion` + conflict guard), добавлен `order_events` и one-time bootstrap marker в `storage_meta`; на этапе 3 добавлены API skeleton, EF Core storage слой, server-side `run/stop` lock-координация (`order_run_locks`), клиентские `LanOrderRunApiGateway` + `LanRunCommandCoordinator` и выносы из `MainForm` в сервисы (`OrdersHistoryRepositoryCoordinator`, `OrderRunStateService`, `OrderStatusTransitionService`).
+- В коде уже закрыт значимый кусок миграции: введён `IOrdersRepository`, реализован LAN PostgreSQL backend с optimistic concurrency (`StorageVersion` + conflict guard), добавлен `order_events` и one-time bootstrap marker в `storage_meta`; на этапе 3 добавлены API skeleton, EF Core storage слой, server-side `run/stop` lock-координация (`order_run_locks`), клиентские `LanOrderRunApiGateway` + `LanRunCommandCoordinator` и выносы из `MainForm` в сервисы (`OrdersHistoryRepositoryCoordinator`, `OrderRunStateService`, `OrderStatusTransitionService`, `OrderRunExecutionService`).
 
 ---
 
@@ -38,13 +40,14 @@
 - Из `MainForm` выделен `OrderStatusTransitionService` (policy status-transition и нормализация reason/source), что уменьшило связность статусной логики.
 - В клиенте добавлен `LanOrderRunApiGateway`: `Run/Stop` в `LanPostgreSql` mode вызывают API endpoints вместо прямой локальной координации.
 - В клиенте добавлен `LanRunCommandCoordinator`: LAN `run/stop` orchestration вынесена из `MainForm` в отдельный сервис (форма теперь использует coordinator, а не прямую LAN gateway-логику).
+- Из `MainForm` выделен `OrderRunExecutionService`: конкурентное выполнение run-сессий и error/cancel lifecycle больше не оркестрируются внутри формы.
 - Persistence реализован через прямое чтение/запись JSON (`history.json`) из UI-слоя.
 - `ConfigService` и `AppSettings` — статические сервисы/конфиги с прямым file IO, без интерфейсов и DI.
 
 ### Вывод
 
 - SoC нарушен: UI-layer контролирует use-case/persistence.
-- Налицо «God Object» в виде `MainForm` (+ partial-файлы как физическое разделение, но не архитектурное), хотя декомпозиция уже заметно продвинута (вынесены persistence/run-state/status-transition/LAN run-coordinator).
+- Налицо «God Object» в виде `MainForm` (+ partial-файлы как физическое разделение, но не архитектурное), хотя декомпозиция уже заметно продвинута (вынесены persistence/run-state/status-transition/LAN run-coordinator/run-execution).
 - Замена persistence/API слоя потребует массового рефакторинга из-за сильной связности и отсутствия портов/адаптеров.
 
 ---
