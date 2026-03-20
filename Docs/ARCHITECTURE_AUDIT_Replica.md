@@ -29,6 +29,8 @@
 > Актуализация на 2026-03-20 (risk-burndown, срез 11): добавлен `OrderDeletionWorkflowService`; batch-удаление заказов/файлов (`remove-from-disk`, fallback на known paths, item reindex, агрегация ошибок) вынесено из `MainForm` в сервисный слой, покрыто unit-тестами (`orders delete`, `folder-miss fallback`, `item reindex`, `item-not-found`).
 >
 > Актуализация на 2026-03-20 (risk-burndown, срез 12): введён `ISettingsProvider` + `FileSettingsProvider`; runtime-path (`Program`/`MainForm`/`OrderProcessor`) переведён на provider-инъекцию, `ConfigService` отвязан от прямого `AppSettings.Load()` через `ConfigService.SettingsProvider`, добавлены unit-тесты provider-boundary.
+>
+> Актуализация на 2026-03-20 (risk-burndown, срез 13): в `OrderProcessor` внедрён `FileOperationRetryPolicy` (retry+backoff для copy/move/delete/create/read), file-операции переведены на policy boundary с retry-telemetry (`FILE-RETRY`), добавлены unit-тесты policy и обновлены UI smoke-тесты cleanup-сценариев.
 
 ## Executive summary
 
@@ -91,14 +93,14 @@
 ### Наблюдения
 
 - Есть polling-ожидание файлов с timeout (`WaitForFileAsync`, `WaitForFileInAnyAsync`) и отмена по `CancellationToken`.
-- Нет стратегии retry с backoff/jitter для операций copy/move/read на временно недоступном NAS.
+- В `OrderProcessor` добавлен retry/backoff policy (`FileOperationRetryPolicy`) для file-операций (copy/move/delete/create/read) с логированием попыток и exhausted-событий.
 - В нескольких местах ошибки suppress-ятся (`catch { }`), что скрывает деградации.
 - Нет circuit breaker / bulkhead / load shedding.
 - Архитектура single-process: падение/фриз UI-компонента критично для всего потока выполнения.
 
 ### Вывод
 
-- Устойчивость к «дрожащей» инфраструктуре (NAS/сетевые share) ограничена timeout-паттерном, но без управляемой деградации и предохранителей.
+- Устойчивость к «дрожащей» инфраструктуре улучшена за счёт retry/backoff на критичных file-операциях, но до production-resilience ещё нужны circuit-breaker/bulkhead и health-state внешних зависимостей.
 
 ---
 
@@ -142,7 +144,7 @@
 | История заказов (`history.json` / LAN PostgreSQL) | В FileSystem-режиме остаётся риск race; в LAN-режиме риск снижен через version-check | **Med** | Оставить FileSystem только как fallback; целевой режим — PostgreSQL + server-side command boundary. |
 | `SetOrderStatus` + `SaveHistory` | Клиентская неатомарность между UI-операцией и persistence | **Med/High** | Перенести статусные команды в API/worker с unit of work и server-side invariants. |
 | `_runTokensByOrder` (in-memory) | Переведён в runtime-session state; риск смещён в сторону UX-согласованности между клиентами | **Low/Med** | Сохранить server lock/state единственным источником истины и расширять server-driven refresh-сценарии. |
-| `OrderProcessor` file workflow | Нет retry/backoff на сетевые ошибки | **High** | Политики resilience (Polly): retry with jitter, timeout budget, fallback. |
+| `OrderProcessor` file workflow | Retry/backoff внедрён в core file-операции; остаточный риск — отсутствие circuit breaker/bulkhead | **Med** | Следующий шаг: circuit-breaker + dependency health-state + timeout budget per stage. |
 | Ожидание hotfolder | Polling без circuit breaker | **Med** | Добавить circuit breaker + health state для внешних зависимостей (PitStop/Imposing/NAS). |
 | Логирование (`Logger`) | В API введён базовый request correlation (`X-Correlation-Id`), но нет полного end-to-end structured telemetry | **Med/High** | Довести до единого structured logging/tracing контура (client+api+worker). |
 | Order status log file | best-effort append, mutable file (частично компенсировано `order_events`) | **Med** | Сделать `order_events` primary audit source, добавить retention/архив и SQL-аудит отчёты. |
@@ -167,8 +169,11 @@
 3. Итерация 3 (2026-03-20): закрыт срез `ConfigService/AppSettings` static IO для runtime-path.
    - Что сделано: добавлены `ISettingsProvider` + `FileSettingsProvider`; `Program`, `MainForm`, `OrderProcessor` и `ConfigService` переведены на provider boundary; добавлены unit-тесты `ConfigService` на injected provider path.
    - Эффект: повышена тестируемость и снижена связность core-path с файловой системой/статикой.
-4. На очереди (итерация 4): resiliency в `OrderProcessor` file-workflow (retry/backoff policy).
-   - План следующего среза: внедрить управляемые retry-политики на сетевых file-операциях и минимальный telemetry для отказов.
+4. Итерация 4 (2026-03-20): закрыт срез resiliency в `OrderProcessor` (retry/backoff policy).
+   - Что сделано: добавлен `FileOperationRetryPolicy`; file-операции `copy/move/delete/create/read` переведены на policy boundary, добавлен telemetry-контур `FILE-RETRY`, добавлены unit-тесты policy и обновлены UI smoke-тесты cleanup.
+   - Эффект: снижен риск фейлов от кратковременных NAS/file-lock сбоев и улучшена диагностируемость file-workflow.
+5. На очереди (итерация 5): dependency health-state + circuit-breaker для hotfolder-интеграций.
+   - План следующего среза: добавить health-marker внешних контуров (PitStop/Imposing/NAS), предохранитель деградации и UI-индикацию readiness.
 
 ---
 

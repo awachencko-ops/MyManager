@@ -689,10 +689,11 @@ public sealed class MainFormCoreRegressionTests
 
             var method = typeof(OrderProcessor).GetMethod(
                 "CleanupQuiteImposingArtifacts",
-                BindingFlags.NonPublic | BindingFlags.Static);
+                BindingFlags.NonPublic | BindingFlags.Instance);
             Assert.NotNull(method);
 
-            method!.Invoke(null, new object?[] { cfg, fileName, Array.Empty<string?>() });
+            var processor = new OrderProcessor(tempRootPath);
+            method!.Invoke(processor, new object?[] { cfg, fileName, Array.Empty<string?>() });
 
             foreach (var folder in new[] { cfg.In, cfg.Out, cfg.Done, cfg.Error })
             {
@@ -759,10 +760,11 @@ public sealed class MainFormCoreRegressionTests
 
             var method = typeof(OrderProcessor).GetMethod(
                 "CleanupPitStopArtifacts",
-                BindingFlags.NonPublic | BindingFlags.Static);
+                BindingFlags.NonPublic | BindingFlags.Instance);
             Assert.NotNull(method);
 
-            method!.Invoke(null, new object?[] { cfg, fileName, Array.Empty<string?>() });
+            var processor = new OrderProcessor(tempRootPath);
+            method!.Invoke(processor, new object?[] { cfg, fileName, Array.Empty<string?>() });
 
             foreach (var folder in new[]
             {

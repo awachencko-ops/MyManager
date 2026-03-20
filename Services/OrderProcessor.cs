@@ -18,14 +18,21 @@ namespace Replica
 
         private readonly string _rootPath;
         private readonly ISettingsProvider _settingsProvider;
+        private readonly FileOperationRetryPolicy _fileRetryPolicy;
         private const string TempInFolder = "in";
         private const string TempPrepressFolder = "prepress";
         private const string TempPrintFolder = "print";
 
-        public OrderProcessor(string rootPath, ISettingsProvider? settingsProvider = null)
+        public OrderProcessor(
+            string rootPath,
+            ISettingsProvider? settingsProvider = null,
+            FileOperationRetryPolicy? fileRetryPolicy = null)
         {
             _rootPath = rootPath;
             _settingsProvider = settingsProvider ?? new FileSettingsProvider();
+            _fileRetryPolicy = fileRetryPolicy ?? new FileOperationRetryPolicy(
+                warnLogger: Logger.Warn,
+                errorLogger: Logger.Error);
         }
 
         public async Task RunAsync(OrderData order, CancellationToken ct, IEnumerable<string>? selectedItemIds = null)
@@ -85,7 +92,10 @@ namespace Replica
                     {
                         Notify(order, "🟡 PitStop: копирование", "Копирую в Hotfolder PitStop...");
                         Logger.Info($"Копирование: {order.PreparedPath} -> {targetIn}");
-                        File.Copy(order.PreparedPath, targetIn, true);
+                        _fileRetryPolicy.Execute(
+                            operation: "copy-to-pitstop",
+                            path: targetIn,
+                            action: () => File.Copy(order.PreparedPath, targetIn, true));
 
                         if (impCfg != null)
                         {
@@ -143,7 +153,10 @@ namespace Replica
                     if (!File.Exists(targetIn))
                     {
                         Notify(order, "🟡 Imposing: старт", "Копирую в Hotfolder Imposing...");
-                        File.Copy(order.PreparedPath, targetIn, true);
+                        _fileRetryPolicy.Execute(
+                            operation: "copy-to-imposing",
+                            path: targetIn,
+                            action: () => File.Copy(order.PreparedPath, targetIn, true));
                     }
 
                     try
@@ -364,7 +377,11 @@ namespace Replica
 
                 try
                 {
-                    File.Copy(item.PreparedPath, EnsureUniquePath(targetIn), true);
+                    targetIn = EnsureUniquePath(targetIn);
+                    _fileRetryPolicy.Execute(
+                        operation: "copy-item-to-pitstop",
+                        path: targetIn,
+                        action: () => File.Copy(item.PreparedPath, targetIn, true));
 
                     if (impCfg != null)
                     {
@@ -416,7 +433,13 @@ namespace Replica
                   string targetIn = Path.Combine(impCfg.In, fileName);
                   string? outFile = null;
                   if (!File.Exists(targetIn))
-                      File.Copy(item.PreparedPath, EnsureUniquePath(targetIn), true);
+                  {
+                      targetIn = EnsureUniquePath(targetIn);
+                      _fileRetryPolicy.Execute(
+                          operation: "copy-item-to-imposing",
+                          path: targetIn,
+                          action: () => File.Copy(item.PreparedPath, targetIn, true));
+                  }
 
                   try
                   {
@@ -527,9 +550,15 @@ namespace Replica
                 _ => ""
             };
             string path = Path.Combine(rootPath, sub);
-            Directory.CreateDirectory(path);
+            _fileRetryPolicy.Execute(
+                operation: "ensure-stage-folder",
+                path: path,
+                action: () => Directory.CreateDirectory(path));
             string dest = Path.Combine(path, name);
-            File.Copy(src, dest, true);
+            _fileRetryPolicy.Execute(
+                operation: "copy-into-stage",
+                path: dest,
+                action: () => File.Copy(src, dest, true));
             return dest;
         }
 
@@ -571,7 +600,10 @@ namespace Replica
         private void MovePrintToGrandpa(OrderData order, string grandpaPath)
         {
             if (string.IsNullOrWhiteSpace(grandpaPath)) return;
-            Directory.CreateDirectory(grandpaPath);
+            _fileRetryPolicy.Execute(
+                operation: "ensure-grandpa-folder",
+                path: grandpaPath,
+                action: () => Directory.CreateDirectory(grandpaPath));
 
             string target = Path.Combine(grandpaPath, Path.GetFileName(order.PrintPath));
             MoveFileWithOverwrite(order.PrintPath, target);
@@ -587,9 +619,15 @@ namespace Replica
         private string CopyToGrandpa(string sourcePath, string fileName, string grandpaPath)
         {
             if (string.IsNullOrWhiteSpace(grandpaPath)) return sourcePath;
-            Directory.CreateDirectory(grandpaPath);
+            _fileRetryPolicy.Execute(
+                operation: "ensure-grandpa-folder",
+                path: grandpaPath,
+                action: () => Directory.CreateDirectory(grandpaPath));
             string target = Path.Combine(grandpaPath, fileName);
-            File.Copy(sourcePath, target, true);
+            _fileRetryPolicy.Execute(
+                operation: "copy-to-grandpa",
+                path: target,
+                action: () => File.Copy(sourcePath, target, true));
             TryCopyPathToClipboard(target);
             return target;
         }
@@ -630,7 +668,10 @@ namespace Replica
                 _ => ""
             };
             string path = Path.Combine(_rootPath, order.FolderName, sub);
-            Directory.CreateDirectory(path);
+            _fileRetryPolicy.Execute(
+                operation: "ensure-order-stage-folder",
+                path: path,
+                action: () => Directory.CreateDirectory(path));
             return path;
         }
 
@@ -651,14 +692,22 @@ namespace Replica
             {
                 TryDeleteFileQuietly(targetPath, $"move-overwrite-target:{Path.GetFileName(targetPath)}");
             }
-            File.Move(sourcePath, targetPath);
+            _fileRetryPolicy.Execute(
+                operation: "move-file-with-overwrite",
+                path: targetPath,
+                action: () => File.Move(sourcePath, targetPath));
         }
 
         private void EnsureTempFolders(string tempRoot)
         {
-            Directory.CreateDirectory(Path.Combine(tempRoot, TempInFolder));
-            Directory.CreateDirectory(Path.Combine(tempRoot, TempPrepressFolder));
-            Directory.CreateDirectory(Path.Combine(tempRoot, TempPrintFolder));
+            foreach (var folder in new[] { TempInFolder, TempPrepressFolder, TempPrintFolder })
+            {
+                var path = Path.Combine(tempRoot, folder);
+                _fileRetryPolicy.Execute(
+                    operation: "ensure-temp-folder",
+                    path: path,
+                    action: () => Directory.CreateDirectory(path));
+            }
         }
 
         private void TryDeleteEmptyFolders(string tempRoot)
@@ -669,7 +718,12 @@ namespace Replica
                 {
                     string path = Path.Combine(tempRoot, folder);
                     if (Directory.Exists(path) && Directory.GetFiles(path).Length == 0)
-                        Directory.Delete(path, true);
+                    {
+                        _fileRetryPolicy.Execute(
+                            operation: "delete-empty-temp-folder",
+                            path: path,
+                            action: () => Directory.Delete(path, true));
+                    }
                 }
             }
             catch (Exception ex)
@@ -771,14 +825,17 @@ namespace Replica
             }
         }
 
-        private static void TryDeleteFileQuietly(string? path, string context)
+        private void TryDeleteFileQuietly(string? path, string context)
         {
             if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
                 return;
 
             try
             {
-                File.Delete(path);
+                _fileRetryPolicy.Execute(
+                    operation: $"delete-file:{context}",
+                    path: path,
+                    action: () => File.Delete(path));
             }
             catch (Exception ex)
             {
@@ -792,7 +849,10 @@ namespace Replica
             {
                 try
                 {
-                    var lines = File.ReadAllLines(logPath);
+                    var lines = _fileRetryPolicy.Execute(
+                        operation: "read-qhi-log",
+                        path: logPath,
+                        action: () => File.ReadAllLines(logPath));
                     if (lines.Length == 0)
                         continue;
 
@@ -873,7 +933,7 @@ namespace Replica
             }
         }
 
-        private static void CleanupPitStopArtifacts(ActionConfig cfg, string fileName, params string?[] extraPaths)
+        private void CleanupPitStopArtifacts(ActionConfig cfg, string fileName, params string?[] extraPaths)
         {
             var reportFileName = $"{Path.GetFileNameWithoutExtension(fileName)}_log.pdf";
             var paths = new List<string?>(extraPaths);
@@ -887,15 +947,7 @@ namespace Replica
 
             foreach (var path in paths.Where(path => !string.IsNullOrWhiteSpace(path)).Distinct(StringComparer.OrdinalIgnoreCase))
             {
-                try
-                {
-                    if (File.Exists(path))
-                        File.Delete(path);
-                }
-                catch
-                {
-                    // Cleanup must not break processing.
-                }
+                TryDeleteFileQuietly(path, $"pitstop-cleanup:{fileName}");
             }
         }
 
@@ -921,7 +973,7 @@ namespace Replica
                 .Distinct(StringComparer.OrdinalIgnoreCase);
         }
 
-        private static void CleanupQuiteImposingArtifacts(ImposingConfig cfg, string fileName, params string?[] extraPaths)
+        private void CleanupQuiteImposingArtifacts(ImposingConfig cfg, string fileName, params string?[] extraPaths)
         {
             var paths = new List<string?>(extraPaths)
             {
@@ -937,15 +989,7 @@ namespace Replica
 
             foreach (var path in paths.Where(path => !string.IsNullOrWhiteSpace(path)).Distinct(StringComparer.OrdinalIgnoreCase))
             {
-                try
-                {
-                    if (File.Exists(path))
-                        File.Delete(path);
-                }
-                catch
-                {
-                    // Cleanup must not break processing.
-                }
+                TryDeleteFileQuietly(path, $"imposing-cleanup:{fileName}");
             }
         }
     }
