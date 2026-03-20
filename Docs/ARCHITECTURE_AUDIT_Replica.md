@@ -37,6 +37,8 @@
 > Актуализация на 2026-03-20 (risk-burndown, срез 15): внедрён `DependencyBulkheadPolicy` (load shedding per dependency) и readiness-проверки в `OrderProcessor` перед стартом workflow (storage/hotfolder availability для выбранных сценариев), запуск блокируется до восстановления критичных контуров.
 >
 > Актуализация на 2026-03-20 (risk-burndown, срез 16): введён `WorkflowTimeoutBudgetPolicy`; `OrderProcessor` переведён на stage-timeout budgets (PitStop/Imposing/report), добавлено логирование budget-параметров (`TIMEOUT-BUDGET`) и unit-тесты timeout-policy.
+>
+> Актуализация на 2026-03-20 (risk-burndown, срез 17): в client-runtime добавлены `LogContext` + structured scope-fields в `Logger` (включая `correlation_id`), `Run/Stop` orchestration в `MainForm` переведена на correlation-scopes, а `LanOrderRunApiGateway` начал пробрасывать `X-Correlation-Id` в API-команды.
 
 ## Executive summary
 
@@ -118,16 +120,17 @@
 
 ### Наблюдения
 
-- Логгер пишет plain-text строки в файл, без структурированных полей, trace/span/correlation id.
+- Логгер пишет plain-text строки в файл (не JSON), но теперь с scope-based structured полями (`key=value`) и `correlation_id`.
+- Логгер в client-runtime переведён на scope-based structured fields (`key=value`) с `correlation_id` через `LogContext`.
 - Лог статусов заказа (`AppendOrderStatusLog`) текстовый, best-effort, с глушением ошибок записи.
 - В PostgreSQL введён событийный журнал `order_events` (CRUD-события репозитория + `run/stop/delete/topology/add-item/remove-item/status-change` из клиентских workflow-точек).
 - Распределенной трассировки нет (и отсутствует распределенная архитектура на текущем этапе).
-- `order_events` хранится в БД и снижает риск mutable file-audit; добавлены базовые actor identity (write path) и request correlation id, но end-to-end трассировка и формализованные audit-дашборды пока отсутствуют.
+- `order_events` хранится в БД и снижает риск mutable file-audit; добавлены request correlation id в API и client->API propagation для run/stop, но полноценная end-to-end трассировка и формализованные audit-дашборды пока отсутствуют.
 
 ### Вывод
 
-- Для форензики инцидентов ситуация улучшилась (есть DB event log), но observability всё ещё недостаточна для SLA/SRE-уровня.
-- Нет надежной корреляции «кто/когда/какой запрос/какой этап пайплайна» в стандартизированном виде.
+- Для форензики инцидентов ситуация заметно улучшилась (DB event log + correlation в client runtime и API), но observability всё ещё недостаточна для SLA/SRE-уровня.
+- Корреляция стала сквозной для ключевого run/stop пути (client->API), но ещё нет стандартизированной end-to-end схемы для всех workflow и аналитических отчётов.
 
 ---
 
@@ -156,7 +159,7 @@
 | `_runTokensByOrder` (in-memory) | Переведён в runtime-session state; риск смещён в сторону UX-согласованности между клиентами | **Low/Med** | Сохранить server lock/state единственным источником истины и расширять server-driven refresh-сценарии. |
 | `OrderProcessor` file workflow | Retry/backoff + circuit-breaker + bulkhead/readiness + stage-timeout budgets внедрены; остаточный риск — polling model и single-process blast radius | **Low/Med** | Следующий шаг: adaptive timeout-tuning + расширение server-side orchestration и queue boundary. |
 | Ожидание hotfolder | Circuit-breaker + bulkhead + readiness внедрены; остаточный риск — polling model и latency детекции недоступности | **Low** | Следующий шаг: переход к event/queue-сигналам и proactive dependency telemetry. |
-| Логирование (`Logger`) | В API введён базовый request correlation (`X-Correlation-Id`), но нет полного end-to-end structured telemetry | **Med/High** | Довести до единого structured logging/tracing контура (client+api+worker). |
+| Логирование (`Logger`) | Client structured scopes + correlation и API request-correlation внедрены; остаточный риск — нет unified tracing/metrics и централизованных dashboard/query стандартов | **Med** | Следующий шаг: единый structured logging schema + tracing/metrics контур (client+api+worker). |
 | Order status log file | best-effort append, mutable file (частично компенсировано `order_events`) | **Med** | Сделать `order_events` primary audit source, добавить retention/архив и SQL-аудит отчёты. |
 | Ошибки с `catch { }` | В критическом runtime-пути silent catches устранены; остаточный риск остаётся в legacy/UI-участках | **Low/Med** | Поддерживать policy: без silent catch в production-path; остаточные блоки вычищать по итерациям. |
 | ConfigService/AppSettings static IO | Сильная связность с файловой системой частично снижена (`ISettingsProvider` внедрён в runtime-path); остаток в legacy/UI-экранах | **Low/Med** | Довести до полного покрытия provider/repository boundary на всех формах и убрать остаточные direct `AppSettings.Load()`. |
@@ -191,6 +194,9 @@
 7. Итерация 7 (2026-03-20): закрыт срез timeout budget per stage в `OrderProcessor`.
    - Что сделано: добавлен `WorkflowTimeoutBudgetPolicy`, ожидания `WaitForFile*` и PitStop report переведены с общего timeout на stage budgets (PitStop/Imposing/report), добавлен `TIMEOUT-BUDGET` telemetry и unit-тесты policy.
    - Эффект: уменьшён риск бесконтрольного зависания на одном этапе, улучшена предсказуемость SLA по этапам pipeline.
+8. Итерация 8 (2026-03-20): закрыт срез structured logging + correlation в client-runtime.
+   - Что сделано: добавлены `LogContext` и scope-based structured fields в `Logger` (`correlation_id`, `workflow`, `order_*`), `Run/Stop` workflow в `MainForm` обёрнут correlation-scope, `LanOrderRunApiGateway` пробрасывает `X-Correlation-Id` в API.
+   - Эффект: улучшена сквозная диагностика run/stop цепочек (client <-> API), снижен риск «непрослеживаемых» инцидентов в runtime.
 
 ---
 

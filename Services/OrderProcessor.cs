@@ -57,6 +57,17 @@ namespace Replica
 
         public async Task RunAsync(OrderData order, CancellationToken ct, IEnumerable<string>? selectedItemIds = null)
         {
+            if (order == null)
+                throw new ArgumentNullException(nameof(order));
+
+            var isMultiOrder = OrderTopologyService.IsMultiOrder(order);
+            using var correlationScope = Logger.BeginCorrelationScope();
+            using var logScope = Logger.BeginScope(
+                ("component", "order_processor"),
+                ("workflow_mode", isMultiOrder ? "multi" : "single"),
+                ("order_id", order.Id),
+                ("order_internal_id", order.InternalId));
+
             var topologyResult = OrderTopologyService.Normalize(order);
             if (topologyResult.Issues.Count > 0)
             {
@@ -75,7 +86,7 @@ namespace Replica
                 ? null
                 : new HashSet<string>(selectedItemIds.Where(x => !string.IsNullOrWhiteSpace(x)), StringComparer.Ordinal);
 
-            if (OrderTopologyService.IsMultiOrder(order))
+            if (isMultiOrder)
             {
                 ReportProgress(order, 0, "Запуск мульти-заказа");
                 await RunMultiOrderAsync(order, settings, timeoutBudget, tempRoot, selectedSet, ct);

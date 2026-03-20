@@ -28,6 +28,7 @@ public interface ILanOrderRunApiGateway
 
 public sealed class LanOrderRunApiGateway : ILanOrderRunApiGateway
 {
+    private const string CorrelationHeaderName = "X-Correlation-Id";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         PropertyNameCaseInsensitive = true
@@ -83,6 +84,13 @@ public sealed class LanOrderRunApiGateway : ILanOrderRunApiGateway
         string actor,
         CancellationToken cancellationToken)
     {
+        using var correlationScope = Logger.BeginCorrelationScope();
+        using var logScope = Logger.BeginScope(
+            ("component", "lan_order_run_api_gateway"),
+            ("api_command", command),
+            ("order_internal_id", orderInternalId),
+            ("expected_order_version", expectedOrderVersion.ToString()));
+
         if (string.IsNullOrWhiteSpace(orderInternalId))
             return LanOrderRunApiResult.BadRequest("order internal id is required");
 
@@ -101,11 +109,14 @@ public sealed class LanOrderRunApiGateway : ILanOrderRunApiGateway
                     options: JsonOptions)
             };
 
+            request.Headers.TryAddWithoutValidation(CorrelationHeaderName, Logger.EnsureCorrelationId());
             if (!string.IsNullOrWhiteSpace(actor))
                 request.Headers.TryAddWithoutValidation("X-Current-User", actor.Trim());
 
+            Logger.Info($"LAN-API | command-send | target={requestUri}");
             using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
             var payload = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            Logger.Info($"LAN-API | command-response | status={(int)response.StatusCode}");
 
             if (response.IsSuccessStatusCode)
             {
@@ -131,14 +142,17 @@ public sealed class LanOrderRunApiGateway : ILanOrderRunApiGateway
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
+            Logger.Warn("LAN-API | command-timeout");
             return LanOrderRunApiResult.Unavailable("LAN API request timed out");
         }
         catch (HttpRequestException ex)
         {
+            Logger.Warn($"LAN-API | command-http-error | {ex.Message}");
             return LanOrderRunApiResult.Unavailable(ex.Message);
         }
         catch (Exception ex)
         {
+            Logger.Error($"LAN-API | command-failed | {ex.Message}");
             return LanOrderRunApiResult.Failed(ex.Message);
         }
     }

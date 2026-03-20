@@ -735,7 +735,15 @@ namespace Replica
                 return;
             }
 
+            using var correlationScope = Logger.BeginCorrelationScope();
             var useLanApi = ShouldUseLanRunApi();
+            using var runScope = Logger.BeginScope(
+                ("component", "main_form"),
+                ("workflow", "run-selected"),
+                ("selected_orders", selectedOrders.Count.ToString(CultureInfo.InvariantCulture)),
+                ("use_lan_api", useLanApi ? "1" : "0"));
+            Logger.Info("RUN | command-start");
+
             var runPlan = _orderRunStateService.BuildRunPlan(
                 selectedOrders,
                 _runTokensByOrder,
@@ -770,6 +778,7 @@ namespace Replica
                 var fatalReason = string.IsNullOrWhiteSpace(lanRunBatchResult.FatalError)
                     ? "LAN API недоступен"
                     : lanRunBatchResult.FatalError;
+                Logger.Warn($"RUN | command-fatal | {fatalReason}");
                 SetBottomStatus($"Сервер недоступен: {fatalReason}");
                 MessageBox.Show(
                     this,
@@ -787,6 +796,7 @@ namespace Replica
             {
                 if (runnableOrders.Count == 0)
                 {
+                    Logger.Warn("RUN | command-rejected-by-server");
                     var skippedPreview = string.Join(Environment.NewLine, serverSkipped.Take(5));
                     if (serverSkipped.Count > 5)
                         skippedPreview += $"{Environment.NewLine}... ещё: {serverSkipped.Count - 5}";
@@ -926,6 +936,8 @@ namespace Replica
             {
                 SetBottomStatus($"Пакетная обработка завершена: {runnableOrders.Count}");
             }
+
+            Logger.Info($"RUN | command-finish | started={runnableOrders.Count} | errors={runExecutionResult.Errors.Count}");
         }
 
         private async Task StopSelectedOrderAsync()
@@ -938,7 +950,16 @@ namespace Replica
                 return;
             }
 
+            using var correlationScope = Logger.BeginCorrelationScope();
             var useLanApi = ShouldUseLanRunApi();
+            using var stopScope = Logger.BeginScope(
+                ("component", "main_form"),
+                ("workflow", "stop-selected"),
+                ("order_id", GetOrderDisplayId(order)),
+                ("order_internal_id", order.InternalId),
+                ("use_lan_api", useLanApi ? "1" : "0"));
+            Logger.Info("RUN | stop-command-start");
+
             var stopPlan = _orderRunStateService.BuildStopPlan(
                 order,
                 useLanApi,
@@ -947,6 +968,7 @@ namespace Replica
 
             if (!stopPlan.CanProceed)
             {
+                Logger.Warn("RUN | stop-command-skipped | reason=not-running");
                 SetBottomStatus($"Заказ {GetOrderDisplayId(order)} сейчас не выполняется");
                 MessageBox.Show(this, $"Заказ {GetOrderDisplayId(order)} сейчас не выполняется.", "Остановка", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
@@ -1006,6 +1028,7 @@ namespace Replica
                 SetOrderStatus(order, WorkflowStatusNames.Cancelled, OrderStatusSourceNames.Ui, "Остановлено пользователем", persistHistory: true, rebuildGrid: true);
                 UpdateActionButtonsState();
                 SetBottomStatus($"Остановлен заказ {GetOrderDisplayId(order)}");
+                Logger.Info("RUN | stop-command-finish | local-status-applied=1");
                 return;
             }
 
@@ -1026,6 +1049,7 @@ namespace Replica
             }
 
             SetBottomStatus($"Сервер не подтвердил остановку {GetOrderDisplayId(order)}");
+            Logger.Warn("RUN | stop-command-finish | local-status-applied=0");
         }
 
         private bool ShouldUseLanRunApi()

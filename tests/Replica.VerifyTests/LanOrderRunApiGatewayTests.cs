@@ -29,11 +29,15 @@ public sealed class LanOrderRunApiGatewayTests
         });
 
         var gateway = new LanOrderRunApiGateway(new HttpClient(handler));
-        var result = await gateway.StartRunAsync(
-            "http://localhost:5000/",
-            "order-1",
-            expectedOrderVersion: 12,
-            actor: "operator-1");
+        LanOrderRunApiResult result;
+        using (Logger.BeginCorrelationScope("corr-test-123"))
+        {
+            result = await gateway.StartRunAsync(
+                "http://localhost:5000/",
+                "order-1",
+                expectedOrderVersion: 12,
+                actor: "operator-1");
+        }
 
         Assert.True(result.IsSuccess);
         Assert.NotNull(result.Order);
@@ -44,6 +48,8 @@ public sealed class LanOrderRunApiGatewayTests
         Assert.Equal("/api/orders/order-1/run", handler.LastRequest.RequestUri!.AbsolutePath);
         Assert.True(handler.LastRequest.Headers.TryGetValues("X-Current-User", out var actors));
         Assert.Equal("operator-1", actors.Single());
+        Assert.True(handler.LastRequest.Headers.TryGetValues("X-Correlation-Id", out var correlations));
+        Assert.Equal("corr-test-123", correlations.Single());
         Assert.Contains("\"expectedOrderVersion\":12", requestBody, StringComparison.Ordinal);
     }
 
