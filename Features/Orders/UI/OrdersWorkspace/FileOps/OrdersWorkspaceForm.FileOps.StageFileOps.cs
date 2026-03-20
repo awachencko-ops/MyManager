@@ -314,7 +314,14 @@ namespace Replica
                 return;
             }
 
-            UpdateOrderFilePath(order, stage, string.Empty);
+            var statusUpdate = _orderFileRenameRemoveCommandService.ApplyOrderFileRemoved(order, stage);
+            SetOrderStatus(
+                order,
+                statusUpdate.Status,
+                OrderStatusSourceNames.FileSync,
+                statusUpdate.Reason,
+                persistHistory: false,
+                rebuildGrid: false);
             PersistGridChanges(OrderGridLogic.BuildOrderTag(order.InternalId));
             SetBottomStatus("Файл удален");
         }
@@ -349,10 +356,20 @@ namespace Replica
             }
 
             var removedFileName = Path.GetFileName(currentPath);
-            UpdateItemFilePath(order, item, stage, string.Empty);
+            var removeOutcome = _orderFileRenameRemoveCommandService.ApplyItemFileRemoved(
+                order,
+                item,
+                stage,
+                wasMultiOrderBeforeMutation);
+            SetOrderStatus(
+                order,
+                removeOutcome.StatusUpdate.Status,
+                OrderStatusSourceNames.FileSync,
+                removeOutcome.StatusUpdate.Reason,
+                persistHistory: false,
+                rebuildGrid: false);
 
-            var itemRemovedFromOrder = RemoveItemIfEmpty(order, item);
-            if (itemRemovedFromOrder)
+            if (removeOutcome.ItemRemovedFromOrder)
             {
                 AppendOrderOperationLog(
                     order,
@@ -360,13 +377,12 @@ namespace Replica
                     $"Удален пустой item после удаления файла: {removedFileName} | stage-{stage}");
             }
 
-            var demotedToSingleOrder = NormalizeOrderTopologyAfterItemMutation(
+            var demotedToSingleOrder = ApplyTopologyMutationResult(
                 order,
-                wasMultiOrderBeforeMutation,
+                removeOutcome.TopologyMutation,
                 $"remove-file: {removedFileName} | stage-{stage}");
 
-            var canRestoreItemSelection = !itemRemovedFromOrder && ContainsOrderItem(order, item.ItemId);
-            var selectionTag = canRestoreItemSelection
+            var selectionTag = removeOutcome.CanRestoreItemSelection
                 ? OrderGridLogic.BuildItemTag(order.InternalId, item.ItemId)
                 : OrderGridLogic.BuildOrderTag(order.InternalId);
 
@@ -377,7 +393,7 @@ namespace Replica
                 return;
             }
 
-            if (itemRemovedFromOrder)
+            if (removeOutcome.ItemRemovedFromOrder)
             {
                 SetBottomStatus("Файл удален. item исключен из группы");
                 return;
@@ -451,7 +467,14 @@ namespace Replica
                 return;
             }
 
-            UpdateOrderFilePath(order, stage, renamedPath);
+            var statusUpdate = _orderFileRenameRemoveCommandService.ApplyOrderFileRenamed(order, stage, renamedPath);
+            SetOrderStatus(
+                order,
+                statusUpdate.Status,
+                OrderStatusSourceNames.FileSync,
+                statusUpdate.Reason,
+                persistHistory: false,
+                rebuildGrid: false);
             PersistGridChanges(OrderGridLogic.BuildOrderTag(order.InternalId));
             SetBottomStatus("Файл переименован");
         }
@@ -476,7 +499,14 @@ namespace Replica
                 return;
             }
 
-            UpdateItemFilePath(order, item, stage, renamedPath);
+            var statusUpdate = _orderFileRenameRemoveCommandService.ApplyItemFileRenamed(order, item, stage, renamedPath);
+            SetOrderStatus(
+                order,
+                statusUpdate.Status,
+                OrderStatusSourceNames.FileSync,
+                statusUpdate.Reason,
+                persistHistory: false,
+                rebuildGrid: false);
             PersistGridChanges(OrderGridLogic.BuildItemTag(order.InternalId, item.ItemId));
             SetBottomStatus("Файл item переименован");
         }
@@ -488,35 +518,20 @@ namespace Replica
                 return false;
 
             var oldName = Path.GetFileNameWithoutExtension(currentPath);
-            var extension = Path.GetExtension(currentPath);
             var nextName = ShowInputDialog("Переименование", "Введите новое имя файла:", oldName);
-            if (string.IsNullOrWhiteSpace(nextName))
-                return false;
-
-            nextName = nextName.Trim();
-            if (string.Equals(nextName, oldName, StringComparison.Ordinal))
-                return false;
-
-            foreach (var invalid in Path.GetInvalidFileNameChars())
-                nextName = nextName.Replace(invalid, '_');
-
-            var directory = Path.GetDirectoryName(currentPath);
-            if (string.IsNullOrWhiteSpace(directory))
-                return false;
-
-            var targetPath = Path.Combine(directory, nextName + extension);
-            if (PathsEqual(currentPath, targetPath))
-                return false;
-
-            if (File.Exists(targetPath))
+            var buildResult = _orderFileRenameRemoveCommandService.TryBuildRenamedPath(currentPath, nextName);
+            if (buildResult.Status == RenamePathBuildStatus.TargetExists)
             {
                 SetBottomStatus("Файл с таким именем уже существует");
                 MessageBox.Show(this, "Файл с таким именем уже существует.", "Переименование", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return false;
             }
 
-            renamedPath = targetPath;
-            return true;
+            if (!buildResult.IsSuccess)
+                return false;
+
+            renamedPath = buildResult.RenamedPath;
+            return !string.IsNullOrWhiteSpace(renamedPath);
         }
 
         private string ShowInputDialog(string title, string promptText, string initialValue)

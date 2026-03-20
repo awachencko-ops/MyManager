@@ -404,37 +404,18 @@ namespace Replica
                 return;
             }
 
-            UpdatePrintPathReferencesForOrder(order, currentPath, renamedPath);
+            var statusUpdate = _orderFileRenameRemoveCommandService.ApplyPrintTileFileRenamed(order, currentPath, renamedPath);
+            SetOrderStatus(
+                order,
+                statusUpdate.Status,
+                OrderStatusSourceNames.FileSync,
+                statusUpdate.Reason,
+                persistHistory: false,
+                rebuildGrid: false);
             RemovePrintTileImageIndex(currentPath);
             RemovePrintTileImageIndex(renamedPath);
             PersistGridChanges(OrderGridLogic.BuildOrderTag(order.InternalId));
             SetBottomStatus("Файл переименован");
-        }
-
-        private void UpdatePrintPathReferencesForOrder(OrderData order, string oldPath, string newPath)
-        {
-            var hasUpdated = false;
-
-            if (PathsEqual(order.PrintPath, oldPath))
-            {
-                order.PrintPath = newPath;
-                hasUpdated = true;
-            }
-
-            if (order.Items != null)
-            {
-                foreach (var item in order.Items)
-                {
-                    if (item == null || !PathsEqual(item.PrintPath, oldPath))
-                        continue;
-
-                    item.PrintPath = newPath;
-                    hasUpdated = true;
-                }
-            }
-
-            if (!hasUpdated)
-                order.PrintPath = newPath;
         }
 
         private void LvPrintTiles_DrawItem(object? sender, DrawListViewItemEventArgs e)
