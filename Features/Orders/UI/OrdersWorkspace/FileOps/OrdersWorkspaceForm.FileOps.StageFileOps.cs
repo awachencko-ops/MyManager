@@ -189,25 +189,25 @@ namespace Replica
 
         private async Task<bool> AddFileToOrderAsync(OrderData order, string sourceFile, int stage)
         {
-            var cleanSource = CleanPath(sourceFile);
-            if (string.IsNullOrWhiteSpace(cleanSource) || !File.Exists(cleanSource))
-                return false;
-
             if (stage == OrderStages.Print && !await EnsureSimpleOrderInfoForPrintAsync(order))
                 return false;
 
-            string targetName;
-            if (stage == OrderStages.Print && !string.IsNullOrWhiteSpace(order.Id))
-                targetName = $"{order.Id}{Path.GetExtension(cleanSource)}";
-            else
-                targetName = EnsureUniqueStageFileName(order, stage, Path.GetFileName(cleanSource));
+            if (!_orderFileStageCommandService.TryPrepareOrderAdd(
+                    order,
+                    sourceFile,
+                    stage,
+                    (targetStage, fileName) => EnsureUniqueStageFileName(order, targetStage, fileName),
+                    out var plan))
+            {
+                return false;
+            }
 
-            var newPath = stage == OrderStages.Print
-                ? await CopyPrintFileAsync(order, cleanSource, targetName)
-                : await CopyIntoStageAsync(order, stage, cleanSource, targetName);
+            var newPath = plan.UsePrintCopy
+                ? await CopyPrintFileAsync(order, plan.CleanSourcePath, plan.TargetFileName)
+                : await CopyIntoStageAsync(order, stage, plan.CleanSourcePath, plan.TargetFileName);
 
-            if (stage == OrderStages.Prepared)
-                await EnsureSourceCopyAsync(order, cleanSource);
+            if (plan.EnsureSourceCopy)
+                await EnsureSourceCopyAsync(order, plan.CleanSourcePath);
 
             UpdateOrderFilePath(order, stage, newPath);
             return true;
@@ -215,27 +215,24 @@ namespace Replica
 
         private async Task<bool> AddFileToItemAsync(OrderData order, OrderFileItem item, string sourceFile, int stage)
         {
-            var cleanSource = CleanPath(sourceFile);
-            if (string.IsNullOrWhiteSpace(cleanSource) || !File.Exists(cleanSource))
-                return false;
-
             if (stage == OrderStages.Print && !await EnsureSimpleOrderInfoForPrintAsync(order))
                 return false;
 
-            if (string.IsNullOrWhiteSpace(item.ClientFileLabel))
-                item.ClientFileLabel = Path.GetFileNameWithoutExtension(cleanSource);
+            if (!_orderFileStageCommandService.TryPrepareItemAdd(
+                    order,
+                    item,
+                    sourceFile,
+                    stage,
+                    (targetStage, fileName) => EnsureUniqueStageFileName(order, targetStage, fileName),
+                    cleanSource => BuildItemPrintFileName(order, item, cleanSource),
+                    out var plan))
+            {
+                return false;
+            }
 
-            string newPath;
-            if (stage == OrderStages.Print)
-            {
-                var printName = EnsureUniqueStageFileName(order, OrderStages.Print, BuildItemPrintFileName(order, item, cleanSource));
-                newPath = await CopyPrintFileAsync(order, cleanSource, printName);
-            }
-            else
-            {
-                var targetName = EnsureUniqueStageFileName(order, stage, Path.GetFileName(cleanSource));
-                newPath = await CopyIntoStageAsync(order, stage, cleanSource, targetName);
-            }
+            var newPath = plan.UsePrintCopy
+                ? await CopyPrintFileAsync(order, plan.CleanSourcePath, plan.TargetFileName)
+                : await CopyIntoStageAsync(order, stage, plan.CleanSourcePath, plan.TargetFileName);
 
             UpdateItemFilePath(order, item, stage, newPath);
             return true;
