@@ -10,6 +10,14 @@ namespace Replica
     {
         private const string PitStopDefaultFile = "pitstop_actions.json";
         private const string ImposingDefaultFile = "imposing_configs.json";
+        private static readonly ISettingsProvider DefaultSettingsProvider = new FileSettingsProvider();
+        private static ISettingsProvider _settingsProvider = DefaultSettingsProvider;
+
+        public static ISettingsProvider SettingsProvider
+        {
+            get => _settingsProvider;
+            set => _settingsProvider = value ?? DefaultSettingsProvider;
+        }
 
         // --- PitStop ---
         public static List<ActionConfig> GetAllPitStopConfigs()
@@ -46,7 +54,7 @@ namespace Replica
         // --- Универсальные методы работы с JSON ---
         private static string ResolvePitStopConfigPath(bool forRead)
         {
-            var settings = AppSettings.Load();
+            var settings = SettingsProvider.Load();
             var configuredPath = settings.PitStopConfigFilePath;
             return forRead
                 ? StoragePaths.ResolveExistingFilePath(configuredPath, PitStopDefaultFile)
@@ -55,7 +63,7 @@ namespace Replica
 
         private static string ResolveImposingConfigPath(bool forRead)
         {
-            var settings = AppSettings.Load();
+            var settings = SettingsProvider.Load();
             var configuredPath = settings.ImposingConfigFilePath;
             return forRead
                 ? StoragePaths.ResolveExistingFilePath(configuredPath, ImposingDefaultFile)

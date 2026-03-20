@@ -17,13 +17,15 @@ namespace Replica
         public event Action<string, string>? OnCapturedOrderLog;
 
         private readonly string _rootPath;
+        private readonly ISettingsProvider _settingsProvider;
         private const string TempInFolder = "in";
         private const string TempPrepressFolder = "prepress";
         private const string TempPrintFolder = "print";
 
-        public OrderProcessor(string rootPath)
+        public OrderProcessor(string rootPath, ISettingsProvider? settingsProvider = null)
         {
             _rootPath = rootPath;
+            _settingsProvider = settingsProvider ?? new FileSettingsProvider();
         }
 
         public async Task RunAsync(OrderData order, CancellationToken ct, IEnumerable<string>? selectedItemIds = null)
@@ -35,7 +37,7 @@ namespace Replica
                     Logger.Warn($"TOPOLOGY | order={order.Id} | {issue}");
             }
 
-            var settings = AppSettings.Load();
+            var settings = _settingsProvider.Load();
             var timeout = TimeSpan.FromMinutes(settings.RunTimeoutMinutes);
             string tempRoot = string.IsNullOrWhiteSpace(settings.TempFolderPath)
                 ? Path.Combine(_rootPath, settings.TempFolderName)

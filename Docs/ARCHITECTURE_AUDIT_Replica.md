@@ -27,6 +27,8 @@
 > Актуализация на 2026-03-20 (этап 4 close, срез 10): внедрён auto-update baseline (client bootstrap + `wwwroot/updates/update.xml` feed), этап 4 закрыт; в рамках risk-burndown убраны silent `catch { }` в критическом runtime-пути (`OrderProcessor`, `OrderForm`, `ConfigService`) с заменой на контролируемый fallback + warning-лог.
 >
 > Актуализация на 2026-03-20 (risk-burndown, срез 11): добавлен `OrderDeletionWorkflowService`; batch-удаление заказов/файлов (`remove-from-disk`, fallback на known paths, item reindex, агрегация ошибок) вынесено из `MainForm` в сервисный слой, покрыто unit-тестами (`orders delete`, `folder-miss fallback`, `item reindex`, `item-not-found`).
+>
+> Актуализация на 2026-03-20 (risk-burndown, срез 12): введён `ISettingsProvider` + `FileSettingsProvider`; runtime-path (`Program`/`MainForm`/`OrderProcessor`) переведён на provider-инъекцию, `ConfigService` отвязан от прямого `AppSettings.Load()` через `ConfigService.SettingsProvider`, добавлены unit-тесты provider-boundary.
 
 ## Executive summary
 
@@ -50,6 +52,7 @@
 - В клиенте добавлен `LanRunCommandCoordinator`: LAN `run/stop` orchestration вынесена из `MainForm` в отдельный сервис (форма теперь использует coordinator, а не прямую LAN gateway-логику).
 - Из `MainForm` выделен `OrderRunExecutionService`: конкурентное выполнение run-сессий и error/cancel lifecycle больше не оркестрируются внутри формы.
 - Из `MainForm` выделен `OrderDeletionWorkflowService`: batch-удаление orders/items (включая disk-cleanup, fallback на known paths и reindex item-ов) переведено в use-case сервис.
+- Введён интерфейсный слой настроек (`ISettingsProvider`), а core runtime-flow (`Program`, `MainForm`, `OrderProcessor`, `ConfigService`) переведён с прямого static-IO на provider boundary.
 - В `OrdersHistoryRepositoryCoordinator` добавлена двусторонняя sync-стратегия `history.json <-> PostgreSQL` (импорт file-only заказов + mirror LAN snapshot обратно в файл).
 - Persistence реализован через прямое чтение/запись JSON (`history.json`) из UI-слоя.
 - `ConfigService` и `AppSettings` — статические сервисы/конфиги с прямым file IO, без интерфейсов и DI.
@@ -144,7 +147,7 @@
 | Логирование (`Logger`) | В API введён базовый request correlation (`X-Correlation-Id`), но нет полного end-to-end structured telemetry | **Med/High** | Довести до единого structured logging/tracing контура (client+api+worker). |
 | Order status log file | best-effort append, mutable file (частично компенсировано `order_events`) | **Med** | Сделать `order_events` primary audit source, добавить retention/архив и SQL-аудит отчёты. |
 | Ошибки с `catch { }` | В критическом runtime-пути silent catches устранены; остаточный риск остаётся в legacy/UI-участках | **Low/Med** | Поддерживать policy: без silent catch в production-path; остаточные блоки вычищать по итерациям. |
-| ConfigService/AppSettings static IO | Сильная связность с файловой системой, сложная тестируемость | **Med** | Абстрагировать через `IConfigRepository`, `ISettingsProvider`, внедрить mockable adapters. |
+| ConfigService/AppSettings static IO | Сильная связность с файловой системой частично снижена (`ISettingsProvider` внедрён в runtime-path); остаток в legacy/UI-экранах | **Low/Med** | Довести до полного покрытия provider/repository boundary на всех формах и убрать остаточные direct `AppSettings.Load()`. |
 | Отсутствие API идемпотентности | Дубли заказов при повторной отправке | **High** | В API-командах использовать `Idempotency-Key` + таблицу дедупликации. |
 | Отсутствие полного authN/authZ контура | Базовая actor validation write-path уже есть, но role/claim policy и полноценная authN не внедрены | **Med/High** | Ввести API authN/authZ (JWT/SSO + role/claim-based authorization). |
 | Валидация входных данных | Локальная и фрагментарная | **Med** | Централизовать validation на command DTO/domain rules, добавить schema/contract validation. |
@@ -161,8 +164,11 @@
 2. Итерация 2 (2026-03-20): закрыт следующий срез `MainForm` God Object (delete-workflow).
    - Что сделано: удаление заказов и item-ов вынесено в `OrderDeletionWorkflowService` (disk cleanup + fallback + reindex + batch failure aggregation), `MainForm` переключён на сервис, добавлены unit-тесты.
    - Эффект: снижена связность `MainForm` и риск регрессий в delete-сценариях за счёт выделенного use-case слоя и автотестов.
-3. На очереди (итерация 3): `ConfigService/AppSettings` static IO.
-   - План следующего среза: ввести интерфейсный слой настроек (`ISettingsProvider`/`IConfigRepository`) и убрать прямые static-зависимости из UI-path.
+3. Итерация 3 (2026-03-20): закрыт срез `ConfigService/AppSettings` static IO для runtime-path.
+   - Что сделано: добавлены `ISettingsProvider` + `FileSettingsProvider`; `Program`, `MainForm`, `OrderProcessor` и `ConfigService` переведены на provider boundary; добавлены unit-тесты `ConfigService` на injected provider path.
+   - Эффект: повышена тестируемость и снижена связность core-path с файловой системой/статикой.
+4. На очереди (итерация 4): resiliency в `OrderProcessor` file-workflow (retry/backoff policy).
+   - План следующего среза: внедрить управляемые retry-политики на сетевых file-операциях и минимальный telemetry для отказов.
 
 ---
 

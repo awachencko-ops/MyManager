@@ -22,7 +22,13 @@ namespace Replica
     public partial class MainForm : Form
     {
         public MainForm()
+            : this(new FileSettingsProvider())
         {
+        }
+
+        internal MainForm(ISettingsProvider settingsProvider)
+        {
+            _settingsProvider = settingsProvider ?? throw new ArgumentNullException(nameof(settingsProvider));
             InitializeComponent();
             InitializeDockSidebar();
             InitializeStatusCellVisuals();
@@ -103,7 +109,7 @@ namespace Replica
 
         private void CreateNewOrder()
         {
-            var settings = AppSettings.Load();
+            var settings = _settingsProvider.Load();
             if (settings.UseExtendedMode)
                 CreateNewExtendedOrder();
             else
@@ -177,7 +183,7 @@ namespace Replica
             if (order == null)
                 return;
 
-            var settings = AppSettings.Load();
+            var settings = _settingsProvider.Load();
             if (settings.UseExtendedMode)
                 EditOrderExtended(order);
             else
@@ -226,7 +232,7 @@ namespace Replica
 
         private void LoadSettings()
         {
-            var settings = AppSettings.Load();
+            var settings = _settingsProvider.Load();
             _ordersRootPath = settings.OrdersRootPath;
             _tempRootPath = settings.TempFolderPath;
             _grandpaFolder = settings.GrandpaPath;
@@ -247,7 +253,7 @@ namespace Replica
 
         private void InitializeProcessor()
         {
-            _processor = new OrderProcessor(_ordersRootPath);
+            _processor = new OrderProcessor(_ordersRootPath, _settingsProvider);
             _processor.OnStatusChanged += (orderId, status, reason) =>
             {
                 void Apply()
@@ -559,7 +565,7 @@ namespace Replica
 
         private void ShowSettingsDialog()
         {
-            var currentSettings = AppSettings.Load();
+            var currentSettings = _settingsProvider.Load();
             using var settingsForm = new SettingsDialogForm(
                 _ordersRootPath,
                 _tempRootPath,
@@ -596,7 +602,7 @@ namespace Replica
             _lanPostgreSqlConnectionString = settingsForm.LanPostgreSqlConnectionString;
             _lanApiBaseUrl = settingsForm.LanApiBaseUrl;
 
-            var settings = AppSettings.Load();
+            var settings = _settingsProvider.Load();
             settings.OrdersRootPath = _ordersRootPath;
             settings.TempFolderPath = _tempRootPath;
             settings.GrandpaPath = _grandpaFolder;
@@ -611,7 +617,7 @@ namespace Replica
             settings.OrdersStorageBackend = _ordersStorageBackend;
             settings.LanPostgreSqlConnectionString = _lanPostgreSqlConnectionString;
             settings.LanApiBaseUrl = _lanApiBaseUrl;
-            settings.Save();
+            _settingsProvider.Save(settings);
             _ordersHistoryCoordinator.Configure(_ordersStorageBackend, _lanPostgreSqlConnectionString, _jsonHistoryFile);
 
             Logger.LogFilePath = _managerLogFilePath;
