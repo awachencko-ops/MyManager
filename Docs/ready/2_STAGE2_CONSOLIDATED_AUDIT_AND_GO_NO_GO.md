@@ -19,8 +19,8 @@
 6. Regression pack закрыт:
    - на момент закрытия этапа 2: `42/42 PASS` (`17/17 Verify`, `25/25 UiSmoke`);
    - повторная проверка на 2026-03-20: `55/55 PASS` (`30/30 Verify`, `25/25 UiSmoke`);
-   - расширенная проверка после Step 2 этапа 3 (2026-03-20): `64/64 PASS` (`39/39 Verify`, `25/25 UiSmoke`);
-   - PostgreSQL integration tests запускаются opt-in: `REPLICA_RUN_PG_INTEGRATION=1` (`39/39 PASS`).
+   - расширенная проверка после Step 2 этапа 3 (2026-03-20): `65/65 PASS` (`40/40 Verify`, `25/25 UiSmoke`);
+   - PostgreSQL integration tests запускаются opt-in: `REPLICA_RUN_PG_INTEGRATION=1` (`40/40 PASS`).
 
 ## 2. Что остается (вход в Stage 3)
 

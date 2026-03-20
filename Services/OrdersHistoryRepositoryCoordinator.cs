@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 
 namespace Replica;
@@ -42,6 +43,9 @@ public sealed class OrdersHistoryRepositoryCoordinator
         {
             if (orders.Count == 0 && _ordersStorageBackend == OrdersStorageMode.LanPostgreSql)
                 TryBootstrapFromFileHistory(ref orders);
+
+            if (_ordersStorageBackend == OrdersStorageMode.LanPostgreSql)
+                TrySynchronizeLanAndFileHistories(ref orders);
 
             return true;
         }
@@ -203,6 +207,100 @@ public sealed class OrdersHistoryRepositoryCoordinator
             completed_at = DateTime.Now
         });
         WriteBootstrapMarker(postgreSqlRepository, emptyMarkerPayload, "empty-source");
+    }
+
+    private void TrySynchronizeLanAndFileHistories(ref List<OrderData> lanOrders)
+    {
+        if (_ordersRepository is not PostgreSqlOrdersRepository)
+            return;
+
+        var fileRepository = OrdersRepositoryFactory.CreateFileSystem(_historyFilePath);
+        if (!fileRepository.TryLoadAll(out var fileOrders, out var fileLoadError))
+        {
+            if (!string.IsNullOrWhiteSpace(fileLoadError))
+            {
+                Logger.Warn(
+                    $"HISTORY | sync-load-file-failed | backend={fileRepository.BackendName} | {fileLoadError}");
+            }
+
+            return;
+        }
+
+        var normalizedLanOrders = NormalizeOrdersForSync(lanOrders);
+        var normalizedFileOrders = NormalizeOrdersForSync(fileOrders);
+        var lanByInternalId = normalizedLanOrders
+            .Where(order => !string.IsNullOrWhiteSpace(order.InternalId))
+            .ToDictionary(order => order.InternalId, order => order, StringComparer.Ordinal);
+        var fileOnlyOrders = normalizedFileOrders
+            .Where(order => !string.IsNullOrWhiteSpace(order.InternalId) && !lanByInternalId.ContainsKey(order.InternalId))
+            .ToList();
+
+        if (fileOnlyOrders.Count > 0)
+        {
+            var mergedOrders = new List<OrderData>(normalizedLanOrders.Count + fileOnlyOrders.Count);
+            mergedOrders.AddRange(normalizedLanOrders);
+            mergedOrders.AddRange(fileOnlyOrders);
+
+            if (_ordersRepository!.TrySaveAll(mergedOrders, out var syncSaveError))
+            {
+                lanOrders = mergedOrders;
+                Logger.Warn(
+                    $"HISTORY | sync-file-to-lan | imported_orders={fileOnlyOrders.Count} | backend={BackendName}");
+            }
+            else
+            {
+                Logger.Warn(
+                    $"HISTORY | sync-file-to-lan-failed | backend={BackendName} | {syncSaveError}");
+            }
+        }
+        else
+        {
+            lanOrders = normalizedLanOrders;
+        }
+
+        if (!fileRepository.TrySaveAll(lanOrders, out var mirrorError))
+        {
+            Logger.Warn(
+                $"HISTORY | sync-lan-to-file-failed | backend={fileRepository.BackendName} | {mirrorError}");
+            return;
+        }
+
+        Logger.Info(
+            $"HISTORY | sync-lan-to-file | orders={lanOrders.Count} | backend={fileRepository.BackendName}");
+    }
+
+    private static List<OrderData> NormalizeOrdersForSync(IEnumerable<OrderData>? orders)
+    {
+        var normalized = new List<OrderData>();
+        foreach (var source in (orders ?? Array.Empty<OrderData>()).Where(order => order != null))
+        {
+            var copy = CloneOrder(source);
+            copy.InternalId = string.IsNullOrWhiteSpace(copy.InternalId) ? Guid.NewGuid().ToString("N") : copy.InternalId;
+            copy.Items ??= new List<OrderFileItem>();
+            for (var i = 0; i < copy.Items.Count; i++)
+            {
+                var item = copy.Items[i];
+                if (item == null)
+                {
+                    copy.Items.RemoveAt(i);
+                    i--;
+                    continue;
+                }
+
+                item.ItemId = string.IsNullOrWhiteSpace(item.ItemId) ? Guid.NewGuid().ToString("N") : item.ItemId;
+                item.SequenceNo = i;
+            }
+
+            normalized.Add(copy);
+        }
+
+        return normalized;
+    }
+
+    private static OrderData CloneOrder(OrderData source)
+    {
+        var json = JsonSerializer.Serialize(source);
+        return JsonSerializer.Deserialize<OrderData>(json) ?? new OrderData();
     }
 
     private static void WriteBootstrapMarker(PostgreSqlOrdersRepository repository, string markerPayload, string state)

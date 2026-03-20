@@ -64,18 +64,24 @@
    - конкурентное выполнение run-сессий (`Task.WhenAll`), обработка `cancel/error` и lifecycle-callbacks вынесены из `MainForm`;
    - `MainForm` теперь вызывает сервисный use-case для выполнения run-пачки и отображает результат;
    - добавлены unit-тесты на `success/cancel/failure/mixed` сценарии выполнения.
+8. Добавлена двусторонняя sync-логика history:
+   - при `LanPostgreSql` load coordinator выполняет безопасную синхронизацию `history.json <-> PostgreSQL`;
+   - `file -> db`: импортируются отсутствующие в БД заказы (по `InternalId`);
+   - `db -> file`: после load/merge актуальный LAN-снимок зеркалится обратно в `history.json`;
+   - conflict-policy для пересечений `InternalId`: DB-first (без silent overwrite существующих серверных записей).
 
 ## 4. Техническая верификация (2026-03-20)
 
 1. `dotnet build Replica.sln` -> PASS (`0 warnings`, `0 errors`).
-2. `dotnet test Replica.sln` -> PASS (`64/64`).
-3. `REPLICA_RUN_PG_INTEGRATION=1 dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj` -> PASS (`39/39`).
+2. `dotnet test Replica.sln` -> PASS (`65/65`).
+3. `REPLICA_RUN_PG_INTEGRATION=1 dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj` -> PASS (`40/40`).
 4. Расширен PostgreSQL integration pack:
    - `PostgreSqlIntegration_EfCoreStore_RunStopLifecycle_PersistsLockAndEvents`;
    - `PostgreSqlIntegration_EfCoreStore_RunStop_RejectsVersionMismatch`.
    - `LanOrderRunApiGatewayTests` (client-side HTTP `run/stop`).
    - `LanRunCommandCoordinatorTests` (client-side coordinator behavior).
    - `OrderRunExecutionServiceTests` (client-side run execution use-case behavior).
+   - `PostgreSqlIntegration_Coordinator_SynchronizesFileAndLanHistories` (двусторонняя sync history).
 5. Smoke API:
    - `GET /health` -> `200`, `store=EfCoreLanOrderStore`, `mode=PostgreSql`;
    - `GET /api/users` -> `200`;
