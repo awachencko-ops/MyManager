@@ -71,6 +71,8 @@
 > Актуализация на 2026-03-20 (risk-burndown, срез 32): `OrderFileRenameRemoveCommandService` расширен print-tiles rename boundary (`ApplyPrintTileFileRenamed`); sync print-path ссылок order/item и post-rename status-update вынесены из `OrdersWorkspaceForm.PrintTiles` в application-service слой, удалён локальный UI-метод `UpdatePrintPathReferencesForOrder`, добавлены unit-тесты print-tile rename (`match/fallback`), подтверждены build + full test + PostgreSQL integration regression.
 >
 > Актуализация на 2026-03-20 (risk-burndown, срез 33): добавлен `OrdersHistoryMaintenanceService`; lifecycle `LoadHistory/SaveHistory` (post-load normalization, hash/size backfill, topology normalization, pre-save maintenance) вынесен из `OrdersWorkspaceForm` в application-service слой, форма оставлена как UI-shell для repository IO и logging, добавлены unit-тесты `OrdersHistoryMaintenanceServiceTests`, подтверждены build + full test + PostgreSQL integration regression.
+>
+> Актуализация на 2026-03-20 (risk-burndown, срез 34): добавлен `OrderFolderPathResolutionService`; folder-path resolution для single/group order (`ResolveBrowseFolderPath`, `ResolvePreferredOrderFolder`, common-folder/root-mismatch policy) вынесен из `OrdersWorkspaceForm` в application-service слой, удалены дублирующие path-алгоритмы из формы, добавлены unit-тесты `OrderFolderPathResolutionServiceTests`, подтверждены build + full test + PostgreSQL integration regression.
 
 ## Executive summary
 
@@ -112,6 +114,7 @@
 - В `OrderProcessor` добавлены dependency health-сигналы и circuit-breaker (`DependencyCircuitBreaker`) для внешних file-зависимостей; `MainForm` получает сигналы и отражает degraded/unavailable статус в UI.
 - В `OrdersHistoryRepositoryCoordinator` добавлена двусторонняя sync-стратегия `history.json <-> PostgreSQL` (импорт file-only заказов + mirror LAN snapshot обратно в файл).
 - Из `OrdersWorkspaceForm` выделен `OrdersHistoryMaintenanceService`: post-load/pre-save maintenance (id/arrival normalization, hash/size backfill, topology normalization) больше не реализуется внутри UI-класса.
+- Из `OrdersWorkspaceForm` выделен `OrderFolderPathResolutionService`: правила выбора папки заказа/group-order и common-path вычисления вынесены из UI-класса в application-service boundary.
 - Persistence реализован через прямое чтение/запись JSON (`history.json`) из UI-слоя.
 - `ConfigService` и `AppSettings` — статические сервисы/конфиги с прямым file IO, без интерфейсов и DI.
 
@@ -200,7 +203,7 @@
 
 | Компонент | Риск | Критичность | Рекомендация |
 |---|---|---|---|
-| `MainForm` orchestration | God Object, смешение UI + domain + persistence + file IO (снижено сервисными выносами, включая delete + run/stop + create/edit/item-mutation + item/order-delete + file-path-status + stage-command + rename/remove + print-tiles rename path sync + history lifecycle maintenance orchestration) | **Med** | Продолжить декомпозицию: выделить use-case слой (`IOrderApplicationService`), UI оставить как presenter/view; внедрить DI/composition root. |
+| `MainForm` orchestration | God Object, смешение UI + domain + persistence + file IO (снижено сервисными выносами, включая delete + run/stop + create/edit/item-mutation + item/order-delete + file-path-status + stage-command + rename/remove + print-tiles rename path sync + history lifecycle maintenance + folder-path resolution orchestration) | **Med** | Продолжить декомпозицию: выделить use-case слой (`IOrderApplicationService`), UI оставить как presenter/view; внедрить DI/composition root. |
 | История заказов (`history.json` / LAN PostgreSQL) | В FileSystem-режиме остаётся риск race; в LAN-режиме риск снижен через version-check | **Med** | Оставить FileSystem только как fallback; целевой режим — PostgreSQL + server-side command boundary. |
 | `SetOrderStatus` + `SaveHistory` | Клиентская неатомарность между UI-операцией и persistence | **Med/High** | Перенести статусные команды в API/worker с unit of work и server-side invariants. |
 | `_runTokensByOrder` (in-memory) | Переведён в runtime-session state; риск смещён в сторону UX-согласованности между клиентами | **Low/Med** | Сохранить server lock/state единственным источником истины и расширять server-driven refresh-сценарии. |
@@ -294,6 +297,9 @@
 24. Итерация 24 (2026-03-20, адресная): закрыт следующий срез `OrdersWorkspaceForm` God Object по history lifecycle maintenance.
    - Что сделано: добавлен `OrdersHistoryMaintenanceService`; логика `LoadHistory/SaveHistory` для post-load/pre-save maintenance (id/arrival normalization, hash/size backfill, topology normalization) переведена в application-service слой; `OrdersWorkspaceForm` оставлен как UI-shell для repository IO и логирования; добавлены unit-тесты `OrdersHistoryMaintenanceServiceTests`.
    - Эффект: уменьшена связность формы с доменными правилами обслуживания истории и file-metadata migration, повышена тестируемость history maintenance без UI-зависимостей.
+25. Итерация 25 (2026-03-20, адресная): закрыт следующий срез `OrdersWorkspaceForm` God Object по folder-path resolution logic.
+   - Что сделано: добавлен `OrderFolderPathResolutionService`; алгоритмы `TryGetBrowseFolderPathForOrder/GetPreferredOrderFolder` (single/group folder resolve, common-directory для group-order, root-mismatch policy) вынесены в application-service слой, удалены дублирующие path-утилиты из формы, добавлены unit-тесты `OrderFolderPathResolutionServiceTests`.
+   - Эффект: уменьшена связность формы с path-policy и directory-normalization логикой, повышена тестируемость folder-resolution сценариев без UI-зависимостей.
 
 ---
 
@@ -303,7 +309,7 @@
 
 1. **Persistence-модель на JSON в UI** — `PARTIAL`: LAN PostgreSQL + двусторонняя sync работают, но FileSystem-ветка ещё жива как fallback.
 2. **Статусные переходы и аудит «мимо транзакций»** — `PARTIAL`: status policy вынесена, `order_events` есть, но полный server-side command handling для всех write-flow не завершён.
-3. **God Object (MainForm/OrdersWorkspaceForm как бизнес-оркестратор)** — `IN PROGRESS`: вынесены history/run-state/status-transition/run-execution/delete-workflow/run-stop-preflight/create-edit/item-mutation/item-delete-command/order-delete-command/file-path-status-mutation/file-stage-command-planning/file-rename-remove-command/print-tiles-rename-sync/history-lifecycle-maintenance + выполнен rename shell и модульный перенос UI-кода; следующий фокус — общий order workflow orchestration и DI/composition root.
+3. **God Object (MainForm/OrdersWorkspaceForm как бизнес-оркестратор)** — `IN PROGRESS`: вынесены history/run-state/status-transition/run-execution/delete-workflow/run-stop-preflight/create-edit/item-mutation/item-delete-command/order-delete-command/file-path-status-mutation/file-stage-command-planning/file-rename-remove-command/print-tiles-rename-sync/history-lifecycle-maintenance/folder-path-resolution + выполнен rename shell и модульный перенос UI-кода; следующий фокус — общий order workflow orchestration и DI/composition root.
 4. **Неструктурированное логирование и mutable file-audit** — `PARTIAL`: correlation + structured scopes внедрены, `order_events` работает; остаётся унификация схемы и централизованный observability stack.
 
 ### P1 (сразу после P0)

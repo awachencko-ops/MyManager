@@ -1175,22 +1175,13 @@ namespace Replica
 
         private bool TryGetBrowseFolderPathForOrder(OrderData order, out string folderPath, out string reason)
         {
-            folderPath = string.Empty;
-            reason = "Папка не определена";
-
-            if (order == null)
-                return false;
-
-            if (!OrderTopologyService.IsMultiOrder(order))
-            {
-                folderPath = GetPreferredOrderFolder(order);
-                return !string.IsNullOrWhiteSpace(folderPath);
-            }
-
-            if (!TryGetCommonFolderForGroupOrder(order, out folderPath, out reason))
-                return false;
-
-            return !string.IsNullOrWhiteSpace(folderPath);
+            var resolution = _orderFolderPathResolutionService.ResolveBrowseFolderPath(
+                order,
+                _ordersRootPath,
+                _tempRootPath);
+            folderPath = resolution.FolderPath;
+            reason = resolution.Reason;
+            return resolution.Success;
         }
 
         private void OpenOrderFolderPath(string targetPath)
@@ -1219,157 +1210,12 @@ namespace Replica
             }
         }
 
-        private bool TryGetCommonFolderForGroupOrder(OrderData order, out string folderPath, out string reason)
-        {
-            folderPath = string.Empty;
-            reason = "Папка не определена";
-            if (order == null)
-                return false;
-
-            if (!string.IsNullOrWhiteSpace(order.FolderName))
-            {
-                folderPath = Path.Combine(_ordersRootPath, order.FolderName);
-                return true;
-            }
-
-            var directories = GetGroupDirectoryCandidates(order)
-                .Where(x => !string.IsNullOrWhiteSpace(x))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
-            if (directories.Count == 0)
-                return false;
-
-            var distinctRoots = directories
-                .Select(GetPathRootSafe)
-                .Where(x => !string.IsNullOrWhiteSpace(x))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
-            if (distinctRoots.Count > 1)
-            {
-                reason = "Пути не совпадают";
-                return false;
-            }
-
-            var commonDirectory = FindCommonDirectory(directories);
-            if (string.IsNullOrWhiteSpace(commonDirectory))
-                return false;
-
-            folderPath = commonDirectory;
-            return true;
-        }
-
-        private static IEnumerable<string> GetGroupDirectoryCandidates(OrderData order)
-        {
-            if (order?.Items != null)
-            {
-                foreach (var item in order.Items.Where(x => x != null))
-                {
-                    var itemPaths = new[] { item.SourcePath, item.PreparedPath, item.PrintPath };
-                    foreach (var rawPath in itemPaths)
-                    {
-                        var cleanPath = CleanPath(rawPath);
-                        if (string.IsNullOrWhiteSpace(cleanPath))
-                            continue;
-
-                        var candidateDirectory = Path.HasExtension(cleanPath)
-                            ? Path.GetDirectoryName(cleanPath)
-                            : cleanPath;
-                        if (!string.IsNullOrWhiteSpace(candidateDirectory))
-                            yield return NormalizePath(candidateDirectory);
-                    }
-                }
-            }
-
-            var orderPaths = new[] { order?.SourcePath, order?.PreparedPath, order?.PrintPath };
-            foreach (var rawPath in orderPaths)
-            {
-                var cleanPath = CleanPath(rawPath);
-                if (string.IsNullOrWhiteSpace(cleanPath))
-                    continue;
-
-                var candidateDirectory = Path.HasExtension(cleanPath)
-                    ? Path.GetDirectoryName(cleanPath)
-                    : cleanPath;
-                if (!string.IsNullOrWhiteSpace(candidateDirectory))
-                    yield return NormalizePath(candidateDirectory);
-            }
-        }
-
-        private static string FindCommonDirectory(IReadOnlyList<string> directories)
-        {
-            if (directories == null || directories.Count == 0)
-                return string.Empty;
-
-            var commonPath = directories[0];
-            if (string.IsNullOrWhiteSpace(commonPath))
-                return string.Empty;
-
-            for (var i = 1; i < directories.Count; i++)
-            {
-                var candidatePath = directories[i];
-                if (string.IsNullOrWhiteSpace(candidatePath))
-                    continue;
-
-                while (!IsDirectoryPrefix(candidatePath, commonPath))
-                {
-                    var parentPath = Path.GetDirectoryName(commonPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-                    if (string.IsNullOrWhiteSpace(parentPath))
-                        return string.Empty;
-
-                    commonPath = parentPath;
-                }
-            }
-
-            return commonPath;
-        }
-
-        private static bool IsDirectoryPrefix(string path, string prefix)
-        {
-            if (string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(prefix))
-                return false;
-
-            if (!path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                return false;
-
-            if (path.Length == prefix.Length)
-                return true;
-
-            var boundary = path[prefix.Length];
-            return boundary == Path.DirectorySeparatorChar || boundary == Path.AltDirectorySeparatorChar;
-        }
-
-        private static string GetPathRootSafe(string path)
-        {
-            if (string.IsNullOrWhiteSpace(path))
-                return string.Empty;
-
-            try
-            {
-                return Path.GetPathRoot(path) ?? string.Empty;
-            }
-            catch
-            {
-                return string.Empty;
-            }
-        }
-
         private string GetPreferredOrderFolder(OrderData order)
         {
-            if (!string.IsNullOrWhiteSpace(order.FolderName))
-                return Path.Combine(_ordersRootPath, order.FolderName);
-
-            var knownPath = FirstNotEmpty(
-                order.PrintPath,
-                order.PreparedPath,
-                order.SourcePath,
-                order.Items?.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x.PrintPath))?.PrintPath,
-                order.Items?.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x.PreparedPath))?.PreparedPath,
-                order.Items?.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x.SourcePath))?.SourcePath);
-
-            if (!string.IsNullOrWhiteSpace(knownPath))
-                return Path.GetDirectoryName(knownPath) ?? _ordersRootPath;
-
-            return !string.IsNullOrWhiteSpace(_tempRootPath) ? _tempRootPath : _ordersRootPath;
+            return _orderFolderPathResolutionService.ResolvePreferredOrderFolder(
+                order,
+                _ordersRootPath,
+                _tempRootPath);
         }
 
         private static string? FirstNotEmpty(params string?[] candidates)

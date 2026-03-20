@@ -31,6 +31,7 @@ namespace Replica
         private readonly LanRunCommandCoordinator _lanRunCommandCoordinator = new(new LanOrderRunApiGateway());
         private readonly OrdersHistoryRepositoryCoordinator _ordersHistoryCoordinator = new();
         private readonly OrdersHistoryMaintenanceService _ordersHistoryMaintenanceService = new();
+        private readonly OrderFolderPathResolutionService _orderFolderPathResolutionService = new();
         private string _managerLogFilePath = AppSettings.DefaultManagerLogFilePath;
         private string _orderLogsFolderPath = AppSettings.DefaultOrderLogsFolderPath;
         private readonly List<OrderData> _orderHistory = [];
