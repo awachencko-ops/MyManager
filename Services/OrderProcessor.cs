@@ -20,6 +20,7 @@ namespace Replica
         private readonly string _rootPath;
         private readonly ISettingsProvider _settingsProvider;
         private readonly FileOperationRetryPolicy _fileRetryPolicy;
+        private readonly WorkflowTimeoutBudgetPolicy _timeoutBudgetPolicy;
         private readonly DependencyBulkheadPolicy _dependencyBulkhead;
         private readonly Dictionary<string, DependencyCircuitBreaker> _dependencyCircuitBreakers = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, DependencyHealthLevel> _dependencyHealthLevels = new(StringComparer.OrdinalIgnoreCase);
@@ -42,13 +43,15 @@ namespace Replica
         public OrderProcessor(
             string rootPath,
             ISettingsProvider? settingsProvider = null,
-            FileOperationRetryPolicy? fileRetryPolicy = null)
+            FileOperationRetryPolicy? fileRetryPolicy = null,
+            WorkflowTimeoutBudgetPolicy? timeoutBudgetPolicy = null)
         {
             _rootPath = rootPath;
             _settingsProvider = settingsProvider ?? new FileSettingsProvider();
             _fileRetryPolicy = fileRetryPolicy ?? new FileOperationRetryPolicy(
                 warnLogger: Logger.Warn,
                 errorLogger: Logger.Error);
+            _timeoutBudgetPolicy = timeoutBudgetPolicy ?? new WorkflowTimeoutBudgetPolicy();
             _dependencyBulkhead = new DependencyBulkheadPolicy(DependencyBulkheadDefaultLimit, DependencyBulkheadLimits);
         }
 
@@ -63,6 +66,7 @@ namespace Replica
 
             var settings = _settingsProvider.Load();
             var timeout = TimeSpan.FromMinutes(settings.RunTimeoutMinutes);
+            var timeoutBudget = _timeoutBudgetPolicy.Calculate(timeout);
             string tempRoot = string.IsNullOrWhiteSpace(settings.TempFolderPath)
                 ? Path.Combine(_rootPath, settings.TempFolderName)
                 : settings.TempFolderPath;
@@ -74,7 +78,7 @@ namespace Replica
             if (OrderTopologyService.IsMultiOrder(order))
             {
                 ReportProgress(order, 0, "Запуск мульти-заказа");
-                await RunMultiOrderAsync(order, settings, timeout, tempRoot, selectedSet, ct);
+                await RunMultiOrderAsync(order, settings, timeoutBudget, tempRoot, selectedSet, ct);
                 return;
             }
 
@@ -85,6 +89,8 @@ namespace Replica
                 Notify(order, "🟡 Запуск…", "Поиск конфигов...");
                 ReportProgress(order, 5, "Поиск конфигов");
                 EnsureWorkflowDependenciesReady(order, selectedSet, tempRoot);
+                Logger.Info(
+                    $"TIMEOUT-BUDGET | order={order.Id} | pitstop_s={(int)timeoutBudget.PitStop.TotalSeconds} | imposing_s={(int)timeoutBudget.Imposing.TotalSeconds} | pitstop_report_s={(int)timeoutBudget.PitStopReport.TotalSeconds}");
 
                 var pitCfg = ConfigService.GetPitStopConfigByName(order.PitStopAction);
                 var impCfg = ConfigService.GetImposingConfigByName(order.ImposingAction);
@@ -124,9 +130,9 @@ namespace Replica
                                 (impCfg.Out,              "Imposing Out")
                             };
                             var pitWaitReporter = CreateRangedProgressReporter(order, 25, 54, "PitStop: ожидание");
-                            var (foundPath, where) = await WaitForFileInAnyAsync(places, fileName, timeout, ct, pitWaitReporter);
+                            var (foundPath, where) = await WaitForFileInAnyAsync(places, fileName, timeoutBudget.PitStop, ct, pitWaitReporter);
                             if (foundPath == null) throw new Exception("Таймаут PitStop.");
-                            await CapturePitStopReportAsync(order, pitCfg, fileName, timeout, ct);
+                            await CapturePitStopReportAsync(order, pitCfg, fileName, timeoutBudget.PitStopReport, ct);
                             if (where == "PitStop Error") throw new Exception("Ошибка PitStop (см. отчет).");
                             Notify(order, "🟡 PitStop OK", $"PitStop завершен ({where})");
                             ReportProgress(order, 55, "PitStop завершен");
@@ -138,9 +144,9 @@ namespace Replica
                             {
                                 (pitCfg.ProcessedSuccess, "PitStop Success"),
                                 (pitCfg.ProcessedError,   "PitStop Error")
-                            }, fileName, timeout, ct, pitWaitReporter);
+                            }, fileName, timeoutBudget.PitStop, ct, pitWaitReporter);
                             if (okFile == null) throw new Exception("Таймаут PitStop.");
-                            await CapturePitStopReportAsync(order, pitCfg, fileName, timeout, ct);
+                            await CapturePitStopReportAsync(order, pitCfg, fileName, timeoutBudget.PitStopReport, ct);
                             if (where == "PitStop Error") throw new Exception("Ошибка PitStop (см. отчет).");
                             string newName = $"{Path.GetFileNameWithoutExtension(fileName)}_pitstop{Path.GetExtension(fileName)}";
                             order.PreparedPath = CopyIntoStage(order, 2, okFile, newName, tempRoot);
@@ -181,7 +187,7 @@ namespace Replica
                     try
                     {
                         var imposingWaitReporter = CreateRangedProgressReporter(order, 72, 89, "Imposing: ожидание");
-                        outFile = await WaitForFileAsync(impCfg.Out, fileName, timeout, ct, imposingWaitReporter);
+                        outFile = await WaitForFileAsync(impCfg.Out, fileName, timeoutBudget.Imposing, ct, imposingWaitReporter);
                         if (outFile == null) throw new Exception("Таймаут Imposing.");
 
                         CaptureQuiteImposingLog(order, impCfg, fileName);
@@ -239,7 +245,7 @@ namespace Replica
             }
         }
 
-        private async Task RunMultiOrderAsync(OrderData order, AppSettings settings, TimeSpan timeout, string tempRoot, HashSet<string>? selectedSet, CancellationToken ct)
+        private async Task RunMultiOrderAsync(OrderData order, AppSettings settings, WorkflowTimeoutBudget timeoutBudget, string tempRoot, HashSet<string>? selectedSet, CancellationToken ct)
         {
             var allItems = order.Items
                 .Where(x => x != null)
@@ -296,7 +302,7 @@ namespace Replica
                         item,
                         itemIndex,
                         settings,
-                        timeout,
+                        timeoutBudget,
                         tempRoot,
                         ct,
                         progressPercent => SetItemProgress(itemKey, progressPercent));
@@ -343,7 +349,7 @@ namespace Replica
             OrderFileItem item,
             int itemIndex,
             AppSettings settings,
-            TimeSpan timeout,
+            WorkflowTimeoutBudget timeoutBudget,
             string tempRoot,
             CancellationToken ct,
             Action<int>? progressReporter = null)
@@ -412,9 +418,9 @@ namespace Replica
                             (impCfg.Out,              "Imposing Out")
                         };
                         var pitWaitReporter = CreateItemProgressRangeReporter(20, 55);
-                        var (foundPath, where) = await WaitForFileInAnyAsync(places, fileName, timeout, ct, pitWaitReporter);
+                        var (foundPath, where) = await WaitForFileInAnyAsync(places, fileName, timeoutBudget.PitStop, ct, pitWaitReporter);
                         if (foundPath == null) throw new Exception("Таймаут PitStop.");
-                        await CapturePitStopReportAsync(order, pitCfg, fileName, timeout, ct);
+                        await CapturePitStopReportAsync(order, pitCfg, fileName, timeoutBudget.PitStopReport, ct);
                         if (where == "PitStop Error") throw new Exception("Ошибка PitStop (см. отчет).");
                     }
                     else
@@ -424,9 +430,9 @@ namespace Replica
                         {
                             (pitCfg.ProcessedSuccess, "PitStop Success"),
                             (pitCfg.ProcessedError,   "PitStop Error")
-                        }, fileName, timeout, ct, pitWaitReporter);
+                        }, fileName, timeoutBudget.PitStop, ct, pitWaitReporter);
                         if (okFile == null) throw new Exception("Таймаут PitStop.");
-                        await CapturePitStopReportAsync(order, pitCfg, fileName, timeout, ct);
+                        await CapturePitStopReportAsync(order, pitCfg, fileName, timeoutBudget.PitStopReport, ct);
                         if (where == "PitStop Error") throw new Exception("Ошибка PitStop (см. отчет).");
                         string newName = $"{Path.GetFileNameWithoutExtension(fileName)}_pitstop{Path.GetExtension(fileName)}";
                         item.PreparedPath = CopyIntoStage(order, 2, okFile, newName, tempRoot);
@@ -465,7 +471,7 @@ namespace Replica
                   try
                   {
                       var imposingWaitReporter = CreateItemProgressRangeReporter(72, 95);
-                      outFile = await WaitForFileAsync(impCfg.Out, fileName, timeout, ct, imposingWaitReporter);
+                      outFile = await WaitForFileAsync(impCfg.Out, fileName, timeoutBudget.Imposing, ct, imposingWaitReporter);
                       if (outFile == null) throw new Exception("Таймаут Imposing.");
 
                       CaptureQuiteImposingLog(order, impCfg, fileName);
@@ -1126,11 +1132,11 @@ namespace Replica
             }
         }
 
-        private async Task CapturePitStopReportAsync(OrderData order, ActionConfig pitCfg, string fileName, TimeSpan timeout, CancellationToken ct)
+        private async Task CapturePitStopReportAsync(OrderData order, ActionConfig pitCfg, string fileName, TimeSpan reportTimeout, CancellationToken ct)
         {
-            var reportTimeout = timeout > TimeSpan.FromMinutes(2)
-                ? TimeSpan.FromMinutes(2)
-                : timeout;
+            var effectiveReportTimeout = reportTimeout <= TimeSpan.Zero
+                ? TimeSpan.FromSeconds(20)
+                : reportTimeout;
 
             var reportFileName = $"{Path.GetFileNameWithoutExtension(fileName)}_log.pdf";
             var places = new (string folder, string label)[]
@@ -1139,7 +1145,7 @@ namespace Replica
                 (pitCfg.ReportError, "PitStop Report Error")
             };
 
-            var (reportPath, where) = await WaitForFileInAnyAsync(places, reportFileName, reportTimeout, ct);
+            var (reportPath, where) = await WaitForFileInAnyAsync(places, reportFileName, effectiveReportTimeout, ct);
             if (reportPath == null)
             {
                 Logger.Warn($"Не найден отчёт PitStop: order={order.Id} | file={reportFileName}");

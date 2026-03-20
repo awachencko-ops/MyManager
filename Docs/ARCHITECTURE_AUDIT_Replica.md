@@ -35,6 +35,8 @@
 > Актуализация на 2026-03-20 (risk-burndown, срез 14): добавлен `DependencyCircuitBreaker` и dependency health-сигналы в `OrderProcessor` (PitStop/Imposing/Storage), операции переведены на dependency-guard (`circuit-open` + retry-after), в `MainForm` добавлена UI-индикация degraded/unavailable в `toolConnection` и server-header статусе.
 >
 > Актуализация на 2026-03-20 (risk-burndown, срез 15): внедрён `DependencyBulkheadPolicy` (load shedding per dependency) и readiness-проверки в `OrderProcessor` перед стартом workflow (storage/hotfolder availability для выбранных сценариев), запуск блокируется до восстановления критичных контуров.
+>
+> Актуализация на 2026-03-20 (risk-burndown, срез 16): введён `WorkflowTimeoutBudgetPolicy`; `OrderProcessor` переведён на stage-timeout budgets (PitStop/Imposing/report), добавлено логирование budget-параметров (`TIMEOUT-BUDGET`) и unit-тесты timeout-policy.
 
 ## Executive summary
 
@@ -101,13 +103,14 @@
 - В `OrderProcessor` добавлен retry/backoff policy (`FileOperationRetryPolicy`) для file-операций (copy/move/delete/create/read) с логированием попыток и exhausted-событий.
 - Добавлен circuit-breaker (`DependencyCircuitBreaker`) и dependency health-state для PitStop/Imposing/Storage с UI-индикацией degraded/unavailable.
 - Добавлен bulkhead/load shedding (`DependencyBulkheadPolicy`) и readiness-контур на старте workflow (проверка storage/hotfolder-директорий по активным сценариям до запуска обработки).
+- Добавлен stage-timeout budget policy (`WorkflowTimeoutBudgetPolicy`) для PitStop/Imposing/report шагов и telemetry-контур `TIMEOUT-BUDGET`.
 - В нескольких местах ошибки suppress-ятся (`catch { }`), что скрывает деградации.
 - Архитектура single-process: падение/фриз UI-компонента критично для всего потока выполнения.
 
 ### Вывод
 
 - Устойчивость к «дрожащей» инфраструктуре существенно улучшена: есть retry/backoff + circuit-breaker + bulkhead/load shedding + readiness-проверки зависимостей на старте.
-- До production-resilience остаются timeout-budget tuning per stage, event-driven orchestration и снижение single-process blast radius.
+- До production-resilience остаются adaptive timeout-tuning по окружениям, event-driven orchestration и снижение single-process blast radius.
 
 ---
 
@@ -151,7 +154,7 @@
 | История заказов (`history.json` / LAN PostgreSQL) | В FileSystem-режиме остаётся риск race; в LAN-режиме риск снижен через version-check | **Med** | Оставить FileSystem только как fallback; целевой режим — PostgreSQL + server-side command boundary. |
 | `SetOrderStatus` + `SaveHistory` | Клиентская неатомарность между UI-операцией и persistence | **Med/High** | Перенести статусные команды в API/worker с unit of work и server-side invariants. |
 | `_runTokensByOrder` (in-memory) | Переведён в runtime-session state; риск смещён в сторону UX-согласованности между клиентами | **Low/Med** | Сохранить server lock/state единственным источником истины и расширять server-driven refresh-сценарии. |
-| `OrderProcessor` file workflow | Retry/backoff + circuit-breaker + bulkhead/readiness внедрены; остаточный риск — polling-timeouts и single-process blast radius | **Low/Med** | Следующий шаг: timeout budget per stage, расширение server-side orchestration и queue boundary. |
+| `OrderProcessor` file workflow | Retry/backoff + circuit-breaker + bulkhead/readiness + stage-timeout budgets внедрены; остаточный риск — polling model и single-process blast radius | **Low/Med** | Следующий шаг: adaptive timeout-tuning + расширение server-side orchestration и queue boundary. |
 | Ожидание hotfolder | Circuit-breaker + bulkhead + readiness внедрены; остаточный риск — polling model и latency детекции недоступности | **Low** | Следующий шаг: переход к event/queue-сигналам и proactive dependency telemetry. |
 | Логирование (`Logger`) | В API введён базовый request correlation (`X-Correlation-Id`), но нет полного end-to-end structured telemetry | **Med/High** | Довести до единого structured logging/tracing контура (client+api+worker). |
 | Order status log file | best-effort append, mutable file (частично компенсировано `order_events`) | **Med** | Сделать `order_events` primary audit source, добавить retention/архив и SQL-аудит отчёты. |
@@ -185,6 +188,9 @@
 6. Итерация 6 (2026-03-20): закрыт срез bulkhead/load shedding + dependency readiness policy.
    - Что сделано: добавлен `DependencyBulkheadPolicy` и подключён в dependency boundary `OrderProcessor`; при перегрузе включается load shedding (`bulkhead-reject`) с деградацией health-state. Добавлены readiness-проверки storage/hotfolder-контуров по активным сценариям перед стартом workflow.
    - Эффект: снижен риск каскадного перегруза и «слепых» запусков при недоступных dependency; запуск блокируется до восстановления критичных директорий.
+7. Итерация 7 (2026-03-20): закрыт срез timeout budget per stage в `OrderProcessor`.
+   - Что сделано: добавлен `WorkflowTimeoutBudgetPolicy`, ожидания `WaitForFile*` и PitStop report переведены с общего timeout на stage budgets (PitStop/Imposing/report), добавлен `TIMEOUT-BUDGET` telemetry и unit-тесты policy.
+   - Эффект: уменьшён риск бесконтрольного зависания на одном этапе, улучшена предсказуемость SLA по этапам pipeline.
 
 ---
 
