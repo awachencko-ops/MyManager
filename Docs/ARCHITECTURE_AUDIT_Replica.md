@@ -49,6 +49,8 @@
 > Актуализация на 2026-03-20 (risk-burndown, срез 21): введён каркас гибридной структуры (`Features/*`, `Infrastructure/*`, `SharedKernel/*`, `Legacy/*`), выполнен первый feature-slice перенос `Orders` (`Features/Orders/UI|Application|Domain`) и storage adapters в `Infrastructure/Storage/Orders`; зафиксированы правила quarantine/exit для `Legacy`.
 >
 > Актуализация на 2026-03-20 (risk-burndown, срез 22): `OrderProcessor` модульно перенесён в `Infrastructure/Processing/Orders` и разложен на частичные файлы по зонам ответственности (`OrderProcessor`, `OrderProcessor.FileWorkflow`, `OrderProcessor.DependencyResilience`); остаточный direct `AppSettings.Load()` в рабочем UI-контуре устранён (перевод `ImposingManagerForm` на `ISettingsProvider`), подтверждено build + unit/ui-smoke + PostgreSQL integration regression.
+>
+> Актуализация на 2026-03-20 (risk-burndown, срез 23): добавлен `OrderRunCommandService`; run-start/run-execution orchestration (`PrepareStart + BeginRunSessions + Execute + CompleteRunSession`) переведена из `OrdersWorkspaceForm` в application-service boundary, форма оставлена как UI/presenter слой для статусов и диалогов; добавлены unit-тесты `OrderRunCommandServiceTests`, подтверждены build + full test + PostgreSQL integration regression.
 
 ## Executive summary
 
@@ -72,6 +74,7 @@
 - В клиенте добавлен `LanRunCommandCoordinator`: LAN `run/stop` orchestration вынесена из `MainForm` в отдельный сервис (форма теперь использует coordinator, а не прямую LAN gateway-логику).
 - Из `MainForm` выделен `OrderRunExecutionService`: конкурентное выполнение run-сессий и error/cancel lifecycle больше не оркестрируются внутри формы.
 - Из `MainForm` выделен `OrderRunWorkflowOrchestrationService`: run/stop preflight (plan, LAN approval, snapshot refresh, local cancel) теперь в сервисном use-case слое.
+- Из `MainForm` выделен `OrderRunCommandService`: единая orchestration-цепочка запуска (`prepare/begin/execute/complete`) переведена в application-service, UI управляет только user-feedback.
 - Из `MainForm` выделен `OrderDeletionWorkflowService`: batch-удаление orders/items (включая disk-cleanup, fallback на known paths и reindex item-ов) переведено в use-case сервис.
 - Выполнен rename UI-shell: рабочая форма теперь `OrdersWorkspaceForm`; после следующего шага декомпозиции код `Orders` разложен в feature-slice структуру `Features/Orders/UI|Application|Domain`, `MainForm` оставлен как compatibility shim.
 - Введён интерфейсный слой настроек (`ISettingsProvider`), а core runtime-flow (`Program`, `MainForm`, `OrderProcessor`, `ConfigService`) переведён с прямого static-IO на provider boundary.
@@ -228,6 +231,9 @@
 13. Итерация 13 (2026-03-20, адресная): закрыт остаточный settings static-IO в manager UI и улучшена модульность processing-контура.
    - Что сделано: `ImposingManagerForm` переведён на injected `ISettingsProvider` (без прямого `AppSettings.Load()`), `OrderProcessor` перенесён в `Infrastructure/Processing/Orders` и разложен на partial-файлы по зонам (`OrderProcessor`, `FileWorkflow`, `DependencyResilience`).
    - Эффект: снижена связность UI-форм с static-config IO, улучшена навигация/поддерживаемость processing-кода и подготовлена база для следующего выноса orchestration из формы.
+14. Итерация 14 (2026-03-20, адресная): закрыт следующий срез `OrdersWorkspaceForm` God Object по run-start/run-execution orchestration.
+   - Что сделано: добавлен `OrderRunCommandService`; цепочка `PrepareStartAsync -> BeginRunSessions -> ExecuteAsync -> CompleteRunSession` вынесена из формы в application-service слой, `RunSelectedOrderAsync` переключён на сервисный вызов, добавлены unit-тесты `OrderRunCommandServiceTests`.
+   - Эффект: дополнительно снижена связность формы с run-state runtime-деталями и повышена тестируемость критичного start/execute workflow без UI-зависимостей.
 
 ---
 

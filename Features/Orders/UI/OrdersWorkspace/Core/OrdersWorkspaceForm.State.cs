@@ -40,7 +40,7 @@ namespace Replica
         private readonly ISettingsProvider _settingsProvider;
         private readonly OrderRunStateService _orderRunStateService = new();
         private readonly OrderRunWorkflowOrchestrationService _orderRunWorkflowOrchestrationService;
-        private readonly OrderRunExecutionService _orderRunExecutionService = new();
+        private readonly OrderRunCommandService _orderRunCommandService;
         private readonly OrderDeletionWorkflowService _orderDeletionWorkflowService = new();
         private readonly OrderStatusTransitionService _orderStatusTransitionService = new();
         private readonly HashSet<string> _archivedFileNames = new(StringComparer.OrdinalIgnoreCase);

@@ -744,16 +744,18 @@ namespace Replica
                 ("use_lan_api", useLanApi ? "1" : "0"));
             Logger.Info("RUN | command-start");
 
-            var runPreparation = await _orderRunWorkflowOrchestrationService.PrepareStartAsync(
+            var startPhase = await _orderRunCommandService.PrepareAndBeginAsync(
                 selectedOrders,
                 _runTokensByOrder,
+                _runProgressByOrderInternalId,
                 useLanApi: useLanApi,
                 lanApiBaseUrl: _lanApiBaseUrl,
                 actor: ResolveLanApiActor(),
                 orderDisplayIdResolver: GetOrderDisplayId,
                 tryRefreshSnapshotFromStorage: TryRefreshRepositorySnapshotFromStorage);
 
-            if (runPreparation.IsFatal)
+            var runPreparation = startPhase.Preparation;
+            if (startPhase.Status == OrderRunStartPhaseStatus.Fatal)
             {
                 var fatalReason = string.IsNullOrWhiteSpace(runPreparation.FatalError)
                     ? "LAN API недоступен"
@@ -773,9 +775,11 @@ namespace Replica
             var runnableOrders = runPreparation.RunnableOrders;
             var serverSkipped = runPreparation.SkippedByServer;
 
-            if (runPlan.RunnableOrders.Count == 0)
+            if (startPhase.Status == OrderRunStartPhaseStatus.NoRunnable)
             {
-                var details = OrderRunStateService.BuildNoRunnableDetails(runPlan);
+                var details = string.IsNullOrWhiteSpace(startPhase.NoRunnableDetails)
+                    ? OrderRunStateService.BuildNoRunnableDetails(runPlan)
+                    : startPhase.NoRunnableDetails;
                 SetBottomStatus($"Нет заказов для запуска ({details})");
                 MessageBox.Show(
                     this,
@@ -786,40 +790,34 @@ namespace Replica
                 return;
             }
 
+            if (startPhase.Status == OrderRunStartPhaseStatus.ServerRejected)
+            {
+                Logger.Warn("RUN | command-rejected-by-server");
+                var skippedPreview = string.Join(Environment.NewLine, serverSkipped.Take(5));
+                if (serverSkipped.Count > 5)
+                    skippedPreview += $"{Environment.NewLine}... ещё: {serverSkipped.Count - 5}";
+
+                SetBottomStatus("Сервер не подтвердил запуск выбранных заказов");
+                MessageBox.Show(
+                    this,
+                    string.IsNullOrWhiteSpace(skippedPreview)
+                        ? "Сервер не подтвердил запуск выбранных заказов."
+                        : $"Сервер не подтвердил запуск выбранных заказов:{Environment.NewLine}{skippedPreview}",
+                    "Запуск",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+                return;
+            }
+
             if (_processor == null)
                 InitializeProcessor();
-
-            if (runPreparation.UsedLanApi)
-            {
-                if (runnableOrders.Count == 0)
-                {
-                    Logger.Warn("RUN | command-rejected-by-server");
-                    var skippedPreview = string.Join(Environment.NewLine, serverSkipped.Take(5));
-                    if (serverSkipped.Count > 5)
-                        skippedPreview += $"{Environment.NewLine}... ещё: {serverSkipped.Count - 5}";
-
-                    SetBottomStatus("Сервер не подтвердил запуск выбранных заказов");
-                    MessageBox.Show(
-                        this,
-                        string.IsNullOrWhiteSpace(skippedPreview)
-                            ? "Сервер не подтвердил запуск выбранных заказов."
-                            : $"Сервер не подтвердил запуск выбранных заказов:{Environment.NewLine}{skippedPreview}",
-                        "Запуск",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Information);
-                    return;
-                }
-            }
 
             if (runPreparation.SnapshotRefreshFailed)
             {
                 Logger.Warn("RUN | snapshot-refresh-failed | reason=run-start | save may conflict on next history write");
             }
 
-            var runSessions = _orderRunStateService.BeginRunSessions(
-                runnableOrders,
-                _runTokensByOrder,
-                _runProgressByOrderInternalId);
+            var runSessions = startPhase.RunSessions;
 
             foreach (var session in runSessions)
             {
@@ -872,12 +870,14 @@ namespace Replica
                         $"Часть заказов не запущена сервером:{Environment.NewLine}{skippedPreview}",
                         "Запуск",
                         MessageBoxButtons.OK,
-                        MessageBoxIcon.Information);
+                    MessageBoxIcon.Information);
                 }
             }
 
-            var runExecutionResult = await _orderRunExecutionService.ExecuteAsync(
+            var runExecutionResult = await _orderRunCommandService.ExecuteAsync(
                 runSessions,
+                _runTokensByOrder,
+                _runProgressByOrderInternalId,
                 runOrderAsync: (order, cancellationToken) => _processor!.RunAsync(order, cancellationToken, selectedItemIds: null),
                 onCancelled: order =>
                 {
@@ -899,12 +899,8 @@ namespace Replica
                         persistHistory: false,
                         rebuildGrid: false);
                 },
-                onCompleted: order =>
+                onCompleted: _ =>
                 {
-                    _orderRunStateService.CompleteRunSession(
-                        order,
-                        _runTokensByOrder,
-                        _runProgressByOrderInternalId);
                     UpdateTrayProgressIndicator();
                 });
 
