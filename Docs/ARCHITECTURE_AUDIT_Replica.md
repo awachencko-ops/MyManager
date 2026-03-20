@@ -31,6 +31,8 @@
 > Актуализация на 2026-03-20 (risk-burndown, срез 12): введён `ISettingsProvider` + `FileSettingsProvider`; runtime-path (`Program`/`MainForm`/`OrderProcessor`) переведён на provider-инъекцию, `ConfigService` отвязан от прямого `AppSettings.Load()` через `ConfigService.SettingsProvider`, добавлены unit-тесты provider-boundary.
 >
 > Актуализация на 2026-03-20 (risk-burndown, срез 13): в `OrderProcessor` внедрён `FileOperationRetryPolicy` (retry+backoff для copy/move/delete/create/read), file-операции переведены на policy boundary с retry-telemetry (`FILE-RETRY`), добавлены unit-тесты policy и обновлены UI smoke-тесты cleanup-сценариев.
+>
+> Актуализация на 2026-03-20 (risk-burndown, срез 14): добавлен `DependencyCircuitBreaker` и dependency health-сигналы в `OrderProcessor` (PitStop/Imposing/Storage), операции переведены на dependency-guard (`circuit-open` + retry-after), в `MainForm` добавлена UI-индикация degraded/unavailable в `toolConnection` и server-header статусе.
 
 ## Executive summary
 
@@ -55,6 +57,7 @@
 - Из `MainForm` выделен `OrderRunExecutionService`: конкурентное выполнение run-сессий и error/cancel lifecycle больше не оркестрируются внутри формы.
 - Из `MainForm` выделен `OrderDeletionWorkflowService`: batch-удаление orders/items (включая disk-cleanup, fallback на known paths и reindex item-ов) переведено в use-case сервис.
 - Введён интерфейсный слой настроек (`ISettingsProvider`), а core runtime-flow (`Program`, `MainForm`, `OrderProcessor`, `ConfigService`) переведён с прямого static-IO на provider boundary.
+- В `OrderProcessor` добавлены dependency health-сигналы и circuit-breaker (`DependencyCircuitBreaker`) для внешних file-зависимостей; `MainForm` получает сигналы и отражает degraded/unavailable статус в UI.
 - В `OrdersHistoryRepositoryCoordinator` добавлена двусторонняя sync-стратегия `history.json <-> PostgreSQL` (импорт file-only заказов + mirror LAN snapshot обратно в файл).
 - Persistence реализован через прямое чтение/запись JSON (`history.json`) из UI-слоя.
 - `ConfigService` и `AppSettings` — статические сервисы/конфиги с прямым file IO, без интерфейсов и DI.
@@ -94,13 +97,14 @@
 
 - Есть polling-ожидание файлов с timeout (`WaitForFileAsync`, `WaitForFileInAnyAsync`) и отмена по `CancellationToken`.
 - В `OrderProcessor` добавлен retry/backoff policy (`FileOperationRetryPolicy`) для file-операций (copy/move/delete/create/read) с логированием попыток и exhausted-событий.
+- Добавлен circuit-breaker (`DependencyCircuitBreaker`) и dependency health-state для PitStop/Imposing/Storage с UI-индикацией degraded/unavailable.
 - В нескольких местах ошибки suppress-ятся (`catch { }`), что скрывает деградации.
-- Нет circuit breaker / bulkhead / load shedding.
+- Bulkhead/load shedding пока не внедрены.
 - Архитектура single-process: падение/фриз UI-компонента критично для всего потока выполнения.
 
 ### Вывод
 
-- Устойчивость к «дрожащей» инфраструктуре улучшена за счёт retry/backoff на критичных file-операциях, но до production-resilience ещё нужны circuit-breaker/bulkhead и health-state внешних зависимостей.
+- Устойчивость к «дрожащей» инфраструктуре улучшена: есть retry/backoff + dependency circuit-breaker и health-state, но до production-resilience ещё нужны bulkhead/load shedding и формализованный dependency readiness-контур.
 
 ---
 
@@ -145,7 +149,7 @@
 | `SetOrderStatus` + `SaveHistory` | Клиентская неатомарность между UI-операцией и persistence | **Med/High** | Перенести статусные команды в API/worker с unit of work и server-side invariants. |
 | `_runTokensByOrder` (in-memory) | Переведён в runtime-session state; риск смещён в сторону UX-согласованности между клиентами | **Low/Med** | Сохранить server lock/state единственным источником истины и расширять server-driven refresh-сценарии. |
 | `OrderProcessor` file workflow | Retry/backoff внедрён в core file-операции; остаточный риск — отсутствие circuit breaker/bulkhead | **Med** | Следующий шаг: circuit-breaker + dependency health-state + timeout budget per stage. |
-| Ожидание hotfolder | Polling без circuit breaker | **Med** | Добавить circuit breaker + health state для внешних зависимостей (PitStop/Imposing/NAS). |
+| Ожидание hotfolder | Circuit-breaker и health-state внедрены; остаточный риск — polling model без bulkhead/load shedding | **Low/Med** | Следующий шаг: dependency readiness + bulkhead/load shedding policy для пиковых сценариев. |
 | Логирование (`Logger`) | В API введён базовый request correlation (`X-Correlation-Id`), но нет полного end-to-end structured telemetry | **Med/High** | Довести до единого structured logging/tracing контура (client+api+worker). |
 | Order status log file | best-effort append, mutable file (частично компенсировано `order_events`) | **Med** | Сделать `order_events` primary audit source, добавить retention/архив и SQL-аудит отчёты. |
 | Ошибки с `catch { }` | В критическом runtime-пути silent catches устранены; остаточный риск остаётся в legacy/UI-участках | **Low/Med** | Поддерживать policy: без silent catch в production-path; остаточные блоки вычищать по итерациям. |
@@ -172,8 +176,11 @@
 4. Итерация 4 (2026-03-20): закрыт срез resiliency в `OrderProcessor` (retry/backoff policy).
    - Что сделано: добавлен `FileOperationRetryPolicy`; file-операции `copy/move/delete/create/read` переведены на policy boundary, добавлен telemetry-контур `FILE-RETRY`, добавлены unit-тесты policy и обновлены UI smoke-тесты cleanup.
    - Эффект: снижен риск фейлов от кратковременных NAS/file-lock сбоев и улучшена диагностируемость file-workflow.
-5. На очереди (итерация 5): dependency health-state + circuit-breaker для hotfolder-интеграций.
-   - План следующего среза: добавить health-marker внешних контуров (PitStop/Imposing/NAS), предохранитель деградации и UI-индикацию readiness.
+5. Итерация 5 (2026-03-20): закрыт срез dependency health-state + circuit-breaker для hotfolder-интеграций.
+   - Что сделано: добавлен `DependencyCircuitBreaker`; операции в `OrderProcessor` обёрнуты dependency-guard (`circuit-open`, `retry-after`), введены сигналы `OnDependencyHealthChanged`, `MainForm` показывает degraded/unavailable состояние в tray и server-header.
+   - Эффект: снижена вероятность каскадных ошибок при недоступности внешних hotfolder-зависимостей, улучшена оперативная диагностика через UI-индикаторы.
+6. На очереди (итерация 6): bulkhead/load shedding + dependency readiness policy.
+   - План следующего среза: добавить ограничение параллелизма по dependency и явный readiness-state для блокировки запуска до восстановления критичных контуров.
 
 ---
 

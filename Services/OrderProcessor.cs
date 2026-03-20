@@ -15,13 +15,21 @@ namespace Replica
         public event Action<string>? OnLog;
         public event Action<string, int, string>? OnProgressChanged;
         public event Action<string, string>? OnCapturedOrderLog;
+        public event Action<DependencyHealthSignal>? OnDependencyHealthChanged;
 
         private readonly string _rootPath;
         private readonly ISettingsProvider _settingsProvider;
         private readonly FileOperationRetryPolicy _fileRetryPolicy;
+        private readonly Dictionary<string, DependencyCircuitBreaker> _dependencyCircuitBreakers = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, DependencyHealthLevel> _dependencyHealthLevels = new(StringComparer.OrdinalIgnoreCase);
         private const string TempInFolder = "in";
         private const string TempPrepressFolder = "prepress";
         private const string TempPrintFolder = "print";
+        private const string DependencyPitStop = "pitstop";
+        private const string DependencyImposing = "imposing";
+        private const string DependencyStorage = "storage";
+        private const int DependencyFailureThreshold = 3;
+        private static readonly TimeSpan DependencyOpenDuration = TimeSpan.FromSeconds(30);
 
         public OrderProcessor(
             string rootPath,
@@ -92,7 +100,8 @@ namespace Replica
                     {
                         Notify(order, "🟡 PitStop: копирование", "Копирую в Hotfolder PitStop...");
                         Logger.Info($"Копирование: {order.PreparedPath} -> {targetIn}");
-                        _fileRetryPolicy.Execute(
+                        ExecuteWithDependencyRetry(
+                            dependencyName: DependencyPitStop,
                             operation: "copy-to-pitstop",
                             path: targetIn,
                             action: () => File.Copy(order.PreparedPath, targetIn, true));
@@ -153,7 +162,8 @@ namespace Replica
                     if (!File.Exists(targetIn))
                     {
                         Notify(order, "🟡 Imposing: старт", "Копирую в Hotfolder Imposing...");
-                        _fileRetryPolicy.Execute(
+                        ExecuteWithDependencyRetry(
+                            dependencyName: DependencyImposing,
                             operation: "copy-to-imposing",
                             path: targetIn,
                             action: () => File.Copy(order.PreparedPath, targetIn, true));
@@ -173,14 +183,14 @@ namespace Replica
                             order.PrintPath = CopyIntoStage(order, 3, outFile, printName, tempRoot);
                             order.PrintFileSizeBytes = TryGetFileLength(order.PrintPath);
                             order.PrintFileHash = TryGetFileHash(order.PrintPath);
-                            TryDeleteFileQuietly(outFile, $"imposing-single-order:{order.Id}");
+                            TryDeleteFileQuietly(outFile, $"imposing-single-order:{order.Id}", DependencyImposing);
                         }
                         else
                         {
                             order.PrintPath = CopyToGrandpa(outFile, printName, settings.GrandpaPath);
                             order.PrintFileSizeBytes = TryGetFileLength(order.PrintPath);
                             order.PrintFileHash = TryGetFileHash(order.PrintPath);
-                            TryDeleteFileQuietly(outFile, $"imposing-single-grandpa:{order.Id}");
+                            TryDeleteFileQuietly(outFile, $"imposing-single-grandpa:{order.Id}", DependencyImposing);
                         }
 
                         ReportProgress(order, 90, "Imposing завершен");
@@ -378,7 +388,8 @@ namespace Replica
                 try
                 {
                     targetIn = EnsureUniquePath(targetIn);
-                    _fileRetryPolicy.Execute(
+                    ExecuteWithDependencyRetry(
+                        dependencyName: DependencyPitStop,
                         operation: "copy-item-to-pitstop",
                         path: targetIn,
                         action: () => File.Copy(item.PreparedPath, targetIn, true));
@@ -435,7 +446,8 @@ namespace Replica
                   if (!File.Exists(targetIn))
                   {
                       targetIn = EnsureUniquePath(targetIn);
-                      _fileRetryPolicy.Execute(
+                      ExecuteWithDependencyRetry(
+                          dependencyName: DependencyImposing,
                           operation: "copy-item-to-imposing",
                           path: targetIn,
                           action: () => File.Copy(item.PreparedPath, targetIn, true));
@@ -456,14 +468,14 @@ namespace Replica
                           item.PrintPath = CopyIntoStage(order, 3, outFile, printName, tempRoot);
                           item.PrintFileSizeBytes = TryGetFileLength(item.PrintPath);
                           item.PrintFileHash = TryGetFileHash(item.PrintPath);
-                          TryDeleteFileQuietly(outFile, $"imposing-multi-item:{order.Id}:{item.ItemId}");
+                          TryDeleteFileQuietly(outFile, $"imposing-multi-item:{order.Id}:{item.ItemId}", DependencyImposing);
                       }
                       else
                       {
                           item.PrintPath = CopyToGrandpa(outFile, printName, settings.GrandpaPath);
                           item.PrintFileSizeBytes = TryGetFileLength(item.PrintPath);
                           item.PrintFileHash = TryGetFileHash(item.PrintPath);
-                          TryDeleteFileQuietly(outFile, $"imposing-multi-grandpa:{order.Id}:{item.ItemId}");
+                          TryDeleteFileQuietly(outFile, $"imposing-multi-grandpa:{order.Id}:{item.ItemId}", DependencyImposing);
                       }
                   }
                   finally
@@ -550,12 +562,14 @@ namespace Replica
                 _ => ""
             };
             string path = Path.Combine(rootPath, sub);
-            _fileRetryPolicy.Execute(
+            ExecuteWithDependencyRetry(
+                dependencyName: DependencyStorage,
                 operation: "ensure-stage-folder",
                 path: path,
                 action: () => Directory.CreateDirectory(path));
             string dest = Path.Combine(path, name);
-            _fileRetryPolicy.Execute(
+            ExecuteWithDependencyRetry(
+                dependencyName: DependencyStorage,
                 operation: "copy-into-stage",
                 path: dest,
                 action: () => File.Copy(src, dest, true));
@@ -600,7 +614,8 @@ namespace Replica
         private void MovePrintToGrandpa(OrderData order, string grandpaPath)
         {
             if (string.IsNullOrWhiteSpace(grandpaPath)) return;
-            _fileRetryPolicy.Execute(
+            ExecuteWithDependencyRetry(
+                dependencyName: DependencyStorage,
                 operation: "ensure-grandpa-folder",
                 path: grandpaPath,
                 action: () => Directory.CreateDirectory(grandpaPath));
@@ -612,19 +627,21 @@ namespace Replica
 
             if (!string.IsNullOrEmpty(order.SourcePath) && File.Exists(order.SourcePath))
             {
-                TryDeleteFileQuietly(order.SourcePath, $"cleanup-source-after-grandpa:{order.Id}");
+                TryDeleteFileQuietly(order.SourcePath, $"cleanup-source-after-grandpa:{order.Id}", DependencyStorage);
             }
         }
 
         private string CopyToGrandpa(string sourcePath, string fileName, string grandpaPath)
         {
             if (string.IsNullOrWhiteSpace(grandpaPath)) return sourcePath;
-            _fileRetryPolicy.Execute(
+            ExecuteWithDependencyRetry(
+                dependencyName: DependencyStorage,
                 operation: "ensure-grandpa-folder",
                 path: grandpaPath,
                 action: () => Directory.CreateDirectory(grandpaPath));
             string target = Path.Combine(grandpaPath, fileName);
-            _fileRetryPolicy.Execute(
+            ExecuteWithDependencyRetry(
+                dependencyName: DependencyStorage,
                 operation: "copy-to-grandpa",
                 path: target,
                 action: () => File.Copy(sourcePath, target, true));
@@ -668,7 +685,8 @@ namespace Replica
                 _ => ""
             };
             string path = Path.Combine(_rootPath, order.FolderName, sub);
-            _fileRetryPolicy.Execute(
+            ExecuteWithDependencyRetry(
+                dependencyName: DependencyStorage,
                 operation: "ensure-order-stage-folder",
                 path: path,
                 action: () => Directory.CreateDirectory(path));
@@ -690,9 +708,10 @@ namespace Replica
             if (string.IsNullOrEmpty(sourcePath) || !File.Exists(sourcePath)) return;
             if (File.Exists(targetPath))
             {
-                TryDeleteFileQuietly(targetPath, $"move-overwrite-target:{Path.GetFileName(targetPath)}");
+                TryDeleteFileQuietly(targetPath, $"move-overwrite-target:{Path.GetFileName(targetPath)}", DependencyStorage);
             }
-            _fileRetryPolicy.Execute(
+            ExecuteWithDependencyRetry(
+                dependencyName: DependencyStorage,
                 operation: "move-file-with-overwrite",
                 path: targetPath,
                 action: () => File.Move(sourcePath, targetPath));
@@ -703,7 +722,8 @@ namespace Replica
             foreach (var folder in new[] { TempInFolder, TempPrepressFolder, TempPrintFolder })
             {
                 var path = Path.Combine(tempRoot, folder);
-                _fileRetryPolicy.Execute(
+                ExecuteWithDependencyRetry(
+                    dependencyName: DependencyStorage,
                     operation: "ensure-temp-folder",
                     path: path,
                     action: () => Directory.CreateDirectory(path));
@@ -719,7 +739,8 @@ namespace Replica
                     string path = Path.Combine(tempRoot, folder);
                     if (Directory.Exists(path) && Directory.GetFiles(path).Length == 0)
                     {
-                        _fileRetryPolicy.Execute(
+                        ExecuteWithDependencyRetry(
+                            dependencyName: DependencyStorage,
                             operation: "delete-empty-temp-folder",
                             path: path,
                             action: () => Directory.Delete(path, true));
@@ -825,14 +846,102 @@ namespace Replica
             }
         }
 
-        private void TryDeleteFileQuietly(string? path, string context)
+        private void EnsureDependencyAvailable(string dependencyName, string operation, string path)
+        {
+            var breaker = GetDependencyCircuitBreaker(dependencyName);
+            var nowUtc = DateTime.UtcNow;
+            if (breaker.TryAllow(nowUtc, out var retryAfter))
+                return;
+
+            PublishDependencyHealth(
+                dependencyName,
+                breaker.GetLevel(nowUtc),
+                $"circuit-open | retry-after={(int)Math.Ceiling(retryAfter.TotalSeconds)}s | op={operation}");
+            throw new IOException($"Dependency '{dependencyName}' is temporarily unavailable for operation '{operation}'.");
+        }
+
+        private void MarkDependencySuccess(string dependencyName)
+        {
+            var nowUtc = DateTime.UtcNow;
+            var breaker = GetDependencyCircuitBreaker(dependencyName);
+            breaker.RecordSuccess();
+            PublishDependencyHealth(dependencyName, breaker.GetLevel(nowUtc), "ok");
+        }
+
+        private void MarkDependencyFailure(string dependencyName, string operation, string path, Exception ex)
+        {
+            var nowUtc = DateTime.UtcNow;
+            var breaker = GetDependencyCircuitBreaker(dependencyName);
+            breaker.RecordFailure(nowUtc);
+            PublishDependencyHealth(
+                dependencyName,
+                breaker.GetLevel(nowUtc),
+                $"failure | op={operation} | path={path} | {ex.Message}");
+        }
+
+        private void ExecuteWithDependencyRetry(string dependencyName, string operation, string path, Action action)
+        {
+            EnsureDependencyAvailable(dependencyName, operation, path);
+            try
+            {
+                _fileRetryPolicy.Execute(operation, path, action);
+                MarkDependencySuccess(dependencyName);
+            }
+            catch (Exception ex) when (FileOperationRetryPolicy.IsTransient(ex))
+            {
+                MarkDependencyFailure(dependencyName, operation, path, ex);
+                throw;
+            }
+        }
+
+        private T ExecuteWithDependencyRetry<T>(string dependencyName, string operation, string path, Func<T> action)
+        {
+            EnsureDependencyAvailable(dependencyName, operation, path);
+            try
+            {
+                var result = _fileRetryPolicy.Execute(operation, path, action);
+                MarkDependencySuccess(dependencyName);
+                return result;
+            }
+            catch (Exception ex) when (FileOperationRetryPolicy.IsTransient(ex))
+            {
+                MarkDependencyFailure(dependencyName, operation, path, ex);
+                throw;
+            }
+        }
+
+        private DependencyCircuitBreaker GetDependencyCircuitBreaker(string dependencyName)
+        {
+            if (_dependencyCircuitBreakers.TryGetValue(dependencyName, out var existing))
+                return existing;
+
+            var created = new DependencyCircuitBreaker(DependencyFailureThreshold, DependencyOpenDuration);
+            _dependencyCircuitBreakers[dependencyName] = created;
+            return created;
+        }
+
+        private void PublishDependencyHealth(string dependencyName, DependencyHealthLevel level, string reason)
+        {
+            if (_dependencyHealthLevels.TryGetValue(dependencyName, out var knownLevel)
+                && knownLevel == level)
+            {
+                return;
+            }
+
+            _dependencyHealthLevels[dependencyName] = level;
+            Logger.Info($"DEPENDENCY | name={dependencyName} | level={level} | {reason}");
+            OnDependencyHealthChanged?.Invoke(new DependencyHealthSignal(dependencyName, level, reason, DateTime.UtcNow));
+        }
+
+        private void TryDeleteFileQuietly(string? path, string context, string dependencyName)
         {
             if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
                 return;
 
             try
             {
-                _fileRetryPolicy.Execute(
+                ExecuteWithDependencyRetry(
+                    dependencyName: dependencyName,
                     operation: $"delete-file:{context}",
                     path: path,
                     action: () => File.Delete(path));
@@ -849,7 +958,8 @@ namespace Replica
             {
                 try
                 {
-                    var lines = _fileRetryPolicy.Execute(
+                    var lines = ExecuteWithDependencyRetry(
+                        dependencyName: DependencyImposing,
                         operation: "read-qhi-log",
                         path: logPath,
                         action: () => File.ReadAllLines(logPath));
@@ -947,7 +1057,7 @@ namespace Replica
 
             foreach (var path in paths.Where(path => !string.IsNullOrWhiteSpace(path)).Distinct(StringComparer.OrdinalIgnoreCase))
             {
-                TryDeleteFileQuietly(path, $"pitstop-cleanup:{fileName}");
+                TryDeleteFileQuietly(path, $"pitstop-cleanup:{fileName}", DependencyPitStop);
             }
         }
 
@@ -989,7 +1099,7 @@ namespace Replica
 
             foreach (var path in paths.Where(path => !string.IsNullOrWhiteSpace(path)).Distinct(StringComparer.OrdinalIgnoreCase))
             {
-                TryDeleteFileQuietly(path, $"imposing-cleanup:{fileName}");
+                TryDeleteFileQuietly(path, $"imposing-cleanup:{fileName}", DependencyImposing);
             }
         }
     }

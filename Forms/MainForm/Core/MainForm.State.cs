@@ -36,6 +36,7 @@ namespace Replica
         private readonly HashSet<string> _expandedOrderIds = new(StringComparer.Ordinal);
         private readonly Dictionary<string, CancellationTokenSource> _runTokensByOrder = new(StringComparer.Ordinal);
         private readonly Dictionary<string, int> _runProgressByOrderInternalId = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, DependencyHealthLevel> _dependencyHealthByName = new(StringComparer.OrdinalIgnoreCase);
         private readonly ISettingsProvider _settingsProvider;
         private readonly OrderRunStateService _orderRunStateService = new();
         private readonly OrderRunExecutionService _orderRunExecutionService = new();

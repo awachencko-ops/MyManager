@@ -360,11 +360,38 @@ namespace Replica
 
         private void UpdateServerHeaderConnectionState(bool isConnected)
         {
+            UpdateServerHeaderConnectionState(isConnected, DependencyHealthLevel.Healthy);
+        }
+
+        private void UpdateServerHeaderConnectionState(bool isConnected, DependencyHealthLevel dependencyHealthLevel)
+        {
+            var statusText = "автономно";
+            var statusColor = QueueHeaderOfflineIndicatorColor;
+
+            if (isConnected)
+            {
+                if (dependencyHealthLevel == DependencyHealthLevel.Unavailable)
+                {
+                    statusText = "hotfolder недоступен";
+                    statusColor = Color.Firebrick;
+                }
+                else if (dependencyHealthLevel == DependencyHealthLevel.Degraded)
+                {
+                    statusText = "подключен (деградация)";
+                    statusColor = Color.DarkOrange;
+                }
+                else
+                {
+                    statusText = "подключен";
+                    statusColor = QueueHeaderOnlineIndicatorColor;
+                }
+            }
+
             if (_serverHeaderStatusDot != null)
-                _serverHeaderStatusDot.BackColor = isConnected ? QueueHeaderOnlineIndicatorColor : QueueHeaderOfflineIndicatorColor;
+                _serverHeaderStatusDot.BackColor = statusColor;
 
             if (_serverHeaderStatusLabel != null)
-                _serverHeaderStatusLabel.Text = isConnected ? "подключен" : "автономно";
+                _serverHeaderStatusLabel.Text = statusText;
         }
 
         private void PopulateQueueTree()

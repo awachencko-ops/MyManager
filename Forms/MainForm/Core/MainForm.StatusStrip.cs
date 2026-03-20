@@ -140,14 +140,86 @@ namespace Replica
                 return;
 
             var isConnected = CanAccessPath(_ordersRootPath);
-            toolConnection.Text = isConnected ? "● Сервер: подключен" : "● Сервер: автономно";
-            toolConnection.ForeColor = isConnected ? Color.SeaGreen : Color.Firebrick;
+            var dependencyHealthLevel = GetWorstDependencyHealthLevel();
+            if (!isConnected)
+            {
+                toolConnection.Text = "● Сервер: автономно";
+                toolConnection.ForeColor = Color.Firebrick;
+            }
+            else if (dependencyHealthLevel == DependencyHealthLevel.Unavailable)
+            {
+                toolConnection.Text = "● Сервер: hotfolder недоступен";
+                toolConnection.ForeColor = Color.Firebrick;
+            }
+            else if (dependencyHealthLevel == DependencyHealthLevel.Degraded)
+            {
+                toolConnection.Text = "● Сервер: подключен (деградация)";
+                toolConnection.ForeColor = Color.DarkOrange;
+            }
+            else
+            {
+                toolConnection.Text = "● Сервер: подключен";
+                toolConnection.ForeColor = Color.SeaGreen;
+            }
 
             var connectionStatusText = isConnected
                 ? "Рабочая папка заказов доступна."
                 : "Рабочая папка заказов недоступна.";
-            toolConnection.ToolTipText = $"{connectionStatusText}\n{_usersDirectoryStatusText}";
-            UpdateServerHeaderConnectionState(isConnected);
+            var dependencyHealthSummary = BuildDependencyHealthSummary();
+            toolConnection.ToolTipText = string.IsNullOrWhiteSpace(dependencyHealthSummary)
+                ? $"{connectionStatusText}\n{_usersDirectoryStatusText}"
+                : $"{connectionStatusText}\n{dependencyHealthSummary}\n{_usersDirectoryStatusText}";
+            UpdateServerHeaderConnectionState(isConnected, dependencyHealthLevel);
+        }
+
+        private void ApplyProcessorDependencyHealthSignal(DependencyHealthSignal signal)
+        {
+            if (signal == null || string.IsNullOrWhiteSpace(signal.DependencyName))
+                return;
+
+            _dependencyHealthByName[signal.DependencyName] = signal.Level;
+            UpdateTrayConnectionIndicator();
+
+            if (signal.Level == DependencyHealthLevel.Unavailable)
+            {
+                SetBottomStatus($"Зависимость недоступна: {signal.DependencyName}");
+            }
+        }
+
+        private DependencyHealthLevel GetWorstDependencyHealthLevel()
+        {
+            if (_dependencyHealthByName.Count == 0)
+                return DependencyHealthLevel.Healthy;
+
+            var level = DependencyHealthLevel.Healthy;
+            foreach (var dependencyLevel in _dependencyHealthByName.Values)
+            {
+                if (dependencyLevel > level)
+                    level = dependencyLevel;
+            }
+
+            return level;
+        }
+
+        private string BuildDependencyHealthSummary()
+        {
+            if (_dependencyHealthByName.Count == 0)
+                return string.Empty;
+
+            var parts = new List<string>();
+            foreach (var dependency in _dependencyHealthByName.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                var levelText = dependency.Value switch
+                {
+                    DependencyHealthLevel.Unavailable => "недоступно",
+                    DependencyHealthLevel.Degraded => "деградация",
+                    _ => "ok"
+                };
+
+                parts.Add($"{dependency.Key}: {levelText}");
+            }
+
+            return "Hotfolder health: " + string.Join(", ", parts);
         }
 
         private void UpdateTrayDiskIndicator()

@@ -253,6 +253,7 @@ namespace Replica
 
         private void InitializeProcessor()
         {
+            _dependencyHealthByName.Clear();
             _processor = new OrderProcessor(_ordersRootPath, _settingsProvider);
             _processor.OnStatusChanged += (orderId, status, reason) =>
             {
@@ -284,6 +285,18 @@ namespace Replica
                 void Apply()
                 {
                     ApplyProcessorProgress(orderId, progressValue);
+                }
+
+                if (InvokeRequired)
+                    BeginInvoke((Action)Apply);
+                else
+                    Apply();
+            };
+            _processor.OnDependencyHealthChanged += signal =>
+            {
+                void Apply()
+                {
+                    ApplyProcessorDependencyHealthSignal(signal);
                 }
 
                 if (InvokeRequired)
