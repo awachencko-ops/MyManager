@@ -22,15 +22,35 @@ namespace Replica
     public partial class OrdersWorkspaceForm : Form
     {
         public OrdersWorkspaceForm()
-            : this(new FileSettingsProvider())
+            : this(new FileSettingsProvider(), OrdersWorkspaceCompositionRoot.CreateRuntimeServices())
         {
         }
 
         internal OrdersWorkspaceForm(ISettingsProvider settingsProvider)
+            : this(settingsProvider, OrdersWorkspaceCompositionRoot.CreateRuntimeServices())
+        {
+        }
+
+        internal OrdersWorkspaceForm(ISettingsProvider settingsProvider, OrdersWorkspaceRuntimeServices runtimeServices)
         {
             _settingsProvider = settingsProvider ?? throw new ArgumentNullException(nameof(settingsProvider));
-            var orderRunWorkflowOrchestrationService = new OrderRunWorkflowOrchestrationService(_orderRunStateService, _lanRunCommandCoordinator);
-            _orderRunCommandService = new OrderRunCommandService(orderRunWorkflowOrchestrationService, _orderRunStateService, new OrderRunExecutionService());
+            var services = runtimeServices ?? throw new ArgumentNullException(nameof(runtimeServices));
+            _lanRunCommandCoordinator = services.LanRunCommandCoordinator;
+            _ordersHistoryCoordinator = services.OrdersHistoryCoordinator;
+            _ordersHistoryMaintenanceService = services.OrdersHistoryMaintenanceService;
+            _orderFolderPathResolutionService = services.OrderFolderPathResolutionService;
+            _orderStorageVersionSyncService = services.OrderStorageVersionSyncService;
+            _orderRunStateService = services.OrderRunStateService;
+            _orderRunFeedbackService = services.OrderRunFeedbackService;
+            _orderRunCommandService = services.OrderRunCommandService;
+            _orderEditorMutationService = services.OrderEditorMutationService;
+            _orderItemMutationService = services.OrderItemMutationService;
+            _orderFileStageCommandService = services.OrderFileStageCommandService;
+            _orderFilePathMutationService = services.OrderFilePathMutationService;
+            _orderFileRenameRemoveCommandService = services.OrderFileRenameRemoveCommandService;
+            _orderDeleteCommandService = services.OrderDeleteCommandService;
+            _orderItemDeleteCommandService = services.OrderItemDeleteCommandService;
+            _orderStatusTransitionService = services.OrderStatusTransitionService;
             InitializeComponent();
             InitializeDockSidebar();
             InitializeStatusCellVisuals();

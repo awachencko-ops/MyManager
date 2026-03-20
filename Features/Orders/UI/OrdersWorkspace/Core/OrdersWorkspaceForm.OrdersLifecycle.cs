@@ -608,9 +608,7 @@ namespace Replica
             if (startPhase.Status == OrderRunStartPhaseStatus.ServerRejected)
             {
                 Logger.Warn("RUN | command-rejected-by-server");
-                var skippedPreview = string.Join(Environment.NewLine, serverSkipped.Take(5));
-                if (serverSkipped.Count > 5)
-                    skippedPreview += $"{Environment.NewLine}... ещё: {serverSkipped.Count - 5}";
+                var skippedPreview = _orderRunFeedbackService.BuildServerSkippedPreview(serverSkipped);
 
                 SetBottomStatus("Сервер не подтвердил запуск выбранных заказов");
                 MessageBox.Show(
@@ -664,25 +662,20 @@ namespace Replica
 
             if (runPlan.OrdersWithoutNumber.Count > 0 || runPlan.AlreadyRunningOrders.Count > 0 || serverSkipped.Count > 0)
             {
-                var skippedParts = new List<string>();
-                var localSkippedDetails = OrderRunStateService.BuildSkippedDetails(runPlan);
-                if (!string.IsNullOrWhiteSpace(localSkippedDetails))
-                    skippedParts.Add(localSkippedDetails);
-                if (serverSkipped.Count > 0)
-                    skippedParts.Add($"сервер отклонил: {serverSkipped.Count}");
-
-                var skippedDetails = string.Join(", ", skippedParts);
-                SetBottomStatus($"Часть заказов пропущена ({skippedDetails})");
+                var skippedDetails = _orderRunFeedbackService.BuildSkippedDetails(runPlan, serverSkipped);
+                SetBottomStatus(string.IsNullOrWhiteSpace(skippedDetails)
+                    ? "Часть заказов пропущена"
+                    : $"Часть заказов пропущена ({skippedDetails})");
 
                 if (serverSkipped.Count > 0)
                 {
-                    var skippedPreview = string.Join(Environment.NewLine, serverSkipped.Take(5));
-                    if (serverSkipped.Count > 5)
-                        skippedPreview += $"{Environment.NewLine}... ещё: {serverSkipped.Count - 5}";
+                    var skippedPreview = _orderRunFeedbackService.BuildServerSkippedPreview(serverSkipped);
 
                     MessageBox.Show(
                         this,
-                        $"Часть заказов не запущена сервером:{Environment.NewLine}{skippedPreview}",
+                        string.IsNullOrWhiteSpace(skippedPreview)
+                            ? "Часть заказов не запущена сервером."
+                            : $"Часть заказов не запущена сервером:{Environment.NewLine}{skippedPreview}",
                         "Запуск",
                         MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
@@ -725,14 +718,9 @@ namespace Replica
 
             if (runExecutionResult.Errors.Count > 0)
             {
-                var errors = runExecutionResult.Errors
-                    .Select(error => $"{GetOrderDisplayId(error.Order)}: {error.Message}")
-                    .ToArray();
-                var errorsPreview = string.Join(Environment.NewLine, errors.Take(5));
-                if (errors.Length > 5)
-                    errorsPreview += $"{Environment.NewLine}... ещё: {errors.Length - 5}";
+                var errorsPreview = _orderRunFeedbackService.BuildExecutionErrorsPreview(runExecutionResult.Errors, GetOrderDisplayId);
 
-                SetBottomStatus($"Ошибок запуска: {errors.Length}");
+                SetBottomStatus($"Ошибок запуска: {runExecutionResult.Errors.Count}");
                 MessageBox.Show(
                     this,
                     $"Некоторые заказы завершились с ошибкой:{Environment.NewLine}{errorsPreview}",
@@ -875,19 +863,7 @@ namespace Replica
                 return false;
             }
 
-            var reloadedByInternalId = reloadedOrders
-                .Where(order => order != null && !string.IsNullOrWhiteSpace(order.InternalId))
-                .GroupBy(order => order.InternalId, StringComparer.Ordinal)
-                .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
-
-            foreach (var localOrder in localOrders.Where(order => order != null && !string.IsNullOrWhiteSpace(order.InternalId)))
-            {
-                if (!reloadedByInternalId.TryGetValue(localOrder.InternalId, out var reloaded))
-                    continue;
-
-                localOrder.StorageVersion = reloaded.StorageVersion;
-            }
-
+            _orderStorageVersionSyncService.SyncLocalVersions(localOrders, reloadedOrders);
             return true;
         }
 
