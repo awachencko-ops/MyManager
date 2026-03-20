@@ -45,10 +45,10 @@ namespace Replica
                 if (TrySelectContextRow())
                     await RunSelectedOrderAsync();
             };
-            _gridMenu.Stop = () =>
+            _gridMenu.Stop = async () =>
             {
                 if (TrySelectContextRow())
-                    StopSelectedOrder();
+                    await StopSelectedOrderAsync();
             };
             _gridMenu.PickFile = (stage, fileType) => _ = PickFileFromContextAsync(stage);
             _gridMenu.RemoveFile = (stage) => RemoveFileFromContext(stage);

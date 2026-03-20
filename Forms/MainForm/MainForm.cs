@@ -79,7 +79,7 @@ namespace Replica
 
             if (e.ClickedItem == tsbStop)
             {
-                StopSelectedOrder();
+                await StopSelectedOrderAsync();
                 return;
             }
 
@@ -234,6 +234,7 @@ namespace Replica
             _jsonHistoryFile = settings.HistoryFilePath;
             _ordersStorageBackend = settings.OrdersStorageBackend;
             _lanPostgreSqlConnectionString = settings.LanPostgreSqlConnectionString;
+            _lanApiBaseUrl = settings.LanApiBaseUrl;
             _ordersHistoryCoordinator.Configure(_ordersStorageBackend, _lanPostgreSqlConnectionString, _jsonHistoryFile);
             _managerLogFilePath = settings.ManagerLogFilePath;
             _orderLogsFolderPath = settings.OrderLogsFolderPath;
@@ -566,6 +567,7 @@ namespace Replica
                 currentSettings.FontsFolderPath,
                 _ordersStorageBackend,
                 _lanPostgreSqlConnectionString,
+                _lanApiBaseUrl,
                 currentSettings.MaxParallelism,
                 useExtendedMode: currentSettings.UseExtendedMode);
 
@@ -587,6 +589,7 @@ namespace Replica
             _sharedPrintTilesCacheFolderPath = nextSharedCacheRootPath;
             _ordersStorageBackend = settingsForm.OrdersStorageBackend;
             _lanPostgreSqlConnectionString = settingsForm.LanPostgreSqlConnectionString;
+            _lanApiBaseUrl = settingsForm.LanApiBaseUrl;
 
             var settings = AppSettings.Load();
             settings.OrdersRootPath = _ordersRootPath;
@@ -602,6 +605,7 @@ namespace Replica
             settings.UseExtendedMode = settingsForm.UseExtendedMode;
             settings.OrdersStorageBackend = _ordersStorageBackend;
             settings.LanPostgreSqlConnectionString = _lanPostgreSqlConnectionString;
+            settings.LanApiBaseUrl = _lanApiBaseUrl;
             settings.Save();
             _ordersHistoryCoordinator.Configure(_ordersStorageBackend, _lanPostgreSqlConnectionString, _jsonHistoryFile);
 

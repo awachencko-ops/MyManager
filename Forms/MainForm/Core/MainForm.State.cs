@@ -27,6 +27,8 @@ namespace Replica
         private string _jsonHistoryFile = AppSettings.DefaultHistoryFilePath;
         private OrdersStorageMode _ordersStorageBackend = OrdersStorageMode.FileSystem;
         private string _lanPostgreSqlConnectionString = AppSettings.DefaultLanPostgreSqlConnectionString;
+        private string _lanApiBaseUrl = AppSettings.DefaultLanApiBaseUrl;
+        private readonly LanRunCommandCoordinator _lanRunCommandCoordinator = new(new LanOrderRunApiGateway());
         private readonly OrdersHistoryRepositoryCoordinator _ordersHistoryCoordinator = new();
         private string _managerLogFilePath = AppSettings.DefaultManagerLogFilePath;
         private string _orderLogsFolderPath = AppSettings.DefaultOrderLogsFolderPath;

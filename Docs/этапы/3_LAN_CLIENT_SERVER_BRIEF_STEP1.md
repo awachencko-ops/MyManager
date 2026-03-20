@@ -38,7 +38,7 @@
    - конфликт активного запуска возвращается как `409 Conflict` (`run already active`).
 8. `/health` возвращает фактический store/mode.
 
-### 3.2 Снижение God Object в MainForm (третий срез)
+### 3.2 Снижение God Object в MainForm (четвертый срез)
 
 1. Вынесен `OrdersHistoryRepositoryCoordinator`:
    - инициализация repository;
@@ -52,15 +52,25 @@
    - нормализация `source/reason`;
    - атомарное применение status-transition к `OrderData`.
 4. `MainForm` переведён на сервисные операции для history/run-state/status-transition.
+5. Добавлен `LanOrderRunApiGateway` и URL-настройка `LAN API base URL`:
+   - в режиме `LanPostgreSql` кнопки `Run/Stop` сначала вызывают `POST /api/orders/{id}/run|stop`;
+   - локальный `_runTokensByOrder` оставлен как runtime-state активной сессии обработки;
+   - после server-command выполняется snapshot-refresh (`TryLoadAll`) для предотвращения false `concurrency conflict` в следующем `SaveHistory`.
+6. Добавлен `LanRunCommandCoordinator`:
+   - `MainForm` больше не оркестрирует LAN `run/stop` напрямую через gateway;
+   - orchestration вынесена в отдельный сервисный слой (`LanRunCommandCoordinator` + `ILanOrderRunApiGateway`);
+   - добавлены unit-тесты coordinator на ветки success/conflict/fatal и stop-flow.
 
 ## 4. Техническая верификация (2026-03-20)
 
 1. `dotnet build Replica.sln` -> PASS (`0 warnings`, `0 errors`).
-2. `dotnet test Replica.sln` -> PASS (`52/52`).
-3. `REPLICA_RUN_PG_INTEGRATION=1 dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj` -> PASS (`27/27`).
+2. `dotnet test Replica.sln` -> PASS (`60/60`).
+3. `REPLICA_RUN_PG_INTEGRATION=1 dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj` -> PASS (`35/35`).
 4. Расширен PostgreSQL integration pack:
    - `PostgreSqlIntegration_EfCoreStore_RunStopLifecycle_PersistsLockAndEvents`;
    - `PostgreSqlIntegration_EfCoreStore_RunStop_RejectsVersionMismatch`.
+   - `LanOrderRunApiGatewayTests` (client-side HTTP `run/stop`).
+   - `LanRunCommandCoordinatorTests` (client-side coordinator behavior).
 5. Smoke API:
    - `GET /health` -> `200`, `store=EfCoreLanOrderStore`, `mode=PostgreSql`;
    - `GET /api/users` -> `200`;
@@ -68,11 +78,11 @@
 
 ## 5. Что остаётся в Step 2 этапа 3
 
-1. Довести client cutover на новые `run/stop` endpoints (убрать локальный `_runTokensByOrder` как источник истины для LAN-режима).
-2. Вынести клиентский HTTP gateway и уменьшить прямой repository-доступ из UI.
+1. Завершить полный client cutover: убрать локальный `_runTokensByOrder` как источник истины в LAN-режиме и оставить его только как UI/runtime-session state.
+2. Продолжить вынос application-логики из UI: следующий кандидат — сервисный use-case слой поверх order workflow.
 3. Ввести authN/authZ boundary и обязательную actor validation.
 4. Добавить structured logging + correlation id.
-5. Продолжить декомпозицию `MainForm`: выделить application service для order workflow (use-case слой поверх UI).
+5. Продолжить декомпозицию `MainForm`: выделить отдельные orchestration-сервисы для file/workflow операций (следом за history/run/status/LAN-run).
 
 ## 6. DoD этапа 3 (без изменений)
 

@@ -13,12 +13,16 @@
 > Актуализация на 2026-03-20 (этап 3, Step 2 progress, срез 3): добавлен `OrderStatusTransitionService`, а `SetOrderStatus` переведён на сервисное применение status-transition policy (нормализация source/reason, единое условие no-op).
 >
 > Актуализация на 2026-03-20 (этап 3, Step 2 progress, срез 4): добавлены server-side `run/stop` endpoints (`POST /api/orders/{id}/run|stop`) и централизованный lock-state (`order_run_locks`) в `EfCoreLanOrderStore`; подтверждено PostgreSQL integration-тестами (lifecycle lock/events + version mismatch).
+>
+> Актуализация на 2026-03-20 (этап 3, Step 2 progress, срез 5): в клиенте добавлен `LanOrderRunApiGateway`; в режиме `LanPostgreSql` команды `Run/Stop` идут через API boundary (`/api/orders/{id}/run|stop`) с локальным snapshot-refresh перед следующим `SaveHistory`.
+>
+> Актуализация на 2026-03-20 (этап 3, Step 2 progress, срез 6): добавлен `LanRunCommandCoordinator` и интерфейсный контракт `ILanOrderRunApiGateway`; orchestration LAN `run/stop` вынесена из `MainForm` в сервисный слой, покрыта unit-тестами coordinator (`success/conflict/fatal/stop`).
 
 ## Executive summary
 
 - Текущая реализация **не готова** к роли транзакционно-безопасной платформы на сотни пользователей.
 - Главные причины: API/worker-контур пока не доведён до production-boundary (authN/authZ, idempotency, full client cutover и observability всё ещё неполные), UI-центричная оркестрация остаётся значимой.
-- В коде уже закрыт значимый кусок миграции: введён `IOrdersRepository`, реализован LAN PostgreSQL backend с optimistic concurrency (`StorageVersion` + conflict guard), добавлен `order_events` и one-time bootstrap marker в `storage_meta`; на этапе 3 добавлены API skeleton, EF Core storage слой, server-side `run/stop` lock-координация (`order_run_locks`) и выносы из `MainForm` в сервисы (`OrdersHistoryRepositoryCoordinator`, `OrderRunStateService`, `OrderStatusTransitionService`).
+- В коде уже закрыт значимый кусок миграции: введён `IOrdersRepository`, реализован LAN PostgreSQL backend с optimistic concurrency (`StorageVersion` + conflict guard), добавлен `order_events` и one-time bootstrap marker в `storage_meta`; на этапе 3 добавлены API skeleton, EF Core storage слой, server-side `run/stop` lock-координация (`order_run_locks`), клиентские `LanOrderRunApiGateway` + `LanRunCommandCoordinator` и выносы из `MainForm` в сервисы (`OrdersHistoryRepositoryCoordinator`, `OrderRunStateService`, `OrderStatusTransitionService`).
 
 ---
 
@@ -28,17 +32,19 @@
 
 - Точка входа поднимает сразу WinForms (`Application.Run(new MainForm())`), без явного composition root для бизнес-слоя/инфраструктуры.
 - `MainForm` агрегирует orchestration, хранение истории, статус-машину, UI-binding, файловые операции и запуск процессора; состояние формы содержит десятки полей и коллекций.
-- Добавлен API-каркас (`Replica.Api`) и shared-контракты (`Replica.Shared`), но клиент пока не переведён на API gateway.
+- Добавлен API-каркас (`Replica.Api`) и shared-контракты (`Replica.Shared`); клиент уже частично переведён на API gateway (`run/stop`), но полный cutover всех write-flow ещё не завершён.
 - Из `MainForm` выделен `OrdersHistoryRepositoryCoordinator` (инициализация repository, bootstrap/fallback/event append), что уменьшило размер и связность части persistence-логики.
 - Из `MainForm` выделен `OrderRunStateService` (run-state lifecycle и фильтрация runnable/skipped заказов), что уменьшило связность части run/stop orchestration.
 - Из `MainForm` выделен `OrderStatusTransitionService` (policy status-transition и нормализация reason/source), что уменьшило связность статусной логики.
+- В клиенте добавлен `LanOrderRunApiGateway`: `Run/Stop` в `LanPostgreSql` mode вызывают API endpoints вместо прямой локальной координации.
+- В клиенте добавлен `LanRunCommandCoordinator`: LAN `run/stop` orchestration вынесена из `MainForm` в отдельный сервис (форма теперь использует coordinator, а не прямую LAN gateway-логику).
 - Persistence реализован через прямое чтение/запись JSON (`history.json`) из UI-слоя.
 - `ConfigService` и `AppSettings` — статические сервисы/конфиги с прямым file IO, без интерфейсов и DI.
 
 ### Вывод
 
 - SoC нарушен: UI-layer контролирует use-case/persistence.
-- Налицо «God Object» в виде `MainForm` (+ partial-файлы как физическое разделение, но не архитектурное), хотя декомпозиция уже начата (persistence-coordinator вынесен).
+- Налицо «God Object» в виде `MainForm` (+ partial-файлы как физическое разделение, но не архитектурное), хотя декомпозиция уже заметно продвинута (вынесены persistence/run-state/status-transition/LAN run-coordinator).
 - Замена persistence/API слоя потребует массового рефакторинга из-за сильной связности и отсутствия портов/адаптеров.
 
 ---
@@ -52,7 +58,8 @@
 - В `PostgreSqlOrdersRepository` реализован optimistic concurrency: version-check на update/delete и внешний conflict-guard перед save.
 - Для первичного переноса истории добавлен one-time marker `history_json_bootstrap_v1` в `storage_meta`.
 - В API реализована централизованная lock-координация `run/stop` через `order_run_locks` (`EfCoreLanOrderStore`, endpoints `POST /api/orders/{id}/run|stop`).
-- В клиенте остаётся локальный run-state слой (`OrderRunStateService`), поэтому полный client cutover на server-command boundary ещё не завершён.
+- В клиенте `Run/Stop` для `LanPostgreSql` идут через API (`LanOrderRunApiGateway`) и координируются через `LanRunCommandCoordinator`; локальный `OrderRunStateService` оставлен как runtime-state для активной сессии обработки.
+- Для совместимости с текущим repository-слоем добавлен snapshot-refresh после server `run/stop`, чтобы исключить ложные `concurrency conflict` на следующем `SaveHistory`.
 - Идемпотентности API пока нет: серверный API существует как skeleton, но command boundary/idempotency key ещё не внедрены.
 
 ### Вывод
@@ -115,10 +122,10 @@
 
 | Компонент | Риск | Критичность | Рекомендация |
 |---|---|---|---|
-| `MainForm` orchestration | God Object, смешение UI + domain + persistence + file IO | **High** | Выделить use-case слой (`IOrderApplicationService`), UI оставить как presenter/view; внедрить DI/composition root. |
+| `MainForm` orchestration | God Object, смешение UI + domain + persistence + file IO (частично снижено сервисными выносами) | **High** | Продолжить декомпозицию: выделить use-case слой (`IOrderApplicationService`), UI оставить как presenter/view; внедрить DI/composition root. |
 | История заказов (`history.json` / LAN PostgreSQL) | В FileSystem-режиме остаётся риск race; в LAN-режиме риск снижен через version-check | **Med** | Оставить FileSystem только как fallback; целевой режим — PostgreSQL + server-side command boundary. |
 | `SetOrderStatus` + `SaveHistory` | Клиентская неатомарность между UI-операцией и persistence | **Med/High** | Перенести статусные команды в API/worker с unit of work и server-side invariants. |
-| `_runTokensByOrder` (in-memory) | Частично дублирует новую server-lock логику (`order_run_locks`) до полного cutover клиента | **Med/High** | Завершить cutover на API `run/stop`, оставить in-memory токены только как локальный UX-state, не как источник истины. |
+| `_runTokensByOrder` (in-memory) | В LAN уже не источник истины для `run/stop`, но всё ещё влияет на локальный lifecycle | **Med** | Довести модель: in-memory только runtime-session state, server lock/state — единственный источник истины. |
 | `OrderProcessor` file workflow | Нет retry/backoff на сетевые ошибки | **High** | Политики resilience (Polly): retry with jitter, timeout budget, fallback. |
 | Ожидание hotfolder | Polling без circuit breaker | **Med** | Добавить circuit breaker + health state для внешних зависимостей (PitStop/Imposing/NAS). |
 | Логирование (`Logger`) | Неструктурированные логи без correlation | **High** | Перейти на structured logging (Serilog + sink), обязательные поля: `order_id`, `actor`, `operation`, `trace_id`. |

@@ -754,6 +754,57 @@ namespace Replica
             if (_processor == null)
                 InitializeProcessor();
 
+            var lanRunBatchResult = await _lanRunCommandCoordinator.TryStartRunsAsync(
+                runnableOrders,
+                useLanApi: ShouldUseLanRunApi(),
+                lanApiBaseUrl: _lanApiBaseUrl,
+                actor: ResolveLanApiActor(),
+                orderDisplayIdResolver: GetOrderDisplayId);
+
+            if (lanRunBatchResult.IsFatal)
+            {
+                var fatalReason = string.IsNullOrWhiteSpace(lanRunBatchResult.FatalError)
+                    ? "LAN API недоступен"
+                    : lanRunBatchResult.FatalError;
+                SetBottomStatus($"Сервер недоступен: {fatalReason}");
+                MessageBox.Show(
+                    this,
+                    $"Не удалось запустить заказ через LAN API: {fatalReason}",
+                    "Запуск",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return;
+            }
+
+            runnableOrders = lanRunBatchResult.ApprovedOrders;
+            var serverSkipped = lanRunBatchResult.SkippedByServer;
+
+            if (lanRunBatchResult.UsedLanApi)
+            {
+                if (runnableOrders.Count == 0)
+                {
+                    var skippedPreview = string.Join(Environment.NewLine, serverSkipped.Take(5));
+                    if (serverSkipped.Count > 5)
+                        skippedPreview += $"{Environment.NewLine}... ещё: {serverSkipped.Count - 5}";
+
+                    SetBottomStatus("Сервер не подтвердил запуск выбранных заказов");
+                    MessageBox.Show(
+                        this,
+                        string.IsNullOrWhiteSpace(skippedPreview)
+                            ? "Сервер не подтвердил запуск выбранных заказов."
+                            : $"Сервер не подтвердил запуск выбранных заказов:{Environment.NewLine}{skippedPreview}",
+                        "Запуск",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+                    return;
+                }
+
+                if (!TryRefreshRepositorySnapshotFromStorage(runnableOrders, "run-start"))
+                {
+                    Logger.Warn("RUN | snapshot-refresh-failed | reason=run-start | save may conflict on next history write");
+                }
+            }
+
             var runSessions = _orderRunStateService.BeginRunSessions(
                 runnableOrders,
                 _runTokensByOrder,
@@ -787,10 +838,31 @@ namespace Replica
             else
                 SetBottomStatus($"Запущено заказов: {runnableOrders.Count}");
 
-            if (runPlan.OrdersWithoutNumber.Count > 0 || runPlan.AlreadyRunningOrders.Count > 0)
+            if (runPlan.OrdersWithoutNumber.Count > 0 || runPlan.AlreadyRunningOrders.Count > 0 || serverSkipped.Count > 0)
             {
-                var skippedDetails = OrderRunStateService.BuildSkippedDetails(runPlan);
+                var skippedParts = new List<string>();
+                var localSkippedDetails = OrderRunStateService.BuildSkippedDetails(runPlan);
+                if (!string.IsNullOrWhiteSpace(localSkippedDetails))
+                    skippedParts.Add(localSkippedDetails);
+                if (serverSkipped.Count > 0)
+                    skippedParts.Add($"сервер отклонил: {serverSkipped.Count}");
+
+                var skippedDetails = string.Join(", ", skippedParts);
                 SetBottomStatus($"Часть заказов пропущена ({skippedDetails})");
+
+                if (serverSkipped.Count > 0)
+                {
+                    var skippedPreview = string.Join(Environment.NewLine, serverSkipped.Take(5));
+                    if (serverSkipped.Count > 5)
+                        skippedPreview += $"{Environment.NewLine}... ещё: {serverSkipped.Count - 5}";
+
+                    MessageBox.Show(
+                        this,
+                        $"Часть заказов не запущена сервером:{Environment.NewLine}{skippedPreview}",
+                        "Запуск",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+                }
             }
 
             var runErrors = new ConcurrentQueue<string>();
@@ -858,7 +930,7 @@ namespace Replica
             }
         }
 
-        private void StopSelectedOrder()
+        private async Task StopSelectedOrderAsync()
         {
             var order = GetSelectedOrder();
             if (order == null)
@@ -877,10 +949,90 @@ namespace Replica
 
             cts.Cancel();
             UpdateTrayProgressIndicator();
+
+            var stopCommandResult = await _lanRunCommandCoordinator.TryStopRunAsync(
+                order,
+                useLanApi: ShouldUseLanRunApi(),
+                lanApiBaseUrl: _lanApiBaseUrl,
+                actor: ResolveLanApiActor());
+
+            if (stopCommandResult.UsedLanApi)
+            {
+                var stopResult = stopCommandResult.ApiResult!;
+                if (stopResult.IsSuccess)
+                {
+                    if (!TryRefreshRepositorySnapshotFromStorage(new[] { order }, "run-stop"))
+                    {
+                        Logger.Warn($"RUN | snapshot-refresh-failed | reason=run-stop | order={GetOrderDisplayId(order)}");
+                    }
+                }
+                else
+                {
+                    var stopReason = string.IsNullOrWhiteSpace(stopResult.Error)
+                        ? "сервер не подтвердил остановку"
+                        : stopResult.Error;
+
+                    if (stopResult.IsUnavailable)
+                    {
+                        Logger.Warn($"RUN | stop-server-unavailable | order={GetOrderDisplayId(order)} | {stopReason}");
+                        MessageBox.Show(
+                            this,
+                            $"Остановка на сервере не подтверждена ({stopReason}).{Environment.NewLine}Локальная остановка будет выполнена, но серверный lock может остаться активным.",
+                            "Остановка",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Warning);
+                    }
+                    else if (!stopResult.IsNotFound && !stopResult.IsBadRequest && !stopResult.IsConflict)
+                    {
+                        Logger.Warn($"RUN | stop-server-failed | order={GetOrderDisplayId(order)} | {stopReason}");
+                    }
+                }
+            }
+
             AppendOrderOperationLog(order, OrderOperationNames.Stop, "Остановлено пользователем");
             SetOrderStatus(order, WorkflowStatusNames.Cancelled, OrderStatusSourceNames.Ui, "Остановлено пользователем", persistHistory: true, rebuildGrid: true);
             UpdateActionButtonsState();
             SetBottomStatus($"Остановлен заказ {GetOrderDisplayId(order)}");
+        }
+
+        private bool ShouldUseLanRunApi()
+        {
+            return _ordersStorageBackend == OrdersStorageMode.LanPostgreSql
+                && !string.IsNullOrWhiteSpace(_lanApiBaseUrl);
+        }
+
+        private string ResolveLanApiActor()
+        {
+            return string.IsNullOrWhiteSpace(_currentUserName)
+                ? "replica-ui"
+                : _currentUserName.Trim();
+        }
+
+        private bool TryRefreshRepositorySnapshotFromStorage(IReadOnlyCollection<OrderData> localOrders, string reason)
+        {
+            if (_ordersStorageBackend != OrdersStorageMode.LanPostgreSql)
+                return true;
+
+            if (!TryLoadHistoryFromConfiguredRepository(out var reloadedOrders))
+            {
+                Logger.Warn($"HISTORY | snapshot-refresh-failed | reason={reason} | backend={_ordersHistoryCoordinator.BackendName}");
+                return false;
+            }
+
+            var reloadedByInternalId = reloadedOrders
+                .Where(order => order != null && !string.IsNullOrWhiteSpace(order.InternalId))
+                .GroupBy(order => order.InternalId, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+
+            foreach (var localOrder in localOrders.Where(order => order != null && !string.IsNullOrWhiteSpace(order.InternalId)))
+            {
+                if (!reloadedByInternalId.TryGetValue(localOrder.InternalId, out var reloaded))
+                    continue;
+
+                localOrder.StorageVersion = reloaded.StorageVersion;
+            }
+
+            return true;
         }
 
         private void RemoveSelectedOrder()

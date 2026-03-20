@@ -18,12 +18,13 @@
    - marker присутствует (`state=imported`).
 6. Regression pack закрыт:
    - на момент закрытия этапа 2: `42/42 PASS` (`17/17 Verify`, `25/25 UiSmoke`);
-   - повторная проверка на 2026-03-20: `52/52 PASS` (`27/27 Verify`, `25/25 UiSmoke`);
-   - PostgreSQL integration tests запускаются opt-in: `REPLICA_RUN_PG_INTEGRATION=1` (`27/27 PASS`).
+   - повторная проверка на 2026-03-20: `55/55 PASS` (`30/30 Verify`, `25/25 UiSmoke`);
+   - расширенная проверка после Step 2 этапа 3 (2026-03-20): `60/60 PASS` (`35/35 Verify`, `25/25 UiSmoke`);
+   - PostgreSQL integration tests запускаются opt-in: `REPLICA_RUN_PG_INTEGRATION=1` (`35/35 PASS`).
 
 ## 2. Что остается (вход в Stage 3)
 
-1. Вынести orchestration `run/stop` из in-memory клиента в server-side coordination.
+1. Завершить cutover `run/stop`: server-side coordination уже внедрена, нужно убрать зависимость от локального in-memory state как источника истины.
 2. Ввести API boundary с authN/authZ и идемпотентностью write-команд.
 3. Добавить structured logging + trace/correlation id.
 4. Закрыть операционные контуры Stage 3:

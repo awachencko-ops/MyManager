@@ -20,6 +20,7 @@ namespace Replica
         private readonly TextBox _txtFontsFolderPath = new TextBox();
         private readonly ComboBox _cmbOrdersStorageBackend = new ComboBox();
         private readonly TextBox _txtLanPostgreSqlConnectionString = new TextBox();
+        private readonly TextBox _txtLanApiBaseUrl = new TextBox();
         private readonly NumericUpDown _numMaxParallelism = new NumericUpDown();
         private readonly CheckBox _chkUseExtendedMode = new CheckBox();
 
@@ -38,6 +39,7 @@ namespace Replica
         public OrdersStorageMode OrdersStorageBackend
             => (_cmbOrdersStorageBackend.SelectedItem as OrdersStorageBackendOption)?.Mode ?? OrdersStorageMode.FileSystem;
         public string LanPostgreSqlConnectionString => _txtLanPostgreSqlConnectionString.Text.Trim();
+        public string LanApiBaseUrl => _txtLanApiBaseUrl.Text.Trim();
         public int MaxParallelism => (int)_numMaxParallelism.Value;
         public bool UseExtendedMode => _chkUseExtendedMode.Checked;
 
@@ -53,6 +55,7 @@ namespace Replica
             string fontsFolderPath,
             OrdersStorageMode ordersStorageBackend,
             string lanPostgreSqlConnectionString,
+            string lanApiBaseUrl,
             int maxParallelism,
             bool useExtendedMode = false)
         {
@@ -94,6 +97,7 @@ namespace Replica
                 fontsFolderPath,
                 ordersStorageBackend,
                 lanPostgreSqlConnectionString,
+                lanApiBaseUrl,
                 maxParallelism,
                 useExtendedMode));
             _tabs.TabPages.Add(CreateEmbeddedManagerTab("Диспетчер PitStop", _pitStopForm));
@@ -130,6 +134,14 @@ namespace Replica
                     return;
                 }
 
+                if (OrdersStorageBackend == OrdersStorageMode.LanPostgreSql
+                    && string.IsNullOrWhiteSpace(LanApiBaseUrl))
+                {
+                    MessageBox.Show(this, "Для режима LAN PostgreSQL укажите LAN API base URL.", "Проверка", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    _tabs.SelectedIndex = 0;
+                    return;
+                }
+
                 DialogResult = DialogResult.OK;
                 Close();
             };
@@ -161,6 +173,7 @@ namespace Replica
             string fontsFolderPath,
             OrdersStorageMode ordersStorageBackend,
             string lanPostgreSqlConnectionString,
+            string lanApiBaseUrl,
             int maxParallelism,
             bool useExtendedMode)
         {
@@ -171,14 +184,14 @@ namespace Replica
                 Dock = DockStyle.Top,
                 AutoSize = true,
                 ColumnCount = 3,
-                RowCount = 13,
+                RowCount = 14,
                 Padding = new Padding(18, 18, 18, 0)
             };
 
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 270));
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140));
-            for (int i = 0; i < 13; i++)
+            for (int i = 0; i < 14; i++)
                 panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
 
             AddRow(panel, 0, "Папка хранения заказов", _txtOrdersRoot, ordersRootPath, true);
@@ -192,9 +205,10 @@ namespace Replica
             AddRow(panel, 8, "Общий кэш превью (опц.)", _txtSharedThumbnailCachePath, sharedThumbnailCachePath, true, optional: true);
             AddStorageBackendRow(panel, 9, "Хранилище заказов", _cmbOrdersStorageBackend, ordersStorageBackend);
             AddRowTextOnly(panel, 10, "LAN PostgreSQL connection string", _txtLanPostgreSqlConnectionString, lanPostgreSqlConnectionString, optional: true);
+            AddRowTextOnly(panel, 11, "LAN API base URL", _txtLanApiBaseUrl, lanApiBaseUrl, optional: true);
 
-            AddNumericRow(panel, 11, "Параллельных файлов (мульти-заказ)", _numMaxParallelism, maxParallelism);
-            AddCheckboxRow(panel, 12, "Форма заказа", _chkUseExtendedMode, useExtendedMode, "Вкл. — расширенная форма; выкл. — простая.");
+            AddNumericRow(panel, 12, "Параллельных файлов (мульти-заказ)", _numMaxParallelism, maxParallelism);
+            AddCheckboxRow(panel, 13, "Форма заказа", _chkUseExtendedMode, useExtendedMode, "Вкл. — расширенная форма; выкл. — простая.");
 
             var hint = new Label
             {
@@ -202,7 +216,7 @@ namespace Replica
                 AutoSize = true,
                 Padding = new Padding(22, 8, 22, 8),
                 ForeColor = Color.DimGray,
-                Text = "Если \"Папка шрифтов PDF\" пустая, используется системная Windows Fonts. Папка логов по умолчанию: ./order-logs рядом с приложением. Для режима LAN PostgreSQL строка подключения обязательна. Путь шрифтов и общий кэш превью полностью применяются после перезапуска приложения."
+                Text = "Если \"Папка шрифтов PDF\" пустая, используется системная Windows Fonts. Папка логов по умолчанию: ./order-logs рядом с приложением. Для режима LAN PostgreSQL обязательны строка подключения и LAN API base URL. Путь шрифтов и общий кэш превью полностью применяются после перезапуска приложения."
             };
 
             page.Controls.Add(hint);

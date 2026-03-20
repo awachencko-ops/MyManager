@@ -43,6 +43,7 @@ namespace Replica
         public static string DefaultPitStopHotfoldersRootPath => Path.Combine(DefaultBaseFolderPath, "WARNING NOT DELETE", "PitStop");
         public static string DefaultImposingHotfoldersRootPath => Path.Combine(DefaultBaseFolderPath, "WARNING NOT DELETE", "HotImposing");
         public const string DefaultLanPostgreSqlConnectionString = "User ID=postgres;Password=1234;Host=localhost;Port=5432;Database=replica_db;";
+        public const string DefaultLanApiBaseUrl = "http://localhost:5000/";
         public static string DefaultThumbnailCacheFolderPath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Replica",
@@ -78,6 +79,7 @@ namespace Replica
         public bool AutoRenameOnDuplicate { get; set; } = true;
         public OrdersStorageMode OrdersStorageBackend { get; set; } = OrdersStorageMode.FileSystem;
         public string LanPostgreSqlConnectionString { get; set; } = DefaultLanPostgreSqlConnectionString;
+        public string LanApiBaseUrl { get; set; } = DefaultLanApiBaseUrl;
 
         public static string FileName => StoragePaths.ResolveFilePath("settings.json", "settings.json");
 
@@ -130,6 +132,15 @@ namespace Replica
             if (!string.Equals(LanPostgreSqlConnectionString, normalizedLanConnectionString, StringComparison.Ordinal))
             {
                 LanPostgreSqlConnectionString = normalizedLanConnectionString;
+                changed = true;
+            }
+
+            var normalizedLanApiBaseUrl = string.IsNullOrWhiteSpace(LanApiBaseUrl)
+                ? DefaultLanApiBaseUrl
+                : LanApiBaseUrl.Trim();
+            if (!string.Equals(LanApiBaseUrl, normalizedLanApiBaseUrl, StringComparison.Ordinal))
+            {
+                LanApiBaseUrl = normalizedLanApiBaseUrl;
                 changed = true;
             }
 

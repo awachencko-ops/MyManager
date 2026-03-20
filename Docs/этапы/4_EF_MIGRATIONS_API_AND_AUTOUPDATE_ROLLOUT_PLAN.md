@@ -23,6 +23,8 @@
 6. `ILanOrderStore` переведён на `EfCoreLanOrderStore` (PostgreSQL mode), in-memory оставлен как fallback.
 7. Реализованы endpoints `POST /api/orders/{id}/run` и `POST /api/orders/{id}/stop` с optimistic concurrency и `409 Conflict` при активном запуске.
 8. Добавлены PostgreSQL integration tests для `run/stop` (`EfCoreLanOrderStore` + `order_run_locks` + event journal).
+9. Клиентский `MainForm` в режиме `LanPostgreSql` отправляет `run/stop` через сервисный слой (`LanRunCommandCoordinator` -> `LanOrderRunApiGateway`).
+10. В настройках клиента добавлен параметр `LAN API base URL` (по умолчанию `http://localhost:5000/`).
 
 ## 2.1 Что внедряем
 
@@ -113,7 +115,8 @@
 4. При конкурентном конфликте API возвращает 409, клиент корректно реагирует.
 5. `order_events` наполняется при изменениях.
 6. `run/stop` проходит через `order_run_locks`, повторный `run` даёт `409 Conflict`.
-7. Автообновление подхватывает новую версию по `update.xml`.
+7. Кнопки `Run/Stop` в WinForms (`LanPostgreSql` mode) используют API boundary (`/api/orders/{id}/run|stop`).
+8. Автообновление подхватывает новую версию по `update.xml`.
 
 ## 7. Definition of Done этапа 4
 
