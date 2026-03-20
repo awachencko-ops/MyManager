@@ -132,34 +132,19 @@ namespace Replica
             if (ofd.ShowDialog(this) != DialogResult.OK)
                 return;
 
-            var wasMultiOrderBefore = OrderTopologyService.IsMultiOrder(order);
-            var normalization = OrderTopologyService.Normalize(order);
-            if (normalization.Changed && normalization.Issues.Count > 0)
-            {
-                foreach (var issue in normalization.Issues)
-                    Logger.Warn($"TOPOLOGY | order={GetOrderDisplayId(order)} | {issue}");
-            }
+            var addPreparation = _orderItemMutationService.PrepareAddItem(
+                order,
+                ofd.FileName,
+                NormalizeAction(order.PitStopAction),
+                NormalizeAction(order.ImposingAction));
 
-            order.Items ??= [];
-            var nextSequenceNo = order.Items
-                .Where(x => x != null)
-                .Select(x => x.SequenceNo)
-                .DefaultIfEmpty(-1L)
-                .Max() + 1L;
+            LogTopologyIssues(
+                order,
+                addPreparation.TopologyChangedBeforeAdd,
+                addPreparation.TopologyIssuesBeforeAdd);
 
-            var sourcePath = CleanPath(ofd.FileName);
-            var newItem = new OrderFileItem
-            {
-                ItemId = Guid.NewGuid().ToString("N"),
-                SequenceNo = nextSequenceNo,
-                ClientFileLabel = Path.GetFileNameWithoutExtension(sourcePath),
-                PitStopAction = NormalizeAction(order.PitStopAction),
-                ImposingAction = NormalizeAction(order.ImposingAction),
-                FileStatus = WorkflowStatusNames.Waiting,
-                UpdatedAt = DateTime.Now
-            };
-
-            order.Items.Add(newItem);
+            var sourcePath = addPreparation.SourcePath;
+            var newItem = addPreparation.Item;
             var addSucceeded = false;
             try
             {
@@ -167,7 +152,7 @@ namespace Replica
             }
             catch (Exception ex)
             {
-                order.Items.Remove(newItem);
+                _orderItemMutationService.RollbackPreparedItem(order, newItem);
                 SetBottomStatus($"Не удалось добавить файл: {ex.Message}");
                 MessageBox.Show(this, $"Не удалось добавить файл: {ex.Message}", "Добавление файла", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
@@ -175,12 +160,15 @@ namespace Replica
 
             if (!addSucceeded)
             {
-                order.Items.Remove(newItem);
+                _orderItemMutationService.RollbackPreparedItem(order, newItem);
                 SetBottomStatus("Файл не добавлен");
                 return;
             }
 
-            OrderTopologyService.Normalize(order);
+            var demotedToSingleOrderAfterAdd = NormalizeOrderTopologyAfterItemMutation(
+                order,
+                addPreparation.WasMultiOrderBeforeMutation,
+                $"add-item: {Path.GetFileName(sourcePath)}");
             var isMultiOrderNow = OrderTopologyService.IsMultiOrder(order);
             if (isMultiOrderNow)
                 _expandedOrderIds.Add(order.InternalId);
@@ -188,7 +176,7 @@ namespace Replica
             PersistGridChanges(OrderGridLogic.BuildOrderTag(order.InternalId));
 
             var addedFileName = Path.GetFileName(sourcePath);
-            if (!wasMultiOrderBefore && isMultiOrderNow)
+            if (!demotedToSingleOrderAfterAdd && !addPreparation.WasMultiOrderBeforeMutation && isMultiOrderNow)
             {
                 AppendOrderOperationLog(order, OrderOperationNames.Topology, $"single-order -> group-order | add-item: {addedFileName}");
                 SetBottomStatus("Файл добавлен. single-order преобразован в group-order");
@@ -406,16 +394,9 @@ namespace Replica
             if (order == null)
                 return false;
 
-            var normalization = OrderTopologyService.Normalize(order);
-            if (normalization.Changed && normalization.Issues.Count > 0)
-            {
-                foreach (var issue in normalization.Issues)
-                    Logger.Warn($"TOPOLOGY | order={GetOrderDisplayId(order)} | {issue}");
-            }
-
-            var isMultiOrderNow = OrderTopologyService.IsMultiOrder(order);
-            var demotedToSingleOrder = wasMultiOrderBeforeMutation && !isMultiOrderNow;
-            if (!demotedToSingleOrder)
+            var result = _orderItemMutationService.ApplyTopologyAfterItemMutation(order, wasMultiOrderBeforeMutation);
+            LogTopologyIssues(order, result.Normalization.Changed, result.Normalization.Issues);
+            if (!result.DemotedToSingleOrder)
                 return false;
 
             _expandedOrderIds.Remove(order.InternalId);
@@ -426,55 +407,23 @@ namespace Replica
             return true;
         }
 
-        private static bool ContainsOrderItem(OrderData order, string? itemId)
+        private bool ContainsOrderItem(OrderData order, string? itemId)
         {
-            if (order?.Items == null || string.IsNullOrWhiteSpace(itemId))
-                return false;
-
-            return order.Items.Any(x => x != null && string.Equals(x.ItemId, itemId, StringComparison.Ordinal));
+            return _orderItemMutationService.ContainsOrderItem(order, itemId);
         }
 
         private static bool RemoveItemIfEmpty(OrderData order, OrderFileItem item)
         {
-            if (order?.Items == null || item == null)
-                return false;
-
-            if (!IsItemEmpty(item))
-                return false;
-
-            var removed = order.Items.RemoveAll(x => x != null && string.Equals(x.ItemId, item.ItemId, StringComparison.Ordinal)) > 0;
-            if (!removed)
-                return false;
-
-            ReindexOrderItems(order);
-            return true;
+            return new OrderItemMutationService().RemoveItemIfEmpty(order, item);
         }
 
-        private static bool IsItemEmpty(OrderFileItem? item)
+        private void LogTopologyIssues(OrderData order, bool topologyChanged, IReadOnlyList<string> issues)
         {
-            if (item == null)
-                return true;
-
-            var hasStagePaths = !string.IsNullOrWhiteSpace(CleanPath(item.SourcePath))
-                                || !string.IsNullOrWhiteSpace(CleanPath(item.PreparedPath))
-                                || !string.IsNullOrWhiteSpace(CleanPath(item.PrintPath));
-            if (hasStagePaths)
-                return false;
-
-            return item.TechnicalFiles == null || item.TechnicalFiles.All(x => string.IsNullOrWhiteSpace(CleanPath(x)));
-        }
-
-        private static void ReindexOrderItems(OrderData order)
-        {
-            if (order?.Items == null || order.Items.Count == 0)
+            if (!topologyChanged || issues == null || issues.Count == 0)
                 return;
 
-            var orderedItems = order.Items
-                .Where(x => x != null)
-                .OrderBy(x => x.SequenceNo)
-                .ToList();
-            for (var index = 0; index < orderedItems.Count; index++)
-                orderedItems[index].SequenceNo = index;
+            foreach (var issue in issues)
+                Logger.Warn($"TOPOLOGY | order={GetOrderDisplayId(order)} | {issue}");
         }
 
         private void RenameFileForOrder(OrderData order, int stage)
