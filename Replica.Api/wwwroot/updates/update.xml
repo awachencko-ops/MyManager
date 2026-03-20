@@ -1,0 +1,7 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<item>
+  <version>0.0.0.0</version>
+  <url>http://localhost:5000/updates/ReplicaClient.zip</url>
+  <changelog>http://localhost:5000/updates/changelog.txt</changelog>
+  <mandatory>false</mandatory>
+</item>

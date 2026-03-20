@@ -14,14 +14,18 @@ namespace Replica
         {
             // To customize application configuration such as set high DPI settings or default font,
             // see https://aka.ms/applicationconfiguration.
-            ConfigurePdfSharpFonts();
+            var settings = AppSettings.Load();
+            ConfigurePdfSharpFonts(settings);
             ApplicationConfiguration.Initialize();
+            AutoUpdateBootstrapper.TryStart(settings);
             Application.Run(new MainForm());
         }
 
-        private static void ConfigurePdfSharpFonts()
+        private static void ConfigurePdfSharpFonts(AppSettings settings)
         {
-            var settings = AppSettings.Load();
+            if (settings == null)
+                settings = new AppSettings();
+
             GlobalFontSettings.FontResolver = new SimpleFontResolver(settings.FontsFolderPath);
         }
     }

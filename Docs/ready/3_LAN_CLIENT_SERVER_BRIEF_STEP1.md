@@ -60,8 +60,8 @@
 ## 4. Техническая верификация (2026-03-20)
 
 1. `dotnet build Replica.sln` -> PASS (`0 warnings`, `0 errors`).
-2. `dotnet test Replica.sln` -> PASS (`73/73`).
-3. `REPLICA_RUN_PG_INTEGRATION=1 dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj` -> PASS (`48/48`).
+2. `dotnet test Replica.sln` -> PASS (`77/77`).
+3. `REPLICA_RUN_PG_INTEGRATION=1 dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj` -> PASS (`52/52`).
 4. Расширен test pack:
    - `PostgreSqlIntegration_EfCoreStore_RunStopLifecycle_PersistsLockAndEvents`;
    - `PostgreSqlIntegration_EfCoreStore_RunStop_RejectsVersionMismatch`;
@@ -92,5 +92,7 @@
 ---
 
 Связь с этапами:
-1. Вход: `Docs/этапы/2_MULTI_ORDER_LOGIC_AND_POSTGRESQL_PLAN.md`
-2. Следующий шаг: `Docs/этапы/4_EF_MIGRATIONS_API_AND_AUTOUPDATE_ROLLOUT_PLAN.md`
+1. Вход: `Docs/ready/2_MULTI_ORDER_LOGIC_AND_POSTGRESQL_PLAN.md`
+2. Следующий шаг: `Docs/ready/4_EF_MIGRATIONS_API_AND_AUTOUPDATE_ROLLOUT_PLAN.md`
+
+

@@ -161,6 +161,9 @@
 9. Контрольная регрессия после закрытия Step 2 этапа 3 (LAN run-state cutover + actor validation + correlation middleware, 2026-03-20):
    - `dotnet test Replica.sln` -> `73/73 PASS` (`48/48 Verify`, `25/25 UiSmoke`);
    - `REPLICA_RUN_PG_INTEGRATION=1 dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj` -> `48/48 PASS`.
+10. Контрольная регрессия после закрытия этапа 4 (auto-update baseline, 2026-03-20):
+   - `dotnet test Replica.sln` -> `77/77 PASS` (`52/52 Verify`, `25/25 UiSmoke`);
+   - `REPLICA_RUN_PG_INTEGRATION=1 dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj` -> `52/52 PASS`.
 
 ## 6. Риски и контрмеры
 
@@ -186,9 +189,11 @@
 4. Актуальный повторный baseline (2026-03-20): `dotnet test Replica.sln` -> `55/55 PASS`.
 5. Дополнительный baseline после сервисного выноса LAN run/stop orchestration, run-execution use-case и двусторонней history-sync (2026-03-20): `dotnet test Replica.sln` -> `65/65 PASS`.
 6. Контрольный baseline после закрытия Step 2 этапа 3 (2026-03-20): `dotnet test Replica.sln` -> `73/73 PASS`.
+7. Контрольный baseline после закрытия этапа 4 (2026-03-20): `dotnet test Replica.sln` -> `77/77 PASS`.
 
 ## 8. Связь с этапами
 
 - Вход: `Docs/ready/1_MAINFORM_MIGRATION_COMPLEX_RESEARCH_AND_PLAN.md`
-- Выход: `3_LAN_CLIENT_SERVER_BRIEF_STEP1.md`
+- Выход: `Docs/ready/3_LAN_CLIENT_SERVER_BRIEF_STEP1.md`
 - Финальный аудит этапа 2: `Docs/ready/2_STAGE2_CONSOLIDATED_AUDIT_AND_GO_NO_GO.md`
+

@@ -66,8 +66,8 @@
 ## 6. Передача на следующий этап
 
 Дальнейшая работа выполняется в следующем порядке:
-1. `2_MULTI_ORDER_LOGIC_AND_POSTGRESQL_PLAN.md`
-2. `3_LAN_CLIENT_SERVER_BRIEF_STEP1.md`
+1. `Docs/ready/2_MULTI_ORDER_LOGIC_AND_POSTGRESQL_PLAN.md`
+2. `Docs/ready/3_LAN_CLIENT_SERVER_BRIEF_STEP1.md`
 
 ## 7. Финальная проверка полноты (2026-03-19)
 
@@ -91,3 +91,4 @@
 | Документация этапа 1 | ✅ | Актуализирована |
 
 Вывод: для этапа 1 все ключевые риски закрыты/переданы, проверка полноты пройдена.
+

@@ -6,7 +6,7 @@
 ## 0. Граница документа
 
 Этот файл фиксирует только этап 5: installer, упаковку runtime-зависимостей и первичную установку на новый ПК.
-Этап 4 (EF/API/auto-update) ведётся отдельно в `4_EF_MIGRATIONS_API_AND_AUTOUPDATE_ROLLOUT_PLAN.md`.
+Этап 4 (EF/API/auto-update) ведётся отдельно в `Docs/ready/4_EF_MIGRATIONS_API_AND_AUTOUPDATE_ROLLOUT_PLAN.md`.
 
 ## 1. Цель этапа
 
@@ -97,5 +97,6 @@
 ---
 
 Связь с этапами:
-- Вход: `4_EF_MIGRATIONS_API_AND_AUTOUPDATE_ROLLOUT_PLAN.md`
+- Вход: `Docs/ready/4_EF_MIGRATIONS_API_AND_AUTOUPDATE_ROLLOUT_PLAN.md`
 - Выход: полностью управляемый цикл "первичная установка + автообновления" для LAN.
+

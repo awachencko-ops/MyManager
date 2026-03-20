@@ -1,0 +1,8 @@
+﻿Replica LAN update feed
+
+Before release:
+1. Publish Replica client.
+2. Pack publish output to ReplicaClient.zip.
+3. Set <version> in update.xml to target release version.
+4. Set <url> and <changelog> to reachable LAN URLs.
+5. Copy update.xml + ReplicaClient.zip + changelog.txt to Replica.Api/wwwroot/updates.
