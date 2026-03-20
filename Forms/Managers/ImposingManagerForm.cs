@@ -12,11 +12,13 @@ namespace Replica
     {
         // 1. УДАЛЕНО: configFile больше не нужен здесь
         private BindingList<ImposingConfig> allActions;
+        private readonly ISettingsProvider _settingsProvider;
 
-        public ImposingManagerForm()
+        public ImposingManagerForm(ISettingsProvider? settingsProvider = null)
         {
             InitializeComponent();
             this.StartPosition = FormStartPosition.CenterParent;
+            _settingsProvider = settingsProvider ?? new FileSettingsProvider();
 
             allActions = new BindingList<ImposingConfig>(ConfigService.GetAllImposingConfigs());
             dataGridView1.DataSource = allActions;
@@ -220,7 +222,7 @@ namespace Replica
                 var categories = memoryDict.Element(ns + "ITEMS")?.Elements(ns + "DICT");
                 if (categories == null) return;
 
-                var settings = AppSettings.Load();
+                var settings = _settingsProvider.Load();
                 string rootPath = string.IsNullOrWhiteSpace(settings.ImposingHotfoldersRootPath)
                     ? AppSettings.DefaultImposingHotfoldersRootPath
                     : settings.ImposingHotfoldersRootPath;

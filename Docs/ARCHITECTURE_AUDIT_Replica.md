@@ -47,6 +47,8 @@
 > Актуализация на 2026-03-20 (risk-burndown, срез 20): выполнен rename и модульный перенос UI-ядра формы: entrypoint переведён на `OrdersWorkspaceForm`, код формы перемещён в `UI/Forms/OrdersWorkspace/*` (Core/FileOps/Filters/Views/Controls), сохранён переходный shim `MainForm` для обратной совместимости автотестов.
 >
 > Актуализация на 2026-03-20 (risk-burndown, срез 21): введён каркас гибридной структуры (`Features/*`, `Infrastructure/*`, `SharedKernel/*`, `Legacy/*`), выполнен первый feature-slice перенос `Orders` (`Features/Orders/UI|Application|Domain`) и storage adapters в `Infrastructure/Storage/Orders`; зафиксированы правила quarantine/exit для `Legacy`.
+>
+> Актуализация на 2026-03-20 (risk-burndown, срез 22): `OrderProcessor` модульно перенесён в `Infrastructure/Processing/Orders` и разложен на частичные файлы по зонам ответственности (`OrderProcessor`, `OrderProcessor.FileWorkflow`, `OrderProcessor.DependencyResilience`); остаточный direct `AppSettings.Load()` в рабочем UI-контуре устранён (перевод `ImposingManagerForm` на `ISettingsProvider`), подтверждено build + unit/ui-smoke + PostgreSQL integration regression.
 
 ## Executive summary
 
@@ -73,6 +75,8 @@
 - Из `MainForm` выделен `OrderDeletionWorkflowService`: batch-удаление orders/items (включая disk-cleanup, fallback на known paths и reindex item-ов) переведено в use-case сервис.
 - Выполнен rename UI-shell: рабочая форма теперь `OrdersWorkspaceForm`; после следующего шага декомпозиции код `Orders` разложен в feature-slice структуру `Features/Orders/UI|Application|Domain`, `MainForm` оставлен как compatibility shim.
 - Введён интерфейсный слой настроек (`ISettingsProvider`), а core runtime-flow (`Program`, `MainForm`, `OrderProcessor`, `ConfigService`) переведён с прямого static-IO на provider boundary.
+- Остаточный direct `AppSettings.Load()` в manager-форме (`ImposingManagerForm`) убран; рабочий UI-контур использует provider boundary.
+- `OrderProcessor` вынесен в модуль `Infrastructure/Processing/Orders` и разложен на partial-срезы file-workflow/resilience для поэтапной декомпозиции.
 - В `OrderProcessor` добавлены dependency health-сигналы и circuit-breaker (`DependencyCircuitBreaker`) для внешних file-зависимостей; `MainForm` получает сигналы и отражает degraded/unavailable статус в UI.
 - В `OrdersHistoryRepositoryCoordinator` добавлена двусторонняя sync-стратегия `history.json <-> PostgreSQL` (импорт file-only заказов + mirror LAN snapshot обратно в файл).
 - Persistence реализован через прямое чтение/запись JSON (`history.json`) из UI-слоя.
@@ -172,7 +176,7 @@
 | Логирование (`Logger`) | Client structured scopes + correlation и API request-correlation внедрены; остаточный риск — нет unified tracing/metrics и централизованных dashboard/query стандартов | **Med** | Следующий шаг: единый structured logging schema + tracing/metrics контур (client+api+worker). |
 | Order status log file | best-effort append, mutable file (частично компенсировано `order_events`) | **Med** | Сделать `order_events` primary audit source, добавить retention/архив и SQL-аудит отчёты. |
 | Ошибки с `catch { }` | В критическом runtime-пути silent catches устранены; остаточный риск остаётся в legacy/UI-участках | **Low/Med** | Поддерживать policy: без silent catch в production-path; остаточные блоки вычищать по итерациям. |
-| ConfigService/AppSettings static IO | Сильная связность с файловой системой частично снижена (`ISettingsProvider` внедрён в runtime-path); остаток в legacy/UI-экранах | **Low/Med** | Довести до полного покрытия provider/repository boundary на всех формах и убрать остаточные direct `AppSettings.Load()`. |
+| ConfigService/AppSettings static IO | Сильная связность с файловой системой существенно снижена (`ISettingsProvider` внедрён в runtime-path и manager-forms); остаток в legacy/artifacts | **Low** | Поддерживать provider-boundary как единый путь и постепенно чистить legacy/direct-load участки при касании. |
 | API идемпотентность write-команд | Для `run/stop` риск закрыт; остаток — `create/update/items/reorder` без дедупликации | **Med** | Расширить `Idempotency-Key` + dedupe-store на все mutating endpoints. |
 | Отсутствие полного authN/authZ контура | Базовая actor validation write-path уже есть, но role/claim policy и полноценная authN не внедрены | **Med/High** | Ввести API authN/authZ (JWT/SSO + role/claim-based authorization). |
 | Валидация входных данных | Локальная и фрагментарная | **Med** | Централизовать validation на command DTO/domain rules, добавить schema/contract validation. |
@@ -221,6 +225,9 @@
 12. Итерация 12 (2026-03-20, адресная): закрыт первый шаг hybrid-layout migration.
    - Что сделано: созданы и задействованы каталоги `Features`, `Infrastructure`, `SharedKernel`, `Legacy`; выполнен перенос `Orders` UI/application/domain кода в `Features/Orders/*`, а `FileSystem/PostgreSql` репозиторных адаптеров — в `Infrastructure/Storage/Orders`; добавлены правила `Legacy` quarantine/exit.
    - Эффект: повышена эргономика разработки по модульным срезам, упорядочены границы слоёв и подготовлен безопасный маршрут к полной ликвидации legacy-контуров.
+13. Итерация 13 (2026-03-20, адресная): закрыт остаточный settings static-IO в manager UI и улучшена модульность processing-контура.
+   - Что сделано: `ImposingManagerForm` переведён на injected `ISettingsProvider` (без прямого `AppSettings.Load()`), `OrderProcessor` перенесён в `Infrastructure/Processing/Orders` и разложен на partial-файлы по зонам (`OrderProcessor`, `FileWorkflow`, `DependencyResilience`).
+   - Эффект: снижена связность UI-форм с static-config IO, улучшена навигация/поддерживаемость processing-кода и подготовлена база для следующего выноса orchestration из формы.
 
 ---
 
