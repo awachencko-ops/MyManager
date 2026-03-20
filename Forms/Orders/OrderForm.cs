@@ -143,7 +143,14 @@ namespace Replica
             // Создаем папку, если её нет, чтобы InitialDirectory сработал
             if (!Directory.Exists(orderFolder))
             {
-                try { Directory.CreateDirectory(orderFolder); } catch { }
+                try
+                {
+                    Directory.CreateDirectory(orderFolder);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn($"ORDER-FORM | create-directory-failed | path={orderFolder} | {ex.Message}");
+                }
             }
 
             using (OpenFileDialog ofd = new OpenFileDialog())

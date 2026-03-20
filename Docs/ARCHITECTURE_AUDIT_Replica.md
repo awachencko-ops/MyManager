@@ -23,12 +23,16 @@
 > Актуализация на 2026-03-20 (этап 3, Step 2 progress, срез 8): добавлена двусторонняя sync-логика history в `OrdersHistoryRepositoryCoordinator` (`history.json <-> PostgreSQL`): `file->db` импорт отсутствующих заказов по `InternalId`, `db->file` зеркалирование актуального снимка; подтверждено integration-тестом coordinator sync.
 >
 > Актуализация на 2026-03-20 (этап 3, Step 2 close, срез 9): закрыт client cutover `run/stop` в LAN-режиме (локальный `_runTokensByOrder` больше не источник истины для server run-state), добавлена обязательная actor validation для write-endpoints (`X-Current-User`) и request-level `X-Correlation-Id` middleware.
+>
+> Актуализация на 2026-03-20 (этап 4 close, срез 10): внедрён auto-update baseline (client bootstrap + `wwwroot/updates/update.xml` feed), этап 4 закрыт; в рамках risk-burndown убраны silent `catch { }` в критическом runtime-пути (`OrderProcessor`, `OrderForm`, `ConfigService`) с заменой на контролируемый fallback + warning-лог.
+>
+> Актуализация на 2026-03-20 (risk-burndown, срез 11): добавлен `OrderDeletionWorkflowService`; batch-удаление заказов/файлов (`remove-from-disk`, fallback на known paths, item reindex, агрегация ошибок) вынесено из `MainForm` в сервисный слой, покрыто unit-тестами (`orders delete`, `folder-miss fallback`, `item reindex`, `item-not-found`).
 
 ## Executive summary
 
 - Текущая реализация **не готова** к роли транзакционно-безопасной платформы на сотни пользователей.
 - Главные причины: API/worker-контур пока не доведён до production-boundary (authN/authZ, idempotency, full client cutover и observability всё ещё неполные), UI-центричная оркестрация остаётся значимой.
-- В коде уже закрыт значимый кусок миграции: введён `IOrdersRepository`, реализован LAN PostgreSQL backend с optimistic concurrency (`StorageVersion` + conflict guard), добавлен `order_events` и one-time bootstrap marker в `storage_meta`; на этапе 3 добавлены API skeleton, EF Core storage слой, server-side `run/stop` lock-координация (`order_run_locks`), клиентские `LanOrderRunApiGateway` + `LanRunCommandCoordinator` и выносы из `MainForm` в сервисы (`OrdersHistoryRepositoryCoordinator`, `OrderRunStateService`, `OrderStatusTransitionService`, `OrderRunExecutionService`) + двусторонняя sync `history.json <-> PostgreSQL`.
+- В коде уже закрыт значимый кусок миграции: введён `IOrdersRepository`, реализован LAN PostgreSQL backend с optimistic concurrency (`StorageVersion` + conflict guard), добавлен `order_events` и one-time bootstrap marker в `storage_meta`; на этапе 3 добавлены API skeleton, EF Core storage слой, server-side `run/stop` lock-координация (`order_run_locks`), клиентские `LanOrderRunApiGateway` + `LanRunCommandCoordinator` и выносы из `MainForm` в сервисы (`OrdersHistoryRepositoryCoordinator`, `OrderRunStateService`, `OrderStatusTransitionService`, `OrderRunExecutionService`, `OrderDeletionWorkflowService`) + двусторонняя sync `history.json <-> PostgreSQL`.
 
 ---
 
@@ -45,6 +49,7 @@
 - В клиенте добавлен `LanOrderRunApiGateway`: `Run/Stop` в `LanPostgreSql` mode вызывают API endpoints вместо прямой локальной координации.
 - В клиенте добавлен `LanRunCommandCoordinator`: LAN `run/stop` orchestration вынесена из `MainForm` в отдельный сервис (форма теперь использует coordinator, а не прямую LAN gateway-логику).
 - Из `MainForm` выделен `OrderRunExecutionService`: конкурентное выполнение run-сессий и error/cancel lifecycle больше не оркестрируются внутри формы.
+- Из `MainForm` выделен `OrderDeletionWorkflowService`: batch-удаление orders/items (включая disk-cleanup, fallback на known paths и reindex item-ов) переведено в use-case сервис.
 - В `OrdersHistoryRepositoryCoordinator` добавлена двусторонняя sync-стратегия `history.json <-> PostgreSQL` (импорт file-only заказов + mirror LAN snapshot обратно в файл).
 - Persistence реализован через прямое чтение/запись JSON (`history.json`) из UI-слоя.
 - `ConfigService` и `AppSettings` — статические сервисы/конфиги с прямым file IO, без интерфейсов и DI.
@@ -130,7 +135,7 @@
 
 | Компонент | Риск | Критичность | Рекомендация |
 |---|---|---|---|
-| `MainForm` orchestration | God Object, смешение UI + domain + persistence + file IO (частично снижено сервисными выносами) | **High** | Продолжить декомпозицию: выделить use-case слой (`IOrderApplicationService`), UI оставить как presenter/view; внедрить DI/composition root. |
+| `MainForm` orchestration | God Object, смешение UI + domain + persistence + file IO (снижено сервисными выносами, включая delete-workflow) | **Med/High** | Продолжить декомпозицию: выделить use-case слой (`IOrderApplicationService`), UI оставить как presenter/view; внедрить DI/composition root. |
 | История заказов (`history.json` / LAN PostgreSQL) | В FileSystem-режиме остаётся риск race; в LAN-режиме риск снижен через version-check | **Med** | Оставить FileSystem только как fallback; целевой режим — PostgreSQL + server-side command boundary. |
 | `SetOrderStatus` + `SaveHistory` | Клиентская неатомарность между UI-операцией и persistence | **Med/High** | Перенести статусные команды в API/worker с unit of work и server-side invariants. |
 | `_runTokensByOrder` (in-memory) | Переведён в runtime-session state; риск смещён в сторону UX-согласованности между клиентами | **Low/Med** | Сохранить server lock/state единственным источником истины и расширять server-driven refresh-сценарии. |
@@ -138,7 +143,7 @@
 | Ожидание hotfolder | Polling без circuit breaker | **Med** | Добавить circuit breaker + health state для внешних зависимостей (PitStop/Imposing/NAS). |
 | Логирование (`Logger`) | В API введён базовый request correlation (`X-Correlation-Id`), но нет полного end-to-end structured telemetry | **Med/High** | Довести до единого structured logging/tracing контура (client+api+worker). |
 | Order status log file | best-effort append, mutable file (частично компенсировано `order_events`) | **Med** | Сделать `order_events` primary audit source, добавить retention/архив и SQL-аудит отчёты. |
-| Ошибки с `catch { }` | Потеря диагностических сигналов | **Med** | Запретить silent catch без метрик/логов; ввести error budget и алерты. |
+| Ошибки с `catch { }` | В критическом runtime-пути silent catches устранены; остаточный риск остаётся в legacy/UI-участках | **Low/Med** | Поддерживать policy: без silent catch в production-path; остаточные блоки вычищать по итерациям. |
 | ConfigService/AppSettings static IO | Сильная связность с файловой системой, сложная тестируемость | **Med** | Абстрагировать через `IConfigRepository`, `ISettingsProvider`, внедрить mockable adapters. |
 | Отсутствие API идемпотентности | Дубли заказов при повторной отправке | **High** | В API-командах использовать `Idempotency-Key` + таблицу дедупликации. |
 | Отсутствие полного authN/authZ контура | Базовая actor validation write-path уже есть, но role/claim policy и полноценная authN не внедрены | **Med/High** | Ввести API authN/authZ (JWT/SSO + role/claim-based authorization). |
@@ -148,13 +153,26 @@
 
 ---
 
+## Статус закрытия матрицы рисков (итерации)
+
+1. Итерация 1 (2026-03-20): закрыт риск silent `catch { }` в критическом runtime-пути.
+   - Что сделано: заменены silent catches на контролируемый fallback с логированием в `OrderProcessor`, `OrderForm`, `ConfigService`.
+   - Эффект: снижен риск «немых» деградаций при file/workflow и config-операциях.
+2. Итерация 2 (2026-03-20): закрыт следующий срез `MainForm` God Object (delete-workflow).
+   - Что сделано: удаление заказов и item-ов вынесено в `OrderDeletionWorkflowService` (disk cleanup + fallback + reindex + batch failure aggregation), `MainForm` переключён на сервис, добавлены unit-тесты.
+   - Эффект: снижена связность `MainForm` и риск регрессий в delete-сценариях за счёт выделенного use-case слоя и автотестов.
+3. На очереди (итерация 3): `ConfigService/AppSettings` static IO.
+   - План следующего среза: ввести интерфейсный слой настроек (`ISettingsProvider`/`IConfigRepository`) и убрать прямые static-зависимости из UI-path.
+
+---
+
 ## Технический долг: что «сжечь и переписать» сейчас
 
 ### P0 (делать немедленно)
 
 1. **Persistence-модель на JSON в UI** → заменить на backend + PostgreSQL.
 2. **Статусные переходы и аудит «мимо транзакций»** → сделать transactional command handling.
-3. **God Object (MainForm как бизнес-оркестратор)** → выделить application layer и инфраструктурные адаптеры.
+3. **God Object (MainForm как бизнес-оркестратор)** → выделить application layer и инфраструктурные адаптеры (In progress: уже вынесены history/run-state/status-transition/run-execution/delete-workflow).
 4. **Неструктурированное логирование и mutable file-audit** → заменить на structured logs + append-only `order_events`.
 
 ### P1 (сразу после P0)

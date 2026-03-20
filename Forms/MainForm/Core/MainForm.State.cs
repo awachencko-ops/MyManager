@@ -38,6 +38,7 @@ namespace Replica
         private readonly Dictionary<string, int> _runProgressByOrderInternalId = new(StringComparer.Ordinal);
         private readonly OrderRunStateService _orderRunStateService = new();
         private readonly OrderRunExecutionService _orderRunExecutionService = new();
+        private readonly OrderDeletionWorkflowService _orderDeletionWorkflowService = new();
         private readonly OrderStatusTransitionService _orderStatusTransitionService = new();
         private readonly HashSet<string> _archivedFileNames = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, List<string>> _archivedFilePathsByName = new(StringComparer.OrdinalIgnoreCase);

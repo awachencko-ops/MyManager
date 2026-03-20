@@ -1114,25 +1114,13 @@ namespace Replica
             }
 
             var removeFilesFromDisk = decision == DialogResult.Yes;
-            var removedOrdersCount = 0;
-            var failedOrders = new List<string>();
-
-            foreach (var order in selectedOrders)
-            {
-                try
+            var deleteResult = _orderDeletionWorkflowService.DeleteOrders(
+                _orderHistory,
+                selectedOrders,
+                removeFilesFromDisk,
+                _ordersRootPath,
+                order =>
                 {
-                    if (removeFilesFromDisk)
-                    {
-                        var orderFolder = string.IsNullOrWhiteSpace(order.FolderName)
-                            ? string.Empty
-                            : Path.Combine(_ordersRootPath, order.FolderName);
-
-                        if (!string.IsNullOrWhiteSpace(orderFolder) && Directory.Exists(orderFolder))
-                            Directory.Delete(orderFolder, true);
-                        else
-                            DeleteOrderFiles(order);
-                    }
-
                     if (_runTokensByOrder.TryGetValue(order.InternalId, out var cts))
                     {
                         cts.Cancel();
@@ -1147,24 +1135,17 @@ namespace Replica
                         removeFilesFromDisk
                             ? "Удален из списка и с диска"
                             : "Удален из списка");
-                    _orderHistory.Remove(order);
-                    removedOrdersCount++;
-                }
-                catch (Exception ex)
-                {
-                    failedOrders.Add($"{GetOrderDisplayId(order)}: {ex.Message}");
-                }
-            }
+                });
 
             UpdateTrayProgressIndicator();
 
-            if (removedOrdersCount > 0)
+            if (deleteResult.RemovedCount > 0)
             {
                 SaveHistory();
                 RebuildOrdersGrid();
                 UpdateActionButtonsState();
                 SetBottomStatus(isBatchDelete
-                    ? $"Удалено заказов: {removedOrdersCount}"
+                    ? $"Удалено заказов: {deleteResult.RemovedCount}"
                     : $"Заказ {GetOrderDisplayId(firstOrder)} удален");
             }
             else
@@ -1172,8 +1153,12 @@ namespace Replica
                 SetBottomStatus("Удаление не выполнено");
             }
 
-            if (failedOrders.Count == 0)
+            if (deleteResult.FailedOrders.Count == 0)
                 return;
+
+            var failedOrders = deleteResult.FailedOrders
+                .Select(x => $"{GetOrderDisplayId(x.Order)}: {x.Message}")
+                .ToList();
 
             var failedPreview = string.Join(Environment.NewLine, failedOrders.Take(5));
             if (failedOrders.Count > 5)
@@ -1197,7 +1182,7 @@ namespace Replica
 
             var isBatchDelete = selectedOrderItems.Count > 1;
             var firstSelection = selectedOrderItems[0];
-            var firstItemName = BuildOrderItemDisplayName(firstSelection.Item);
+            var firstItemName = OrderDeletionWorkflowService.BuildOrderItemDisplayName(firstSelection.Item);
             var confirmationText = isBatchDelete
                 ? $"Выбрано файлов: {selectedOrderItems.Count}\n\n" +
                   "Удалить файлы с диска?\n\n" +
@@ -1223,8 +1208,6 @@ namespace Replica
             }
 
             var removeFilesFromDisk = decision == DialogResult.Yes;
-            var removedItemsCount = 0;
-            var failedItems = new List<string>();
             var affectedOrders = new Dictionary<string, (OrderData Order, bool WasMultiBefore)>(StringComparer.Ordinal);
 
             foreach (var (order, item) in selectedOrderItems)
@@ -1234,34 +1217,20 @@ namespace Replica
 
                 if (!affectedOrders.ContainsKey(order.InternalId))
                     affectedOrders[order.InternalId] = (order, OrderTopologyService.IsMultiOrder(order));
+            }
 
-                var itemName = BuildOrderItemDisplayName(item);
-                try
+            var deleteResult = _orderDeletionWorkflowService.DeleteOrderItems(
+                selectedOrderItems.Select(x => new OrderItemSelection(x.Order, x.Item)).ToList(),
+                removeFilesFromDisk,
+                (order, _, itemName) =>
                 {
-                    if (removeFilesFromDisk)
-                        DeleteOrderItemFiles(item);
-
-                    var removed = order.Items?.RemoveAll(x => x != null && string.Equals(x.ItemId, item.ItemId, StringComparison.Ordinal)) > 0;
-                    if (!removed)
-                    {
-                        failedItems.Add($"{GetOrderDisplayId(order)} / {itemName}: файл не найден");
-                        continue;
-                    }
-
-                    ReindexOrderItems(order);
                     AppendOrderOperationLog(
                         order,
                         OrderOperationNames.RemoveItem,
                         removeFilesFromDisk
                             ? $"Удален файл: {itemName} (с диска и из группы)"
                             : $"Удален файл: {itemName} (из группы)");
-                    removedItemsCount++;
-                }
-                catch (Exception ex)
-                {
-                    failedItems.Add($"{GetOrderDisplayId(order)} / {itemName}: {ex.Message}");
-                }
-            }
+                });
 
             foreach (var (_, payload) in affectedOrders)
             {
@@ -1271,13 +1240,13 @@ namespace Replica
                     "remove-item-row");
             }
 
-            if (removedItemsCount > 0)
+            if (deleteResult.RemovedCount > 0)
             {
                 SaveHistory();
                 RebuildOrdersGrid();
                 UpdateActionButtonsState();
                 SetBottomStatus(isBatchDelete
-                    ? $"Удалено файлов: {removedItemsCount}"
+                    ? $"Удалено файлов: {deleteResult.RemovedCount}"
                     : $"Файл {firstItemName} удален");
             }
             else
@@ -1285,8 +1254,12 @@ namespace Replica
                 SetBottomStatus("Удаление файла не выполнено");
             }
 
-            if (failedItems.Count == 0)
+            if (deleteResult.FailedItems.Count == 0)
                 return;
+
+            var failedItems = deleteResult.FailedItems
+                .Select(x => $"{GetOrderDisplayId(x.Order)} / {x.ItemDisplayName}: {x.Message}")
+                .ToList();
 
             var failedPreview = string.Join(Environment.NewLine, failedItems.Take(5));
             if (failedItems.Count > 5)
@@ -1298,97 +1271,6 @@ namespace Replica
                 isBatchDelete ? "Удаление файлов" : "Удаление файла",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
-        }
-
-        private void DeleteOrderFiles(OrderData order)
-        {
-            foreach (var path in GetOrderAllKnownPaths(order))
-            {
-                if (string.IsNullOrWhiteSpace(path))
-                    continue;
-
-                try
-                {
-                    if (File.Exists(path))
-                        File.Delete(path);
-                }
-                catch (Exception ex)
-                {
-                    throw new IOException($"Не удалось удалить файл: {path}", ex);
-                }
-            }
-        }
-
-        private void DeleteOrderItemFiles(OrderFileItem item)
-        {
-            foreach (var path in GetOrderItemAllKnownPaths(item))
-            {
-                if (string.IsNullOrWhiteSpace(path))
-                    continue;
-
-                try
-                {
-                    if (File.Exists(path))
-                        File.Delete(path);
-                }
-                catch (Exception ex)
-                {
-                    throw new IOException($"Не удалось удалить файл: {path}", ex);
-                }
-            }
-        }
-
-        private static IEnumerable<string?> GetOrderAllKnownPaths(OrderData order)
-        {
-            if (order == null)
-                yield break;
-
-            yield return order.SourcePath;
-            yield return order.PreparedPath;
-            yield return order.PrintPath;
-
-            if (order.Items == null)
-                yield break;
-
-            foreach (var item in order.Items)
-            {
-                if (item == null)
-                    continue;
-
-                yield return item.SourcePath;
-                yield return item.PreparedPath;
-                yield return item.PrintPath;
-            }
-        }
-
-        private static IEnumerable<string?> GetOrderItemAllKnownPaths(OrderFileItem item)
-        {
-            if (item == null)
-                yield break;
-
-            yield return item.SourcePath;
-            yield return item.PreparedPath;
-            yield return item.PrintPath;
-
-            if (item.TechnicalFiles == null || item.TechnicalFiles.Count == 0)
-                yield break;
-
-            foreach (var technicalFilePath in item.TechnicalFiles)
-                yield return technicalFilePath;
-        }
-
-        private static string BuildOrderItemDisplayName(OrderFileItem item)
-        {
-            if (item == null)
-                return "файл";
-
-            if (!string.IsNullOrWhiteSpace(item.ClientFileLabel))
-                return item.ClientFileLabel.Trim();
-
-            if (!string.IsNullOrWhiteSpace(item.ItemId))
-                return item.ItemId;
-
-            return "файл";
         }
 
         private void OpenLogForSelectionOrManager()

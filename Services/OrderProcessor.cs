@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -157,14 +158,14 @@ namespace Replica
                             order.PrintPath = CopyIntoStage(order, 3, outFile, printName, tempRoot);
                             order.PrintFileSizeBytes = TryGetFileLength(order.PrintPath);
                             order.PrintFileHash = TryGetFileHash(order.PrintPath);
-                            try { File.Delete(outFile); } catch { }
+                            TryDeleteFileQuietly(outFile, $"imposing-single-order:{order.Id}");
                         }
                         else
                         {
                             order.PrintPath = CopyToGrandpa(outFile, printName, settings.GrandpaPath);
                             order.PrintFileSizeBytes = TryGetFileLength(order.PrintPath);
                             order.PrintFileHash = TryGetFileHash(order.PrintPath);
-                            try { File.Delete(outFile); } catch { }
+                            TryDeleteFileQuietly(outFile, $"imposing-single-grandpa:{order.Id}");
                         }
 
                         ReportProgress(order, 90, "Imposing завершен");
@@ -430,14 +431,14 @@ namespace Replica
                           item.PrintPath = CopyIntoStage(order, 3, outFile, printName, tempRoot);
                           item.PrintFileSizeBytes = TryGetFileLength(item.PrintPath);
                           item.PrintFileHash = TryGetFileHash(item.PrintPath);
-                          try { File.Delete(outFile); } catch { }
+                          TryDeleteFileQuietly(outFile, $"imposing-multi-item:{order.Id}:{item.ItemId}");
                       }
                       else
                       {
                           item.PrintPath = CopyToGrandpa(outFile, printName, settings.GrandpaPath);
                           item.PrintFileSizeBytes = TryGetFileLength(item.PrintPath);
                           item.PrintFileHash = TryGetFileHash(item.PrintPath);
-                          try { File.Delete(outFile); } catch { }
+                          TryDeleteFileQuietly(outFile, $"imposing-multi-grandpa:{order.Id}:{item.ItemId}");
                       }
                   }
                   finally
@@ -577,7 +578,7 @@ namespace Replica
 
             if (!string.IsNullOrEmpty(order.SourcePath) && File.Exists(order.SourcePath))
             {
-                try { File.Delete(order.SourcePath); } catch { }
+                TryDeleteFileQuietly(order.SourcePath, $"cleanup-source-after-grandpa:{order.Id}");
             }
         }
 
@@ -598,8 +599,13 @@ namespace Replica
                 if (!string.IsNullOrWhiteSpace(path))
                     Clipboard.SetText(path);
             }
+            catch (ExternalException ex)
+            {
+                Logger.Warn($"CLIPBOARD | set-text-failed | path={path} | {ex.Message}");
+            }
             catch
             {
+                Logger.Warn($"CLIPBOARD | set-text-failed | path={path} | unknown error");
             }
         }
 
@@ -641,7 +647,7 @@ namespace Replica
             if (string.IsNullOrEmpty(sourcePath) || !File.Exists(sourcePath)) return;
             if (File.Exists(targetPath))
             {
-                try { File.Delete(targetPath); } catch { }
+                TryDeleteFileQuietly(targetPath, $"move-overwrite-target:{Path.GetFileName(targetPath)}");
             }
             File.Move(sourcePath, targetPath);
         }
@@ -664,7 +670,10 @@ namespace Replica
                         Directory.Delete(path, true);
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Logger.Warn($"TEMP-CLEANUP | delete-empty-folders-failed | root={tempRoot} | {ex.Message}");
+            }
         }
 
         private async Task<string?> WaitForFileAsync(
@@ -740,8 +749,39 @@ namespace Replica
 
         private bool IsFileReady(string path)
         {
-            try { using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None); return true; }
-            catch { return false; }
+            try
+            {
+                using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None);
+                return true;
+            }
+            catch (IOException)
+            {
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn($"FILE-READY | unexpected-error | path={path} | {ex.Message}");
+                return false;
+            }
+        }
+
+        private static void TryDeleteFileQuietly(string? path, string context)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+                return;
+
+            try
+            {
+                File.Delete(path);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn($"FILE | delete-failed | context={context} | path={path} | {ex.Message}");
+            }
         }
 
         private void CaptureQuiteImposingLog(OrderData order, ImposingConfig cfg, string fileName)

@@ -72,7 +72,11 @@ namespace Replica
                 string json = File.ReadAllText(resolvedPath);
                 return JsonSerializer.Deserialize<List<T>>(json) ?? new List<T>();
             }
-            catch { return new List<T>(); }
+            catch (Exception ex)
+            {
+                Logger.Warn($"CONFIG | load-json-failed | path={resolvedPath} | {ex.Message}");
+                return new List<T>();
+            }
         }
 
         private static void SaveJson<T>(string resolvedPath, List<T> data)
