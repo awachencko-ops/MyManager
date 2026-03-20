@@ -744,13 +744,36 @@ namespace Replica
                 ("use_lan_api", useLanApi ? "1" : "0"));
             Logger.Info("RUN | command-start");
 
-            var runPlan = _orderRunStateService.BuildRunPlan(
+            var runPreparation = await _orderRunWorkflowOrchestrationService.PrepareStartAsync(
                 selectedOrders,
                 _runTokensByOrder,
-                useLocalRunState: !useLanApi);
-            var runnableOrders = runPlan.RunnableOrders;
+                useLanApi: useLanApi,
+                lanApiBaseUrl: _lanApiBaseUrl,
+                actor: ResolveLanApiActor(),
+                orderDisplayIdResolver: GetOrderDisplayId,
+                tryRefreshSnapshotFromStorage: TryRefreshRepositorySnapshotFromStorage);
 
-            if (runnableOrders.Count == 0)
+            if (runPreparation.IsFatal)
+            {
+                var fatalReason = string.IsNullOrWhiteSpace(runPreparation.FatalError)
+                    ? "LAN API недоступен"
+                    : runPreparation.FatalError;
+                Logger.Warn($"RUN | command-fatal | {fatalReason}");
+                SetBottomStatus($"Сервер недоступен: {fatalReason}");
+                MessageBox.Show(
+                    this,
+                    $"Не удалось запустить заказ через LAN API: {fatalReason}",
+                    "Запуск",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return;
+            }
+
+            var runPlan = runPreparation.RunPlan;
+            var runnableOrders = runPreparation.RunnableOrders;
+            var serverSkipped = runPreparation.SkippedByServer;
+
+            if (runPlan.RunnableOrders.Count == 0)
             {
                 var details = OrderRunStateService.BuildNoRunnableDetails(runPlan);
                 SetBottomStatus($"Нет заказов для запуска ({details})");
@@ -766,33 +789,7 @@ namespace Replica
             if (_processor == null)
                 InitializeProcessor();
 
-            var lanRunBatchResult = await _lanRunCommandCoordinator.TryStartRunsAsync(
-                runnableOrders,
-                useLanApi: useLanApi,
-                lanApiBaseUrl: _lanApiBaseUrl,
-                actor: ResolveLanApiActor(),
-                orderDisplayIdResolver: GetOrderDisplayId);
-
-            if (lanRunBatchResult.IsFatal)
-            {
-                var fatalReason = string.IsNullOrWhiteSpace(lanRunBatchResult.FatalError)
-                    ? "LAN API недоступен"
-                    : lanRunBatchResult.FatalError;
-                Logger.Warn($"RUN | command-fatal | {fatalReason}");
-                SetBottomStatus($"Сервер недоступен: {fatalReason}");
-                MessageBox.Show(
-                    this,
-                    $"Не удалось запустить заказ через LAN API: {fatalReason}",
-                    "Запуск",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
-                return;
-            }
-
-            runnableOrders = lanRunBatchResult.ApprovedOrders;
-            var serverSkipped = lanRunBatchResult.SkippedByServer;
-
-            if (lanRunBatchResult.UsedLanApi)
+            if (runPreparation.UsedLanApi)
             {
                 if (runnableOrders.Count == 0)
                 {
@@ -812,11 +809,11 @@ namespace Replica
                         MessageBoxIcon.Information);
                     return;
                 }
+            }
 
-                if (!TryRefreshRepositorySnapshotFromStorage(runnableOrders, "run-start"))
-                {
-                    Logger.Warn("RUN | snapshot-refresh-failed | reason=run-start | save may conflict on next history write");
-                }
+            if (runPreparation.SnapshotRefreshFailed)
+            {
+                Logger.Warn("RUN | snapshot-refresh-failed | reason=run-start | save may conflict on next history write");
             }
 
             var runSessions = _orderRunStateService.BeginRunSessions(
@@ -960,13 +957,16 @@ namespace Replica
                 ("use_lan_api", useLanApi ? "1" : "0"));
             Logger.Info("RUN | stop-command-start");
 
-            var stopPlan = _orderRunStateService.BuildStopPlan(
-                order,
-                useLanApi,
-                _runTokensByOrder,
-                _runProgressByOrderInternalId);
+            var stopPreparation = await _orderRunWorkflowOrchestrationService.PrepareStopAsync(
+                order: order,
+                useLanApi: useLanApi,
+                lanApiBaseUrl: _lanApiBaseUrl,
+                actor: ResolveLanApiActor(),
+                runTokensByOrder: _runTokensByOrder,
+                runProgressByOrderInternalId: _runProgressByOrderInternalId,
+                tryRefreshSnapshotFromStorage: TryRefreshRepositorySnapshotFromStorage);
 
-            if (!stopPlan.CanProceed)
+            if (!stopPreparation.CanProceed)
             {
                 Logger.Warn("RUN | stop-command-skipped | reason=not-running");
                 SetBottomStatus($"Заказ {GetOrderDisplayId(order)} сейчас не выполняется");
@@ -974,32 +974,23 @@ namespace Replica
                 return;
             }
 
-            if (stopPlan.LocalCancellationTokenSource != null)
+            if (stopPreparation.LocalCancellationRequested)
             {
-                stopPlan.LocalCancellationTokenSource.Cancel();
                 UpdateTrayProgressIndicator();
             }
 
-            var stopCommandResult = await _lanRunCommandCoordinator.TryStopRunAsync(
-                order,
-                useLanApi: stopPlan.ShouldSendServerStop,
-                lanApiBaseUrl: _lanApiBaseUrl,
-                actor: ResolveLanApiActor());
+            var stopCommandResult = stopPreparation.StopCommandResult;
+            var canApplyLocalStopStatus = stopPreparation.CanApplyLocalStopStatus;
 
-            var canApplyLocalStopStatus = stopPlan.HasLocalRunSession;
+            if (stopPreparation.SnapshotRefreshFailed)
+            {
+                Logger.Warn($"RUN | snapshot-refresh-failed | reason=run-stop | order={GetOrderDisplayId(order)}");
+            }
 
             if (stopCommandResult.UsedLanApi)
             {
                 var stopResult = stopCommandResult.ApiResult!;
-                if (stopResult.IsSuccess)
-                {
-                    canApplyLocalStopStatus = true;
-                    if (!TryRefreshRepositorySnapshotFromStorage(new[] { order }, "run-stop"))
-                    {
-                        Logger.Warn($"RUN | snapshot-refresh-failed | reason=run-stop | order={GetOrderDisplayId(order)}");
-                    }
-                }
-                else
+                if (!stopResult.IsSuccess)
                 {
                     var stopReason = string.IsNullOrWhiteSpace(stopResult.Error)
                         ? "сервер не подтвердил остановку"

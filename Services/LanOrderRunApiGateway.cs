@@ -29,6 +29,7 @@ public interface ILanOrderRunApiGateway
 public sealed class LanOrderRunApiGateway : ILanOrderRunApiGateway
 {
     private const string CorrelationHeaderName = "X-Correlation-Id";
+    private const string IdempotencyHeaderName = "Idempotency-Key";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         PropertyNameCaseInsensitive = true
@@ -99,6 +100,8 @@ public sealed class LanOrderRunApiGateway : ILanOrderRunApiGateway
 
         try
         {
+            var correlationId = Logger.EnsureCorrelationId();
+            var idempotencyKey = BuildIdempotencyKey(correlationId, command, orderInternalId, expectedOrderVersion);
             using var request = new HttpRequestMessage(HttpMethod.Post, requestUri)
             {
                 Content = JsonContent.Create(
@@ -109,11 +112,12 @@ public sealed class LanOrderRunApiGateway : ILanOrderRunApiGateway
                     options: JsonOptions)
             };
 
-            request.Headers.TryAddWithoutValidation(CorrelationHeaderName, Logger.EnsureCorrelationId());
+            request.Headers.TryAddWithoutValidation(CorrelationHeaderName, correlationId);
+            request.Headers.TryAddWithoutValidation(IdempotencyHeaderName, idempotencyKey);
             if (!string.IsNullOrWhiteSpace(actor))
                 request.Headers.TryAddWithoutValidation("X-Current-User", actor.Trim());
 
-            Logger.Info($"LAN-API | command-send | target={requestUri}");
+            Logger.Info($"LAN-API | command-send | target={requestUri} | idempotency_key={idempotencyKey}");
             using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
             var payload = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             Logger.Info($"LAN-API | command-response | status={(int)response.StatusCode}");
@@ -155,6 +159,14 @@ public sealed class LanOrderRunApiGateway : ILanOrderRunApiGateway
             Logger.Error($"LAN-API | command-failed | {ex.Message}");
             return LanOrderRunApiResult.Failed(ex.Message);
         }
+    }
+
+    private static string BuildIdempotencyKey(string correlationId, string command, string orderInternalId, long expectedOrderVersion)
+    {
+        var source = $"{correlationId}|{command}|{orderInternalId}|{expectedOrderVersion}";
+        var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(source));
+        var shortHash = Convert.ToHexString(hash.AsSpan(0, 12)).ToLowerInvariant();
+        return $"replica-{command}-{shortHash}";
     }
 
     private static bool TryBuildCommandUri(string apiBaseUrl, string orderInternalId, string command, out Uri? requestUri)

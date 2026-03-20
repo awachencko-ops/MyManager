@@ -11,6 +11,7 @@ namespace Replica.Api.Controllers;
 [Route("api/orders")]
 public sealed class OrdersController : ControllerBase
 {
+    private const string IdempotencyHeaderName = "Idempotency-Key";
     private readonly ILanOrderStore _store;
     private readonly ILogger<OrdersController> _logger;
 
@@ -172,7 +173,10 @@ public sealed class OrdersController : ControllerBase
             return validationError!;
 
         var runRequest = request ?? new RunOrderRequest();
-        var result = _store.TryStartRun(id, runRequest, actor);
+        var idempotencyKey = ResolveIdempotencyKey();
+        var result = _store is EfCoreLanOrderStore efCoreStore
+            ? efCoreStore.TryStartRun(id, runRequest, actor, idempotencyKey)
+            : _store.TryStartRun(id, runRequest, actor);
         if (result.IsSuccess)
             return Ok(result.Order);
         if (result.IsNotFound)
@@ -195,7 +199,10 @@ public sealed class OrdersController : ControllerBase
             return validationError!;
 
         var stopRequest = request ?? new StopOrderRequest();
-        var result = _store.TryStopRun(id, stopRequest, actor);
+        var idempotencyKey = ResolveIdempotencyKey();
+        var result = _store is EfCoreLanOrderStore efCoreStore
+            ? efCoreStore.TryStopRun(id, stopRequest, actor, idempotencyKey)
+            : _store.TryStopRun(id, stopRequest, actor);
         if (result.IsSuccess)
             return Ok(result.Order);
         if (result.IsNotFound)
@@ -239,6 +246,18 @@ public sealed class OrdersController : ControllerBase
 
         actor = matchedUser.Name.Trim();
         return true;
+    }
+
+    private string ResolveIdempotencyKey()
+    {
+        if (!Request.Headers.TryGetValue(IdempotencyHeaderName, out var rawValue))
+            return string.Empty;
+
+        var value = rawValue.ToString().Trim();
+        if (string.IsNullOrWhiteSpace(value))
+            return string.Empty;
+
+        return value.Length <= 128 ? value : value[..128];
     }
 }
 

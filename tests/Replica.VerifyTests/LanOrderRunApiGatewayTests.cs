@@ -50,6 +50,8 @@ public sealed class LanOrderRunApiGatewayTests
         Assert.Equal("operator-1", actors.Single());
         Assert.True(handler.LastRequest.Headers.TryGetValues("X-Correlation-Id", out var correlations));
         Assert.Equal("corr-test-123", correlations.Single());
+        Assert.True(handler.LastRequest.Headers.TryGetValues("Idempotency-Key", out var idempotencyKeys));
+        Assert.StartsWith("replica-run-", idempotencyKeys.Single(), StringComparison.Ordinal);
         Assert.Contains("\"expectedOrderVersion\":12", requestBody, StringComparison.Ordinal);
     }
 

@@ -15,6 +15,9 @@ namespace Replica.Api.Services;
 public sealed class EfCoreLanOrderStore : ILanOrderStore
 {
     private readonly IDbContextFactory<ReplicaDbContext> _dbContextFactory;
+    private const string RunCommandName = "run";
+    private const string StopCommandName = "stop";
+    private const int MaxIdempotencyKeyLength = 128;
 
     private readonly List<SharedUser> _fallbackUsers =
     [
@@ -432,6 +435,75 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
 
     public StoreOperationResult TryStartRun(string orderId, RunOrderRequest request, string actor)
     {
+        return TryStartRun(orderId, request, actor, idempotencyKey: null);
+    }
+
+    public StoreOperationResult TryStopRun(string orderId, StopOrderRequest request, string actor)
+    {
+        return TryStopRun(orderId, request, actor, idempotencyKey: null);
+    }
+
+    public StoreOperationResult TryStartRun(string orderId, RunOrderRequest request, string actor, string? idempotencyKey)
+    {
+        return ExecuteRunCommandWithOptionalIdempotency(
+            commandName: RunCommandName,
+            orderId: orderId,
+            expectedOrderVersion: request?.ExpectedOrderVersion ?? 0,
+            actor: actor,
+            idempotencyKey: idempotencyKey,
+            executeCore: () => TryStartRunCore(orderId, request, actor));
+    }
+
+    public StoreOperationResult TryStopRun(string orderId, StopOrderRequest request, string actor, string? idempotencyKey)
+    {
+        return ExecuteRunCommandWithOptionalIdempotency(
+            commandName: StopCommandName,
+            orderId: orderId,
+            expectedOrderVersion: request?.ExpectedOrderVersion ?? 0,
+            actor: actor,
+            idempotencyKey: idempotencyKey,
+            executeCore: () => TryStopRunCore(orderId, request, actor));
+    }
+
+    private StoreOperationResult ExecuteRunCommandWithOptionalIdempotency(
+        string commandName,
+        string orderId,
+        long expectedOrderVersion,
+        string actor,
+        string? idempotencyKey,
+        Func<StoreOperationResult> executeCore)
+    {
+        var normalizedOrderId = orderId?.Trim() ?? string.Empty;
+        var normalizedActor = actor?.Trim() ?? string.Empty;
+        var normalizedKey = NormalizeIdempotencyKey(idempotencyKey);
+        if (string.IsNullOrWhiteSpace(normalizedKey))
+            return executeCore();
+
+        var requestFingerprint = BuildRunRequestFingerprint(commandName, normalizedOrderId, normalizedActor, expectedOrderVersion);
+
+        if (TryGetStoredRunCommandResult(normalizedOrderId, commandName, normalizedKey, requestFingerprint, out var cachedResult, out var mismatchError))
+            return string.IsNullOrWhiteSpace(mismatchError)
+                ? cachedResult
+                : StoreOperationResult.BadRequest(mismatchError);
+
+        var executed = executeCore();
+        var stored = TryStoreRunCommandResult(
+            normalizedOrderId,
+            commandName,
+            normalizedKey,
+            requestFingerprint,
+            normalizedActor,
+            executed,
+            out var storeError);
+
+        if (!string.IsNullOrWhiteSpace(storeError))
+            return StoreOperationResult.BadRequest(storeError);
+
+        return stored;
+    }
+
+    private StoreOperationResult TryStartRunCore(string orderId, RunOrderRequest request, string actor)
+    {
         if (string.IsNullOrWhiteSpace(orderId))
             return StoreOperationResult.BadRequest("order id is required");
 
@@ -500,7 +572,7 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
         return StoreOperationResult.Success(updated);
     }
 
-    public StoreOperationResult TryStopRun(string orderId, StopOrderRequest request, string actor)
+    private StoreOperationResult TryStopRunCore(string orderId, StopOrderRequest request, string actor)
     {
         if (string.IsNullOrWhiteSpace(orderId))
             return StoreOperationResult.BadRequest("order id is required");
@@ -549,6 +621,142 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
 
         var updated = LoadOrder(db, orderRecord.InternalId) ?? order;
         return StoreOperationResult.Success(updated);
+    }
+
+    private bool TryGetStoredRunCommandResult(
+        string orderInternalId,
+        string commandName,
+        string idempotencyKey,
+        string requestFingerprint,
+        out StoreOperationResult cachedResult,
+        out string mismatchError)
+    {
+        cachedResult = StoreOperationResult.BadRequest(string.Empty);
+        mismatchError = string.Empty;
+
+        using var db = _dbContextFactory.CreateDbContext();
+        var entry = db.OrderRunIdempotency
+            .AsNoTracking()
+            .FirstOrDefault(x =>
+                x.OrderInternalId == orderInternalId
+                && x.CommandName == commandName
+                && x.IdempotencyKey == idempotencyKey);
+        if (entry == null)
+            return false;
+
+        if (!string.Equals(entry.RequestFingerprint, requestFingerprint, StringComparison.Ordinal))
+        {
+            mismatchError = "idempotency key reuse with different request payload";
+            return true;
+        }
+
+        cachedResult = DeserializeStoredRunCommandResult(entry);
+        return true;
+    }
+
+    private StoreOperationResult TryStoreRunCommandResult(
+        string orderInternalId,
+        string commandName,
+        string idempotencyKey,
+        string requestFingerprint,
+        string actor,
+        StoreOperationResult result,
+        out string storeError)
+    {
+        storeError = string.Empty;
+        using var db = _dbContextFactory.CreateDbContext();
+
+        var entry = new OrderRunIdempotencyRecord
+        {
+            OrderInternalId = orderInternalId,
+            CommandName = commandName,
+            IdempotencyKey = idempotencyKey,
+            RequestFingerprint = requestFingerprint,
+            Actor = actor ?? string.Empty,
+            ResultKind = ToResultKind(result),
+            Error = result.Error ?? string.Empty,
+            CurrentVersion = result.CurrentVersion,
+            ResponseOrderJson = result.Order == null
+                ? "{}"
+                : JsonSerializer.Serialize(result.Order),
+            CreatedAt = DateTime.Now,
+            UpdatedAt = DateTime.Now
+        };
+
+        db.OrderRunIdempotency.Add(entry);
+        try
+        {
+            db.SaveChanges();
+            return result;
+        }
+        catch (DbUpdateException)
+        {
+            if (TryGetStoredRunCommandResult(orderInternalId, commandName, idempotencyKey, requestFingerprint, out var cached, out var mismatchError))
+            {
+                storeError = mismatchError;
+                return cached;
+            }
+
+            return result;
+        }
+    }
+
+    private static string ToResultKind(StoreOperationResult result)
+    {
+        if (result.IsSuccess)
+            return "success";
+        if (result.IsNotFound)
+            return "not_found";
+        if (result.IsConflict)
+            return "conflict";
+        return "bad_request";
+    }
+
+    private static StoreOperationResult DeserializeStoredRunCommandResult(OrderRunIdempotencyRecord entry)
+    {
+        var kind = entry.ResultKind?.Trim().ToLowerInvariant() ?? string.Empty;
+        return kind switch
+        {
+            "success" => StoreOperationResult.Success(DeserializeStoredRunOrder(entry.ResponseOrderJson)),
+            "not_found" => StoreOperationResult.NotFound(),
+            "conflict" => StoreOperationResult.Conflict(entry.CurrentVersion, entry.Error),
+            _ => StoreOperationResult.BadRequest(entry.Error)
+        };
+    }
+
+    private static SharedOrder DeserializeStoredRunOrder(string payloadJson)
+    {
+        if (!string.IsNullOrWhiteSpace(payloadJson))
+        {
+            try
+            {
+                var order = JsonSerializer.Deserialize<SharedOrder>(payloadJson);
+                if (order != null)
+                    return order;
+            }
+            catch
+            {
+                // keep fallback below
+            }
+        }
+
+        return new SharedOrder();
+    }
+
+    private static string NormalizeIdempotencyKey(string? rawKey)
+    {
+        if (string.IsNullOrWhiteSpace(rawKey))
+            return string.Empty;
+
+        var trimmed = rawKey.Trim();
+        return trimmed.Length <= MaxIdempotencyKeyLength ? trimmed : trimmed[..MaxIdempotencyKeyLength];
+    }
+
+    private static string BuildRunRequestFingerprint(string commandName, string orderId, string actor, long expectedOrderVersion)
+    {
+        var source = $"{commandName}|{orderId}|{actor}|{expectedOrderVersion}";
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(source));
+        return Convert.ToHexString(hash).ToLowerInvariant();
     }
 
     private static SharedOrder? LoadOrder(ReplicaDbContext db, string orderInternalId)

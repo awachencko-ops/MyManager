@@ -235,6 +235,86 @@ public sealed class PostgreSqlIntegrationTests
     }
 
     [Fact]
+    public void PostgreSqlIntegration_EfCoreStore_RunStart_IsIdempotentByKey()
+    {
+        if (!IsIntegrationEnabled())
+            return;
+
+        using var db = TemporaryPostgreSqlDatabase.Create();
+        var store = CreateEfCoreStore(db.ConnectionString);
+
+        var created = store.CreateOrder(new CreateOrderRequest
+        {
+            OrderNumber = "RUN-IDEM-100",
+            UserName = "Integration User",
+            CreatedById = "integration-user",
+            CreatedByUser = "integration-user",
+            Status = WorkflowStatusNames.Waiting
+        }, "integration-user");
+
+        var firstStart = store.TryStartRun(
+            created.InternalId,
+            new RunOrderRequest { ExpectedOrderVersion = created.Version },
+            "integration-runner",
+            idempotencyKey: "idem-run-start-1");
+        var secondStart = store.TryStartRun(
+            created.InternalId,
+            new RunOrderRequest { ExpectedOrderVersion = created.Version },
+            "integration-runner",
+            idempotencyKey: "idem-run-start-1");
+
+        Assert.True(firstStart.IsSuccess, firstStart.Error);
+        Assert.True(secondStart.IsSuccess, secondStart.Error);
+        Assert.NotNull(firstStart.Order);
+        Assert.NotNull(secondStart.Order);
+        Assert.Equal(firstStart.Order!.Version, secondStart.Order!.Version);
+        Assert.Equal("Processing", secondStart.Order.Status);
+
+        using var verifyDb = CreateReplicaDbContext(db.ConnectionString);
+        var runEvents = verifyDb.OrderEvents.Count(x => x.OrderInternalId == created.InternalId && x.EventType == "run");
+        Assert.Equal(1, runEvents);
+        var idempotencyRows = verifyDb.OrderRunIdempotency.Count(x =>
+            x.OrderInternalId == created.InternalId
+            && x.CommandName == "run"
+            && x.IdempotencyKey == "idem-run-start-1");
+        Assert.Equal(1, idempotencyRows);
+    }
+
+    [Fact]
+    public void PostgreSqlIntegration_EfCoreStore_RunStart_IdempotencyReuseWithDifferentPayload_ReturnsBadRequest()
+    {
+        if (!IsIntegrationEnabled())
+            return;
+
+        using var db = TemporaryPostgreSqlDatabase.Create();
+        var store = CreateEfCoreStore(db.ConnectionString);
+
+        var created = store.CreateOrder(new CreateOrderRequest
+        {
+            OrderNumber = "RUN-IDEM-200",
+            UserName = "Integration User",
+            CreatedById = "integration-user",
+            CreatedByUser = "integration-user",
+            Status = WorkflowStatusNames.Waiting
+        }, "integration-user");
+
+        var firstStart = store.TryStartRun(
+            created.InternalId,
+            new RunOrderRequest { ExpectedOrderVersion = created.Version },
+            "integration-runner",
+            idempotencyKey: "idem-run-start-2");
+        Assert.True(firstStart.IsSuccess, firstStart.Error);
+
+        var secondStart = store.TryStartRun(
+            created.InternalId,
+            new RunOrderRequest { ExpectedOrderVersion = created.Version + 1 },
+            "integration-runner",
+            idempotencyKey: "idem-run-start-2");
+        Assert.True(secondStart.IsBadRequest);
+        Assert.Contains("idempotency", secondStart.Error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void PostgreSqlIntegration_EfCoreStore_RunStop_RejectsVersionMismatch()
     {
         if (!IsIntegrationEnabled())

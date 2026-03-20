@@ -39,12 +39,16 @@
 > Актуализация на 2026-03-20 (risk-burndown, срез 16): введён `WorkflowTimeoutBudgetPolicy`; `OrderProcessor` переведён на stage-timeout budgets (PitStop/Imposing/report), добавлено логирование budget-параметров (`TIMEOUT-BUDGET`) и unit-тесты timeout-policy.
 >
 > Актуализация на 2026-03-20 (risk-burndown, срез 17): в client-runtime добавлены `LogContext` + structured scope-fields в `Logger` (включая `correlation_id`), `Run/Stop` orchestration в `MainForm` переведена на correlation-scopes, а `LanOrderRunApiGateway` начал пробрасывать `X-Correlation-Id` в API-команды.
+>
+> Актуализация на 2026-03-20 (risk-burndown, срез 18): для server `run/stop` внедрена идемпотентность команд (`Idempotency-Key` в client gateway + API header-resolve, таблица `order_run_idempotency`, migration `20260320000300_OrderRunIdempotency`, дедупликация с request fingerprint), покрыто unit/integration тестами PostgreSQL.
+>
+> Актуализация на 2026-03-20 (risk-burndown, срез 19): добавлен `OrderRunWorkflowOrchestrationService`; подготовка `run/stop` workflow (run-plan, LAN command preflight, snapshot refresh, stop preflight/cancel) вынесена из `MainForm` в application-service слой, добавлены unit-тесты orchestration (`OrderRunWorkflowOrchestrationServiceTests`).
 
 ## Executive summary
 
 - Текущая реализация **не готова** к роли транзакционно-безопасной платформы на сотни пользователей.
-- Главные причины: API/worker-контур пока не доведён до production-boundary (authN/authZ, idempotency, full client cutover и observability всё ещё неполные), UI-центричная оркестрация остаётся значимой.
-- В коде уже закрыт значимый кусок миграции: введён `IOrdersRepository`, реализован LAN PostgreSQL backend с optimistic concurrency (`StorageVersion` + conflict guard), добавлен `order_events` и one-time bootstrap marker в `storage_meta`; на этапе 3 добавлены API skeleton, EF Core storage слой, server-side `run/stop` lock-координация (`order_run_locks`), клиентские `LanOrderRunApiGateway` + `LanRunCommandCoordinator` и выносы из `MainForm` в сервисы (`OrdersHistoryRepositoryCoordinator`, `OrderRunStateService`, `OrderStatusTransitionService`, `OrderRunExecutionService`, `OrderDeletionWorkflowService`) + двусторонняя sync `history.json <-> PostgreSQL`.
+- Главные причины: API/worker-контур пока не доведён до production-boundary (full authN/authZ, полный cutover всех write-flow и observability/SLO контур ещё неполные), UI-центричная оркестрация остаётся значимой.
+- В коде уже закрыт значимый кусок миграции: введён `IOrdersRepository`, реализован LAN PostgreSQL backend с optimistic concurrency (`StorageVersion` + conflict guard), добавлен `order_events` и one-time bootstrap marker в `storage_meta`; на этапе 3 добавлены API skeleton, EF Core storage слой, server-side `run/stop` lock-координация (`order_run_locks`), идемпотентность `run/stop` (`Idempotency-Key` + `order_run_idempotency`), клиентские `LanOrderRunApiGateway` + `LanRunCommandCoordinator` и выносы из `MainForm` в сервисы (`OrdersHistoryRepositoryCoordinator`, `OrderRunStateService`, `OrderStatusTransitionService`, `OrderRunExecutionService`, `OrderDeletionWorkflowService`) + двусторонняя sync `history.json <-> PostgreSQL`.
 
 ---
 
@@ -61,6 +65,7 @@
 - В клиенте добавлен `LanOrderRunApiGateway`: `Run/Stop` в `LanPostgreSql` mode вызывают API endpoints вместо прямой локальной координации.
 - В клиенте добавлен `LanRunCommandCoordinator`: LAN `run/stop` orchestration вынесена из `MainForm` в отдельный сервис (форма теперь использует coordinator, а не прямую LAN gateway-логику).
 - Из `MainForm` выделен `OrderRunExecutionService`: конкурентное выполнение run-сессий и error/cancel lifecycle больше не оркестрируются внутри формы.
+- Из `MainForm` выделен `OrderRunWorkflowOrchestrationService`: run/stop preflight (plan, LAN approval, snapshot refresh, local cancel) теперь в сервисном use-case слое.
 - Из `MainForm` выделен `OrderDeletionWorkflowService`: batch-удаление orders/items (включая disk-cleanup, fallback на known paths и reindex item-ов) переведено в use-case сервис.
 - Введён интерфейсный слой настроек (`ISettingsProvider`), а core runtime-flow (`Program`, `MainForm`, `OrderProcessor`, `ConfigService`) переведён с прямого static-IO на provider boundary.
 - В `OrderProcessor` добавлены dependency health-сигналы и circuit-breaker (`DependencyCircuitBreaker`) для внешних file-зависимостей; `MainForm` получает сигналы и отражает degraded/unavailable статус в UI.
@@ -87,13 +92,13 @@
 - В API реализована централизованная lock-координация `run/stop` через `order_run_locks` (`EfCoreLanOrderStore`, endpoints `POST /api/orders/{id}/run|stop`).
 - В клиенте `Run/Stop` для `LanPostgreSql` идут через API (`LanOrderRunApiGateway`) и координируются через `LanRunCommandCoordinator`; локальный `OrderRunStateService` оставлен как runtime-state для активной сессии обработки.
 - Для совместимости с текущим repository-слоем добавлен snapshot-refresh после server `run/stop`, чтобы исключить ложные `concurrency conflict` на следующем `SaveHistory`.
-- Идемпотентности API пока нет: серверный API существует как skeleton, но command boundary/idempotency key ещё не внедрены.
+- Для `run/stop` внедрена API-идемпотентность (`Idempotency-Key` + таблица дедупликации `order_run_idempotency` + fingerprint запроса); для остальных write-команд (`create/update/items/reorder`) это пока следующий шаг.
 
 ### Вывод
 
 - Риск `lost update` существенно снижен в LAN-режиме за счёт optimistic concurrency и запрета silent overwrite при конфликте.
-- Полной транзакционной модели уровня API/command handling пока нет (нет idempotency keys и полного cutover всех write-flow клиента на server-command boundary).
-- Повторные команды со стороны клиента не имеют глобальных idempotency key и дедупликации на сервере.
+- Полной транзакционной модели уровня API/command handling пока нет (идемпотентность закрыта только для `run/stop`, нет полного cutover всех write-flow клиента на server-command boundary).
+- Повторные команды `run/stop` уже дедуплицируются на сервере; для остальных write-операций глобальные idempotency key ещё не включены.
 
 ---
 
@@ -153,7 +158,7 @@
 
 | Компонент | Риск | Критичность | Рекомендация |
 |---|---|---|---|
-| `MainForm` orchestration | God Object, смешение UI + domain + persistence + file IO (снижено сервисными выносами, включая delete-workflow) | **Med/High** | Продолжить декомпозицию: выделить use-case слой (`IOrderApplicationService`), UI оставить как presenter/view; внедрить DI/composition root. |
+| `MainForm` orchestration | God Object, смешение UI + domain + persistence + file IO (снижено сервисными выносами, включая delete + run/stop workflow orchestration) | **Med** | Продолжить декомпозицию: выделить use-case слой (`IOrderApplicationService`), UI оставить как presenter/view; внедрить DI/composition root. |
 | История заказов (`history.json` / LAN PostgreSQL) | В FileSystem-режиме остаётся риск race; в LAN-режиме риск снижен через version-check | **Med** | Оставить FileSystem только как fallback; целевой режим — PostgreSQL + server-side command boundary. |
 | `SetOrderStatus` + `SaveHistory` | Клиентская неатомарность между UI-операцией и persistence | **Med/High** | Перенести статусные команды в API/worker с unit of work и server-side invariants. |
 | `_runTokensByOrder` (in-memory) | Переведён в runtime-session state; риск смещён в сторону UX-согласованности между клиентами | **Low/Med** | Сохранить server lock/state единственным источником истины и расширять server-driven refresh-сценарии. |
@@ -163,7 +168,7 @@
 | Order status log file | best-effort append, mutable file (частично компенсировано `order_events`) | **Med** | Сделать `order_events` primary audit source, добавить retention/архив и SQL-аудит отчёты. |
 | Ошибки с `catch { }` | В критическом runtime-пути silent catches устранены; остаточный риск остаётся в legacy/UI-участках | **Low/Med** | Поддерживать policy: без silent catch в production-path; остаточные блоки вычищать по итерациям. |
 | ConfigService/AppSettings static IO | Сильная связность с файловой системой частично снижена (`ISettingsProvider` внедрён в runtime-path); остаток в legacy/UI-экранах | **Low/Med** | Довести до полного покрытия provider/repository boundary на всех формах и убрать остаточные direct `AppSettings.Load()`. |
-| Отсутствие API идемпотентности | Дубли заказов при повторной отправке | **High** | В API-командах использовать `Idempotency-Key` + таблицу дедупликации. |
+| API идемпотентность write-команд | Для `run/stop` риск закрыт; остаток — `create/update/items/reorder` без дедупликации | **Med** | Расширить `Idempotency-Key` + dedupe-store на все mutating endpoints. |
 | Отсутствие полного authN/authZ контура | Базовая actor validation write-path уже есть, но role/claim policy и полноценная authN не внедрены | **Med/High** | Ввести API authN/authZ (JWT/SSO + role/claim-based authorization). |
 | Валидация входных данных | Локальная и фрагментарная | **Med** | Централизовать validation на command DTO/domain rules, добавить schema/contract validation. |
 | Хардкод дефолтных путей NAS | Сложность portability/segmentation | **Low/Med** | Вынести в environment-specific config profiles, добавить проверку доступности на старте. |
@@ -172,6 +177,8 @@
 ---
 
 ## Статус закрытия матрицы рисков (итерации)
+
+Базовые 8 итераций risk-burndown закрыты; дальше идут адресные расширения по остаткам матрицы (без пересмотра факта закрытия этапа 4).
 
 1. Итерация 1 (2026-03-20): закрыт риск silent `catch { }` в критическом runtime-пути.
    - Что сделано: заменены silent catches на контролируемый fallback с логированием в `OrderProcessor`, `OrderForm`, `ConfigService`.
@@ -197,6 +204,12 @@
 8. Итерация 8 (2026-03-20): закрыт срез structured logging + correlation в client-runtime.
    - Что сделано: добавлены `LogContext` и scope-based structured fields в `Logger` (`correlation_id`, `workflow`, `order_*`), `Run/Stop` workflow в `MainForm` обёрнут correlation-scope, `LanOrderRunApiGateway` пробрасывает `X-Correlation-Id` в API.
    - Эффект: улучшена сквозная диагностика run/stop цепочек (client <-> API), снижен риск «непрослеживаемых» инцидентов в runtime.
+9. Итерация 9 (2026-03-20, адресная): закрыт high-risk срез API идемпотентности для `run/stop`.
+   - Что сделано: добавлены `Idempotency-Key` в client gateway и API controller, таблица `order_run_idempotency` + migration `20260320000300_OrderRunIdempotency`, дедупликация и fingerprint-проверка в `EfCoreLanOrderStore`, обновлены unit/integration тесты.
+   - Эффект: повторная отправка `run/stop` с одним ключом больше не дублирует side effects; риск повторного запуска/остановки по ретраям снижен.
+10. Итерация 10 (2026-03-20, адресная): закрыт следующий срез `MainForm` God Object по `run/stop` orchestration preflight.
+   - Что сделано: добавлен `OrderRunWorkflowOrchestrationService`; подготовка `run/stop` цепочки (run-plan, LAN preflight, local cancel, snapshot refresh decisions) вынесена из `MainForm` в сервисный слой; добавлены unit-тесты orchestration.
+   - Эффект: уменьшена связность формы и повышена тестируемость критичного run/stop workflow без UI-зависимости.
 
 ---
 
@@ -204,17 +217,17 @@
 
 ### P0 (делать немедленно)
 
-1. **Persistence-модель на JSON в UI** → заменить на backend + PostgreSQL.
-2. **Статусные переходы и аудит «мимо транзакций»** → сделать transactional command handling.
-3. **God Object (MainForm как бизнес-оркестратор)** → выделить application layer и инфраструктурные адаптеры (In progress: уже вынесены history/run-state/status-transition/run-execution/delete-workflow).
-4. **Неструктурированное логирование и mutable file-audit** → заменить на structured logs + append-only `order_events`.
+1. **Persistence-модель на JSON в UI** — `PARTIAL`: LAN PostgreSQL + двусторонняя sync работают, но FileSystem-ветка ещё жива как fallback.
+2. **Статусные переходы и аудит «мимо транзакций»** — `PARTIAL`: status policy вынесена, `order_events` есть, но полный server-side command handling для всех write-flow не завершён.
+3. **God Object (MainForm как бизнес-оркестратор)** — `IN PROGRESS`: вынесены history/run-state/status-transition/run-execution/delete-workflow/run-stop-preflight; следующий фокус — общий order workflow orchestration и DI/composition root.
+4. **Неструктурированное логирование и mutable file-audit** — `PARTIAL`: correlation + structured scopes внедрены, `order_events` работает; остаётся унификация схемы и централизованный observability stack.
 
 ### P1 (сразу после P0)
 
-1. Ввести **optimistic concurrency** (`row_version`) и конфликто-разрешение.
-2. Ввести **idempotency** для write-операций API.
-3. Добавить **resilience policies** (retry/circuit breaker/timeouts/bulkhead).
-4. Ввести **health-checks + readiness/liveness + SLO метрики**.
+1. Ввести **optimistic concurrency** (`row_version`) и конфликто-разрешение — `DONE` (LAN path).
+2. Ввести **idempotency** для write-операций API — `PARTIAL` (`run/stop` закрыты, остальные endpoints в очереди).
+3. Добавить **resilience policies** (retry/circuit breaker/timeouts/bulkhead) — `DONE` для file-workflow path.
+4. Ввести **health-checks + readiness/liveness + SLO метрики** — `PARTIAL` (health/readiness есть, SLO-метрики и dashboards в работе).
 
 ### P2 (масштабирование на сотни пользователей)
 

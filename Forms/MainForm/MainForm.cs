@@ -29,6 +29,7 @@ namespace Replica
         internal MainForm(ISettingsProvider settingsProvider)
         {
             _settingsProvider = settingsProvider ?? throw new ArgumentNullException(nameof(settingsProvider));
+            _orderRunWorkflowOrchestrationService = new OrderRunWorkflowOrchestrationService(_orderRunStateService, _lanRunCommandCoordinator);
             InitializeComponent();
             InitializeDockSidebar();
             InitializeStatusCellVisuals();

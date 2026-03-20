@@ -39,6 +39,7 @@ namespace Replica
         private readonly Dictionary<string, DependencyHealthLevel> _dependencyHealthByName = new(StringComparer.OrdinalIgnoreCase);
         private readonly ISettingsProvider _settingsProvider;
         private readonly OrderRunStateService _orderRunStateService = new();
+        private readonly OrderRunWorkflowOrchestrationService _orderRunWorkflowOrchestrationService;
         private readonly OrderRunExecutionService _orderRunExecutionService = new();
         private readonly OrderDeletionWorkflowService _orderDeletionWorkflowService = new();
         private readonly OrderStatusTransitionService _orderStatusTransitionService = new();
