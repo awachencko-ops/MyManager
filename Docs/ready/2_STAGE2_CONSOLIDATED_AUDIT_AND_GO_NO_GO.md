@@ -17,8 +17,9 @@
    - `orphan_items=0`
    - marker присутствует (`state=imported`).
 6. Regression pack закрыт:
-   - solution tests: `42/42 PASS` (`17/17 Verify`, `25/25 UiSmoke`);
-   - добавлены PostgreSQL integration tests (opt-in: `REPLICA_RUN_PG_INTEGRATION=1`).
+   - на момент закрытия этапа 2: `42/42 PASS` (`17/17 Verify`, `25/25 UiSmoke`);
+   - повторная проверка на 2026-03-20: `52/52 PASS` (`27/27 Verify`, `25/25 UiSmoke`);
+   - PostgreSQL integration tests запускаются opt-in: `REPLICA_RUN_PG_INTEGRATION=1` (`27/27 PASS`).
 
 ## 2. Что остается (вход в Stage 3)
 

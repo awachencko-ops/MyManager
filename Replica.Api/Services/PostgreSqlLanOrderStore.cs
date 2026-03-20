@@ -343,6 +343,16 @@ public sealed class PostgreSqlLanOrderStore : ILanOrderStore
         return StoreOperationResult.Success(updated ?? order);
     }
 
+    public StoreOperationResult TryStartRun(string orderId, RunOrderRequest request, string actor)
+    {
+        return StoreOperationResult.BadRequest("deprecated store implementation: use EfCoreLanOrderStore");
+    }
+
+    public StoreOperationResult TryStopRun(string orderId, StopOrderRequest request, string actor)
+    {
+        return StoreOperationResult.BadRequest("deprecated store implementation: use EfCoreLanOrderStore");
+    }
+
     private NpgsqlConnection OpenConnection()
     {
         if (string.IsNullOrWhiteSpace(_connectionString))

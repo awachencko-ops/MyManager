@@ -131,6 +131,42 @@ public sealed class OrdersController : ControllerBase
         return BadRequest(new { error = result.Error });
     }
 
+    [HttpPost("{id}/run")]
+    [ProducesResponseType(typeof(SharedOrder), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public ActionResult<SharedOrder> StartOrderRun(string id, [FromBody] RunOrderRequest? request)
+    {
+        var runRequest = request ?? new RunOrderRequest();
+        var result = _store.TryStartRun(id, runRequest, ResolveActor());
+        if (result.IsSuccess)
+            return Ok(result.Order);
+        if (result.IsNotFound)
+            return NotFound(new { error = result.Error });
+        if (result.IsConflict)
+            return Conflict(new { error = result.Error, currentVersion = result.CurrentVersion });
+        return BadRequest(new { error = result.Error });
+    }
+
+    [HttpPost("{id}/stop")]
+    [ProducesResponseType(typeof(SharedOrder), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public ActionResult<SharedOrder> StopOrderRun(string id, [FromBody] StopOrderRequest? request)
+    {
+        var stopRequest = request ?? new StopOrderRequest();
+        var result = _store.TryStopRun(id, stopRequest, ResolveActor());
+        if (result.IsSuccess)
+            return Ok(result.Order);
+        if (result.IsNotFound)
+            return NotFound(new { error = result.Error });
+        if (result.IsConflict)
+            return Conflict(new { error = result.Error, currentVersion = result.CurrentVersion });
+        return BadRequest(new { error = result.Error });
+    }
+
     private string ResolveActor()
     {
         if (Request.Headers.TryGetValue("X-Current-User", out var actorHeader))

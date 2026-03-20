@@ -29,6 +29,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Replica.csproj" />
+    <ProjectReference Include="..\..\Replica.Api\Replica.Api.csproj" />
   </ItemGroup>
 
 </Project>

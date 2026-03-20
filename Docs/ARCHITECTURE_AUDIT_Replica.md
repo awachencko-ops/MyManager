@@ -11,12 +11,14 @@
 > Актуализация на 2026-03-20 (этап 3, Step 2 progress, срез 2): добавлен `OrderRunStateService`, а методы `RunSelectedOrderAsync`/`StopSelectedOrder` переведены на сервисное управление run-state (план runnable/skipped + lifecycle токенов).
 >
 > Актуализация на 2026-03-20 (этап 3, Step 2 progress, срез 3): добавлен `OrderStatusTransitionService`, а `SetOrderStatus` переведён на сервисное применение status-transition policy (нормализация source/reason, единое условие no-op).
+>
+> Актуализация на 2026-03-20 (этап 3, Step 2 progress, срез 4): добавлены server-side `run/stop` endpoints (`POST /api/orders/{id}/run|stop`) и централизованный lock-state (`order_run_locks`) в `EfCoreLanOrderStore`; подтверждено PostgreSQL integration-тестами (lifecycle lock/events + version mismatch).
 
 ## Executive summary
 
 - Текущая реализация **не готова** к роли транзакционно-безопасной платформы на сотни пользователей.
-- Главные причины: API/worker-контур пока не доведён до production-boundary (server-side orchestration, authN/authZ, idempotency и observability всё ещё неполные), UI-центричная оркестрация остаётся значимой.
-- В коде уже закрыт значимый кусок миграции: введён `IOrdersRepository`, реализован LAN PostgreSQL backend с optimistic concurrency (`StorageVersion` + conflict guard), добавлен `order_events` и one-time bootstrap marker в `storage_meta`; на этапе 3 добавлены API skeleton, EF Core storage слой и первые выносы из `MainForm` в сервисы (`OrdersHistoryRepositoryCoordinator`, `OrderRunStateService`, `OrderStatusTransitionService`).
+- Главные причины: API/worker-контур пока не доведён до production-boundary (authN/authZ, idempotency, full client cutover и observability всё ещё неполные), UI-центричная оркестрация остаётся значимой.
+- В коде уже закрыт значимый кусок миграции: введён `IOrdersRepository`, реализован LAN PostgreSQL backend с optimistic concurrency (`StorageVersion` + conflict guard), добавлен `order_events` и one-time bootstrap marker в `storage_meta`; на этапе 3 добавлены API skeleton, EF Core storage слой, server-side `run/stop` lock-координация (`order_run_locks`) и выносы из `MainForm` в сервисы (`OrdersHistoryRepositoryCoordinator`, `OrderRunStateService`, `OrderStatusTransitionService`).
 
 ---
 
@@ -49,14 +51,14 @@
 - В модели добавлены version-поля (`OrderData.StorageVersion`, `OrderFileItem.StorageVersion`).
 - В `PostgreSqlOrdersRepository` реализован optimistic concurrency: version-check на update/delete и внешний conflict-guard перед save.
 - Для первичного переноса истории добавлен one-time marker `history_json_bootstrap_v1` в `storage_meta`.
-- Модель конкурентного запуска ограничивается in-memory-словарем `_runTokensByOrder` в рамках одного процесса UI.
-- Межклиентская координация обработки (`run/stop`) на сервер не вынесена; coordination остаётся в клиентском процессе.
+- В API реализована централизованная lock-координация `run/stop` через `order_run_locks` (`EfCoreLanOrderStore`, endpoints `POST /api/orders/{id}/run|stop`).
+- В клиенте остаётся локальный run-state слой (`OrderRunStateService`), поэтому полный client cutover на server-command boundary ещё не завершён.
 - Идемпотентности API пока нет: серверный API существует как skeleton, но command boundary/idempotency key ещё не внедрены.
 
 ### Вывод
 
 - Риск `lost update` существенно снижен в LAN-режиме за счёт optimistic concurrency и запрета silent overwrite при конфликте.
-- Полной транзакционной модели уровня API/command handling пока нет (нет server-side use-case boundary и idempotency keys).
+- Полной транзакционной модели уровня API/command handling пока нет (нет idempotency keys и полного cutover всех write-flow клиента на server-command boundary).
 - Повторные команды со стороны клиента не имеют глобальных idempotency key и дедупликации на сервере.
 
 ---
@@ -116,7 +118,7 @@
 | `MainForm` orchestration | God Object, смешение UI + domain + persistence + file IO | **High** | Выделить use-case слой (`IOrderApplicationService`), UI оставить как presenter/view; внедрить DI/composition root. |
 | История заказов (`history.json` / LAN PostgreSQL) | В FileSystem-режиме остаётся риск race; в LAN-режиме риск снижен через version-check | **Med** | Оставить FileSystem только как fallback; целевой режим — PostgreSQL + server-side command boundary. |
 | `SetOrderStatus` + `SaveHistory` | Клиентская неатомарность между UI-операцией и persistence | **Med/High** | Перенести статусные команды в API/worker с unit of work и server-side invariants. |
-| `_runTokensByOrder` (in-memory) | Контроль выполнения только в рамках процесса | **High** | Вынести coordination в backend (job table/queue), статус/lock хранить централизованно. |
+| `_runTokensByOrder` (in-memory) | Частично дублирует новую server-lock логику (`order_run_locks`) до полного cutover клиента | **Med/High** | Завершить cutover на API `run/stop`, оставить in-memory токены только как локальный UX-state, не как источник истины. |
 | `OrderProcessor` file workflow | Нет retry/backoff на сетевые ошибки | **High** | Политики resilience (Polly): retry with jitter, timeout budget, fallback. |
 | Ожидание hotfolder | Polling без circuit breaker | **Med** | Добавить circuit breaker + health state для внешних зависимостей (PitStop/Imposing/NAS). |
 | Логирование (`Logger`) | Неструктурированные логи без correlation | **High** | Перейти на structured logging (Serilog + sink), обязательные поля: `order_id`, `actor`, `operation`, `trace_id`. |

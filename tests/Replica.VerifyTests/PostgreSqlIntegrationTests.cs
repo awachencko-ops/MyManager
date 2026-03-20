@@ -1,7 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using Replica.Api.Contracts;
+using Replica.Api.Data;
+using Replica.Api.Services;
 using Xunit;
 
 namespace Replica.VerifyTests;
@@ -172,6 +176,108 @@ public sealed class PostgreSqlIntegrationTests
         Assert.Equal(1, QueryEventCount(db.ConnectionString, "status-change", "processor"));
     }
 
+    [Fact]
+    public void PostgreSqlIntegration_EfCoreStore_RunStopLifecycle_PersistsLockAndEvents()
+    {
+        if (!IsIntegrationEnabled())
+            return;
+
+        using var db = TemporaryPostgreSqlDatabase.Create();
+        var store = CreateEfCoreStore(db.ConnectionString);
+
+        var created = store.CreateOrder(new CreateOrderRequest
+        {
+            OrderNumber = "RUN-100",
+            UserName = "Integration User",
+            CreatedById = "integration-user",
+            CreatedByUser = "integration-user",
+            Status = WorkflowStatusNames.Waiting
+        }, "integration-user");
+
+        var start = store.TryStartRun(created.InternalId, new RunOrderRequest
+        {
+            ExpectedOrderVersion = created.Version
+        }, "integration-runner");
+
+        Assert.True(start.IsSuccess, start.Error);
+        Assert.NotNull(start.Order);
+        Assert.Equal("Processing", start.Order!.Status);
+        Assert.Equal(created.Version + 1, start.Order.Version);
+
+        var duplicateStart = store.TryStartRun(created.InternalId, new RunOrderRequest
+        {
+            ExpectedOrderVersion = start.Order.Version
+        }, "integration-runner");
+
+        Assert.True(duplicateStart.IsConflict);
+        Assert.Contains("run already active", duplicateStart.Error, StringComparison.OrdinalIgnoreCase);
+
+        var stop = store.TryStopRun(created.InternalId, new StopOrderRequest
+        {
+            ExpectedOrderVersion = start.Order.Version
+        }, "integration-runner");
+
+        Assert.True(stop.IsSuccess, stop.Error);
+        Assert.NotNull(stop.Order);
+        Assert.Equal("Cancelled", stop.Order!.Status);
+        Assert.Equal(start.Order.Version + 1, stop.Order.Version);
+
+        using var verifyDb = CreateReplicaDbContext(db.ConnectionString);
+        var lockRow = verifyDb.OrderRunLocks.Single(x => x.OrderInternalId == created.InternalId);
+        Assert.False(lockRow.IsActive);
+        Assert.Equal("integration-runner", lockRow.LeaseOwner);
+
+        var runEvents = verifyDb.OrderEvents.Count(x => x.OrderInternalId == created.InternalId && x.EventType == "run");
+        var stopEvents = verifyDb.OrderEvents.Count(x => x.OrderInternalId == created.InternalId && x.EventType == "stop");
+        Assert.Equal(1, runEvents);
+        Assert.Equal(1, stopEvents);
+    }
+
+    [Fact]
+    public void PostgreSqlIntegration_EfCoreStore_RunStop_RejectsVersionMismatch()
+    {
+        if (!IsIntegrationEnabled())
+            return;
+
+        using var db = TemporaryPostgreSqlDatabase.Create();
+        var store = CreateEfCoreStore(db.ConnectionString);
+
+        var created = store.CreateOrder(new CreateOrderRequest
+        {
+            OrderNumber = "RUN-200",
+            UserName = "Integration User",
+            CreatedById = "integration-user",
+            CreatedByUser = "integration-user",
+            Status = WorkflowStatusNames.Waiting
+        }, "integration-user");
+
+        var startMismatch = store.TryStartRun(created.InternalId, new RunOrderRequest
+        {
+            ExpectedOrderVersion = created.Version + 5
+        }, "integration-runner");
+
+        Assert.True(startMismatch.IsConflict);
+        Assert.Equal(created.Version, startMismatch.CurrentVersion);
+        Assert.Contains("version mismatch", startMismatch.Error, StringComparison.OrdinalIgnoreCase);
+
+        var start = store.TryStartRun(created.InternalId, new RunOrderRequest
+        {
+            ExpectedOrderVersion = created.Version
+        }, "integration-runner");
+
+        Assert.True(start.IsSuccess, start.Error);
+        Assert.NotNull(start.Order);
+
+        var stopMismatch = store.TryStopRun(created.InternalId, new StopOrderRequest
+        {
+            ExpectedOrderVersion = start.Order!.Version + 5
+        }, "integration-runner");
+
+        Assert.True(stopMismatch.IsConflict);
+        Assert.Equal(start.Order.Version, stopMismatch.CurrentVersion);
+        Assert.Contains("version mismatch", stopMismatch.Error, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static bool IsIntegrationEnabled()
     {
         var rawValue = Environment.GetEnvironmentVariable("REPLICA_RUN_PG_INTEGRATION");
@@ -196,6 +302,39 @@ public sealed class PostgreSqlIntegrationTests
         cmd.Parameters.AddWithValue("event_source", eventSource);
 
         return Convert.ToInt64(cmd.ExecuteScalar() ?? 0L);
+    }
+
+    private static EfCoreLanOrderStore CreateEfCoreStore(string connectionString)
+    {
+        using var db = CreateReplicaDbContext(connectionString);
+        db.Database.Migrate();
+
+        return new EfCoreLanOrderStore(new TestReplicaDbContextFactory(connectionString));
+    }
+
+    private static ReplicaDbContext CreateReplicaDbContext(string connectionString)
+    {
+        var options = new DbContextOptionsBuilder<ReplicaDbContext>()
+            .UseNpgsql(connectionString)
+            .Options;
+        return new ReplicaDbContext(options);
+    }
+
+    private sealed class TestReplicaDbContextFactory : IDbContextFactory<ReplicaDbContext>
+    {
+        private readonly DbContextOptions<ReplicaDbContext> _options;
+
+        public TestReplicaDbContextFactory(string connectionString)
+        {
+            _options = new DbContextOptionsBuilder<ReplicaDbContext>()
+                .UseNpgsql(connectionString)
+                .Options;
+        }
+
+        public ReplicaDbContext CreateDbContext()
+        {
+            return new ReplicaDbContext(_options);
+        }
     }
 
     private sealed class TemporaryPostgreSqlDatabase : IDisposable

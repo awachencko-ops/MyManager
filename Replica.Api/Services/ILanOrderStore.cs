@@ -14,4 +14,6 @@ public interface ILanOrderStore
     StoreOperationResult TryAddItem(string orderId, AddOrderItemRequest request, string actor);
     StoreOperationResult TryUpdateItem(string orderId, string itemId, UpdateOrderItemRequest request, string actor);
     StoreOperationResult TryReorderItems(string orderId, ReorderOrderItemsRequest request, string actor);
+    StoreOperationResult TryStartRun(string orderId, RunOrderRequest request, string actor);
+    StoreOperationResult TryStopRun(string orderId, StopOrderRequest request, string actor);
 }

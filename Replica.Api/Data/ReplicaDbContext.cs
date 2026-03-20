@@ -14,6 +14,7 @@ public sealed class ReplicaDbContext : DbContext
     public DbSet<OrderEventRecord> OrderEvents => Set<OrderEventRecord>();
     public DbSet<UserRecord> Users => Set<UserRecord>();
     public DbSet<StorageMetaRecord> StorageMeta => Set<StorageMetaRecord>();
+    public DbSet<OrderRunLockRecord> OrderRunLocks => Set<OrderRunLockRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -25,13 +26,13 @@ public sealed class ReplicaDbContext : DbContext
             entity.Property(x => x.OrderNumber).HasColumnName("order_number").HasMaxLength(256).HasDefaultValue(string.Empty);
             entity.Property(x => x.UserName).HasColumnName("user_name").HasMaxLength(256).HasDefaultValue(string.Empty);
             entity.Property(x => x.Status).HasColumnName("status").HasMaxLength(128).HasDefaultValue(string.Empty);
-            entity.Property(x => x.ArrivalDate).HasColumnName("arrival_date");
-            entity.Property(x => x.OrderDate).HasColumnName("order_date");
+            entity.Property(x => x.ArrivalDate).HasColumnName("arrival_date").HasColumnType("timestamp without time zone");
+            entity.Property(x => x.OrderDate).HasColumnName("order_date").HasColumnType("timestamp without time zone");
             entity.Property(x => x.StartMode).HasColumnName("start_mode");
             entity.Property(x => x.TopologyMarker).HasColumnName("topology_marker");
             entity.Property(x => x.PayloadJson).HasColumnName("payload_json").HasColumnType("jsonb");
             entity.Property(x => x.Version).HasColumnName("version").IsConcurrencyToken();
-            entity.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+            entity.Property(x => x.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp without time zone");
 
             entity.HasIndex(x => x.OrderNumber).HasDatabaseName("ix_orders_order_number");
             entity.HasIndex(x => x.ArrivalDate).HasDatabaseName("ix_orders_arrival_date");
@@ -46,7 +47,7 @@ public sealed class ReplicaDbContext : DbContext
             entity.Property(x => x.SequenceNo).HasColumnName("sequence_no");
             entity.Property(x => x.PayloadJson).HasColumnName("payload_json").HasColumnType("jsonb");
             entity.Property(x => x.Version).HasColumnName("version").IsConcurrencyToken();
-            entity.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+            entity.Property(x => x.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp without time zone");
 
             entity.HasOne(x => x.Order)
                 .WithMany(x => x.Items)
@@ -71,7 +72,7 @@ public sealed class ReplicaDbContext : DbContext
             entity.Property(x => x.EventType).HasColumnName("event_type").HasMaxLength(128);
             entity.Property(x => x.EventSource).HasColumnName("event_source").HasMaxLength(128);
             entity.Property(x => x.PayloadJson).HasColumnName("payload_json").HasColumnType("jsonb");
-            entity.Property(x => x.CreatedAt).HasColumnName("created_at");
+            entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp without time zone");
 
             entity.HasIndex(x => x.OrderInternalId).HasDatabaseName("ix_order_events_order_internal_id");
         });
@@ -82,7 +83,7 @@ public sealed class ReplicaDbContext : DbContext
             entity.HasKey(x => x.UserName);
             entity.Property(x => x.UserName).HasColumnName("user_name");
             entity.Property(x => x.IsActive).HasColumnName("is_active");
-            entity.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+            entity.Property(x => x.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp without time zone");
         });
 
         modelBuilder.Entity<StorageMetaRecord>(entity =>
@@ -91,7 +92,21 @@ public sealed class ReplicaDbContext : DbContext
             entity.HasKey(x => x.MetaKey);
             entity.Property(x => x.MetaKey).HasColumnName("meta_key");
             entity.Property(x => x.MetaValue).HasColumnName("meta_value");
-            entity.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+            entity.Property(x => x.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp without time zone");
+        });
+
+        modelBuilder.Entity<OrderRunLockRecord>(entity =>
+        {
+            entity.ToTable("order_run_locks");
+            entity.HasKey(x => x.OrderInternalId);
+            entity.Property(x => x.OrderInternalId).HasColumnName("order_internal_id");
+            entity.Property(x => x.IsActive).HasColumnName("is_active");
+            entity.Property(x => x.LeaseToken).HasColumnName("lease_token").HasDefaultValue(string.Empty);
+            entity.Property(x => x.LeaseOwner).HasColumnName("lease_owner").HasDefaultValue(string.Empty);
+            entity.Property(x => x.StartedAt).HasColumnName("started_at").HasColumnType("timestamp without time zone");
+            entity.Property(x => x.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp without time zone");
+
+            entity.HasIndex(x => x.IsActive).HasDatabaseName("ix_order_run_locks_is_active");
         });
     }
 }

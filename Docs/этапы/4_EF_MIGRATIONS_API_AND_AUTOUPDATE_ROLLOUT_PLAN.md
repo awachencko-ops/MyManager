@@ -18,8 +18,11 @@
 1. Добавлен `ReplicaDbContext` в `Replica.Api`.
 2. Добавлены entity mappings для `orders`, `order_items`, `order_events`, `users`, `storage_meta`.
 3. Добавлена baseline migration: `20260320000100_BaselineSchema` (idempotent SQL).
-4. На старте API (PostgreSQL mode) выполняется `Database.Migrate()`.
-5. `ILanOrderStore` переведён на `EfCoreLanOrderStore` (PostgreSQL mode), in-memory оставлен как fallback.
+4. Добавлена миграция `20260320000200_OrderRunLocks` для server-side `run/stop` lock-таблицы.
+5. На старте API (PostgreSQL mode) выполняется `Database.Migrate()`.
+6. `ILanOrderStore` переведён на `EfCoreLanOrderStore` (PostgreSQL mode), in-memory оставлен как fallback.
+7. Реализованы endpoints `POST /api/orders/{id}/run` и `POST /api/orders/{id}/stop` с optimistic concurrency и `409 Conflict` при активном запуске.
+8. Добавлены PostgreSQL integration tests для `run/stop` (`EfCoreLanOrderStore` + `order_run_locks` + event journal).
 
 ## 2.1 Что внедряем
 
@@ -53,6 +56,8 @@
 5. `POST /orders/{id}/items` — добавить item в заказ.
 6. `PATCH /orders/{id}/items/{itemId}` — обновить item.
 7. `POST /orders/{id}/items/reorder` — изменение порядка файлов.
+8. `POST /orders/{id}/run` — серверный старт обработки заказа.
+9. `POST /orders/{id}/stop` — серверная остановка обработки заказа.
 
 ## 3.3 Требования к обработке
 
@@ -107,7 +112,8 @@
 3. Фильтр `createdBy` в WinForms отдаёт реальные данные.
 4. При конкурентном конфликте API возвращает 409, клиент корректно реагирует.
 5. `order_events` наполняется при изменениях.
-6. Автообновление подхватывает новую версию по `update.xml`.
+6. `run/stop` проходит через `order_run_locks`, повторный `run` даёт `409 Conflict`.
+7. Автообновление подхватывает новую версию по `update.xml`.
 
 ## 7. Definition of Done этапа 4
 

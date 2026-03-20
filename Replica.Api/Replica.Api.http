@@ -14,3 +14,24 @@ GET {{Replica_Api_HostAddress}}/api/orders
 Accept: application/json
 
 ###
+
+# Replace ORDER_ID and version with a real value from GET /api/orders
+POST {{Replica_Api_HostAddress}}/api/orders/ORDER_ID/run
+Content-Type: application/json
+X-Current-User: api-smoke
+
+{
+  "expectedOrderVersion": 0
+}
+
+###
+
+POST {{Replica_Api_HostAddress}}/api/orders/ORDER_ID/stop
+Content-Type: application/json
+X-Current-User: api-smoke
+
+{
+  "expectedOrderVersion": 0
+}
+
+###

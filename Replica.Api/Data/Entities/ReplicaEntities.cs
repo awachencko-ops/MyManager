@@ -56,3 +56,13 @@ public sealed class StorageMetaRecord
     public string MetaValue { get; set; } = string.Empty;
     public DateTime UpdatedAt { get; set; }
 }
+
+public sealed class OrderRunLockRecord
+{
+    public string OrderInternalId { get; set; } = string.Empty;
+    public bool IsActive { get; set; }
+    public string LeaseToken { get; set; } = string.Empty;
+    public string LeaseOwner { get; set; } = string.Empty;
+    public DateTime StartedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+}

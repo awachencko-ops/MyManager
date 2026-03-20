@@ -66,10 +66,21 @@ public partial class BaselineSchema : Migration
                 updated_at timestamp without time zone not null default now()
             );
 
+            create table if not exists order_run_locks
+            (
+                order_internal_id text primary key references orders(internal_id) on delete cascade,
+                is_active boolean not null default false,
+                lease_token text not null default '',
+                lease_owner text not null default '',
+                started_at timestamp without time zone not null default now(),
+                updated_at timestamp without time zone not null default now()
+            );
+
             create index if not exists ix_orders_order_number on orders(order_number);
             create index if not exists ix_orders_arrival_date on orders(arrival_date);
             create index if not exists ix_order_items_order_internal_id on order_items(order_internal_id);
             create index if not exists ix_order_events_order_internal_id on order_events(order_internal_id);
+            create index if not exists ix_order_run_locks_is_active on order_run_locks(is_active);
             """);
     }
 
@@ -78,6 +89,7 @@ public partial class BaselineSchema : Migration
         migrationBuilder.Sql(
             """
             drop table if exists order_events;
+            drop table if exists order_run_locks;
             drop table if exists order_items;
             drop table if exists orders;
             drop table if exists users;

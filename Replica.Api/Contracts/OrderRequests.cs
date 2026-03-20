@@ -59,3 +59,13 @@ public sealed class ReorderOrderItemsRequest
     public long ExpectedOrderVersion { get; set; }
     public List<string> OrderedItemIds { get; set; } = new();
 }
+
+public sealed class RunOrderRequest
+{
+    public long ExpectedOrderVersion { get; set; }
+}
+
+public sealed class StopOrderRequest
+{
+    public long ExpectedOrderVersion { get; set; }
+}

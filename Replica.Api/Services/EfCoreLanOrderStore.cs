@@ -223,6 +223,10 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
         {
             return StoreOperationResult.Conflict(orderRecord.Version, "order version mismatch");
         }
+        catch (DbUpdateException)
+        {
+            return StoreOperationResult.Conflict(orderRecord.Version, "run already active");
+        }
 
         var updated = LoadOrder(db, orderRecord.InternalId) ?? order;
         return StoreOperationResult.Success(updated);
@@ -420,6 +424,127 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
         catch (DbUpdateConcurrencyException)
         {
             return StoreOperationResult.Conflict(orderRecord.Version, "order/item version mismatch");
+        }
+
+        var updated = LoadOrder(db, orderRecord.InternalId) ?? order;
+        return StoreOperationResult.Success(updated);
+    }
+
+    public StoreOperationResult TryStartRun(string orderId, RunOrderRequest request, string actor)
+    {
+        if (string.IsNullOrWhiteSpace(orderId))
+            return StoreOperationResult.BadRequest("order id is required");
+
+        using var db = _dbContextFactory.CreateDbContext();
+        using var tx = db.Database.BeginTransaction();
+
+        var normalizedOrderId = orderId.Trim();
+        var orderRecord = db.Orders.FirstOrDefault(x => x.InternalId == normalizedOrderId);
+        if (orderRecord == null)
+            return StoreOperationResult.NotFound();
+
+        if (request.ExpectedOrderVersion > 0 && orderRecord.Version != request.ExpectedOrderVersion)
+            return StoreOperationResult.Conflict(orderRecord.Version, "order version mismatch");
+
+        var lockRecord = db.OrderRunLocks.FirstOrDefault(x => x.OrderInternalId == normalizedOrderId);
+        if (lockRecord != null && lockRecord.IsActive)
+            return StoreOperationResult.Conflict(orderRecord.Version, "run already active");
+
+        var leaseToken = Guid.NewGuid().ToString("N");
+        if (lockRecord == null)
+        {
+            db.OrderRunLocks.Add(new OrderRunLockRecord
+            {
+                OrderInternalId = normalizedOrderId,
+                IsActive = true,
+                LeaseToken = leaseToken,
+                LeaseOwner = actor ?? string.Empty,
+                StartedAt = DateTime.Now,
+                UpdatedAt = DateTime.Now
+            });
+        }
+        else
+        {
+            lockRecord.IsActive = true;
+            lockRecord.LeaseToken = leaseToken;
+            lockRecord.LeaseOwner = actor ?? string.Empty;
+            lockRecord.StartedAt = DateTime.Now;
+            lockRecord.UpdatedAt = DateTime.Now;
+        }
+
+        var order = DeserializeOrder(orderRecord);
+        order.Version = orderRecord.Version + 1;
+        order.Status = "Processing";
+        order.LastStatusAt = DateTime.Now;
+        order.LastStatusSource = "api";
+        order.LastStatusReason = "run-started";
+        ApplyOrderRecord(orderRecord, order);
+
+        db.OrderEvents.Add(BuildEventRecord(orderRecord.InternalId, string.Empty, "run", "api", actor ?? string.Empty, new
+        {
+            lease_token = leaseToken,
+            order_version = order.Version
+        }));
+
+        try
+        {
+            db.SaveChanges();
+            tx.Commit();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return StoreOperationResult.Conflict(orderRecord.Version, "order version mismatch");
+        }
+
+        var updated = LoadOrder(db, orderRecord.InternalId) ?? order;
+        return StoreOperationResult.Success(updated);
+    }
+
+    public StoreOperationResult TryStopRun(string orderId, StopOrderRequest request, string actor)
+    {
+        if (string.IsNullOrWhiteSpace(orderId))
+            return StoreOperationResult.BadRequest("order id is required");
+
+        using var db = _dbContextFactory.CreateDbContext();
+        using var tx = db.Database.BeginTransaction();
+
+        var normalizedOrderId = orderId.Trim();
+        var orderRecord = db.Orders.FirstOrDefault(x => x.InternalId == normalizedOrderId);
+        if (orderRecord == null)
+            return StoreOperationResult.NotFound();
+
+        if (request.ExpectedOrderVersion > 0 && orderRecord.Version != request.ExpectedOrderVersion)
+            return StoreOperationResult.Conflict(orderRecord.Version, "order version mismatch");
+
+        var lockRecord = db.OrderRunLocks.FirstOrDefault(x => x.OrderInternalId == normalizedOrderId);
+        if (lockRecord == null || !lockRecord.IsActive)
+            return StoreOperationResult.BadRequest("run is not active");
+
+        lockRecord.IsActive = false;
+        lockRecord.UpdatedAt = DateTime.Now;
+
+        var order = DeserializeOrder(orderRecord);
+        order.Version = orderRecord.Version + 1;
+        order.Status = "Cancelled";
+        order.LastStatusAt = DateTime.Now;
+        order.LastStatusSource = "api";
+        order.LastStatusReason = "run-stopped";
+        ApplyOrderRecord(orderRecord, order);
+
+        db.OrderEvents.Add(BuildEventRecord(orderRecord.InternalId, string.Empty, "stop", "api", actor, new
+        {
+            lease_token = lockRecord.LeaseToken,
+            order_version = order.Version
+        }));
+
+        try
+        {
+            db.SaveChanges();
+            tx.Commit();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return StoreOperationResult.Conflict(orderRecord.Version, "order version mismatch");
         }
 
         var updated = LoadOrder(db, orderRecord.InternalId) ?? order;

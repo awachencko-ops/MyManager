@@ -11,6 +11,7 @@ public sealed class InMemoryLanOrderStore : ILanOrderStore
 {
     private readonly object _sync = new();
     private readonly Dictionary<string, SharedOrder> _ordersById = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _activeRunTokensByOrder = new(StringComparer.Ordinal);
     private readonly List<SharedOrderEvent> _events = new();
     private long _eventSequence;
 
@@ -252,6 +253,66 @@ public sealed class InMemoryLanOrderStore : ILanOrderStore
 
             order.Version++;
             AppendEvent(order.InternalId, string.Empty, "topology", "api", actor, new { operation = "reorder-items", order_version = order.Version });
+            return StoreOperationResult.Success(CloneOrder(order));
+        }
+    }
+
+    public StoreOperationResult TryStartRun(string orderId, RunOrderRequest request, string actor)
+    {
+        lock (_sync)
+        {
+            if (!_ordersById.TryGetValue(orderId ?? string.Empty, out var order))
+                return StoreOperationResult.NotFound();
+
+            if (request.ExpectedOrderVersion > 0 && order.Version != request.ExpectedOrderVersion)
+                return StoreOperationResult.Conflict(order.Version, "order version mismatch");
+
+            if (_activeRunTokensByOrder.ContainsKey(order.InternalId))
+                return StoreOperationResult.Conflict(order.Version, "run already active");
+
+            var token = Guid.NewGuid().ToString("N");
+            _activeRunTokensByOrder[order.InternalId] = token;
+
+            order.Version++;
+            order.Status = "Processing";
+            order.LastStatusAt = DateTime.Now;
+            order.LastStatusSource = "api";
+            order.LastStatusReason = "run-started";
+
+            AppendEvent(order.InternalId, string.Empty, "run", "api", actor, new
+            {
+                lease_token = token,
+                version = order.Version
+            });
+
+            return StoreOperationResult.Success(CloneOrder(order));
+        }
+    }
+
+    public StoreOperationResult TryStopRun(string orderId, StopOrderRequest request, string actor)
+    {
+        lock (_sync)
+        {
+            if (!_ordersById.TryGetValue(orderId ?? string.Empty, out var order))
+                return StoreOperationResult.NotFound();
+
+            if (request.ExpectedOrderVersion > 0 && order.Version != request.ExpectedOrderVersion)
+                return StoreOperationResult.Conflict(order.Version, "order version mismatch");
+
+            if (!_activeRunTokensByOrder.Remove(order.InternalId))
+                return StoreOperationResult.BadRequest("run is not active");
+
+            order.Version++;
+            order.Status = "Cancelled";
+            order.LastStatusAt = DateTime.Now;
+            order.LastStatusSource = "api";
+            order.LastStatusReason = "run-stopped";
+
+            AppendEvent(order.InternalId, string.Empty, "stop", "api", actor, new
+            {
+                version = order.Version
+            });
+
             return StoreOperationResult.Success(CloneOrder(order));
         }
     }

@@ -152,6 +152,9 @@
 6. Текущее состояние test-pack: `dotnet test Replica.sln` -> `42/42 PASS`:
    - `tests/Replica.VerifyTests`: `17/17 PASS`
    - `tests/Replica.UiSmokeTests`: `25/25 PASS`
+7. Повторная регрессия после расширения этапа 3 (2026-03-20):
+   - `dotnet test Replica.sln` -> `52/52 PASS` (`27/27 Verify`, `25/25 UiSmoke`);
+   - `REPLICA_RUN_PG_INTEGRATION=1 dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj` -> `27/27 PASS`.
 
 ## 6. Риски и контрмеры
 
@@ -174,6 +177,7 @@
 1. Все пункты `E2-P1`...`E2-P6` имеют статус `Completed`.
 2. Live-проверка PostgreSQL подтверждена (`orders=10`, `items=11`, `orphan_items=0`, bootstrap-marker присутствует).
 3. Тестовый baseline подтвержден: `dotnet test Replica.sln` -> `42/42 PASS`.
+4. Актуальный повторный baseline (2026-03-20): `dotnet test Replica.sln` -> `52/52 PASS`.
 
 ## 8. Связь с этапами
 
