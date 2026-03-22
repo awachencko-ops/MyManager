@@ -128,6 +128,7 @@ public sealed class OrderApplicationServiceTests
             orderDeleteCommandService: new OrderDeleteCommandService(),
             orderItemDeleteCommandService: new OrderItemDeleteCommandService(itemMutationService: orderItemMutationService),
             orderStatusTransitionService: new OrderStatusTransitionService(),
-            orderStorageVersionSyncService: new OrderStorageVersionSyncService());
+            orderStorageVersionSyncService: new OrderStorageVersionSyncService(),
+            lanOrderWriteCommandService: new LanOrderWriteCommandService(new LanOrderWriteApiGateway()));
     }
 }

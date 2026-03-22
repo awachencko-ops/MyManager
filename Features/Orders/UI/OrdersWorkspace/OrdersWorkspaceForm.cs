@@ -159,6 +159,30 @@ namespace Replica
             if (order == null)
                 return;
 
+            if (ShouldUseLanRunApi())
+            {
+                var writeResult = _orderApplicationService
+                    .TryCreateOrderViaLanApiAsync(
+                        order,
+                        _lanApiBaseUrl,
+                        ResolveLanApiActor(),
+                        NormalizeOrderUserName)
+                    .GetAwaiter()
+                    .GetResult();
+
+                if (!writeResult.IsSuccess || writeResult.Order == null)
+                {
+                    ShowLanWriteError(writeResult, "Создание заказа");
+                    return;
+                }
+
+                UpsertOrderInHistory(writeResult.Order);
+                TryRefreshRepositorySnapshotFromStorage(_orderHistory, "lan-api-create-order");
+                RebuildOrdersGrid();
+                TryRestoreSelectedRowByTag(OrderGridLogic.BuildOrderTag(writeResult.Order.InternalId));
+                return;
+            }
+
             var orderInternalId = _orderApplicationService.AddCreatedOrder(
                 _orderHistory,
                 order,
@@ -198,6 +222,38 @@ namespace Replica
             if (form.ShowDialog(this) != DialogResult.OK)
                 return;
 
+            if (ShouldUseLanRunApi())
+            {
+                var updatedOrder = new OrderData
+                {
+                    Id = form.OrderNumber?.Trim() ?? string.Empty,
+                    OrderDate = form.OrderDate,
+                    UserName = order.UserName,
+                    Status = order.Status,
+                    Keyword = order.Keyword,
+                    FolderName = order.FolderName,
+                    PitStopAction = order.PitStopAction,
+                    ImposingAction = order.ImposingAction
+                };
+
+                var writeResult = _orderApplicationService
+                    .TryUpdateOrderViaLanApiAsync(
+                        order,
+                        updatedOrder,
+                        _lanApiBaseUrl,
+                        ResolveLanApiActor(),
+                        NormalizeOrderUserName)
+                    .GetAwaiter()
+                    .GetResult();
+
+                if (!TryApplyLanOrderUpdateResult(order, writeResult, "Редактирование заказа"))
+                    return;
+
+                RebuildOrdersGrid();
+                TryRestoreSelectedRowByTag(OrderGridLogic.BuildOrderTag(order.InternalId));
+                return;
+            }
+
             _orderApplicationService.ApplySimpleEdit(order, form.OrderNumber, form.OrderDate);
 
             SaveHistory();
@@ -211,11 +267,99 @@ namespace Replica
             if (form.ShowDialog(this) != DialogResult.OK || form.ResultOrder == null)
                 return;
 
+            if (ShouldUseLanRunApi())
+            {
+                var writeResult = _orderApplicationService
+                    .TryUpdateOrderViaLanApiAsync(
+                        order,
+                        form.ResultOrder,
+                        _lanApiBaseUrl,
+                        ResolveLanApiActor(),
+                        NormalizeOrderUserName)
+                    .GetAwaiter()
+                    .GetResult();
+
+                if (!TryApplyLanOrderUpdateResult(order, writeResult, "Редактирование заказа"))
+                    return;
+
+                RebuildOrdersGrid();
+                TryRestoreSelectedRowByTag(OrderGridLogic.BuildOrderTag(order.InternalId));
+                return;
+            }
+
             _orderApplicationService.ApplyExtendedEdit(order, form.ResultOrder);
 
             SaveHistory();
             RebuildOrdersGrid();
             TryRestoreSelectedRowByTag(OrderGridLogic.BuildOrderTag(order.InternalId));
+        }
+
+        private bool TryApplyLanOrderUpdateResult(OrderData targetOrder, LanOrderWriteCommandResult writeResult, string operationCaption)
+        {
+            if (targetOrder == null)
+                return false;
+
+            if (writeResult.IsSuccess && writeResult.Order != null)
+            {
+                if (string.Equals(targetOrder.InternalId, writeResult.Order.InternalId, StringComparison.Ordinal))
+                    UpsertOrderInHistory(writeResult.Order);
+
+                TryRefreshRepositorySnapshotFromStorage(_orderHistory, "lan-api-update-order");
+                return true;
+            }
+
+            if (writeResult.CurrentVersion > 0)
+                targetOrder.StorageVersion = writeResult.CurrentVersion;
+
+            ShowLanWriteError(writeResult, operationCaption);
+            return false;
+        }
+
+        private void UpsertOrderInHistory(OrderData updatedOrder)
+        {
+            if (updatedOrder == null)
+                return;
+
+            var index = _orderHistory.FindIndex(order =>
+                order != null
+                && string.Equals(order.InternalId, updatedOrder.InternalId, StringComparison.Ordinal));
+
+            if (index >= 0)
+            {
+                _orderHistory[index] = updatedOrder;
+                return;
+            }
+
+            _orderHistory.Add(updatedOrder);
+        }
+
+        private void ShowLanWriteError(LanOrderWriteCommandResult writeResult, string operationCaption)
+        {
+            var defaultError = "LAN API недоступен";
+            var errorText = string.IsNullOrWhiteSpace(writeResult.Error)
+                ? defaultError
+                : writeResult.Error;
+
+            if (writeResult.IsConflict)
+            {
+                TryRefreshRepositorySnapshotFromStorage(_orderHistory, "lan-api-write-conflict");
+                SetBottomStatus($"{operationCaption}: конфликт версии");
+                MessageBox.Show(
+                    this,
+                    $"Сервер отклонил запись из-за конфликта версии.{Environment.NewLine}{errorText}",
+                    operationCaption,
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+                return;
+            }
+
+            SetBottomStatus($"{operationCaption} не выполнено");
+            MessageBox.Show(
+                this,
+                $"{operationCaption} не выполнено.{Environment.NewLine}{errorText}",
+                operationCaption,
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
         }
 
         private void LoadSettings()

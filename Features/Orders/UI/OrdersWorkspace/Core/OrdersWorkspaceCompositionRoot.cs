@@ -18,6 +18,7 @@ internal static class OrdersWorkspaceCompositionRoot
     public static OrdersWorkspaceRuntimeServices CreateRuntimeServices()
     {
         var lanRunCommandCoordinator = new LanRunCommandCoordinator(new LanOrderRunApiGateway());
+        var lanOrderWriteCommandService = new LanOrderWriteCommandService(new LanOrderWriteApiGateway());
         var orderRunStateService = new OrderRunStateService();
         var orderRunWorkflowOrchestrationService = new OrderRunWorkflowOrchestrationService(
             orderRunStateService,
@@ -48,7 +49,8 @@ internal static class OrdersWorkspaceCompositionRoot
             orderDeleteCommandService: new OrderDeleteCommandService(),
             orderItemDeleteCommandService: new OrderItemDeleteCommandService(itemMutationService: orderItemMutationService),
             orderStatusTransitionService: new OrderStatusTransitionService(),
-            orderStorageVersionSyncService: new OrderStorageVersionSyncService());
+            orderStorageVersionSyncService: new OrderStorageVersionSyncService(),
+            lanOrderWriteCommandService: lanOrderWriteCommandService);
 
         return new OrdersWorkspaceRuntimeServices(
             orderApplicationService: orderApplicationService);

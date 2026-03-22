@@ -115,6 +115,8 @@ public sealed class PostgreSqlLanOrderStore : ILanOrderStore
         using var tx = connection.BeginTransaction();
 
         var now = DateTime.Now;
+        var managerOrderDate = request.ManagerOrderDate ?? DateTime.Today;
+        var arrivalDate = request.ArrivalDate ?? now;
         var order = new SharedOrder
         {
             InternalId = Guid.NewGuid().ToString("N"),
@@ -129,8 +131,8 @@ public sealed class PostgreSqlLanOrderStore : ILanOrderStore
             TopologyMarker = request.TopologyMarker,
             PitStopAction = request.PitStopAction?.Trim() ?? "-",
             ImposingAction = request.ImposingAction?.Trim() ?? "-",
-            ManagerOrderDate = DateTime.Today,
-            ArrivalDate = now,
+            ManagerOrderDate = managerOrderDate == default ? DateTime.Today : managerOrderDate,
+            ArrivalDate = arrivalDate == default ? now : arrivalDate,
             LastStatusAt = now,
             LastStatusSource = "api",
             LastStatusReason = "create-order",
@@ -178,6 +180,10 @@ public sealed class PostgreSqlLanOrderStore : ILanOrderStore
         if (currentVersion != request.ExpectedVersion)
             return StoreOperationResult.Conflict(currentVersion, "order version mismatch");
 
+        if (request.OrderNumber != null)
+            order.OrderNumber = request.OrderNumber.Trim();
+        if (request.ManagerOrderDate.HasValue)
+            order.ManagerOrderDate = request.ManagerOrderDate.Value;
         if (request.UserName != null)
             order.UserName = request.UserName.Trim();
         if (request.Status != null)

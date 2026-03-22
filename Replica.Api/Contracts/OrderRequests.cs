@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+using System;
+using System.Collections.Generic;
 using Replica.Shared.Models;
 
 namespace Replica.Api.Contracts;
@@ -16,12 +17,16 @@ public sealed class CreateOrderRequest
     public SharedOrderTopologyMarker TopologyMarker { get; set; } = SharedOrderTopologyMarker.Unknown;
     public string PitStopAction { get; set; } = "-";
     public string ImposingAction { get; set; } = "-";
+    public DateTime? ArrivalDate { get; set; }
+    public DateTime? ManagerOrderDate { get; set; }
     public List<SharedOrderItem>? Items { get; set; }
 }
 
 public sealed class UpdateOrderRequest
 {
     public long ExpectedVersion { get; set; }
+    public string? OrderNumber { get; set; }
+    public DateTime? ManagerOrderDate { get; set; }
     public string? UserName { get; set; }
     public string? Status { get; set; }
     public string? Keyword { get; set; }

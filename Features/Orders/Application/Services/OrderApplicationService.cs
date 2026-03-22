@@ -34,6 +34,19 @@ public interface IOrderApplicationService
     string AddCreatedOrder(ICollection<OrderData> orderHistory, OrderData order, Func<string, string> normalizeUserName);
     void ApplySimpleEdit(OrderData order, string orderNumber, DateTime orderDate);
     void ApplyExtendedEdit(OrderData targetOrder, OrderData updatedOrder);
+    Task<LanOrderWriteCommandResult> TryCreateOrderViaLanApiAsync(
+        OrderData order,
+        string lanApiBaseUrl,
+        string actor,
+        Func<string, string> normalizeUserName,
+        CancellationToken cancellationToken = default);
+    Task<LanOrderWriteCommandResult> TryUpdateOrderViaLanApiAsync(
+        OrderData currentOrder,
+        OrderData updatedOrder,
+        string lanApiBaseUrl,
+        string actor,
+        Func<string, string> normalizeUserName,
+        CancellationToken cancellationToken = default);
 
     Task<OrderRunStartPhaseResult> PrepareAndBeginRunAsync(
         IReadOnlyCollection<OrderData> selectedOrders,
@@ -146,6 +159,7 @@ public sealed class OrderApplicationService : IOrderApplicationService
     private readonly OrderItemDeleteCommandService _orderItemDeleteCommandService;
     private readonly OrderStatusTransitionService _orderStatusTransitionService;
     private readonly OrderStorageVersionSyncService _orderStorageVersionSyncService;
+    private readonly LanOrderWriteCommandService _lanOrderWriteCommandService;
 
     public OrderApplicationService(
         OrderRunCommandService orderRunCommandService,
@@ -161,7 +175,8 @@ public sealed class OrderApplicationService : IOrderApplicationService
         OrderDeleteCommandService orderDeleteCommandService,
         OrderItemDeleteCommandService orderItemDeleteCommandService,
         OrderStatusTransitionService orderStatusTransitionService,
-        OrderStorageVersionSyncService orderStorageVersionSyncService)
+        OrderStorageVersionSyncService orderStorageVersionSyncService,
+        LanOrderWriteCommandService lanOrderWriteCommandService)
     {
         _orderRunCommandService = orderRunCommandService ?? throw new ArgumentNullException(nameof(orderRunCommandService));
         _orderRunFeedbackService = orderRunFeedbackService ?? throw new ArgumentNullException(nameof(orderRunFeedbackService));
@@ -177,6 +192,7 @@ public sealed class OrderApplicationService : IOrderApplicationService
         _orderItemDeleteCommandService = orderItemDeleteCommandService ?? throw new ArgumentNullException(nameof(orderItemDeleteCommandService));
         _orderStatusTransitionService = orderStatusTransitionService ?? throw new ArgumentNullException(nameof(orderStatusTransitionService));
         _orderStorageVersionSyncService = orderStorageVersionSyncService ?? throw new ArgumentNullException(nameof(orderStorageVersionSyncService));
+        _lanOrderWriteCommandService = lanOrderWriteCommandService ?? throw new ArgumentNullException(nameof(lanOrderWriteCommandService));
     }
 
     public string OrdersRepositoryBackendName => _ordersHistoryRepositoryCoordinator.BackendName;
@@ -239,6 +255,34 @@ public sealed class OrderApplicationService : IOrderApplicationService
 
     public void ApplyExtendedEdit(OrderData targetOrder, OrderData updatedOrder)
         => _orderEditorMutationService.ApplyExtendedEdit(targetOrder, updatedOrder);
+
+    public Task<LanOrderWriteCommandResult> TryCreateOrderViaLanApiAsync(
+        OrderData order,
+        string lanApiBaseUrl,
+        string actor,
+        Func<string, string> normalizeUserName,
+        CancellationToken cancellationToken = default)
+        => _lanOrderWriteCommandService.TryCreateOrderAsync(
+            order,
+            lanApiBaseUrl,
+            actor,
+            normalizeUserName,
+            cancellationToken);
+
+    public Task<LanOrderWriteCommandResult> TryUpdateOrderViaLanApiAsync(
+        OrderData currentOrder,
+        OrderData updatedOrder,
+        string lanApiBaseUrl,
+        string actor,
+        Func<string, string> normalizeUserName,
+        CancellationToken cancellationToken = default)
+        => _lanOrderWriteCommandService.TryUpdateOrderAsync(
+            currentOrder,
+            updatedOrder,
+            lanApiBaseUrl,
+            actor,
+            normalizeUserName,
+            cancellationToken);
 
     public Task<OrderRunStartPhaseResult> PrepareAndBeginRunAsync(
         IReadOnlyCollection<OrderData> selectedOrders,

@@ -64,6 +64,9 @@ public sealed class InMemoryLanOrderStore : ILanOrderStore
     {
         lock (_sync)
         {
+            var now = DateTime.Now;
+            var managerOrderDate = request.ManagerOrderDate ?? DateTime.Today;
+            var arrivalDate = request.ArrivalDate ?? now;
             var order = new SharedOrder
             {
                 InternalId = Guid.NewGuid().ToString("N"),
@@ -78,8 +81,10 @@ public sealed class InMemoryLanOrderStore : ILanOrderStore
                 TopologyMarker = request.TopologyMarker,
                 PitStopAction = request.PitStopAction?.Trim() ?? "-",
                 ImposingAction = request.ImposingAction?.Trim() ?? "-",
+                ManagerOrderDate = managerOrderDate == default ? DateTime.Today : managerOrderDate,
+                ArrivalDate = arrivalDate == default ? now : arrivalDate,
                 Version = 1,
-                LastStatusAt = DateTime.Now
+                LastStatusAt = now
             };
 
             var items = request.Items ?? new List<SharedOrderItem>();
@@ -110,6 +115,10 @@ public sealed class InMemoryLanOrderStore : ILanOrderStore
             if (order.Version != request.ExpectedVersion)
                 return StoreOperationResult.Conflict(order.Version, "order version mismatch");
 
+            if (request.OrderNumber != null)
+                order.OrderNumber = request.OrderNumber.Trim();
+            if (request.ManagerOrderDate.HasValue)
+                order.ManagerOrderDate = request.ManagerOrderDate.Value;
             if (request.UserName != null)
                 order.UserName = request.UserName.Trim();
             if (request.Status != null)

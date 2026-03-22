@@ -125,6 +125,8 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
         using var tx = db.Database.BeginTransaction();
 
         var now = DateTime.Now;
+        var managerOrderDate = request.ManagerOrderDate ?? DateTime.Today;
+        var arrivalDate = request.ArrivalDate ?? now;
         var normalizedActor = actor?.Trim() ?? string.Empty;
         var order = new SharedOrder
         {
@@ -140,8 +142,8 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
             TopologyMarker = request.TopologyMarker,
             PitStopAction = request.PitStopAction?.Trim() ?? "-",
             ImposingAction = request.ImposingAction?.Trim() ?? "-",
-            ManagerOrderDate = DateTime.Today,
-            ArrivalDate = now,
+            ManagerOrderDate = managerOrderDate == default ? DateTime.Today : managerOrderDate,
+            ArrivalDate = arrivalDate == default ? now : arrivalDate,
             LastStatusAt = now,
             LastStatusSource = "api",
             LastStatusReason = "create-order",
@@ -193,6 +195,10 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
 
         var order = DeserializeOrder(orderRecord);
 
+        if (request.OrderNumber != null)
+            order.OrderNumber = request.OrderNumber.Trim();
+        if (request.ManagerOrderDate.HasValue)
+            order.ManagerOrderDate = request.ManagerOrderDate.Value;
         if (request.UserName != null)
             order.UserName = request.UserName.Trim();
         if (request.Status != null)

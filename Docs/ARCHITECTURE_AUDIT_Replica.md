@@ -328,6 +328,9 @@
 30. Итерация 30 (2026-03-20, адресная): закрыт срез history/folder orchestration за единым boundary.
    - Что сделано: `IOrderApplicationService` расширен методами history/folder orchestration (`Configure/Load/Save/AppendEvent`, post-load/pre-save maintenance, topology/hash maintenance, folder resolve); `OrdersWorkspaceForm` убрал прямые поля `OrdersHistoryRepositoryCoordinator`/`OrdersHistoryMaintenanceService`/`OrderFolderPathResolutionService` и использует единый фасад.
    - Эффект: форма дополнительно упрощена до UI-shell/presenter роли, снижена связность с persistence/path-policy деталями и завершён запланированный history/folder DI-cutover шаг.
+31. Итерация 31 (2026-03-23, адресная): закрыт следующий write-boundary срез для LAN `create/update` (order-level).
+   - Что сделано: добавлены `LanOrderWriteApiGateway` и `LanOrderWriteCommandService`, `IOrderApplicationService` расширен LAN write-методами; `OrdersWorkspaceForm` переведён на LAN API для создания и редактирования заказа в режиме `LAN PostgreSQL` (без локального `SaveAll` сразу после успешной серверной записи); в API-контрактах расширены `CreateOrderRequest/UpdateOrderRequest` полями `ManagerOrderDate` и `OrderNumber`, обновлены реализации `EfCoreLanOrderStore/InMemoryLanOrderStore/PostgreSqlLanOrderStore`.
+   - Эффект: снижён риск рассинхронизации UI и PostgreSQL в базовых user-flow `create/edit`, улучшена двусторонняя синхронизация (операции фиксируются сервером и сразу видны в DBeaver/других клиентах), при конфликтах версия и snapshot корректно синхронизируются через refresh.
 
 ---
 
