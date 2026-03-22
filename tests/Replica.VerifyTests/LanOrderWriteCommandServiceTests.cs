@@ -108,6 +108,7 @@ public sealed class LanOrderWriteCommandServiceTests
         Assert.Equal("2002", gateway.LastUpdateRequest.OrderNumber);
         Assert.Equal(new DateTime(2026, 3, 24), gateway.LastUpdateRequest.ManagerOrderDate);
         Assert.Equal("operator-2", gateway.LastUpdateRequest.UserName);
+        Assert.Equal("Waiting", gateway.LastUpdateRequest.Status);
         Assert.NotNull(result.Order);
         Assert.Equal(15, result.Order!.StorageVersion);
     }

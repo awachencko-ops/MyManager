@@ -1232,7 +1232,19 @@ namespace Replica
                 });
 
             if (persistHistory)
-                SaveHistory();
+            {
+                var persistedViaLanApi = TryPersistOrderStatusViaLanApi(order, transition.Source, transition.Reason);
+                if (!persistedViaLanApi)
+                {
+                    if (ShouldUseLanRunApi())
+                    {
+                        Logger.Warn(
+                            $"LAN-API | status-update-fallback-local-save | order={GetOrderDisplayId(order)} | status={transition.NewStatus}");
+                    }
+
+                    SaveHistory();
+                }
+            }
             if (rebuildGrid)
                 RebuildOrdersGrid();
 

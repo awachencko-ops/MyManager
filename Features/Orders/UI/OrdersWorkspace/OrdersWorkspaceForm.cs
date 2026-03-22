@@ -315,6 +315,68 @@ namespace Replica
             return false;
         }
 
+        private bool TryPersistOrderStatusViaLanApi(OrderData order, string source, string reason)
+        {
+            if (order == null || !ShouldUseLanRunApi())
+                return false;
+
+            var statusUpdateModel = new OrderData
+            {
+                Id = order.Id,
+                OrderDate = order.OrderDate,
+                UserName = order.UserName,
+                Status = order.Status,
+                Keyword = order.Keyword,
+                FolderName = order.FolderName,
+                PitStopAction = order.PitStopAction,
+                ImposingAction = order.ImposingAction
+            };
+
+            var writeResult = _orderApplicationService
+                .TryUpdateOrderViaLanApiAsync(
+                    order,
+                    statusUpdateModel,
+                    _lanApiBaseUrl,
+                    ResolveLanApiActor(),
+                    NormalizeOrderUserName)
+                .GetAwaiter()
+                .GetResult();
+
+            if (writeResult.IsSuccess && writeResult.Order != null)
+            {
+                ApplyLanStatusSnapshot(order, writeResult.Order);
+                TryRefreshRepositorySnapshotFromStorage(_orderHistory, "lan-api-status-update");
+                return true;
+            }
+
+            if (writeResult.CurrentVersion > 0)
+                order.StorageVersion = writeResult.CurrentVersion;
+
+            var errorText = string.IsNullOrWhiteSpace(writeResult.Error)
+                ? "LAN status update failed"
+                : writeResult.Error;
+            Logger.Warn(
+                $"LAN-API | status-update-failed | order={GetOrderDisplayId(order)} | source={source} | reason={reason} | conflict={(writeResult.IsConflict ? "1" : "0")} | unavailable={(writeResult.IsUnavailable ? "1" : "0")} | {errorText}");
+            return false;
+        }
+
+        private static void ApplyLanStatusSnapshot(OrderData localOrder, OrderData serverOrder)
+        {
+            if (localOrder == null || serverOrder == null)
+                return;
+
+            if (serverOrder.StorageVersion > 0)
+                localOrder.StorageVersion = serverOrder.StorageVersion;
+            if (!string.IsNullOrWhiteSpace(serverOrder.Status))
+                localOrder.Status = serverOrder.Status.Trim();
+            if (!string.IsNullOrWhiteSpace(serverOrder.LastStatusSource))
+                localOrder.LastStatusSource = serverOrder.LastStatusSource.Trim();
+            if (!string.IsNullOrWhiteSpace(serverOrder.LastStatusReason))
+                localOrder.LastStatusReason = serverOrder.LastStatusReason.Trim();
+            if (serverOrder.LastStatusAt != default)
+                localOrder.LastStatusAt = serverOrder.LastStatusAt;
+        }
+
         private void UpsertOrderInHistory(OrderData updatedOrder)
         {
             if (updatedOrder == null)

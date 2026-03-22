@@ -43,3 +43,4 @@
 - P0 `Write-command boundary`: moved forward from `run/stop only` to `run/stop + create/update(order-level)` via LAN API gateway/command service.
 - In LAN mode, `OrdersWorkspaceForm` now sends create/edit to server API first and refreshes repository snapshot after success, reducing hidden divergence with PostgreSQL.
 - API contracts/store implementations now accept and persist `OrderNumber` + `ManagerOrderDate` in update path, so simple order edit no longer depends on local snapshot write for these fields.
+- Status persistence in LAN mode moved to API-first path (`SetOrderStatus` -> `TryUpdateOrderViaLanApiAsync`), with local history save kept only as controlled fallback when API update fails.

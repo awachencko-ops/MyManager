@@ -331,6 +331,9 @@
 31. Итерация 31 (2026-03-23, адресная): закрыт следующий write-boundary срез для LAN `create/update` (order-level).
    - Что сделано: добавлены `LanOrderWriteApiGateway` и `LanOrderWriteCommandService`, `IOrderApplicationService` расширен LAN write-методами; `OrdersWorkspaceForm` переведён на LAN API для создания и редактирования заказа в режиме `LAN PostgreSQL` (без локального `SaveAll` сразу после успешной серверной записи); в API-контрактах расширены `CreateOrderRequest/UpdateOrderRequest` полями `ManagerOrderDate` и `OrderNumber`, обновлены реализации `EfCoreLanOrderStore/InMemoryLanOrderStore/PostgreSqlLanOrderStore`.
    - Эффект: снижён риск рассинхронизации UI и PostgreSQL в базовых user-flow `create/edit`, улучшена двусторонняя синхронизация (операции фиксируются сервером и сразу видны в DBeaver/других клиентах), при конфликтах версия и snapshot корректно синхронизируются через refresh.
+32. Итерация 32 (2026-03-23, адресная): закрыт следующий write-boundary срез для LAN status persistence.
+   - Что сделано: `SetOrderStatus(..., persistHistory: true)` в `OrdersWorkspaceForm` переведён на приоритетный LAN API update-path (`TryUpdateOrderViaLanApiAsync`) через новый helper `TryPersistOrderStatusViaLanApi`; добавлен apply-снимка статуса (`version/status/last-status-*`) из server response и автоматический snapshot-refresh после успешного update; локальный `SaveHistory` оставлен только как controlled fallback при недоступности/конфликте API.
+   - Эффект: снижена доля статусных изменений, проходящих мимо server command boundary в LAN-режиме, и уменьшен риск «тихого» расхождения статусов между UI и PostgreSQL при длительных run/file-workflow сценариях.
 
 ---
 
