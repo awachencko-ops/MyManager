@@ -39,6 +39,12 @@ namespace Replica
             toolConnection.MouseEnter += ToolConnection_MouseEnter;
             toolConnection.Click -= ToolConnection_Click;
             toolConnection.Click += ToolConnection_Click;
+            toolConnection.AutoToolTip = false;
+
+            statusStrip1.MouseMove -= StatusStrip1_MouseMove;
+            statusStrip1.MouseMove += StatusStrip1_MouseMove;
+            statusStrip1.MouseLeave -= StatusStrip1_MouseLeave;
+            statusStrip1.MouseLeave += StatusStrip1_MouseLeave;
 
             _lanServerProbeCts?.Cancel();
             _lanServerProbeCts?.Dispose();
@@ -68,6 +74,27 @@ namespace Replica
         {
             RequestLanServerProbe("hover", force: true);
             UpdateTrayConnectionIndicator();
+            ShowPersistentConnectionToolTip();
+        }
+
+        private void StatusStrip1_MouseMove(object? sender, MouseEventArgs e)
+        {
+            if (statusStrip1.IsDisposed)
+                return;
+
+            var hoveredItem = statusStrip1.GetItemAt(e.Location);
+            if (hoveredItem == toolConnection)
+            {
+                ShowPersistentConnectionToolTip();
+                return;
+            }
+
+            HidePersistentConnectionToolTip();
+        }
+
+        private void StatusStrip1_MouseLeave(object? sender, EventArgs e)
+        {
+            HidePersistentConnectionToolTip();
         }
 
         private async void ToolConnection_Click(object? sender, EventArgs e)
@@ -143,6 +170,10 @@ namespace Replica
 
             toolConnection.MouseEnter -= ToolConnection_MouseEnter;
             toolConnection.Click -= ToolConnection_Click;
+            statusStrip1.MouseMove -= StatusStrip1_MouseMove;
+            statusStrip1.MouseLeave -= StatusStrip1_MouseLeave;
+            HidePersistentConnectionToolTip();
+            _connectionStatusToolTip.Dispose();
 
             if (_trayIndicatorsTimer != null)
             {
@@ -253,6 +284,7 @@ namespace Replica
             toolConnection.ToolTipText = string.IsNullOrWhiteSpace(dependencyHealthSummary)
                 ? $"{connectionStatusText}\n{_usersDirectoryStatusText}"
                 : $"{connectionStatusText}\n{dependencyHealthSummary}\n{_usersDirectoryStatusText}";
+            RefreshPersistentConnectionToolTip();
             UpdateServerHeaderConnectionState(shortStatusText, statusColor);
         }
 
@@ -367,7 +399,56 @@ namespace Replica
             toolConnection.ActiveLinkColor = statusColor;
             toolConnection.VisitedLinkColor = statusColor;
             toolConnection.ToolTipText = BuildLanConnectionToolTip(snapshot, dependencyHealthLevel, probeInProgress, requestCount);
+            RefreshPersistentConnectionToolTip();
             UpdateServerHeaderConnectionState(shortStatusText, statusColor);
+        }
+
+        private void RefreshPersistentConnectionToolTip()
+        {
+            if (!_connectionStatusToolTipVisible)
+                return;
+
+            ShowPersistentConnectionToolTip(forceRefresh: true);
+        }
+
+        private void ShowPersistentConnectionToolTip(bool forceRefresh = false)
+        {
+            if (statusStrip1.IsDisposed || toolConnection.IsDisposed)
+                return;
+
+            var toolTipText = toolConnection.ToolTipText ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(toolTipText))
+            {
+                HidePersistentConnectionToolTip();
+                return;
+            }
+
+            if (!forceRefresh
+                && _connectionStatusToolTipVisible
+                && string.Equals(_connectionStatusToolTipText, toolTipText, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            var bounds = toolConnection.Bounds;
+            var x = Math.Max(bounds.Left + 8, 0);
+            var y = -Math.Max(bounds.Height + 12, 36);
+
+            _connectionStatusToolTip.Hide(statusStrip1);
+            _connectionStatusToolTip.Show(toolTipText, statusStrip1, x, y);
+            _connectionStatusToolTipVisible = true;
+            _connectionStatusToolTipText = toolTipText;
+        }
+
+        private void HidePersistentConnectionToolTip()
+        {
+            if (!_connectionStatusToolTipVisible)
+                return;
+
+            if (!statusStrip1.IsDisposed)
+                _connectionStatusToolTip.Hide(statusStrip1);
+            _connectionStatusToolTipVisible = false;
+            _connectionStatusToolTipText = string.Empty;
         }
 
         private string BuildLanConnectionToolTip(
