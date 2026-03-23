@@ -179,7 +179,7 @@ namespace Replica
             statusStrip1.MouseMove -= StatusStrip1_MouseMove;
             statusStrip1.MouseLeave -= StatusStrip1_MouseLeave;
             HidePersistentConnectionToolTip();
-            _connectionStatusToolTip.Dispose();
+            _connectionStatusPopup.Dispose();
 
             if (_trayIndicatorsTimer != null)
             {
@@ -447,13 +447,9 @@ namespace Replica
             }
 
             var bounds = toolConnection.Bounds;
-            var x = Math.Max(bounds.Left + 8, 0);
-            var y = -Math.Max(bounds.Height + 12, 36);
-
-            _connectionStatusToolTip.Hide(statusStrip1);
-            _connectionStatusToolTip.Show(toolTipText, statusStrip1, x, y);
+            var anchorScreenPoint = statusStrip1.PointToScreen(new Point(bounds.Left + 8, bounds.Top - 8));
+            _connectionStatusPopup.ShowPopup(toolTipText, anchorScreenPoint);
             _connectionStatusToolTipVisible = true;
-            _connectionStatusToolTipText = toolTipText;
         }
 
         private void HidePersistentConnectionToolTip()
@@ -461,10 +457,8 @@ namespace Replica
             if (!_connectionStatusToolTipVisible)
                 return;
 
-            if (!statusStrip1.IsDisposed)
-                _connectionStatusToolTip.Hide(statusStrip1);
+            _connectionStatusPopup.Hide();
             _connectionStatusToolTipVisible = false;
-            _connectionStatusToolTipText = string.Empty;
 
             if (_pendingConnectionIndicatorRefresh && !toolConnection.IsDisposed)
                 UpdateTrayConnectionIndicator();
@@ -1566,7 +1560,95 @@ namespace Replica
 
             action();
         }
+    }
 
+    internal sealed class ConnectionStatusPopup : Form
+    {
+        private const int WsExToolWindow = 0x00000080;
+        private const int WsExTopmost = 0x00000008;
+        private const int WsExNoActivate = 0x08000000;
+        private readonly Label _contentLabel;
+
+        internal ConnectionStatusPopup()
+        {
+            FormBorderStyle = FormBorderStyle.None;
+            ShowInTaskbar = false;
+            StartPosition = FormStartPosition.Manual;
+            BackColor = Color.FromArgb(255, 255, 225);
+            Padding = new Padding(10, 8, 10, 8);
+            AutoScaleMode = AutoScaleMode.None;
+
+            _contentLabel = new Label
+            {
+                AutoSize = true,
+                MaximumSize = new Size(560, 0),
+                BackColor = Color.Transparent,
+                ForeColor = Color.Black
+            };
+
+            Controls.Add(_contentLabel);
+        }
+
+        protected override bool ShowWithoutActivation => true;
+
+        protected override CreateParams CreateParams
+        {
+            get
+            {
+                var createParams = base.CreateParams;
+                createParams.ExStyle |= WsExToolWindow | WsExTopmost | WsExNoActivate;
+                return createParams;
+            }
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            ControlPaint.DrawBorder(e.Graphics, ClientRectangle, Color.FromArgb(160, 160, 160), ButtonBorderStyle.Solid);
+        }
+
+        internal void ShowPopup(string text, Point anchorScreenPoint)
+        {
+            var normalizedText = text ?? string.Empty;
+            if (_contentLabel.Text != normalizedText)
+                _contentLabel.Text = normalizedText;
+
+            var preferredSize = _contentLabel.GetPreferredSize(new Size(560, 0));
+            ClientSize = new Size(preferredSize.Width + Padding.Horizontal, preferredSize.Height + Padding.Vertical);
+            _contentLabel.Location = new Point(Padding.Left, Padding.Top);
+
+            Location = new Point(
+                Math.Max(anchorScreenPoint.X, 0),
+                Math.Max(anchorScreenPoint.Y - Height, 0));
+
+            if (!Visible)
+            {
+                Show();
+                return;
+            }
+
+            if (WindowState == FormWindowState.Minimized)
+                WindowState = FormWindowState.Normal;
+
+            NativeMethods.SetWindowPos(Handle, NativeMethods.HWndTopMost, Location.X, Location.Y, Width, Height, NativeMethods.SwpNoActivate);
+            Invalidate();
+        }
+
+        private static class NativeMethods
+        {
+            internal static readonly IntPtr HWndTopMost = new(-1);
+            internal const uint SwpNoActivate = 0x0010;
+
+            [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+            internal static extern bool SetWindowPos(
+                IntPtr hWnd,
+                IntPtr hWndInsertAfter,
+                int x,
+                int y,
+                int cx,
+                int cy,
+                uint uFlags);
+        }
     }
 }
 

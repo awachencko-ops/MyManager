@@ -38,13 +38,7 @@ namespace Replica
         private readonly Dictionary<string, int> _runProgressByOrderInternalId = new(StringComparer.Ordinal);
         private readonly Dictionary<string, DependencyHealthLevel> _dependencyHealthByName = new(StringComparer.OrdinalIgnoreCase);
         private readonly HttpClient _lanStatusHttpClient = new() { Timeout = TimeSpan.FromSeconds(5) };
-        private readonly ToolTip _connectionStatusToolTip = new()
-        {
-            AutoPopDelay = 600000,
-            InitialDelay = 400,
-            ReshowDelay = 100,
-            ShowAlways = true
-        };
+        private readonly ConnectionStatusPopup _connectionStatusPopup = new();
         private readonly object _lanServerProbeSync = new();
         private readonly ISettingsProvider _settingsProvider;
         private readonly HashSet<string> _archivedFileNames = new(StringComparer.OrdinalIgnoreCase);
@@ -99,7 +93,6 @@ namespace Replica
         private bool _connectionStatusToolTipVisible;
         private bool _pendingConnectionIndicatorRefresh;
         private string _connectionStatusToolTipContent = string.Empty;
-        private string _connectionStatusToolTipText = string.Empty;
         private OrdersViewMode _ordersViewMode = OrdersViewMode.List;
 
         private readonly List<string> _users = ["Сервер \"Таудеми\""];
