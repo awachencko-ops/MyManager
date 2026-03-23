@@ -72,7 +72,6 @@ namespace Replica
 
         private void ToolConnection_MouseEnter(object? sender, EventArgs e)
         {
-            RequestLanServerProbe("hover", force: true);
             UpdateTrayConnectionIndicator();
             ShowPersistentConnectionToolTip();
         }
@@ -408,7 +407,9 @@ namespace Replica
             if (!_connectionStatusToolTipVisible)
                 return;
 
-            ShowPersistentConnectionToolTip(forceRefresh: true);
+            // Keep the current tooltip stable while the pointer stays hovered.
+            // Connection status updates frequently enough to cause visible flicker
+            // if we recreate the tooltip on every probe refresh.
         }
 
         private void ShowPersistentConnectionToolTip(bool forceRefresh = false)
@@ -423,9 +424,7 @@ namespace Replica
                 return;
             }
 
-            if (!forceRefresh
-                && _connectionStatusToolTipVisible
-                && string.Equals(_connectionStatusToolTipText, toolTipText, StringComparison.Ordinal))
+            if (!forceRefresh && _connectionStatusToolTipVisible)
             {
                 return;
             }
