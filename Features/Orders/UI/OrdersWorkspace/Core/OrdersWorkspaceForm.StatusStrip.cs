@@ -308,7 +308,10 @@ namespace Replica
         {
             var snapshot = GetLanServerProbeSnapshot(out var probeInProgress, out var requestCount);
 
-            var disconnected = !snapshot.ApiReachable || !snapshot.IsReady;
+            var disconnected = LanApiConnectionStatusEvaluator.IsDisconnected(
+                snapshot.ApiReachable,
+                snapshot.ConsecutiveFailureCount,
+                LanServerProbeFailureThreshold);
             _lanConnectionRecoveryActionEnabled = disconnected && !_lanApiRecoveryInProgress;
 
             string shortStatusText;
@@ -322,11 +325,26 @@ namespace Replica
                         : "не подключен");
                 statusColor = Color.Firebrick;
             }
-            else if (snapshot.IsDegraded
-                     || !snapshot.SloHealthy
-                     || dependencyHealthLevel != DependencyHealthLevel.Healthy)
+            else if (LanApiConnectionStatusEvaluator.IsTransientFailure(
+                         snapshot.ApiReachable,
+                         snapshot.ConsecutiveFailureCount,
+                         LanServerProbeFailureThreshold))
             {
-                shortStatusText = "подключен (деградация)";
+                shortStatusText = snapshot.CompletedAtUtc == DateTime.MinValue
+                    ? "проверка..."
+                    : "нестабильно, перепроверяем";
+                statusColor = Color.DarkOrange;
+            }
+            else if (LanApiConnectionStatusEvaluator.IsDegraded(
+                         snapshot.ApiReachable,
+                         snapshot.IsReady,
+                         snapshot.IsDegraded,
+                         snapshot.SloHealthy,
+                         dependencyHealthLevel))
+            {
+                shortStatusText = snapshot.IsReady
+                    ? "подключен (деградация)"
+                    : "API доступен, ждём ready";
                 statusColor = Color.DarkOrange;
             }
             else
@@ -379,6 +397,8 @@ namespace Replica
             }
 
             lines.Add($"Проверок за сессию: {requestCount}");
+            if (snapshot.ConsecutiveFailureCount > 0)
+                lines.Add($"Неудачных проверок подряд: {snapshot.ConsecutiveFailureCount}");
 
             if (probeInProgress)
                 lines.Add("Проверка выполняется...");
@@ -434,9 +454,14 @@ namespace Replica
                 if (!TryResolveLanApiBaseUri(_lanApiBaseUrl, out var baseUri))
                     throw new InvalidOperationException("Некорректный URL LAN API.");
 
-                var liveProbe = await ProbeEndpointStatusAsync(baseUri, "live", cancellationToken);
-                var readyProbe = await ProbeEndpointStatusAsync(baseUri, "ready", cancellationToken);
-                var sloProbe = await ProbeEndpointStatusAsync(baseUri, "slo", cancellationToken);
+                var liveProbeTask = ProbeEndpointStatusAsync(baseUri, "live", cancellationToken);
+                var readyProbeTask = ProbeEndpointStatusAsync(baseUri, "ready", cancellationToken);
+                var sloProbeTask = ProbeEndpointStatusAsync(baseUri, "slo", cancellationToken);
+                await Task.WhenAll(liveProbeTask, readyProbeTask, sloProbeTask);
+
+                var liveProbe = await liveProbeTask;
+                var readyProbe = await readyProbeTask;
+                var sloProbe = await sloProbeTask;
                 completedAtUtc = DateTime.UtcNow;
 
                 var apiReachable = liveProbe.IsReachable || readyProbe.IsReachable || sloProbe.IsReachable;
@@ -446,7 +471,8 @@ namespace Replica
 
                 var isReady = string.Equals(readyStatus, "ready", StringComparison.OrdinalIgnoreCase)
                               || string.Equals(readyStatus, "degraded", StringComparison.OrdinalIgnoreCase);
-                var isDegraded = string.Equals(readyStatus, "degraded", StringComparison.OrdinalIgnoreCase)
+                var isDegraded = !isReady
+                                 || string.Equals(readyStatus, "degraded", StringComparison.OrdinalIgnoreCase)
                                  || string.Equals(sloStatus, "degraded", StringComparison.OrdinalIgnoreCase);
                 var sloHealthy = string.Equals(sloStatus, "ok", StringComparison.OrdinalIgnoreCase);
 
@@ -529,6 +555,12 @@ namespace Replica
             lock (_lanServerProbeSync)
             {
                 var previousSuccessUtc = _lanServerProbeSnapshot.SuccessfulAtUtc;
+                var previousFailureCount = _lanServerProbeSnapshot.ConsecutiveFailureCount;
+                var nextFailureCount = nextSnapshot.ApiReachable
+                    ? 0
+                    : string.Equals(nextSnapshot.LiveStatus, "cancelled", StringComparison.OrdinalIgnoreCase)
+                        ? previousFailureCount
+                        : previousFailureCount + 1;
                 if (nextSnapshot.SuccessfulAtUtc == DateTime.MinValue && previousSuccessUtc > DateTime.MinValue)
                 {
                     nextSnapshot = new LanServerProbeSnapshot
@@ -548,7 +580,31 @@ namespace Replica
                         ProbeReason = nextSnapshot.ProbeReason,
                         AvailabilityRatio = nextSnapshot.AvailabilityRatio,
                         LatencyP95Ms = nextSnapshot.LatencyP95Ms,
-                        WriteSuccessRatio = nextSnapshot.WriteSuccessRatio
+                        WriteSuccessRatio = nextSnapshot.WriteSuccessRatio,
+                        ConsecutiveFailureCount = nextFailureCount
+                    };
+                }
+                else
+                {
+                    nextSnapshot = new LanServerProbeSnapshot
+                    {
+                        ApiReachable = nextSnapshot.ApiReachable,
+                        IsReady = nextSnapshot.IsReady,
+                        IsDegraded = nextSnapshot.IsDegraded,
+                        SloHealthy = nextSnapshot.SloHealthy,
+                        RequestedAtUtc = nextSnapshot.RequestedAtUtc,
+                        CompletedAtUtc = nextSnapshot.CompletedAtUtc,
+                        SuccessfulAtUtc = nextSnapshot.SuccessfulAtUtc,
+                        ServerNowAtUtc = nextSnapshot.ServerNowAtUtc,
+                        LiveStatus = nextSnapshot.LiveStatus,
+                        ReadyStatus = nextSnapshot.ReadyStatus,
+                        SloStatus = nextSnapshot.SloStatus,
+                        Error = nextSnapshot.Error,
+                        ProbeReason = nextSnapshot.ProbeReason,
+                        AvailabilityRatio = nextSnapshot.AvailabilityRatio,
+                        LatencyP95Ms = nextSnapshot.LatencyP95Ms,
+                        WriteSuccessRatio = nextSnapshot.WriteSuccessRatio,
+                        ConsecutiveFailureCount = nextFailureCount
                     };
                 }
 

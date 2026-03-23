@@ -116,6 +116,7 @@ namespace Replica
         private const string DefaultTrayStatusText = "Готово";
         private const int TrayIndicatorsRefreshIntervalMs = 15000;
         private const int LanServerProbeMinIntervalMs = 5000;
+        private const int LanServerProbeFailureThreshold = 3;
         private static readonly TimeSpan ArchiveIndexLifetime = TimeSpan.FromSeconds(15);
         private const int OrdersGridWarmupIntervalMs = 3000;
         private const int GridHoverActivateDelayMs = 500;
@@ -325,7 +326,8 @@ namespace Replica
                     ReadyStatus = "unknown",
                     SloStatus = "unknown",
                     LiveStatus = "unknown",
-                    ProbeReason = "startup"
+                    ProbeReason = "startup",
+                    ConsecutiveFailureCount = 0
                 };
             }
 
@@ -345,6 +347,7 @@ namespace Replica
             public double AvailabilityRatio { get; init; } = -1;
             public double LatencyP95Ms { get; init; } = -1;
             public double WriteSuccessRatio { get; init; } = -1;
+            public int ConsecutiveFailureCount { get; init; }
         }
 
         private enum CreatedDateFilterKind
