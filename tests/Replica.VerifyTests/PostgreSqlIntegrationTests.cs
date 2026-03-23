@@ -273,7 +273,7 @@ public sealed class PostgreSqlIntegrationTests
         using var verifyDb = CreateReplicaDbContext(db.ConnectionString);
         var runEvents = verifyDb.OrderEvents.Count(x => x.OrderInternalId == created.InternalId && x.EventType == "run");
         Assert.Equal(1, runEvents);
-        var idempotencyRows = verifyDb.OrderRunIdempotency.Count(x =>
+        var idempotencyRows = verifyDb.OrderWriteIdempotency.Count(x =>
             x.OrderInternalId == created.InternalId
             && x.CommandName == "run"
             && x.IdempotencyKey == "idem-run-start-1");
@@ -312,6 +312,153 @@ public sealed class PostgreSqlIntegrationTests
             idempotencyKey: "idem-run-start-2");
         Assert.True(secondStart.IsBadRequest);
         Assert.Contains("idempotency", secondStart.Error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void PostgreSqlIntegration_EfCoreStore_WriteCommands_AreIdempotentByKey()
+    {
+        if (!IsIntegrationEnabled())
+            return;
+
+        using var db = TemporaryPostgreSqlDatabase.Create();
+        var store = CreateEfCoreStore(db.ConnectionString);
+
+        var createRequest = new CreateOrderRequest
+        {
+            OrderNumber = "WR-IDEM-100",
+            UserName = "Integration User",
+            CreatedById = "integration-user",
+            CreatedByUser = "integration-user",
+            Status = WorkflowStatusNames.Waiting
+        };
+
+        var createFirst = store.TryCreateOrder(createRequest, "integration-user", idempotencyKey: "idem-write-create-1");
+        var createSecond = store.TryCreateOrder(createRequest, "integration-user", idempotencyKey: "idem-write-create-1");
+        Assert.True(createFirst.IsSuccess, createFirst.Error);
+        Assert.True(createSecond.IsSuccess, createSecond.Error);
+        Assert.NotNull(createFirst.Order);
+        Assert.NotNull(createSecond.Order);
+        var current = createSecond.Order!;
+        Assert.Equal(createFirst.Order!.InternalId, createSecond.Order!.InternalId);
+
+        var updateRequest = new UpdateOrderRequest
+        {
+            ExpectedVersion = current.Version,
+            Status = "Processing",
+            OrderNumber = "WR-IDEM-100"
+        };
+        var updateFirst = store.TryUpdateOrder(current.InternalId, updateRequest, "integration-user", idempotencyKey: "idem-write-update-1");
+        var updateSecond = store.TryUpdateOrder(current.InternalId, updateRequest, "integration-user", idempotencyKey: "idem-write-update-1");
+        Assert.True(updateFirst.IsSuccess, updateFirst.Error);
+        Assert.True(updateSecond.IsSuccess, updateSecond.Error);
+        current = updateSecond.Order!;
+
+        var addRequest = new AddOrderItemRequest
+        {
+            ExpectedOrderVersion = current.Version,
+            Item = new Replica.Shared.Models.SharedOrderItem
+            {
+                ItemId = "w-item-1",
+                SequenceNo = 0,
+                ClientFileLabel = "w-item.pdf",
+                FileStatus = WorkflowStatusNames.Waiting
+            }
+        };
+        var addFirst = store.TryAddItem(current.InternalId, addRequest, "integration-user", idempotencyKey: "idem-write-add-1");
+        var addSecond = store.TryAddItem(current.InternalId, addRequest, "integration-user", idempotencyKey: "idem-write-add-1");
+        Assert.True(addFirst.IsSuccess, addFirst.Error);
+        Assert.True(addSecond.IsSuccess, addSecond.Error);
+        current = addSecond.Order!;
+        var currentItem = current.Items.Single(x => x.ItemId == "w-item-1");
+
+        var itemUpdateRequest = new UpdateOrderItemRequest
+        {
+            ExpectedOrderVersion = current.Version,
+            ExpectedItemVersion = currentItem.Version,
+            FileStatus = "Ready",
+            LastReason = "idem-check"
+        };
+        var itemUpdateFirst = store.TryUpdateItem(current.InternalId, currentItem.ItemId, itemUpdateRequest, "integration-user", idempotencyKey: "idem-write-item-update-1");
+        var itemUpdateSecond = store.TryUpdateItem(current.InternalId, currentItem.ItemId, itemUpdateRequest, "integration-user", idempotencyKey: "idem-write-item-update-1");
+        Assert.True(itemUpdateFirst.IsSuccess, itemUpdateFirst.Error);
+        Assert.True(itemUpdateSecond.IsSuccess, itemUpdateSecond.Error);
+        current = itemUpdateSecond.Order!;
+        currentItem = current.Items.Single(x => x.ItemId == "w-item-1");
+
+        var reorderRequest = new ReorderOrderItemsRequest
+        {
+            ExpectedOrderVersion = current.Version,
+            OrderedItemIds = new List<string> { "w-item-1" }
+        };
+        var reorderFirst = store.TryReorderItems(current.InternalId, reorderRequest, "integration-user", idempotencyKey: "idem-write-reorder-1");
+        var reorderSecond = store.TryReorderItems(current.InternalId, reorderRequest, "integration-user", idempotencyKey: "idem-write-reorder-1");
+        Assert.True(reorderFirst.IsSuccess, reorderFirst.Error);
+        Assert.True(reorderSecond.IsSuccess, reorderSecond.Error);
+        current = reorderSecond.Order!;
+        currentItem = current.Items.Single(x => x.ItemId == "w-item-1");
+
+        var deleteRequest = new DeleteOrderItemRequest
+        {
+            ExpectedOrderVersion = current.Version,
+            ExpectedItemVersion = currentItem.Version
+        };
+        var deleteFirst = store.TryDeleteItem(current.InternalId, currentItem.ItemId, deleteRequest, "integration-user", idempotencyKey: "idem-write-item-delete-1");
+        var deleteSecond = store.TryDeleteItem(current.InternalId, currentItem.ItemId, deleteRequest, "integration-user", idempotencyKey: "idem-write-item-delete-1");
+        Assert.True(deleteFirst.IsSuccess, deleteFirst.Error);
+        Assert.True(deleteSecond.IsSuccess, deleteSecond.Error);
+        Assert.Empty(deleteSecond.Order!.Items);
+
+        using var verifyDb = CreateReplicaDbContext(db.ConnectionString);
+        Assert.Equal(1, verifyDb.Orders.Count());
+        Assert.Equal(1, verifyDb.OrderWriteIdempotency.Count(x => x.CommandName == "create-order" && x.IdempotencyKey == "idem-write-create-1"));
+        Assert.Equal(1, verifyDb.OrderWriteIdempotency.Count(x => x.CommandName == "update-order" && x.IdempotencyKey == "idem-write-update-1"));
+        Assert.Equal(1, verifyDb.OrderWriteIdempotency.Count(x => x.CommandName == "add-item" && x.IdempotencyKey == "idem-write-add-1"));
+        Assert.Equal(1, verifyDb.OrderWriteIdempotency.Count(x => x.CommandName == "update-item" && x.IdempotencyKey == "idem-write-item-update-1"));
+        Assert.Equal(1, verifyDb.OrderWriteIdempotency.Count(x => x.CommandName == "reorder-items" && x.IdempotencyKey == "idem-write-reorder-1"));
+        Assert.Equal(1, verifyDb.OrderWriteIdempotency.Count(x => x.CommandName == "delete-item" && x.IdempotencyKey == "idem-write-item-delete-1"));
+    }
+
+    [Fact]
+    public void PostgreSqlIntegration_EfCoreStore_UpdateOrder_IdempotencyReuseWithDifferentPayload_ReturnsBadRequest()
+    {
+        if (!IsIntegrationEnabled())
+            return;
+
+        using var db = TemporaryPostgreSqlDatabase.Create();
+        var store = CreateEfCoreStore(db.ConnectionString);
+
+        var created = store.CreateOrder(new CreateOrderRequest
+        {
+            OrderNumber = "WR-IDEM-200",
+            UserName = "Integration User",
+            CreatedById = "integration-user",
+            CreatedByUser = "integration-user",
+            Status = WorkflowStatusNames.Waiting
+        }, "integration-user");
+
+        var key = "idem-write-update-mismatch-1";
+        var first = store.TryUpdateOrder(
+            created.InternalId,
+            new UpdateOrderRequest
+            {
+                ExpectedVersion = created.Version,
+                Status = "Processing"
+            },
+            "integration-user",
+            idempotencyKey: key);
+        Assert.True(first.IsSuccess, first.Error);
+
+        var second = store.TryUpdateOrder(
+            created.InternalId,
+            new UpdateOrderRequest
+            {
+                ExpectedVersion = created.Version,
+                Status = "Cancelled"
+            },
+            "integration-user",
+            idempotencyKey: key);
+        Assert.True(second.IsBadRequest);
+        Assert.Contains("idempotency", second.Error, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

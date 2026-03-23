@@ -81,3 +81,18 @@ public sealed class OrderRunIdempotencyRecord
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }
+
+public sealed class OrderWriteIdempotencyRecord
+{
+    public string CommandName { get; set; } = string.Empty;
+    public string IdempotencyKey { get; set; } = string.Empty;
+    public string RequestFingerprint { get; set; } = string.Empty;
+    public string Actor { get; set; } = string.Empty;
+    public string OrderInternalId { get; set; } = string.Empty;
+    public string ResultKind { get; set; } = string.Empty;
+    public string Error { get; set; } = string.Empty;
+    public long CurrentVersion { get; set; }
+    public string ResponseOrderJson { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+}

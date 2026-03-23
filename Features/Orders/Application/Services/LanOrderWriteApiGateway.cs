@@ -58,6 +58,7 @@ public interface ILanOrderWriteApiGateway
 public sealed class LanOrderWriteApiGateway : ILanOrderWriteApiGateway
 {
     private const string CorrelationHeaderName = "X-Correlation-Id";
+    private const string IdempotencyHeaderName = "Idempotency-Key";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         PropertyNameCaseInsensitive = true
@@ -230,16 +231,18 @@ public sealed class LanOrderWriteApiGateway : ILanOrderWriteApiGateway
         try
         {
             var correlationId = Logger.EnsureCorrelationId();
+            var idempotencyKey = BuildIdempotencyKey(correlationId, method.Method, requestUri.AbsolutePath, body);
             using var request = new HttpRequestMessage(method, requestUri)
             {
                 Content = JsonContent.Create(body, options: JsonOptions)
             };
 
             request.Headers.TryAddWithoutValidation(CorrelationHeaderName, correlationId);
+            request.Headers.TryAddWithoutValidation(IdempotencyHeaderName, idempotencyKey);
             if (!string.IsNullOrWhiteSpace(actor))
                 request.Headers.TryAddWithoutValidation("X-Current-User", actor.Trim());
 
-            Logger.Info($"LAN-API | write-send | method={method.Method} | target={requestUri}");
+            Logger.Info($"LAN-API | write-send | method={method.Method} | target={requestUri} | idempotency_key={idempotencyKey}");
             using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
             var payload = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             Logger.Info($"LAN-API | write-response | status={(int)response.StatusCode}");
@@ -381,6 +384,15 @@ public sealed class LanOrderWriteApiGateway : ILanOrderWriteApiGateway
         {
             return new ApiErrorResponse();
         }
+    }
+
+    private static string BuildIdempotencyKey(string correlationId, string httpMethod, string requestPath, object body)
+    {
+        var bodyJson = body == null ? string.Empty : JsonSerializer.Serialize(body, JsonOptions);
+        var source = $"{correlationId}|{httpMethod}|{requestPath}|{bodyJson}";
+        var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(source));
+        var shortHash = Convert.ToHexString(hash.AsSpan(0, 12)).ToLowerInvariant();
+        return $"replica-write-{shortHash}";
     }
 
     private sealed class ApiErrorResponse

@@ -52,6 +52,8 @@ public sealed class LanOrderWriteApiGatewayTests
         Assert.Equal("operator-1", actors.Single());
         Assert.True(handler.LastRequest.Headers.TryGetValues("X-Correlation-Id", out var correlations));
         Assert.Equal("corr-write-123", correlations.Single());
+        Assert.True(handler.LastRequest.Headers.TryGetValues("Idempotency-Key", out var idempotencyKeys));
+        Assert.StartsWith("replica-write-", idempotencyKeys.Single(), StringComparison.Ordinal);
         Assert.Contains("\"orderNumber\":\"1001\"", requestBody, StringComparison.Ordinal);
     }
 

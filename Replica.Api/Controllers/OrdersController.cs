@@ -56,6 +56,20 @@ public sealed class OrdersController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.CreatedById))
             request.CreatedById = actor;
 
+        var idempotencyKey = ResolveIdempotencyKey();
+        if (_store is EfCoreLanOrderStore efCoreStore)
+        {
+            var createResult = efCoreStore.TryCreateOrder(request, actor, idempotencyKey);
+            if (createResult.IsSuccess && createResult.Order != null)
+                return CreatedAtAction(nameof(GetOrderById), new { id = createResult.Order.InternalId }, createResult.Order);
+
+            if (createResult.IsConflict)
+                return Conflict(new { error = createResult.Error, currentVersion = createResult.CurrentVersion });
+            if (createResult.IsNotFound)
+                return NotFound(new { error = createResult.Error });
+            return BadRequest(new { error = createResult.Error });
+        }
+
         var created = _store.CreateOrder(request, actor);
         return CreatedAtAction(nameof(GetOrderById), new { id = created.InternalId }, created);
     }
@@ -75,7 +89,10 @@ public sealed class OrdersController : ControllerBase
         if (!TryResolveValidatedActor(out var actor, out var validationError))
             return validationError!;
 
-        var result = _store.TryUpdateOrder(id, request, actor);
+        var idempotencyKey = ResolveIdempotencyKey();
+        var result = _store is EfCoreLanOrderStore efCoreStore
+            ? efCoreStore.TryUpdateOrder(id, request, actor, idempotencyKey)
+            : _store.TryUpdateOrder(id, request, actor);
         if (result.IsSuccess)
             return Ok(result.Order);
         if (result.IsNotFound)
@@ -100,7 +117,10 @@ public sealed class OrdersController : ControllerBase
         if (!TryResolveValidatedActor(out var actor, out var validationError))
             return validationError!;
 
-        var result = _store.TryAddItem(id, request, actor);
+        var idempotencyKey = ResolveIdempotencyKey();
+        var result = _store is EfCoreLanOrderStore efCoreStore
+            ? efCoreStore.TryAddItem(id, request, actor, idempotencyKey)
+            : _store.TryAddItem(id, request, actor);
         if (result.IsSuccess)
             return Ok(result.Order);
         if (result.IsNotFound)
@@ -125,7 +145,10 @@ public sealed class OrdersController : ControllerBase
         if (!TryResolveValidatedActor(out var actor, out var validationError))
             return validationError!;
 
-        var result = _store.TryUpdateItem(id, itemId, request, actor);
+        var idempotencyKey = ResolveIdempotencyKey();
+        var result = _store is EfCoreLanOrderStore efCoreStore
+            ? efCoreStore.TryUpdateItem(id, itemId, request, actor, idempotencyKey)
+            : _store.TryUpdateItem(id, itemId, request, actor);
         if (result.IsSuccess)
             return Ok(result.Order);
         if (result.IsNotFound)
@@ -150,7 +173,10 @@ public sealed class OrdersController : ControllerBase
         if (!TryResolveValidatedActor(out var actor, out var validationError))
             return validationError!;
 
-        var result = _store.TryDeleteItem(id, itemId, request, actor);
+        var idempotencyKey = ResolveIdempotencyKey();
+        var result = _store is EfCoreLanOrderStore efCoreStore
+            ? efCoreStore.TryDeleteItem(id, itemId, request, actor, idempotencyKey)
+            : _store.TryDeleteItem(id, itemId, request, actor);
         if (result.IsSuccess)
             return Ok(result.Order);
         if (result.IsNotFound)
@@ -175,7 +201,10 @@ public sealed class OrdersController : ControllerBase
         if (!TryResolveValidatedActor(out var actor, out var validationError))
             return validationError!;
 
-        var result = _store.TryReorderItems(id, request, actor);
+        var idempotencyKey = ResolveIdempotencyKey();
+        var result = _store is EfCoreLanOrderStore efCoreStore
+            ? efCoreStore.TryReorderItems(id, request, actor, idempotencyKey)
+            : _store.TryReorderItems(id, request, actor);
         if (result.IsSuccess)
             return Ok(result.Order);
         if (result.IsNotFound)

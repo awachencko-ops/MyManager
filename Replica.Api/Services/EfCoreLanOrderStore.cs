@@ -15,6 +15,12 @@ namespace Replica.Api.Services;
 public sealed class EfCoreLanOrderStore : ILanOrderStore
 {
     private readonly IDbContextFactory<ReplicaDbContext> _dbContextFactory;
+    private const string CreateOrderCommandName = "create-order";
+    private const string UpdateOrderCommandName = "update-order";
+    private const string AddItemCommandName = "add-item";
+    private const string UpdateItemCommandName = "update-item";
+    private const string DeleteItemCommandName = "delete-item";
+    private const string ReorderItemsCommandName = "reorder-items";
     private const string RunCommandName = "run";
     private const string StopCommandName = "stop";
     private const int MaxIdempotencyKeyLength = 128;
@@ -121,6 +127,52 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
 
     public SharedOrder CreateOrder(CreateOrderRequest request, string actor)
     {
+        var result = TryCreateOrder(request, actor, idempotencyKey: null);
+        if (result.IsSuccess && result.Order != null)
+            return CloneOrder(result.Order);
+
+        throw new InvalidOperationException(string.IsNullOrWhiteSpace(result.Error)
+            ? "create-order failed"
+            : result.Error);
+    }
+
+    public StoreOperationResult TryCreateOrder(CreateOrderRequest request, string actor, string? idempotencyKey)
+    {
+        request ??= new CreateOrderRequest();
+        var normalizedActor = actor?.Trim() ?? string.Empty;
+        var requestFingerprint = BuildWriteRequestFingerprint(
+            commandName: CreateOrderCommandName,
+            orderId: string.Empty,
+            actor: normalizedActor,
+            requestPayload: new
+            {
+                request.OrderNumber,
+                request.UserName,
+                request.CreatedById,
+                request.CreatedByUser,
+                request.Status,
+                request.Keyword,
+                request.FolderName,
+                request.StartMode,
+                request.TopologyMarker,
+                request.PitStopAction,
+                request.ImposingAction,
+                request.ArrivalDate,
+                request.ManagerOrderDate,
+                request.Items
+            });
+
+        return ExecuteWriteCommandWithOptionalIdempotency(
+            commandName: CreateOrderCommandName,
+            orderId: string.Empty,
+            actor: normalizedActor,
+            idempotencyKey: idempotencyKey,
+            requestFingerprint: requestFingerprint,
+            executeCore: () => TryCreateOrderCore(request, normalizedActor));
+    }
+
+    private StoreOperationResult TryCreateOrderCore(CreateOrderRequest request, string actor)
+    {
         using var db = _dbContextFactory.CreateDbContext();
         using var tx = db.Database.BeginTransaction();
 
@@ -175,10 +227,35 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
         db.SaveChanges();
         tx.Commit();
 
-        return CloneOrder(order);
+        return StoreOperationResult.Success(CloneOrder(order));
     }
 
     public StoreOperationResult TryUpdateOrder(string orderId, UpdateOrderRequest request, string actor)
+    {
+        return TryUpdateOrder(orderId, request, actor, idempotencyKey: null);
+    }
+
+    public StoreOperationResult TryUpdateOrder(string orderId, UpdateOrderRequest request, string actor, string? idempotencyKey)
+    {
+        request ??= new UpdateOrderRequest();
+        var normalizedOrderId = orderId?.Trim() ?? string.Empty;
+        var normalizedActor = actor?.Trim() ?? string.Empty;
+        var requestFingerprint = BuildWriteRequestFingerprint(
+            commandName: UpdateOrderCommandName,
+            orderId: normalizedOrderId,
+            actor: normalizedActor,
+            requestPayload: request);
+
+        return ExecuteWriteCommandWithOptionalIdempotency(
+            commandName: UpdateOrderCommandName,
+            orderId: normalizedOrderId,
+            actor: normalizedActor,
+            idempotencyKey: idempotencyKey,
+            requestFingerprint: requestFingerprint,
+            executeCore: () => TryUpdateOrderCore(normalizedOrderId, request, normalizedActor));
+    }
+
+    private StoreOperationResult TryUpdateOrderCore(string orderId, UpdateOrderRequest request, string actor)
     {
         if (string.IsNullOrWhiteSpace(orderId))
             return StoreOperationResult.BadRequest("order id is required");
@@ -186,7 +263,7 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
         using var db = _dbContextFactory.CreateDbContext();
         using var tx = db.Database.BeginTransaction();
 
-        var orderRecord = db.Orders.FirstOrDefault(x => x.InternalId == orderId.Trim());
+        var orderRecord = db.Orders.FirstOrDefault(x => x.InternalId == orderId);
         if (orderRecord == null)
             return StoreOperationResult.NotFound();
 
@@ -243,13 +320,42 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
 
     public StoreOperationResult TryAddItem(string orderId, AddOrderItemRequest request, string actor)
     {
+        return TryAddItem(orderId, request, actor, idempotencyKey: null);
+    }
+
+    public StoreOperationResult TryAddItem(string orderId, AddOrderItemRequest request, string actor, string? idempotencyKey)
+    {
+        request ??= new AddOrderItemRequest();
+        var normalizedOrderId = orderId?.Trim() ?? string.Empty;
+        var normalizedActor = actor?.Trim() ?? string.Empty;
+        var requestFingerprint = BuildWriteRequestFingerprint(
+            commandName: AddItemCommandName,
+            orderId: normalizedOrderId,
+            actor: normalizedActor,
+            requestPayload: new
+            {
+                request.ExpectedOrderVersion,
+                request.Item
+            });
+
+        return ExecuteWriteCommandWithOptionalIdempotency(
+            commandName: AddItemCommandName,
+            orderId: normalizedOrderId,
+            actor: normalizedActor,
+            idempotencyKey: idempotencyKey,
+            requestFingerprint: requestFingerprint,
+            executeCore: () => TryAddItemCore(normalizedOrderId, request, normalizedActor));
+    }
+
+    private StoreOperationResult TryAddItemCore(string orderId, AddOrderItemRequest request, string actor)
+    {
         if (string.IsNullOrWhiteSpace(orderId))
             return StoreOperationResult.BadRequest("order id is required");
 
         using var db = _dbContextFactory.CreateDbContext();
         using var tx = db.Database.BeginTransaction();
 
-        var orderRecord = db.Orders.FirstOrDefault(x => x.InternalId == orderId.Trim());
+        var orderRecord = db.Orders.FirstOrDefault(x => x.InternalId == orderId);
         if (orderRecord == null)
             return StoreOperationResult.NotFound();
 
@@ -289,23 +395,63 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
 
     public StoreOperationResult TryUpdateItem(string orderId, string itemId, UpdateOrderItemRequest request, string actor)
     {
+        return TryUpdateItem(orderId, itemId, request, actor, idempotencyKey: null);
+    }
+
+    public StoreOperationResult TryUpdateItem(string orderId, string itemId, UpdateOrderItemRequest request, string actor, string? idempotencyKey)
+    {
+        request ??= new UpdateOrderItemRequest();
+        var normalizedOrderId = orderId?.Trim() ?? string.Empty;
+        var normalizedItemId = itemId?.Trim() ?? string.Empty;
+        var normalizedActor = actor?.Trim() ?? string.Empty;
+        var requestFingerprint = BuildWriteRequestFingerprint(
+            commandName: UpdateItemCommandName,
+            orderId: normalizedOrderId,
+            actor: normalizedActor,
+            requestPayload: new
+            {
+                item_id = normalizedItemId,
+                request.ExpectedOrderVersion,
+                request.ExpectedItemVersion,
+                request.ClientFileLabel,
+                request.Variant,
+                request.FileStatus,
+                request.LastReason,
+                request.SourcePath,
+                request.PreparedPath,
+                request.PrintPath,
+                request.SourceFileHash,
+                request.PreparedFileHash,
+                request.PrintFileHash,
+                request.PitStopAction,
+                request.ImposingAction
+            });
+
+        return ExecuteWriteCommandWithOptionalIdempotency(
+            commandName: UpdateItemCommandName,
+            orderId: normalizedOrderId,
+            actor: normalizedActor,
+            idempotencyKey: idempotencyKey,
+            requestFingerprint: requestFingerprint,
+            executeCore: () => TryUpdateItemCore(normalizedOrderId, normalizedItemId, request, normalizedActor));
+    }
+
+    private StoreOperationResult TryUpdateItemCore(string orderId, string itemId, UpdateOrderItemRequest request, string actor)
+    {
         if (string.IsNullOrWhiteSpace(orderId) || string.IsNullOrWhiteSpace(itemId))
             return StoreOperationResult.BadRequest("order id and item id are required");
 
         using var db = _dbContextFactory.CreateDbContext();
         using var tx = db.Database.BeginTransaction();
 
-        var normalizedOrderId = orderId.Trim();
-        var normalizedItemId = itemId.Trim();
-
-        var orderRecord = db.Orders.FirstOrDefault(x => x.InternalId == normalizedOrderId);
+        var orderRecord = db.Orders.FirstOrDefault(x => x.InternalId == orderId);
         if (orderRecord == null)
             return StoreOperationResult.NotFound();
 
         if (orderRecord.Version != request.ExpectedOrderVersion)
             return StoreOperationResult.Conflict(orderRecord.Version, "order version mismatch");
 
-        var itemRecord = db.OrderItems.FirstOrDefault(x => x.OrderInternalId == normalizedOrderId && x.ItemId == normalizedItemId);
+        var itemRecord = db.OrderItems.FirstOrDefault(x => x.OrderInternalId == orderId && x.ItemId == itemId);
         if (itemRecord == null)
             return StoreOperationResult.NotFound();
 
@@ -365,23 +511,51 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
 
     public StoreOperationResult TryDeleteItem(string orderId, string itemId, DeleteOrderItemRequest request, string actor)
     {
+        return TryDeleteItem(orderId, itemId, request, actor, idempotencyKey: null);
+    }
+
+    public StoreOperationResult TryDeleteItem(string orderId, string itemId, DeleteOrderItemRequest request, string actor, string? idempotencyKey)
+    {
+        request ??= new DeleteOrderItemRequest();
+        var normalizedOrderId = orderId?.Trim() ?? string.Empty;
+        var normalizedItemId = itemId?.Trim() ?? string.Empty;
+        var normalizedActor = actor?.Trim() ?? string.Empty;
+        var requestFingerprint = BuildWriteRequestFingerprint(
+            commandName: DeleteItemCommandName,
+            orderId: normalizedOrderId,
+            actor: normalizedActor,
+            requestPayload: new
+            {
+                item_id = normalizedItemId,
+                request.ExpectedOrderVersion,
+                request.ExpectedItemVersion
+            });
+
+        return ExecuteWriteCommandWithOptionalIdempotency(
+            commandName: DeleteItemCommandName,
+            orderId: normalizedOrderId,
+            actor: normalizedActor,
+            idempotencyKey: idempotencyKey,
+            requestFingerprint: requestFingerprint,
+            executeCore: () => TryDeleteItemCore(normalizedOrderId, normalizedItemId, request, normalizedActor));
+    }
+
+    private StoreOperationResult TryDeleteItemCore(string orderId, string itemId, DeleteOrderItemRequest request, string actor)
+    {
         if (string.IsNullOrWhiteSpace(orderId) || string.IsNullOrWhiteSpace(itemId))
             return StoreOperationResult.BadRequest("order id and item id are required");
 
         using var db = _dbContextFactory.CreateDbContext();
         using var tx = db.Database.BeginTransaction();
 
-        var normalizedOrderId = orderId.Trim();
-        var normalizedItemId = itemId.Trim();
-
-        var orderRecord = db.Orders.FirstOrDefault(x => x.InternalId == normalizedOrderId);
+        var orderRecord = db.Orders.FirstOrDefault(x => x.InternalId == orderId);
         if (orderRecord == null)
             return StoreOperationResult.NotFound();
 
         if (orderRecord.Version != request.ExpectedOrderVersion)
             return StoreOperationResult.Conflict(orderRecord.Version, "order version mismatch");
 
-        var itemRecord = db.OrderItems.FirstOrDefault(x => x.OrderInternalId == normalizedOrderId && x.ItemId == normalizedItemId);
+        var itemRecord = db.OrderItems.FirstOrDefault(x => x.OrderInternalId == orderId && x.ItemId == itemId);
         if (itemRecord == null)
             return StoreOperationResult.NotFound();
 
@@ -392,7 +566,7 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
         db.SaveChanges();
 
         var remainingRecords = db.OrderItems
-            .Where(x => x.OrderInternalId == normalizedOrderId && x.ItemId != normalizedItemId)
+            .Where(x => x.OrderInternalId == orderId && x.ItemId != itemId)
             .OrderBy(x => x.SequenceNo)
             .ThenBy(x => x.ItemId)
             .ToList();
@@ -410,7 +584,7 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
         order.Version = orderRecord.Version + 1;
         ApplyOrderRecord(orderRecord, order);
 
-        db.OrderEvents.Add(BuildEventRecord(orderRecord.InternalId, normalizedItemId, "delete-item", "api", actor, new { item_id = normalizedItemId, order_version = order.Version }));
+        db.OrderEvents.Add(BuildEventRecord(orderRecord.InternalId, itemId, "delete-item", "api", actor, new { item_id = itemId, order_version = order.Version }));
 
         try
         {
@@ -428,14 +602,54 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
 
     public StoreOperationResult TryReorderItems(string orderId, ReorderOrderItemsRequest request, string actor)
     {
+        return TryReorderItems(orderId, request, actor, idempotencyKey: null);
+    }
+
+    public StoreOperationResult TryReorderItems(string orderId, ReorderOrderItemsRequest request, string actor, string? idempotencyKey)
+    {
+        request ??= new ReorderOrderItemsRequest();
+        var normalizedOrderId = orderId?.Trim() ?? string.Empty;
+        var normalizedActor = actor?.Trim() ?? string.Empty;
+        var normalizedItemIds = (request.OrderedItemIds ?? new List<string>())
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Select(id => id.Trim())
+            .ToList();
+        var requestFingerprint = BuildWriteRequestFingerprint(
+            commandName: ReorderItemsCommandName,
+            orderId: normalizedOrderId,
+            actor: normalizedActor,
+            requestPayload: new
+            {
+                request.ExpectedOrderVersion,
+                ordered_item_ids = normalizedItemIds
+            });
+
+        return ExecuteWriteCommandWithOptionalIdempotency(
+            commandName: ReorderItemsCommandName,
+            orderId: normalizedOrderId,
+            actor: normalizedActor,
+            idempotencyKey: idempotencyKey,
+            requestFingerprint: requestFingerprint,
+            executeCore: () =>
+            {
+                var coreRequest = new ReorderOrderItemsRequest
+                {
+                    ExpectedOrderVersion = request.ExpectedOrderVersion,
+                    OrderedItemIds = normalizedItemIds
+                };
+                return TryReorderItemsCore(normalizedOrderId, coreRequest, normalizedActor);
+            });
+    }
+
+    private StoreOperationResult TryReorderItemsCore(string orderId, ReorderOrderItemsRequest request, string actor)
+    {
         if (string.IsNullOrWhiteSpace(orderId))
             return StoreOperationResult.BadRequest("order id is required");
 
         using var db = _dbContextFactory.CreateDbContext();
         using var tx = db.Database.BeginTransaction();
 
-        var normalizedOrderId = orderId.Trim();
-        var orderRecord = db.Orders.FirstOrDefault(x => x.InternalId == normalizedOrderId);
+        var orderRecord = db.Orders.FirstOrDefault(x => x.InternalId == orderId);
         if (orderRecord == null)
             return StoreOperationResult.NotFound();
 
@@ -443,7 +657,7 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
             return StoreOperationResult.Conflict(orderRecord.Version, "order version mismatch");
 
         var itemRecords = db.OrderItems
-            .Where(x => x.OrderInternalId == normalizedOrderId)
+            .Where(x => x.OrderInternalId == orderId)
             .OrderBy(x => x.SequenceNo)
             .ThenBy(x => x.ItemId)
             .ToList();
@@ -470,7 +684,7 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
         var maxSequence = itemRecords.Count == 0 ? 0L : itemRecords.Max(x => x.SequenceNo);
         var tempOffset = maxSequence + itemRecords.Count + 100;
         foreach (var row in itemRecords)
-            row.SequenceNo = row.SequenceNo + tempOffset;
+            row.SequenceNo += tempOffset;
 
         db.SaveChanges();
 
@@ -515,33 +729,49 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
     public StoreOperationResult TryStartRun(string orderId, RunOrderRequest request, string actor, string? idempotencyKey)
     {
         request ??= new RunOrderRequest();
-        return ExecuteRunCommandWithOptionalIdempotency(
+        var normalizedOrderId = orderId?.Trim() ?? string.Empty;
+        var normalizedActor = actor?.Trim() ?? string.Empty;
+        var requestFingerprint = BuildWriteRequestFingerprint(
             commandName: RunCommandName,
-            orderId: orderId,
-            expectedOrderVersion: request.ExpectedOrderVersion,
-            actor: actor,
+            orderId: normalizedOrderId,
+            actor: normalizedActor,
+            requestPayload: new { request.ExpectedOrderVersion });
+
+        return ExecuteWriteCommandWithOptionalIdempotency(
+            commandName: RunCommandName,
+            orderId: normalizedOrderId,
+            actor: normalizedActor,
             idempotencyKey: idempotencyKey,
-            executeCore: () => TryStartRunCore(orderId, request, actor));
+            requestFingerprint: requestFingerprint,
+            executeCore: () => TryStartRunCore(normalizedOrderId, request, normalizedActor));
     }
 
     public StoreOperationResult TryStopRun(string orderId, StopOrderRequest request, string actor, string? idempotencyKey)
     {
         request ??= new StopOrderRequest();
-        return ExecuteRunCommandWithOptionalIdempotency(
+        var normalizedOrderId = orderId?.Trim() ?? string.Empty;
+        var normalizedActor = actor?.Trim() ?? string.Empty;
+        var requestFingerprint = BuildWriteRequestFingerprint(
             commandName: StopCommandName,
-            orderId: orderId,
-            expectedOrderVersion: request.ExpectedOrderVersion,
-            actor: actor,
+            orderId: normalizedOrderId,
+            actor: normalizedActor,
+            requestPayload: new { request.ExpectedOrderVersion });
+
+        return ExecuteWriteCommandWithOptionalIdempotency(
+            commandName: StopCommandName,
+            orderId: normalizedOrderId,
+            actor: normalizedActor,
             idempotencyKey: idempotencyKey,
-            executeCore: () => TryStopRunCore(orderId, request, actor));
+            requestFingerprint: requestFingerprint,
+            executeCore: () => TryStopRunCore(normalizedOrderId, request, normalizedActor));
     }
 
-    private StoreOperationResult ExecuteRunCommandWithOptionalIdempotency(
+    private StoreOperationResult ExecuteWriteCommandWithOptionalIdempotency(
         string commandName,
         string orderId,
-        long expectedOrderVersion,
         string actor,
         string? idempotencyKey,
+        string requestFingerprint,
         Func<StoreOperationResult> executeCore)
     {
         var normalizedOrderId = orderId?.Trim() ?? string.Empty;
@@ -550,21 +780,19 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
         if (string.IsNullOrWhiteSpace(normalizedKey))
             return executeCore();
 
-        var requestFingerprint = BuildRunRequestFingerprint(commandName, normalizedOrderId, normalizedActor, expectedOrderVersion);
-
-        if (TryGetStoredRunCommandResult(normalizedOrderId, commandName, normalizedKey, requestFingerprint, out var cachedResult, out var mismatchError))
+        if (TryGetStoredWriteCommandResult(commandName, normalizedKey, requestFingerprint, out var cachedResult, out var mismatchError))
             return string.IsNullOrWhiteSpace(mismatchError)
                 ? cachedResult
                 : StoreOperationResult.BadRequest(mismatchError);
 
         var executed = executeCore();
-        var stored = TryStoreRunCommandResult(
-            normalizedOrderId,
-            commandName,
-            normalizedKey,
-            requestFingerprint,
-            normalizedActor,
-            executed,
+        var stored = TryStoreWriteCommandResult(
+            commandName: commandName,
+            idempotencyKey: normalizedKey,
+            requestFingerprint: requestFingerprint,
+            actor: normalizedActor,
+            orderInternalId: normalizedOrderId,
+            result: executed,
             out var storeError);
 
         if (!string.IsNullOrWhiteSpace(storeError))
@@ -581,15 +809,14 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
         using var db = _dbContextFactory.CreateDbContext();
         using var tx = db.Database.BeginTransaction();
 
-        var normalizedOrderId = orderId.Trim();
-        var orderRecord = db.Orders.FirstOrDefault(x => x.InternalId == normalizedOrderId);
+        var orderRecord = db.Orders.FirstOrDefault(x => x.InternalId == orderId);
         if (orderRecord == null)
             return StoreOperationResult.NotFound();
 
         if (request.ExpectedOrderVersion > 0 && orderRecord.Version != request.ExpectedOrderVersion)
             return StoreOperationResult.Conflict(orderRecord.Version, "order version mismatch");
 
-        var lockRecord = db.OrderRunLocks.FirstOrDefault(x => x.OrderInternalId == normalizedOrderId);
+        var lockRecord = db.OrderRunLocks.FirstOrDefault(x => x.OrderInternalId == orderId);
         if (lockRecord != null && lockRecord.IsActive)
             return StoreOperationResult.Conflict(orderRecord.Version, "run already active");
 
@@ -598,7 +825,7 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
         {
             db.OrderRunLocks.Add(new OrderRunLockRecord
             {
-                OrderInternalId = normalizedOrderId,
+                OrderInternalId = orderId,
                 IsActive = true,
                 LeaseToken = leaseToken,
                 LeaseOwner = actor ?? string.Empty,
@@ -651,15 +878,14 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
         using var db = _dbContextFactory.CreateDbContext();
         using var tx = db.Database.BeginTransaction();
 
-        var normalizedOrderId = orderId.Trim();
-        var orderRecord = db.Orders.FirstOrDefault(x => x.InternalId == normalizedOrderId);
+        var orderRecord = db.Orders.FirstOrDefault(x => x.InternalId == orderId);
         if (orderRecord == null)
             return StoreOperationResult.NotFound();
 
         if (request.ExpectedOrderVersion > 0 && orderRecord.Version != request.ExpectedOrderVersion)
             return StoreOperationResult.Conflict(orderRecord.Version, "order version mismatch");
 
-        var lockRecord = db.OrderRunLocks.FirstOrDefault(x => x.OrderInternalId == normalizedOrderId);
+        var lockRecord = db.OrderRunLocks.FirstOrDefault(x => x.OrderInternalId == orderId);
         if (lockRecord == null || !lockRecord.IsActive)
             return StoreOperationResult.BadRequest("run is not active");
 
@@ -694,8 +920,7 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
         return StoreOperationResult.Success(updated);
     }
 
-    private bool TryGetStoredRunCommandResult(
-        string orderInternalId,
+    private bool TryGetStoredWriteCommandResult(
         string commandName,
         string idempotencyKey,
         string requestFingerprint,
@@ -706,11 +931,10 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
         mismatchError = string.Empty;
 
         using var db = _dbContextFactory.CreateDbContext();
-        var entry = db.OrderRunIdempotency
+        var entry = db.OrderWriteIdempotency
             .AsNoTracking()
             .FirstOrDefault(x =>
-                x.OrderInternalId == orderInternalId
-                && x.CommandName == commandName
+                x.CommandName == commandName
                 && x.IdempotencyKey == idempotencyKey);
         if (entry == null)
             return false;
@@ -721,29 +945,32 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
             return true;
         }
 
-        cachedResult = DeserializeStoredRunCommandResult(entry);
+        cachedResult = DeserializeStoredWriteCommandResult(entry);
         return true;
     }
 
-    private StoreOperationResult TryStoreRunCommandResult(
-        string orderInternalId,
+    private StoreOperationResult TryStoreWriteCommandResult(
         string commandName,
         string idempotencyKey,
         string requestFingerprint,
         string actor,
+        string orderInternalId,
         StoreOperationResult result,
         out string storeError)
     {
         storeError = string.Empty;
         using var db = _dbContextFactory.CreateDbContext();
 
-        var entry = new OrderRunIdempotencyRecord
+        var effectiveOrderInternalId = !string.IsNullOrWhiteSpace(result.Order?.InternalId)
+            ? result.Order!.InternalId.Trim()
+            : (orderInternalId ?? string.Empty).Trim();
+        var entry = new OrderWriteIdempotencyRecord
         {
-            OrderInternalId = orderInternalId,
             CommandName = commandName,
             IdempotencyKey = idempotencyKey,
             RequestFingerprint = requestFingerprint,
             Actor = actor ?? string.Empty,
+            OrderInternalId = effectiveOrderInternalId,
             ResultKind = ToResultKind(result),
             Error = result.Error ?? string.Empty,
             CurrentVersion = result.CurrentVersion,
@@ -754,7 +981,7 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
             UpdatedAt = DateTime.Now
         };
 
-        db.OrderRunIdempotency.Add(entry);
+        db.OrderWriteIdempotency.Add(entry);
         try
         {
             db.SaveChanges();
@@ -762,7 +989,7 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
         }
         catch (DbUpdateException)
         {
-            if (TryGetStoredRunCommandResult(orderInternalId, commandName, idempotencyKey, requestFingerprint, out var cached, out var mismatchError))
+            if (TryGetStoredWriteCommandResult(commandName, idempotencyKey, requestFingerprint, out var cached, out var mismatchError))
             {
                 storeError = mismatchError;
                 return cached;
@@ -783,19 +1010,19 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
         return "bad_request";
     }
 
-    private static StoreOperationResult DeserializeStoredRunCommandResult(OrderRunIdempotencyRecord entry)
+    private static StoreOperationResult DeserializeStoredWriteCommandResult(OrderWriteIdempotencyRecord entry)
     {
         var kind = entry.ResultKind?.Trim().ToLowerInvariant() ?? string.Empty;
         return kind switch
         {
-            "success" => StoreOperationResult.Success(DeserializeStoredRunOrder(entry.ResponseOrderJson)),
+            "success" => StoreOperationResult.Success(DeserializeStoredOrder(entry.ResponseOrderJson)),
             "not_found" => StoreOperationResult.NotFound(),
             "conflict" => StoreOperationResult.Conflict(entry.CurrentVersion, entry.Error),
             _ => StoreOperationResult.BadRequest(entry.Error)
         };
     }
 
-    private static SharedOrder DeserializeStoredRunOrder(string payloadJson)
+    private static SharedOrder DeserializeStoredOrder(string payloadJson)
     {
         if (!string.IsNullOrWhiteSpace(payloadJson))
         {
@@ -823,9 +1050,12 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
         return trimmed.Length <= MaxIdempotencyKeyLength ? trimmed : trimmed[..MaxIdempotencyKeyLength];
     }
 
-    private static string BuildRunRequestFingerprint(string commandName, string orderId, string actor, long expectedOrderVersion)
+    private static string BuildWriteRequestFingerprint(string commandName, string orderId, string actor, object? requestPayload)
     {
-        var source = $"{commandName}|{orderId}|{actor}|{expectedOrderVersion}";
+        var payloadJson = requestPayload == null
+            ? string.Empty
+            : JsonSerializer.Serialize(requestPayload);
+        var source = $"{commandName}|{orderId}|{actor}|{payloadJson}";
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(source));
         return Convert.ToHexString(hash).ToLowerInvariant();
     }

@@ -16,6 +16,7 @@ public sealed class ReplicaDbContext : DbContext
     public DbSet<StorageMetaRecord> StorageMeta => Set<StorageMetaRecord>();
     public DbSet<OrderRunLockRecord> OrderRunLocks => Set<OrderRunLockRecord>();
     public DbSet<OrderRunIdempotencyRecord> OrderRunIdempotency => Set<OrderRunIdempotencyRecord>();
+    public DbSet<OrderWriteIdempotencyRecord> OrderWriteIdempotency => Set<OrderWriteIdempotencyRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -127,6 +128,26 @@ public sealed class ReplicaDbContext : DbContext
             entity.Property(x => x.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp without time zone");
 
             entity.HasIndex(x => x.CreatedAt).HasDatabaseName("ix_order_run_idempotency_created_at");
+        });
+
+        modelBuilder.Entity<OrderWriteIdempotencyRecord>(entity =>
+        {
+            entity.ToTable("order_write_idempotency");
+            entity.HasKey(x => new { x.CommandName, x.IdempotencyKey });
+            entity.Property(x => x.CommandName).HasColumnName("command_name").HasMaxLength(64);
+            entity.Property(x => x.IdempotencyKey).HasColumnName("idempotency_key").HasMaxLength(128);
+            entity.Property(x => x.RequestFingerprint).HasColumnName("request_fingerprint").HasMaxLength(128);
+            entity.Property(x => x.Actor).HasColumnName("actor").HasMaxLength(256).HasDefaultValue(string.Empty);
+            entity.Property(x => x.OrderInternalId).HasColumnName("order_internal_id").HasDefaultValue(string.Empty);
+            entity.Property(x => x.ResultKind).HasColumnName("result_kind").HasMaxLength(32);
+            entity.Property(x => x.Error).HasColumnName("error").HasDefaultValue(string.Empty);
+            entity.Property(x => x.CurrentVersion).HasColumnName("current_version");
+            entity.Property(x => x.ResponseOrderJson).HasColumnName("response_order_json").HasColumnType("jsonb").HasDefaultValue("{}");
+            entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp without time zone");
+            entity.Property(x => x.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp without time zone");
+
+            entity.HasIndex(x => x.CreatedAt).HasDatabaseName("ix_order_write_idempotency_created_at");
+            entity.HasIndex(x => x.OrderInternalId).HasDatabaseName("ix_order_write_idempotency_order_internal_id");
         });
     }
 }
