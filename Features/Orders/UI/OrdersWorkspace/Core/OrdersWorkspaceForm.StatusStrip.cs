@@ -666,18 +666,12 @@ namespace Replica
 
         private static IEnumerable<string> ResolveReplicaApiExecutableCandidates()
         {
-            var baseDir = AppContext.BaseDirectory;
-            yield return Path.Combine(baseDir, "Replica.Api.exe");
-            yield return Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "Replica.Api", "bin", "Debug", "net8.0", "Replica.Api.exe"));
-            yield return Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "Replica.Api", "bin", "Release", "net8.0", "Replica.Api.exe"));
+            return ReplicaApiLaunchLocator.ResolveExecutableCandidates(AppContext.BaseDirectory);
         }
 
         private static IEnumerable<string> ResolveReplicaApiDllCandidates()
         {
-            var baseDir = AppContext.BaseDirectory;
-            yield return Path.Combine(baseDir, "Replica.Api.dll");
-            yield return Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "Replica.Api", "bin", "Debug", "net8.0", "Replica.Api.dll"));
-            yield return Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "Replica.Api", "bin", "Release", "net8.0", "Replica.Api.dll"));
+            return ReplicaApiLaunchLocator.ResolveDllCandidates(AppContext.BaseDirectory);
         }
 
         private async Task<EndpointProbeResult> ProbeEndpointStatusAsync(Uri baseUri, string endpointPath, CancellationToken cancellationToken)
