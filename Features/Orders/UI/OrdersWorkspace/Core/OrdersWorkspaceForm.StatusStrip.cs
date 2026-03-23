@@ -8,6 +8,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Net.Sockets;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -53,6 +54,7 @@ namespace Replica
 
             _acknowledgedErrorCount = CountOrdersWithErrors();
             RefreshTrayIndicators();
+            EnsureLocalLanApiStartup();
             RequestLanServerProbe("startup", force: true);
         }
 
@@ -651,6 +653,12 @@ namespace Replica
                 return false;
             }
 
+            if (IsLanApiPortListening())
+            {
+                message = "LAN API уже слушает локальный порт. Выполняем повторную проверку.";
+                return false;
+            }
+
             var runningApiProcesses = Process.GetProcessesByName("Replica.Api");
             if (runningApiProcesses.Length > 0)
             {
@@ -712,6 +720,36 @@ namespace Replica
             return string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase)
                    || string.Equals(host, "127.0.0.1", StringComparison.OrdinalIgnoreCase)
                    || string.Equals(host, "::1", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void EnsureLocalLanApiStartup()
+        {
+            if (!ShouldUseLanRunApi() || !IsLanApiLocalHost())
+                return;
+
+            if (!TryStartLocalLanApiIfNeeded(out var startupMessage))
+                return;
+
+            if (!string.IsNullOrWhiteSpace(startupMessage))
+                SetBottomStatus(startupMessage);
+        }
+
+        private bool IsLanApiPortListening()
+        {
+            if (!TryResolveLanApiBaseUri(_lanApiBaseUrl, out var baseUri))
+                return false;
+
+            try
+            {
+                using var tcpClient = new TcpClient();
+                var connectTask = tcpClient.ConnectAsync(baseUri.Host, baseUri.Port);
+                var connectedInTime = connectTask.Wait(TimeSpan.FromMilliseconds(350));
+                return connectedInTime && tcpClient.Connected;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private static IEnumerable<string> ResolveReplicaApiExecutableCandidates()
