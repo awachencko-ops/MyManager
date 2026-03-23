@@ -37,6 +37,8 @@ namespace Replica
 
             toolConnection.MouseEnter -= ToolConnection_MouseEnter;
             toolConnection.MouseEnter += ToolConnection_MouseEnter;
+            toolConnection.MouseLeave -= ToolConnection_MouseLeave;
+            toolConnection.MouseLeave += ToolConnection_MouseLeave;
             toolConnection.Click -= ToolConnection_Click;
             toolConnection.Click += ToolConnection_Click;
             toolConnection.AutoToolTip = false;
@@ -72,8 +74,12 @@ namespace Replica
 
         private void ToolConnection_MouseEnter(object? sender, EventArgs e)
         {
-            UpdateTrayConnectionIndicator();
             ShowPersistentConnectionToolTip();
+        }
+
+        private void ToolConnection_MouseLeave(object? sender, EventArgs e)
+        {
+            HidePersistentConnectionToolTip();
         }
 
         private void StatusStrip1_MouseMove(object? sender, MouseEventArgs e)
@@ -168,6 +174,7 @@ namespace Replica
             }
 
             toolConnection.MouseEnter -= ToolConnection_MouseEnter;
+            toolConnection.MouseLeave -= ToolConnection_MouseLeave;
             toolConnection.Click -= ToolConnection_Click;
             statusStrip1.MouseMove -= StatusStrip1_MouseMove;
             statusStrip1.MouseLeave -= StatusStrip1_MouseLeave;
@@ -280,9 +287,10 @@ namespace Replica
                 ? "Рабочая папка заказов доступна."
                 : "Рабочая папка заказов недоступна.";
             var dependencyHealthSummary = BuildDependencyHealthSummary();
-            toolConnection.ToolTipText = string.IsNullOrWhiteSpace(dependencyHealthSummary)
+            _connectionStatusToolTipContent = string.IsNullOrWhiteSpace(dependencyHealthSummary)
                 ? $"{connectionStatusText}\n{_usersDirectoryStatusText}"
                 : $"{connectionStatusText}\n{dependencyHealthSummary}\n{_usersDirectoryStatusText}";
+            toolConnection.ToolTipText = string.Empty;
             RefreshPersistentConnectionToolTip();
             UpdateServerHeaderConnectionState(shortStatusText, statusColor);
         }
@@ -397,7 +405,8 @@ namespace Replica
             toolConnection.LinkColor = statusColor;
             toolConnection.ActiveLinkColor = statusColor;
             toolConnection.VisitedLinkColor = statusColor;
-            toolConnection.ToolTipText = BuildLanConnectionToolTip(snapshot, dependencyHealthLevel, probeInProgress, requestCount);
+            _connectionStatusToolTipContent = BuildLanConnectionToolTip(snapshot, dependencyHealthLevel, probeInProgress, requestCount);
+            toolConnection.ToolTipText = string.Empty;
             RefreshPersistentConnectionToolTip();
             UpdateServerHeaderConnectionState(shortStatusText, statusColor);
         }
@@ -417,7 +426,7 @@ namespace Replica
             if (statusStrip1.IsDisposed || toolConnection.IsDisposed)
                 return;
 
-            var toolTipText = toolConnection.ToolTipText ?? string.Empty;
+            var toolTipText = _connectionStatusToolTipContent ?? string.Empty;
             if (string.IsNullOrWhiteSpace(toolTipText))
             {
                 HidePersistentConnectionToolTip();
