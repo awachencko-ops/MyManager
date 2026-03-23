@@ -32,7 +32,8 @@ public sealed class CorrelationContextMiddleware
         {
             ["correlation_id"] = correlationId,
             ["request_method"] = context.Request.Method,
-            ["request_path"] = context.Request.Path.ToString()
+            ["request_path"] = context.Request.Path.ToString(),
+            ["request_path_normalized"] = ReplicaApiObservability.NormalizeRequestPath(context.Request.Path.ToString())
         }))
         {
             _logger.LogInformation("HTTP request started");
@@ -44,6 +45,11 @@ public sealed class CorrelationContextMiddleware
             finally
             {
                 var elapsedMs = Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
+                ReplicaApiObservability.RecordHttpRequest(
+                    context.Request.Method,
+                    context.Request.Path.ToString(),
+                    context.Response.StatusCode,
+                    elapsedMs);
                 _logger.LogInformation(
                     "HTTP request completed with status {StatusCode} in {ElapsedMs:0.###} ms",
                     context.Response.StatusCode,

@@ -1,42 +1,42 @@
-# Технический долг: что «сжечь и переписать» сейчас
+﻿# РўРµС…РЅРёС‡РµСЃРєРёР№ РґРѕР»Рі: С‡С‚Рѕ В«СЃР¶РµС‡СЊ Рё РїРµСЂРµРїРёСЃР°С‚СЊВ» СЃРµР№С‡Р°СЃ
 
-Актуально на `2026-03-23`.
+РђРєС‚СѓР°Р»СЊРЅРѕ РЅР° `2026-03-23`.
 
-## Цель
+## Р¦РµР»СЊ
 
-Закрыть архитектурные долги, которые прямо бьют по надежности LAN/PostgreSQL режима и мешают масштабированию.
+Р—Р°РєСЂС‹С‚СЊ Р°СЂС…РёС‚РµРєС‚СѓСЂРЅС‹Рµ РґРѕР»РіРё, РєРѕС‚РѕСЂС‹Рµ РїСЂСЏРјРѕ Р±СЊСЋС‚ РїРѕ РЅР°РґРµР¶РЅРѕСЃС‚Рё LAN/PostgreSQL СЂРµР¶РёРјР° Рё РјРµС€Р°СЋС‚ РјР°СЃС€С‚Р°Р±РёСЂРѕРІР°РЅРёСЋ.
 
-## P0 Burn-List (сейчас)
+## P0 Burn-List (СЃРµР№С‡Р°СЃ)
 
-| Область | Текущее состояние | Что переписываем | Критерий закрытия |
+| РћР±Р»Р°СЃС‚СЊ | РўРµРєСѓС‰РµРµ СЃРѕСЃС‚РѕСЏРЅРёРµ | Р§С‚Рѕ РїРµСЂРµРїРёСЃС‹РІР°РµРј | РљСЂРёС‚РµСЂРёР№ Р·Р°РєСЂС‹С‚РёСЏ |
 |---|---|---|---|
-| `MainForm` (god-object orchestration) | Shell переименован в `OrdersWorkspaceForm`, код `Orders` перенесён в `Features/Orders/UI/*`, введён единый `IOrderApplicationService` (включая run/create/edit/delete/item/file + history/folder orchestration) | Дожать presenter-only слой: убрать остаточные orchestration ветки из UI и завершить DI cutover | `OrdersWorkspaceForm` не управляет бизнес-циклами напрямую, только UI/presenter |
-| Write-command boundary | `DONE` для целевого LAN scope: `create/update/items/reorder/status` + `item delete` + `order delete` идут через API boundary (включая remove/move item-сценарии и batch order delete) | Поддерживать единый API-first путь и убирать legacy fallback ветки | Все mutating операции идут через API-команды и server invariants |
-| JSON/file как рабочее хранилище | LAN sync работает, но file fallback влияет на поведение | Зафиксировать PostgreSQL как primary source of truth, file оставить только import/export fallback | Runtime в LAN режиме не зависит от `history.json` для актуального состояния |
-| Audit/observability | Есть `order_events` + correlation, но нет единой схемы и метрик | Ввести единый structured schema + метрики/дашборды | Инцидент можно отследить end-to-end по `correlation_id` + есть базовые SLO графики |
+| `MainForm` (god-object orchestration) | Shell РїРµСЂРµРёРјРµРЅРѕРІР°РЅ РІ `OrdersWorkspaceForm`, РєРѕРґ `Orders` РїРµСЂРµРЅРµСЃС‘РЅ РІ `Features/Orders/UI/*`, РІРІРµРґС‘РЅ РµРґРёРЅС‹Р№ `IOrderApplicationService` (РІРєР»СЋС‡Р°СЏ run/create/edit/delete/item/file + history/folder orchestration) | Р”РѕР¶Р°С‚СЊ presenter-only СЃР»РѕР№: СѓР±СЂР°С‚СЊ РѕСЃС‚Р°С‚РѕС‡РЅС‹Рµ orchestration РІРµС‚РєРё РёР· UI Рё Р·Р°РІРµСЂС€РёС‚СЊ DI cutover | `OrdersWorkspaceForm` РЅРµ СѓРїСЂР°РІР»СЏРµС‚ Р±РёР·РЅРµСЃ-С†РёРєР»Р°РјРё РЅР°РїСЂСЏРјСѓСЋ, С‚РѕР»СЊРєРѕ UI/presenter |
+| Write-command boundary | `DONE` РґР»СЏ С†РµР»РµРІРѕРіРѕ LAN scope: `create/update/items/reorder/status` + `item delete` + `order delete` РёРґСѓС‚ С‡РµСЂРµР· API boundary (РІРєР»СЋС‡Р°СЏ remove/move item-СЃС†РµРЅР°СЂРёРё Рё batch order delete) | РџРѕРґРґРµСЂР¶РёРІР°С‚СЊ РµРґРёРЅС‹Р№ API-first РїСѓС‚СЊ Рё СѓР±РёСЂР°С‚СЊ legacy fallback РІРµС‚РєРё | Р’СЃРµ mutating РѕРїРµСЂР°С†РёРё РёРґСѓС‚ С‡РµСЂРµР· API-РєРѕРјР°РЅРґС‹ Рё server invariants |
+| JSON/file РєР°Рє СЂР°Р±РѕС‡РµРµ С…СЂР°РЅРёР»РёС‰Рµ | LAN sync СЂР°Р±РѕС‚Р°РµС‚, РЅРѕ file fallback РІР»РёСЏРµС‚ РЅР° РїРѕРІРµРґРµРЅРёРµ | Р—Р°С„РёРєСЃРёСЂРѕРІР°С‚СЊ PostgreSQL РєР°Рє primary source of truth, file РѕСЃС‚Р°РІРёС‚СЊ С‚РѕР»СЊРєРѕ import/export fallback | Runtime РІ LAN СЂРµР¶РёРјРµ РЅРµ Р·Р°РІРёСЃРёС‚ РѕС‚ `history.json` РґР»СЏ Р°РєС‚СѓР°Р»СЊРЅРѕРіРѕ СЃРѕСЃС‚РѕСЏРЅРёСЏ |
+| Audit/observability | Р•СЃС‚СЊ `order_events` + correlation, РЅРѕ РЅРµС‚ РµРґРёРЅРѕР№ СЃС…РµРјС‹ Рё РјРµС‚СЂРёРє | Р’РІРµСЃС‚Рё РµРґРёРЅС‹Р№ structured schema + РјРµС‚СЂРёРєРё/РґР°С€Р±РѕСЂРґС‹ | РРЅС†РёРґРµРЅС‚ РјРѕР¶РЅРѕ РѕС‚СЃР»РµРґРёС‚СЊ end-to-end РїРѕ `correlation_id` + РµСЃС‚СЊ Р±Р°Р·РѕРІС‹Рµ SLO РіСЂР°С„РёРєРё |
 
-## P1 (следом за P0)
+## P1 (СЃР»РµРґРѕРј Р·Р° P0)
 
-| Область | Статус |
+| РћР±Р»Р°СЃС‚СЊ | РЎС‚Р°С‚СѓСЃ |
 |---|---|
 | Optimistic concurrency | `DONE` (LAN path) |
-| Idempotency write API | `DONE` (`Idempotency-Key` на `create/update/items(add/update/delete/reorder)/run/stop`, единый dedupe-store `order_write_idempotency` + fingerprint validation) |
-| Resilience (retry/circuit/bulkhead/timeout) | `DONE` для file-workflow |
-| Health/readiness + SLO метрики | `PARTIAL` |
+| Idempotency write API | `DONE` (`Idempotency-Key` РЅР° `create/update/items(add/update/delete/reorder)/run/stop`, РµРґРёРЅС‹Р№ dedupe-store `order_write_idempotency` + fingerprint validation) |
+| Resilience (retry/circuit/bulkhead/timeout) | `DONE` РґР»СЏ file-workflow |
+| Health/readiness + SLO метрики | `DONE (baseline)` |
 
-## Следующие 3 итерации
+## РЎР»РµРґСѓСЋС‰РёРµ 3 РёС‚РµСЂР°С†РёРё
 
-1. Финализировать observability baseline (единая схема логов + SLO метрики + dashboard).
-2. Дожать presenter-only слой для `OrdersWorkspaceForm` (убрать остаточные orchestration-ветки из UI).
-3. Зафиксировать PostgreSQL как primary source-of-truth в runtime (минимизировать влияние file fallback).
+1. Поддерживать observability baseline (`/live`, `/ready`, `/metrics`, `/slo`) и развивать dashboards/alerts.
+2. Р”РѕР¶Р°С‚СЊ presenter-only СЃР»РѕР№ РґР»СЏ `OrdersWorkspaceForm` (СѓР±СЂР°С‚СЊ РѕСЃС‚Р°С‚РѕС‡РЅС‹Рµ orchestration-РІРµС‚РєРё РёР· UI).
+3. Р—Р°С„РёРєСЃРёСЂРѕРІР°С‚СЊ PostgreSQL РєР°Рє primary source-of-truth РІ runtime (РјРёРЅРёРјРёР·РёСЂРѕРІР°С‚СЊ РІР»РёСЏРЅРёРµ file fallback).
 
-## Правило завершения блока «сжечь и переписать»
+## РџСЂР°РІРёР»Рѕ Р·Р°РІРµСЂС€РµРЅРёСЏ Р±Р»РѕРєР° В«СЃР¶РµС‡СЊ Рё РїРµСЂРµРїРёСЃР°С‚СЊВ»
 
-Блок считается закрытым, когда все пункты P0 имеют статус `DONE`, а `MainForm` остается только UI-слоем без прямой бизнес-оркестрации и persistence-решений.
+Р‘Р»РѕРє СЃС‡РёС‚Р°РµС‚СЃСЏ Р·Р°РєСЂС‹С‚С‹Рј, РєРѕРіРґР° РІСЃРµ РїСѓРЅРєС‚С‹ P0 РёРјРµСЋС‚ СЃС‚Р°С‚СѓСЃ `DONE`, Р° `MainForm` РѕСЃС‚Р°РµС‚СЃСЏ С‚РѕР»СЊРєРѕ UI-СЃР»РѕРµРј Р±РµР· РїСЂСЏРјРѕР№ Р±РёР·РЅРµСЃ-РѕСЂРєРµСЃС‚СЂР°С†РёРё Рё persistence-СЂРµС€РµРЅРёР№.
 
 ## Legacy policy
 
-`Legacy/` работает как временный quarantine. Вход/выход и условия удаления описаны в [Legacy/README.md](/C:/Users/user/Desktop/MyManager%201.0.1/Legacy/README.md).
+`Legacy/` СЂР°Р±РѕС‚Р°РµС‚ РєР°Рє РІСЂРµРјРµРЅРЅС‹Р№ quarantine. Р’С…РѕРґ/РІС‹С…РѕРґ Рё СѓСЃР»РѕРІРёСЏ СѓРґР°Р»РµРЅРёСЏ РѕРїРёСЃР°РЅС‹ РІ [Legacy/README.md](/C:/Users/user/Desktop/MyManager%201.0.1/Legacy/README.md).
 
 ## Update 2026-03-23
 
@@ -52,3 +52,6 @@
 - Full write idempotency is now closed: `OrdersController` resolves `Idempotency-Key` for all mutating endpoints, `EfCoreLanOrderStore` applies a single dedupe pipeline with request fingerprint, and migration `20260323000100_OrderWriteIdempotency` introduces unified store `order_write_idempotency` (including backfill from legacy `order_run_idempotency`).
 - `LanOrderWriteApiGateway` now sends `Idempotency-Key` for create/update/items/reorder requests; verify-tests and PostgreSQL integration pack were expanded (including end-to-end idempotency regression for create/update/add/update/delete/reorder + mismatch check).
 - `order delete` API-path is now closed end-to-end: added `DELETE /api/orders/{id}` + `DeleteOrderRequest` + store command `TryDeleteOrder` (EF Core/PostgreSQL/InMemory) with optimistic concurrency and `delete-order` event; client boundary expanded with `DeleteOrderAsync/TryDeleteOrderAsync/TryDeleteOrderViaLanApiAsync`, and `OrdersWorkspaceForm` in LAN mode switched to API-first order delete (single/batch) with local disk cleanup + snapshot refresh.
+
+- Observability/SLO baseline is now closed in API runtime: added request metrics aggregator (`ReplicaApiObservability`), write-command outcome counters in `OrdersController`, idempotency hit/miss/mismatch telemetry in `EfCoreLanOrderStore`, and operational endpoints `/live`, `/ready`, `/metrics`, `/slo`; covered by new verify tests (`ReplicaApiObservabilityTests`) and full regression runs.
+

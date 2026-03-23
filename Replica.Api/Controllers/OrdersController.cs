@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Replica.Api.Contracts;
+using Replica.Api.Infrastructure;
 using Replica.Api.Services;
 using Replica.Shared.Models;
 using System;
@@ -12,6 +13,15 @@ namespace Replica.Api.Controllers;
 public sealed class OrdersController : ControllerBase
 {
     private const string IdempotencyHeaderName = "Idempotency-Key";
+    private const string CreateOrderCommandName = "create-order";
+    private const string DeleteOrderCommandName = "delete-order";
+    private const string UpdateOrderCommandName = "update-order";
+    private const string AddItemCommandName = "add-item";
+    private const string UpdateItemCommandName = "update-item";
+    private const string DeleteItemCommandName = "delete-item";
+    private const string ReorderItemsCommandName = "reorder-items";
+    private const string RunCommandName = "run";
+    private const string StopCommandName = "stop";
     private readonly ILanOrderStore _store;
     private readonly ILogger<OrdersController> _logger;
 
@@ -60,17 +70,11 @@ public sealed class OrdersController : ControllerBase
         if (_store is EfCoreLanOrderStore efCoreStore)
         {
             var createResult = efCoreStore.TryCreateOrder(request, actor, idempotencyKey);
-            if (createResult.IsSuccess && createResult.Order != null)
-                return CreatedAtAction(nameof(GetOrderById), new { id = createResult.Order.InternalId }, createResult.Order);
-
-            if (createResult.IsConflict)
-                return Conflict(new { error = createResult.Error, currentVersion = createResult.CurrentVersion });
-            if (createResult.IsNotFound)
-                return NotFound(new { error = createResult.Error });
-            return BadRequest(new { error = createResult.Error });
+            return BuildCreateResponse(createResult);
         }
 
         var created = _store.CreateOrder(request, actor);
+        ReplicaApiObservability.RecordWriteCommand(CreateOrderCommandName, "success");
         return CreatedAtAction(nameof(GetOrderById), new { id = created.InternalId }, created);
     }
 
@@ -93,13 +97,7 @@ public sealed class OrdersController : ControllerBase
         var result = _store is EfCoreLanOrderStore efCoreStore
             ? efCoreStore.TryDeleteOrder(id, request, actor, idempotencyKey)
             : _store.TryDeleteOrder(id, request, actor);
-        if (result.IsSuccess)
-            return Ok(result.Order);
-        if (result.IsNotFound)
-            return NotFound(new { error = result.Error });
-        if (result.IsConflict)
-            return Conflict(new { error = result.Error, currentVersion = result.CurrentVersion });
-        return BadRequest(new { error = result.Error });
+        return BuildWriteResponse(DeleteOrderCommandName, result);
     }
 
     [HttpPatch("{id}")]
@@ -121,13 +119,7 @@ public sealed class OrdersController : ControllerBase
         var result = _store is EfCoreLanOrderStore efCoreStore
             ? efCoreStore.TryUpdateOrder(id, request, actor, idempotencyKey)
             : _store.TryUpdateOrder(id, request, actor);
-        if (result.IsSuccess)
-            return Ok(result.Order);
-        if (result.IsNotFound)
-            return NotFound(new { error = result.Error });
-        if (result.IsConflict)
-            return Conflict(new { error = result.Error, currentVersion = result.CurrentVersion });
-        return BadRequest(new { error = result.Error });
+        return BuildWriteResponse(UpdateOrderCommandName, result);
     }
 
     [HttpPost("{id}/items")]
@@ -149,13 +141,7 @@ public sealed class OrdersController : ControllerBase
         var result = _store is EfCoreLanOrderStore efCoreStore
             ? efCoreStore.TryAddItem(id, request, actor, idempotencyKey)
             : _store.TryAddItem(id, request, actor);
-        if (result.IsSuccess)
-            return Ok(result.Order);
-        if (result.IsNotFound)
-            return NotFound(new { error = result.Error });
-        if (result.IsConflict)
-            return Conflict(new { error = result.Error, currentVersion = result.CurrentVersion });
-        return BadRequest(new { error = result.Error });
+        return BuildWriteResponse(AddItemCommandName, result);
     }
 
     [HttpPatch("{id}/items/{itemId}")]
@@ -177,13 +163,7 @@ public sealed class OrdersController : ControllerBase
         var result = _store is EfCoreLanOrderStore efCoreStore
             ? efCoreStore.TryUpdateItem(id, itemId, request, actor, idempotencyKey)
             : _store.TryUpdateItem(id, itemId, request, actor);
-        if (result.IsSuccess)
-            return Ok(result.Order);
-        if (result.IsNotFound)
-            return NotFound(new { error = result.Error });
-        if (result.IsConflict)
-            return Conflict(new { error = result.Error, currentVersion = result.CurrentVersion });
-        return BadRequest(new { error = result.Error });
+        return BuildWriteResponse(UpdateItemCommandName, result);
     }
 
     [HttpDelete("{id}/items/{itemId}")]
@@ -205,13 +185,7 @@ public sealed class OrdersController : ControllerBase
         var result = _store is EfCoreLanOrderStore efCoreStore
             ? efCoreStore.TryDeleteItem(id, itemId, request, actor, idempotencyKey)
             : _store.TryDeleteItem(id, itemId, request, actor);
-        if (result.IsSuccess)
-            return Ok(result.Order);
-        if (result.IsNotFound)
-            return NotFound(new { error = result.Error });
-        if (result.IsConflict)
-            return Conflict(new { error = result.Error, currentVersion = result.CurrentVersion });
-        return BadRequest(new { error = result.Error });
+        return BuildWriteResponse(DeleteItemCommandName, result);
     }
 
     [HttpPost("{id}/items/reorder")]
@@ -233,13 +207,7 @@ public sealed class OrdersController : ControllerBase
         var result = _store is EfCoreLanOrderStore efCoreStore
             ? efCoreStore.TryReorderItems(id, request, actor, idempotencyKey)
             : _store.TryReorderItems(id, request, actor);
-        if (result.IsSuccess)
-            return Ok(result.Order);
-        if (result.IsNotFound)
-            return NotFound(new { error = result.Error });
-        if (result.IsConflict)
-            return Conflict(new { error = result.Error, currentVersion = result.CurrentVersion });
-        return BadRequest(new { error = result.Error });
+        return BuildWriteResponse(ReorderItemsCommandName, result);
     }
 
     [HttpPost("{id}/run")]
@@ -259,13 +227,7 @@ public sealed class OrdersController : ControllerBase
         var result = _store is EfCoreLanOrderStore efCoreStore
             ? efCoreStore.TryStartRun(id, runRequest, actor, idempotencyKey)
             : _store.TryStartRun(id, runRequest, actor);
-        if (result.IsSuccess)
-            return Ok(result.Order);
-        if (result.IsNotFound)
-            return NotFound(new { error = result.Error });
-        if (result.IsConflict)
-            return Conflict(new { error = result.Error, currentVersion = result.CurrentVersion });
-        return BadRequest(new { error = result.Error });
+        return BuildWriteResponse(RunCommandName, result);
     }
 
     [HttpPost("{id}/stop")]
@@ -285,13 +247,7 @@ public sealed class OrdersController : ControllerBase
         var result = _store is EfCoreLanOrderStore efCoreStore
             ? efCoreStore.TryStopRun(id, stopRequest, actor, idempotencyKey)
             : _store.TryStopRun(id, stopRequest, actor);
-        if (result.IsSuccess)
-            return Ok(result.Order);
-        if (result.IsNotFound)
-            return NotFound(new { error = result.Error });
-        if (result.IsConflict)
-            return Conflict(new { error = result.Error, currentVersion = result.CurrentVersion });
-        return BadRequest(new { error = result.Error });
+        return BuildWriteResponse(StopCommandName, result);
     }
 
     private bool TryResolveValidatedActor(out string actor, out ActionResult? validationError)
@@ -340,6 +296,54 @@ public sealed class OrdersController : ControllerBase
             return string.Empty;
 
         return value.Length <= 128 ? value : value[..128];
+    }
+
+    private ActionResult<SharedOrder> BuildCreateResponse(StoreOperationResult result)
+    {
+        if (result.IsSuccess && result.Order != null)
+        {
+            ReplicaApiObservability.RecordWriteCommand(CreateOrderCommandName, "success");
+            return CreatedAtAction(nameof(GetOrderById), new { id = result.Order.InternalId }, result.Order);
+        }
+
+        if (result.IsConflict)
+        {
+            ReplicaApiObservability.RecordWriteCommand(CreateOrderCommandName, "conflict");
+            return Conflict(new { error = result.Error, currentVersion = result.CurrentVersion });
+        }
+
+        if (result.IsNotFound)
+        {
+            ReplicaApiObservability.RecordWriteCommand(CreateOrderCommandName, "not_found");
+            return NotFound(new { error = result.Error });
+        }
+
+        ReplicaApiObservability.RecordWriteCommand(CreateOrderCommandName, "bad_request");
+        return BadRequest(new { error = result.Error });
+    }
+
+    private ActionResult<SharedOrder> BuildWriteResponse(string commandName, StoreOperationResult result)
+    {
+        if (result.IsSuccess)
+        {
+            ReplicaApiObservability.RecordWriteCommand(commandName, "success");
+            return Ok(result.Order);
+        }
+
+        if (result.IsNotFound)
+        {
+            ReplicaApiObservability.RecordWriteCommand(commandName, "not_found");
+            return NotFound(new { error = result.Error });
+        }
+
+        if (result.IsConflict)
+        {
+            ReplicaApiObservability.RecordWriteCommand(commandName, "conflict");
+            return Conflict(new { error = result.Error, currentVersion = result.CurrentVersion });
+        }
+
+        ReplicaApiObservability.RecordWriteCommand(commandName, "bad_request");
+        return BadRequest(new { error = result.Error });
     }
 }
 

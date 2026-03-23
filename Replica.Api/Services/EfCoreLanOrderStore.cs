@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Replica.Api.Contracts;
 using Replica.Api.Data;
 using Replica.Api.Data.Entities;
+using Replica.Api.Infrastructure;
 using Replica.Shared.Models;
 
 namespace Replica.Api.Services;
@@ -847,10 +848,18 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
             return executeCore();
 
         if (TryGetStoredWriteCommandResult(commandName, normalizedKey, requestFingerprint, out var cachedResult, out var mismatchError))
-            return string.IsNullOrWhiteSpace(mismatchError)
-                ? cachedResult
-                : StoreOperationResult.BadRequest(mismatchError);
+        {
+            if (string.IsNullOrWhiteSpace(mismatchError))
+            {
+                ReplicaApiObservability.RecordIdempotency(commandName, IdempotencyTelemetryOutcome.Hit);
+                return cachedResult;
+            }
 
+            ReplicaApiObservability.RecordIdempotency(commandName, IdempotencyTelemetryOutcome.Mismatch);
+            return StoreOperationResult.BadRequest(mismatchError);
+        }
+
+        ReplicaApiObservability.RecordIdempotency(commandName, IdempotencyTelemetryOutcome.Miss);
         var executed = executeCore();
         var stored = TryStoreWriteCommandResult(
             commandName: commandName,
@@ -862,7 +871,10 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
             out var storeError);
 
         if (!string.IsNullOrWhiteSpace(storeError))
+        {
+            ReplicaApiObservability.RecordIdempotency(commandName, IdempotencyTelemetryOutcome.Mismatch);
             return StoreOperationResult.BadRequest(storeError);
+        }
 
         return stored;
     }

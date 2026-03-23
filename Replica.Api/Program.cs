@@ -56,6 +56,96 @@ app.UseCorrelationContext();
 app.UseStaticFiles();
 app.UseAuthorization();
 app.MapControllers();
+
+app.MapGet("/live", () => Results.Ok(new
+{
+    status = "live",
+    service = "Replica.Api",
+    mode = effectiveStoreMode
+}));
+
+app.MapGet("/ready", async (IServiceProvider services, ILanOrderStore store) =>
+{
+    if (!string.Equals(effectiveStoreMode, "PostgreSql", StringComparison.OrdinalIgnoreCase))
+    {
+        return Results.Ok(new
+        {
+            status = "ready",
+            service = "Replica.Api",
+            store = store.GetType().Name,
+            mode = effectiveStoreMode
+        });
+    }
+
+    try
+    {
+        using var scope = services.CreateScope();
+        var dbContextFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<ReplicaDbContext>>();
+        await using var db = await dbContextFactory.CreateDbContextAsync();
+        var canConnect = await db.Database.CanConnectAsync();
+        if (!canConnect)
+        {
+            return Results.Json(new
+            {
+                status = "not_ready",
+                reason = "database connection failed",
+                mode = effectiveStoreMode
+            }, statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+
+        var pendingMigrations = (await db.Database.GetPendingMigrationsAsync()).ToList();
+        return Results.Ok(new
+        {
+            status = pendingMigrations.Count == 0 ? "ready" : "degraded",
+            service = "Replica.Api",
+            store = store.GetType().Name,
+            mode = effectiveStoreMode,
+            pendingMigrations = pendingMigrations.Count
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new
+        {
+            status = "not_ready",
+            reason = ex.Message,
+            mode = effectiveStoreMode
+        }, statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+});
+
+app.MapGet("/metrics", () => Results.Ok(ReplicaApiObservability.GetSnapshot()));
+
+app.MapGet("/slo", () =>
+{
+    var snapshot = ReplicaApiObservability.GetSnapshot();
+    const double availabilityTarget = 0.995;
+    const double p95LatencyTargetMs = 500;
+    const double writeSuccessTarget = 0.99;
+
+    var availabilityOk = snapshot.HttpAvailabilityRatio >= availabilityTarget;
+    var latencyOk = snapshot.HttpLatencyP95Ms <= p95LatencyTargetMs;
+    var writeSuccessOk = snapshot.WriteSuccessRatio >= writeSuccessTarget;
+
+    return Results.Ok(new
+    {
+        status = availabilityOk && latencyOk && writeSuccessOk ? "ok" : "degraded",
+        evaluatedAtUtc = DateTime.UtcNow,
+        targets = new
+        {
+            availabilityRatio = availabilityTarget,
+            latencyP95Ms = p95LatencyTargetMs,
+            writeSuccessRatio = writeSuccessTarget
+        },
+        current = new
+        {
+            snapshot.HttpAvailabilityRatio,
+            snapshot.HttpLatencyP95Ms,
+            snapshot.WriteSuccessRatio
+        }
+    });
+});
+
 app.MapGet("/health", (ILanOrderStore store) => Results.Ok(new
 {
     status = "ok",

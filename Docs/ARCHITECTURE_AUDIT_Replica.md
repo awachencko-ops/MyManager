@@ -46,6 +46,8 @@
 >
 > Актуализация на 2026-03-23 (risk-burndown, срез 43): закрыт `order delete` API-path: добавлены `DeleteOrderRequest` + endpoint `DELETE /api/orders/{id}` + store-команда `TryDeleteOrder` (EF Core/PostgreSQL/InMemory), клиентский путь `DeleteOrderAsync/TryDeleteOrderAsync/TryDeleteOrderViaLanApiAsync`, а `OrdersWorkspaceForm.RemoveSelectedOrder` в LAN-режиме переведён на API-first удаление (single/batch, optional disk cleanup, snapshot refresh), подтверждено verify + PostgreSQL integration regression.
 >
+> Актуализация на 2026-03-23 (risk-burndown, срез 44): закрыт observability/SLO baseline: добавлены `ReplicaApiObservability` (HTTP/write/idempotency counters + latency buckets), middleware учёт HTTP latency/status, write outcome telemetry в `OrdersController`, idempotency telemetry hit/miss/mismatch в `EfCoreLanOrderStore`, а также operational endpoints `/live`, `/ready`, `/metrics`, `/slo`; добавлены verify-тесты `ReplicaApiObservabilityTests`, подтверждено full regression (verify + PostgreSQL integration + solution tests).
+>
 > Актуализация на 2026-03-20 (risk-burndown, срез 19): добавлен `OrderRunWorkflowOrchestrationService`; подготовка `run/stop` workflow (run-plan, LAN command preflight, snapshot refresh, stop preflight/cancel) вынесена из `MainForm` в application-service слой, добавлены unit-тесты orchestration (`OrderRunWorkflowOrchestrationServiceTests`).
 >
 > Актуализация на 2026-03-20 (risk-burndown, срез 20): выполнен rename и модульный перенос UI-ядра формы: entrypoint переведён на `OrdersWorkspaceForm`, код формы перемещён в `UI/Forms/OrdersWorkspace/*` (Core/FileOps/Filters/Views/Controls), сохранён переходный shim `MainForm` для обратной совместимости автотестов.
@@ -95,7 +97,7 @@
 ## Executive summary
 
 - Текущая реализация **не готова** к роли транзакционно-безопасной платформы на сотни пользователей.
-- Главные причины: API/worker-контур пока не доведён до production-boundary (full authN/authZ, полный cutover всех write-flow и observability/SLO контур ещё неполные), UI-центричная оркестрация остаётся значимой.
+- Главные причины: API/worker-контур пока не доведён до production-boundary (full authN/authZ и полный cutover всех write-flow), UI-центричная оркестрация остаётся значимой.
 - В коде уже закрыт значимый кусок миграции: введён `IOrdersRepository`, реализован LAN PostgreSQL backend с optimistic concurrency (`StorageVersion` + conflict guard), добавлен `order_events` и one-time bootstrap marker в `storage_meta`; на этапе 3 добавлены API skeleton, EF Core storage слой, server-side `run/stop` lock-координация (`order_run_locks`), full write-idempotency (`Idempotency-Key` на `create/update/items(add/update/delete/reorder)/run/stop`, единый `order_write_idempotency`), клиентские `LanOrderRunApiGateway` + `LanOrderWriteApiGateway` + `LanRunCommandCoordinator`, bootstrap composition root (`OrdersWorkspaceCompositionRoot`), unified application boundary (`IOrderApplicationService`) и выносы из `MainForm` в сервисы (`OrdersHistoryRepositoryCoordinator`, `OrderRunStateService`, `OrderStatusTransitionService`, `OrderRunExecutionService`, `OrderRunFeedbackService`, `OrderDeletionWorkflowService`) + двусторонняя sync `history.json <-> PostgreSQL`; в финальном срезе history/folder orchestration тоже переведены за `IOrderApplicationService`.
 
 ---
@@ -163,7 +165,7 @@
 ### Вывод
 
 - Риск `lost update` существенно снижен в LAN-режиме за счёт optimistic concurrency и запрета silent overwrite при конфликте.
-- Полной транзакционной модели уровня API/command handling пока нет (authN/authZ и observability/SLO остаются в работе), но idempotency write-команд закрыта в целевом LAN scope.
+- Полной транзакционной модели уровня API/command handling пока нет (authN/authZ остаются в работе), но idempotency write-команд и observability/SLO baseline закрыты в целевом LAN scope.
 - Повторные mutating-команды (`create/update/items/reorder/run/stop`) дедуплицируются на сервере при повторе `Idempotency-Key` с тем же fingerprint.
 
 ---
@@ -371,7 +373,7 @@
 1. Ввести **optimistic concurrency** (`row_version`) и конфликто-разрешение — `DONE` (LAN path).
 2. Ввести **idempotency** для write-операций API — `DONE` (весь mutating LAN scope).
 3. Добавить **resilience policies** (retry/circuit breaker/timeouts/bulkhead) — `DONE` для file-workflow path.
-4. Ввести **health-checks + readiness/liveness + SLO метрики** — `PARTIAL` (health/readiness есть, SLO-метрики и dashboards в работе).
+4. Ввести **health-checks + readiness/liveness + SLO метрики** — `DONE (baseline)` (`/live`, `/ready`, `/metrics`, `/slo` внедрены; dashboards/alerts — следующий шаг операционного контура).
 
 ### P2 (масштабирование на сотни пользователей)
 
@@ -408,4 +410,6 @@
 ## Заключение
 
 Текущий Replica (будущий Replica) хорош как локальный/переходный инструмент, но для enterprise-scale и критичных данных требуется архитектурный pivot: **от UI-центричного file-driven монолита к транзакционному API+worker контуру с наблюдаемостью и строгими границами доверия**.
+
+
 
