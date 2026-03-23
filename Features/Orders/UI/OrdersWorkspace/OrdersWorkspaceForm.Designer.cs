@@ -80,7 +80,6 @@
             toolProgress = new ToolStripProgressBar();
             toolStats = new ToolStripStatusLabel();
             toolConnection = new ToolStripStatusLabel();
-            toolConnectionRefresh = new ToolStripStatusLabel();
             toolDiskFree = new ToolStripStatusLabel();
             toolAlerts = new ToolStripStatusLabel();
             tsMainActions = new ToolStrip();
@@ -596,7 +595,7 @@
             // statusStrip1
             // 
             statusStrip1.ImageScalingSize = new Size(24, 24);
-            statusStrip1.Items.AddRange(new ToolStripItem[] { toolStatus, toolProgress, toolStats, toolConnection, toolConnectionRefresh, toolDiskFree, toolAlerts });
+            statusStrip1.Items.AddRange(new ToolStripItem[] { toolStatus, toolProgress, toolStats, toolConnection, toolDiskFree, toolAlerts });
             statusStrip1.Location = new Point(0, 2);
             statusStrip1.Name = "statusStrip1";
             statusStrip1.Size = new Size(1743, 32);
@@ -628,14 +627,6 @@
             toolConnection.Name = "toolConnection";
             toolConnection.Size = new Size(174, 25);
             toolConnection.Text = "Сервер: автономно";
-            // 
-            // toolConnectionRefresh
-            // 
-            toolConnectionRefresh.IsLink = true;
-            toolConnectionRefresh.LinkBehavior = LinkBehavior.HoverUnderline;
-            toolConnectionRefresh.Name = "toolConnectionRefresh";
-            toolConnectionRefresh.Size = new Size(118, 25);
-            toolConnectionRefresh.Text = "↻ Проверить";
             // 
             // toolDiskFree
             // 
@@ -810,7 +801,6 @@
         private ToolStripProgressBar toolProgress;
         private ToolStripStatusLabel toolStats;
         private ToolStripStatusLabel toolConnection;
-        private ToolStripStatusLabel toolConnectionRefresh;
         private ToolStripStatusLabel toolDiskFree;
         private ToolStripStatusLabel toolAlerts;
         private DataGridViewTextBoxColumn colStatus;

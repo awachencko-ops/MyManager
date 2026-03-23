@@ -18,8 +18,6 @@ namespace Replica
 {
     public partial class OrdersWorkspaceForm
     {
-        private static readonly string[] LanProbeSpinnerFrames = ["↻", "↺", "↻", "↺"];
-
         private void InitializeTrayIndicators()
         {
             statusStrip1.ShowItemToolTips = true;
@@ -38,24 +36,12 @@ namespace Replica
 
             toolConnection.MouseEnter -= ToolConnection_MouseEnter;
             toolConnection.MouseEnter += ToolConnection_MouseEnter;
-            toolConnectionRefresh.IsLink = true;
-            toolConnectionRefresh.LinkBehavior = LinkBehavior.HoverUnderline;
-            toolConnectionRefresh.Click -= ToolConnectionRefresh_Click;
-            toolConnectionRefresh.Click += ToolConnectionRefresh_Click;
-            toolConnectionRefresh.MouseEnter -= ToolConnectionRefresh_MouseEnter;
-            toolConnectionRefresh.MouseEnter += ToolConnectionRefresh_MouseEnter;
+            toolConnection.Click -= ToolConnection_Click;
+            toolConnection.Click += ToolConnection_Click;
 
             _lanServerProbeCts?.Cancel();
             _lanServerProbeCts?.Dispose();
             _lanServerProbeCts = new CancellationTokenSource();
-
-            _lanProbeActionAnimationTimer ??= new System.Windows.Forms.Timer
-            {
-                Interval = LanProbeActionAnimationIntervalMs
-            };
-            _lanProbeActionAnimationTimer.Tick -= LanProbeActionAnimationTimer_Tick;
-            _lanProbeActionAnimationTimer.Tick += LanProbeActionAnimationTimer_Tick;
-            _lanProbeActionAnimationTimer.Start();
 
             _trayIndicatorsTimer ??= new System.Windows.Forms.Timer
             {
@@ -82,19 +68,15 @@ namespace Replica
             UpdateTrayConnectionIndicator();
         }
 
-        private void ToolConnectionRefresh_MouseEnter(object? sender, EventArgs e)
+        private async void ToolConnection_Click(object? sender, EventArgs e)
         {
-            RequestLanServerProbe("refresh-hover", force: true);
-            UpdateLanProbeActionIndicator();
-        }
-
-        private async void ToolConnectionRefresh_Click(object? sender, EventArgs e)
-        {
-            if (!ShouldUseLanRunApi() || _lanApiRecoveryInProgress)
+            if (!ShouldUseLanRunApi()
+                || _lanApiRecoveryInProgress
+                || !_lanConnectionRecoveryActionEnabled)
                 return;
 
             _lanApiRecoveryInProgress = true;
-            UpdateLanProbeActionIndicator();
+            UpdateTrayConnectionIndicator();
 
             try
             {
@@ -119,12 +101,6 @@ namespace Replica
                 _lanApiRecoveryInProgress = false;
                 UpdateTrayConnectionIndicator();
             }
-        }
-
-        private void LanProbeActionAnimationTimer_Tick(object? sender, EventArgs e)
-        {
-            _lanProbeActionAnimationFrame = (_lanProbeActionAnimationFrame + 1) % LanProbeSpinnerFrames.Length;
-            UpdateLanProbeActionIndicator();
         }
 
         private void TrayIndicatorsTimer_Tick(object? sender, EventArgs e)
@@ -164,8 +140,7 @@ namespace Replica
             }
 
             toolConnection.MouseEnter -= ToolConnection_MouseEnter;
-            toolConnectionRefresh.Click -= ToolConnectionRefresh_Click;
-            toolConnectionRefresh.MouseEnter -= ToolConnectionRefresh_MouseEnter;
+            toolConnection.Click -= ToolConnection_Click;
 
             if (_trayIndicatorsTimer != null)
             {
@@ -173,14 +148,6 @@ namespace Replica
                 _trayIndicatorsTimer.Tick -= TrayIndicatorsTimer_Tick;
                 _trayIndicatorsTimer.Dispose();
                 _trayIndicatorsTimer = null;
-            }
-
-            if (_lanProbeActionAnimationTimer != null)
-            {
-                _lanProbeActionAnimationTimer.Stop();
-                _lanProbeActionAnimationTimer.Tick -= LanProbeActionAnimationTimer_Tick;
-                _lanProbeActionAnimationTimer.Dispose();
-                _lanProbeActionAnimationTimer = null;
             }
 
             _lanServerProbeCts?.Cancel();
@@ -193,7 +160,6 @@ namespace Replica
         {
             UpdateTrayStatsIndicator();
             UpdateTrayConnectionIndicator();
-            UpdateLanProbeActionIndicator();
             UpdateTrayDiskIndicator();
             UpdateTrayErrorIndicator();
             UpdateTrayProgressIndicator();
@@ -243,11 +209,11 @@ namespace Replica
             {
                 RequestLanServerProbe("status-refresh");
                 UpdateLanApiConnectionIndicator(dependencyHealthLevel);
-                UpdateLanProbeActionIndicator();
                 return;
             }
 
             var isConnected = CanAccessPath(_ordersRootPath);
+            _lanConnectionRecoveryActionEnabled = false;
             string shortStatusText;
             Color statusColor;
             if (!isConnected)
@@ -271,6 +237,11 @@ namespace Replica
                 statusColor = Color.SeaGreen;
             }
 
+            toolConnection.IsLink = false;
+            toolConnection.LinkBehavior = LinkBehavior.NeverUnderline;
+            toolConnection.LinkColor = statusColor;
+            toolConnection.ActiveLinkColor = statusColor;
+            toolConnection.VisitedLinkColor = statusColor;
             toolConnection.Text = $"● Сервер: {shortStatusText}";
             toolConnection.ForeColor = statusColor;
             var connectionStatusText = isConnected
@@ -281,7 +252,6 @@ namespace Replica
                 ? $"{connectionStatusText}\n{_usersDirectoryStatusText}"
                 : $"{connectionStatusText}\n{dependencyHealthSummary}\n{_usersDirectoryStatusText}";
             UpdateServerHeaderConnectionState(shortStatusText, statusColor);
-            UpdateLanProbeActionIndicator();
         }
 
         private void ApplyProcessorDependencyHealthSignal(DependencyHealthSignal signal)
@@ -338,23 +308,18 @@ namespace Replica
         {
             var snapshot = GetLanServerProbeSnapshot(out var probeInProgress, out var requestCount);
 
+            var disconnected = !snapshot.ApiReachable || !snapshot.IsReady;
+            _lanConnectionRecoveryActionEnabled = disconnected && !_lanApiRecoveryInProgress;
+
             string shortStatusText;
             Color statusColor;
-            if (probeInProgress && snapshot.CompletedAtUtc == DateTime.MinValue)
+            if (disconnected)
             {
-                shortStatusText = "проверка...";
-                statusColor = Color.DarkOrange;
-            }
-            else if (!snapshot.ApiReachable)
-            {
-                shortStatusText = snapshot.CompletedAtUtc == DateTime.MinValue
-                    ? "проверка..."
-                    : "нет ответа API";
-                statusColor = Color.Firebrick;
-            }
-            else if (!snapshot.IsReady)
-            {
-                shortStatusText = "не готов";
+                shortStatusText = _lanApiRecoveryInProgress
+                    ? "переподключение..."
+                    : (!snapshot.ApiReachable
+                        ? (snapshot.CompletedAtUtc == DateTime.MinValue ? "проверка..." : "нет ответа API")
+                        : "не подключен");
                 statusColor = Color.Firebrick;
             }
             else if (snapshot.IsDegraded
@@ -370,56 +335,19 @@ namespace Replica
                 statusColor = Color.SeaGreen;
             }
 
-            toolConnection.Text = $"● Сервер: {shortStatusText}";
+            toolConnection.Text = disconnected
+                ? $"↻ Сервер: {shortStatusText}"
+                : $"● Сервер: {shortStatusText}";
             toolConnection.ForeColor = statusColor;
+            toolConnection.IsLink = _lanConnectionRecoveryActionEnabled;
+            toolConnection.LinkBehavior = _lanConnectionRecoveryActionEnabled
+                ? LinkBehavior.HoverUnderline
+                : LinkBehavior.NeverUnderline;
+            toolConnection.LinkColor = statusColor;
+            toolConnection.ActiveLinkColor = statusColor;
+            toolConnection.VisitedLinkColor = statusColor;
             toolConnection.ToolTipText = BuildLanConnectionToolTip(snapshot, dependencyHealthLevel, probeInProgress, requestCount);
             UpdateServerHeaderConnectionState(shortStatusText, statusColor);
-        }
-
-        private void UpdateLanProbeActionIndicator()
-        {
-            if (toolConnectionRefresh.IsDisposed)
-                return;
-
-            if (!ShouldUseLanRunApi())
-            {
-                toolConnectionRefresh.Visible = false;
-                return;
-            }
-
-            toolConnectionRefresh.Visible = true;
-            var snapshot = GetLanServerProbeSnapshot(out var probeInProgress, out _);
-            var isBusy = _lanApiRecoveryInProgress || probeInProgress;
-
-            if (isBusy)
-            {
-                var spinnerGlyph = LanProbeSpinnerFrames[_lanProbeActionAnimationFrame % LanProbeSpinnerFrames.Length];
-                toolConnectionRefresh.Text = $"{spinnerGlyph} Обновление";
-                toolConnectionRefresh.ForeColor = Color.DarkOrange;
-                toolConnectionRefresh.ToolTipText = "Выполняется проверка сервера.";
-                toolConnectionRefresh.Enabled = false;
-                return;
-            }
-
-            toolConnectionRefresh.Enabled = true;
-            toolConnectionRefresh.IsLink = true;
-            toolConnectionRefresh.LinkBehavior = LinkBehavior.HoverUnderline;
-
-            var canAutoRecover = snapshot.CompletedAtUtc > DateTime.MinValue
-                                 && (!snapshot.ApiReachable || !snapshot.IsReady)
-                                 && IsLanApiLocalHost();
-            if (canAutoRecover)
-            {
-                toolConnectionRefresh.Text = "↻ Восстановить";
-                toolConnectionRefresh.ForeColor = Color.Firebrick;
-                toolConnectionRefresh.ToolTipText =
-                    "Запустить локальный Replica.Api и перепроверить подключение.";
-                return;
-            }
-
-            toolConnectionRefresh.Text = "↻ Проверить";
-            toolConnectionRefresh.ForeColor = Color.SteelBlue;
-            toolConnectionRefresh.ToolTipText = "Обновить статус LAN API прямо сейчас.";
         }
 
         private string BuildLanConnectionToolTip(
@@ -458,7 +386,8 @@ namespace Replica
                 lines.Add($"Ошибка: {snapshot.Error}");
             if (dependencyHealthLevel != DependencyHealthLevel.Healthy)
                 lines.Add($"Hotfolder: {BuildDependencyHealthSummary()}");
-            lines.Add("Действие: нажмите ↻ для ручной проверки/восстановления.");
+            if (_lanConnectionRecoveryActionEnabled)
+                lines.Add("Действие: нажмите на статус '↻ Сервер...' для переподключения.");
             if (!string.IsNullOrWhiteSpace(_usersDirectoryStatusText))
                 lines.Add(_usersDirectoryStatusText);
 

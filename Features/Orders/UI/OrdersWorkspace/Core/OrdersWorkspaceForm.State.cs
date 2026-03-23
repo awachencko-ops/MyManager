@@ -87,9 +87,8 @@ namespace Replica
         private DateTime _lanServerProbeLastSuccessfulUtc = DateTime.MinValue;
         private CancellationTokenSource? _lanServerProbeCts;
         private LanServerProbeSnapshot _lanServerProbeSnapshot = LanServerProbeSnapshot.CreateInitial();
-        private System.Windows.Forms.Timer? _lanProbeActionAnimationTimer;
-        private int _lanProbeActionAnimationFrame;
         private bool _lanApiRecoveryInProgress;
+        private bool _lanConnectionRecoveryActionEnabled;
         private OrdersViewMode _ordersViewMode = OrdersViewMode.List;
 
         private readonly List<string> _users = ["Сервер \"Таудеми\""];
@@ -117,7 +116,6 @@ namespace Replica
         private const string DefaultTrayStatusText = "Готово";
         private const int TrayIndicatorsRefreshIntervalMs = 15000;
         private const int LanServerProbeMinIntervalMs = 5000;
-        private const int LanProbeActionAnimationIntervalMs = 220;
         private static readonly TimeSpan ArchiveIndexLifetime = TimeSpan.FromSeconds(15);
         private const int OrdersGridWarmupIntervalMs = 3000;
         private const int GridHoverActivateDelayMs = 500;
