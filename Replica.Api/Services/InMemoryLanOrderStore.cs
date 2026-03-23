@@ -105,6 +105,31 @@ public sealed class InMemoryLanOrderStore : ILanOrderStore
         }
     }
 
+    public StoreOperationResult TryDeleteOrder(string orderId, DeleteOrderRequest request, string actor)
+    {
+        lock (_sync)
+        {
+            if (!_ordersById.TryGetValue(orderId ?? string.Empty, out var order))
+                return StoreOperationResult.NotFound();
+
+            request ??= new DeleteOrderRequest();
+            if (request.ExpectedVersion > 0 && order.Version != request.ExpectedVersion)
+                return StoreOperationResult.Conflict(order.Version, "order version mismatch");
+
+            var snapshot = CloneOrder(order);
+            _ordersById.Remove(order.InternalId);
+            _activeRunTokensByOrder.Remove(order.InternalId);
+
+            AppendEvent(order.InternalId, string.Empty, "delete-order", "api", actor, new
+            {
+                order_id = order.InternalId,
+                order_version = order.Version
+            });
+
+            return StoreOperationResult.Success(snapshot);
+        }
+    }
+
     public StoreOperationResult TryUpdateOrder(string orderId, UpdateOrderRequest request, string actor)
     {
         lock (_sync)

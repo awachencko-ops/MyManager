@@ -555,6 +555,52 @@ public sealed class PostgreSqlIntegrationTests
     }
 
     [Fact]
+    public void PostgreSqlIntegration_EfCoreStore_DeleteOrder_IsIdempotentByKey()
+    {
+        if (!IsIntegrationEnabled())
+            return;
+
+        using var db = TemporaryPostgreSqlDatabase.Create();
+        var store = CreateEfCoreStore(db.ConnectionString);
+
+        var created = store.CreateOrder(new CreateOrderRequest
+        {
+            OrderNumber = "DEL-ORDER-100",
+            UserName = "Integration User",
+            CreatedById = "integration-user",
+            CreatedByUser = "integration-user",
+            Status = WorkflowStatusNames.Waiting,
+            Items = new List<Replica.Shared.Models.SharedOrderItem>
+            {
+                new() { ItemId = "d-o-1", SequenceNo = 0, FileStatus = WorkflowStatusNames.Waiting }
+            }
+        }, "integration-user");
+
+        var firstDelete = store.TryDeleteOrder(
+            created.InternalId,
+            new DeleteOrderRequest { ExpectedVersion = created.Version },
+            "integration-user",
+            idempotencyKey: "idem-delete-order-1");
+        var secondDelete = store.TryDeleteOrder(
+            created.InternalId,
+            new DeleteOrderRequest { ExpectedVersion = created.Version },
+            "integration-user",
+            idempotencyKey: "idem-delete-order-1");
+
+        Assert.True(firstDelete.IsSuccess, firstDelete.Error);
+        Assert.True(secondDelete.IsSuccess, secondDelete.Error);
+        Assert.NotNull(firstDelete.Order);
+        Assert.NotNull(secondDelete.Order);
+        Assert.Equal(created.InternalId, secondDelete.Order!.InternalId);
+
+        using var verifyDb = CreateReplicaDbContext(db.ConnectionString);
+        Assert.Equal(0, verifyDb.Orders.Count(x => x.InternalId == created.InternalId));
+        Assert.Equal(0, verifyDb.OrderItems.Count(x => x.OrderInternalId == created.InternalId));
+        Assert.Equal(1, verifyDb.OrderEvents.Count(x => x.OrderInternalId == created.InternalId && x.EventType == "delete-order"));
+        Assert.Equal(1, verifyDb.OrderWriteIdempotency.Count(x => x.CommandName == "delete-order" && x.IdempotencyKey == "idem-delete-order-1"));
+    }
+
+    [Fact]
     public void PostgreSqlIntegration_Coordinator_SynchronizesFileAndLanHistories()
     {
         if (!IsIntegrationEnabled())

@@ -16,6 +16,7 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
 {
     private readonly IDbContextFactory<ReplicaDbContext> _dbContextFactory;
     private const string CreateOrderCommandName = "create-order";
+    private const string DeleteOrderCommandName = "delete-order";
     private const string UpdateOrderCommandName = "update-order";
     private const string AddItemCommandName = "add-item";
     private const string UpdateItemCommandName = "update-item";
@@ -228,6 +229,71 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
         tx.Commit();
 
         return StoreOperationResult.Success(CloneOrder(order));
+    }
+
+    public StoreOperationResult TryDeleteOrder(string orderId, DeleteOrderRequest request, string actor)
+    {
+        return TryDeleteOrder(orderId, request, actor, idempotencyKey: null);
+    }
+
+    public StoreOperationResult TryDeleteOrder(string orderId, DeleteOrderRequest request, string actor, string? idempotencyKey)
+    {
+        request ??= new DeleteOrderRequest();
+        var normalizedOrderId = orderId?.Trim() ?? string.Empty;
+        var normalizedActor = actor?.Trim() ?? string.Empty;
+        var requestFingerprint = BuildWriteRequestFingerprint(
+            commandName: DeleteOrderCommandName,
+            orderId: normalizedOrderId,
+            actor: normalizedActor,
+            requestPayload: new { request.ExpectedVersion });
+
+        return ExecuteWriteCommandWithOptionalIdempotency(
+            commandName: DeleteOrderCommandName,
+            orderId: normalizedOrderId,
+            actor: normalizedActor,
+            idempotencyKey: idempotencyKey,
+            requestFingerprint: requestFingerprint,
+            executeCore: () => TryDeleteOrderCore(normalizedOrderId, request, normalizedActor));
+    }
+
+    private StoreOperationResult TryDeleteOrderCore(string orderId, DeleteOrderRequest request, string actor)
+    {
+        if (string.IsNullOrWhiteSpace(orderId))
+            return StoreOperationResult.BadRequest("order id is required");
+
+        using var db = _dbContextFactory.CreateDbContext();
+        using var tx = db.Database.BeginTransaction();
+
+        var orderRecord = db.Orders.FirstOrDefault(x => x.InternalId == orderId);
+        if (orderRecord == null)
+            return StoreOperationResult.NotFound();
+
+        if (request.ExpectedVersion > 0 && orderRecord.Version != request.ExpectedVersion)
+            return StoreOperationResult.Conflict(orderRecord.Version, "order version mismatch");
+
+        var snapshot = LoadOrder(db, orderRecord.InternalId) ?? DeserializeOrder(orderRecord);
+        var lockRecord = db.OrderRunLocks.FirstOrDefault(x => x.OrderInternalId == orderRecord.InternalId);
+        if (lockRecord != null)
+            db.OrderRunLocks.Remove(lockRecord);
+
+        db.OrderEvents.Add(BuildEventRecord(orderRecord.InternalId, string.Empty, "delete-order", "api", actor, new
+        {
+            order_id = orderRecord.InternalId,
+            order_version = orderRecord.Version
+        }));
+        db.Orders.Remove(orderRecord);
+
+        try
+        {
+            db.SaveChanges();
+            tx.Commit();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return StoreOperationResult.Conflict(orderRecord.Version, "order version mismatch");
+        }
+
+        return StoreOperationResult.Success(snapshot);
     }
 
     public StoreOperationResult TryUpdateOrder(string orderId, UpdateOrderRequest request, string actor)

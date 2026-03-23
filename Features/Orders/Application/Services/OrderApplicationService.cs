@@ -47,6 +47,11 @@ public interface IOrderApplicationService
         string actor,
         Func<string, string> normalizeUserName,
         CancellationToken cancellationToken = default);
+    Task<LanOrderWriteCommandResult> TryDeleteOrderViaLanApiAsync(
+        OrderData order,
+        string lanApiBaseUrl,
+        string actor,
+        CancellationToken cancellationToken = default);
     Task<LanOrderWriteCommandResult> TryReorderOrderItemsViaLanApiAsync(
         OrderData order,
         string lanApiBaseUrl,
@@ -299,6 +304,17 @@ public sealed class OrderApplicationService : IOrderApplicationService
             lanApiBaseUrl,
             actor,
             normalizeUserName,
+            cancellationToken);
+
+    public Task<LanOrderWriteCommandResult> TryDeleteOrderViaLanApiAsync(
+        OrderData order,
+        string lanApiBaseUrl,
+        string actor,
+        CancellationToken cancellationToken = default)
+        => _lanOrderWriteCommandService.TryDeleteOrderAsync(
+            order,
+            lanApiBaseUrl,
+            actor,
             cancellationToken);
 
     public Task<LanOrderWriteCommandResult> TryReorderOrderItemsViaLanApiAsync(

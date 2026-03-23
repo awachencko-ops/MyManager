@@ -165,6 +165,36 @@ public sealed class PostgreSqlLanOrderStore : ILanOrderStore
         return CloneOrder(order);
     }
 
+    public StoreOperationResult TryDeleteOrder(string orderId, DeleteOrderRequest request, string actor)
+    {
+        if (string.IsNullOrWhiteSpace(orderId))
+            return StoreOperationResult.BadRequest("order id is required");
+
+        request ??= new DeleteOrderRequest();
+
+        using var connection = OpenConnection();
+        EnsureSchema(connection);
+        using var tx = connection.BeginTransaction();
+
+        if (!TryLoadOrderForUpdate(connection, tx, orderId.Trim(), out var order, out var currentVersion))
+            return StoreOperationResult.NotFound();
+
+        if (request.ExpectedVersion > 0 && currentVersion != request.ExpectedVersion)
+            return StoreOperationResult.Conflict(currentVersion, "order version mismatch");
+
+        var snapshot = LoadOrderById(connection, tx, order.InternalId) ?? order;
+
+        AppendEvent(connection, tx, order.InternalId, string.Empty, "delete-order", "api", actor, new
+        {
+            order_id = order.InternalId,
+            order_version = currentVersion
+        });
+        DeleteOrder(connection, tx, order.InternalId, currentVersion);
+
+        tx.Commit();
+        return StoreOperationResult.Success(snapshot);
+    }
+
     public StoreOperationResult TryUpdateOrder(string orderId, UpdateOrderRequest request, string actor)
     {
         if (string.IsNullOrWhiteSpace(orderId))
@@ -428,6 +458,22 @@ public sealed class PostgreSqlLanOrderStore : ILanOrderStore
         cmd.Parameters.AddWithValue("topology_marker", (int)order.TopologyMarker);
         cmd.Parameters.AddWithValue("payload_json", JsonSerializer.Serialize(order));
         cmd.ExecuteNonQuery();
+    }
+
+    private static void DeleteOrder(NpgsqlConnection connection, NpgsqlTransaction tx, string orderInternalId, long knownVersion)
+    {
+        using var cmd = new NpgsqlCommand(
+            $"""
+            delete from {OrdersTable}
+            where internal_id = @internal_id and version = @known_version;
+            """,
+            connection,
+            tx);
+        cmd.Parameters.AddWithValue("internal_id", orderInternalId);
+        cmd.Parameters.AddWithValue("known_version", knownVersion);
+
+        if (cmd.ExecuteNonQuery() != 1)
+            throw new InvalidOperationException("concurrency conflict: order version mismatch");
     }
 
     private static void UpdateOrder(NpgsqlConnection connection, NpgsqlTransaction tx, SharedOrder order, long knownVersion)

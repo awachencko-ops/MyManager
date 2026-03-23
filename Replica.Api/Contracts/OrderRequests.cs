@@ -35,6 +35,11 @@ public sealed class UpdateOrderRequest
     public string? ImposingAction { get; set; }
 }
 
+public sealed class DeleteOrderRequest
+{
+    public long ExpectedVersion { get; set; }
+}
+
 public sealed class AddOrderItemRequest
 {
     public long ExpectedOrderVersion { get; set; }

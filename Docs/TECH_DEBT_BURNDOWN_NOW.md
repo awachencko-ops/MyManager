@@ -11,7 +11,7 @@
 | Область | Текущее состояние | Что переписываем | Критерий закрытия |
 |---|---|---|---|
 | `MainForm` (god-object orchestration) | Shell переименован в `OrdersWorkspaceForm`, код `Orders` перенесён в `Features/Orders/UI/*`, введён единый `IOrderApplicationService` (включая run/create/edit/delete/item/file + history/folder orchestration) | Дожать presenter-only слой: убрать остаточные orchestration ветки из UI и завершить DI cutover | `OrdersWorkspaceForm` не управляет бизнес-циклами напрямую, только UI/presenter |
-| Write-command boundary | `DONE` для целевого LAN scope: `create/update/items/reorder/status` + `item delete` идут через API boundary (включая remove/move item-сценарии) | Расширять на `order delete` API-path | Все mutating операции идут через API-команды и server invariants |
+| Write-command boundary | `DONE` для целевого LAN scope: `create/update/items/reorder/status` + `item delete` + `order delete` идут через API boundary (включая remove/move item-сценарии и batch order delete) | Поддерживать единый API-first путь и убирать legacy fallback ветки | Все mutating операции идут через API-команды и server invariants |
 | JSON/file как рабочее хранилище | LAN sync работает, но file fallback влияет на поведение | Зафиксировать PostgreSQL как primary source of truth, file оставить только import/export fallback | Runtime в LAN режиме не зависит от `history.json` для актуального состояния |
 | Audit/observability | Есть `order_events` + correlation, но нет единой схемы и метрик | Ввести единый structured schema + метрики/дашборды | Инцидент можно отследить end-to-end по `correlation_id` + есть базовые SLO графики |
 
@@ -26,9 +26,9 @@
 
 ## Следующие 3 итерации
 
-1. Завершить API-path для `order delete` и убрать client-side fallback orchestration из LAN ветки.
-2. Финализировать observability baseline (единая схема логов + SLO метрики + dashboard).
-3. Дожать presenter-only слой для `OrdersWorkspaceForm` (убрать остаточные orchestration-ветки из UI).
+1. Финализировать observability baseline (единая схема логов + SLO метрики + dashboard).
+2. Дожать presenter-only слой для `OrdersWorkspaceForm` (убрать остаточные orchestration-ветки из UI).
+3. Зафиксировать PostgreSQL как primary source-of-truth в runtime (минимизировать влияние file fallback).
 
 ## Правило завершения блока «сжечь и переписать»
 
@@ -51,3 +51,4 @@
 - Added server-side `TryDeleteItem` implementations (EF Core/PostgreSQL/InMemory) with optimistic concurrency + sequence reindex + `delete-item` event, plus test coverage in gateway/command-service and PostgreSQL integration pack.
 - Full write idempotency is now closed: `OrdersController` resolves `Idempotency-Key` for all mutating endpoints, `EfCoreLanOrderStore` applies a single dedupe pipeline with request fingerprint, and migration `20260323000100_OrderWriteIdempotency` introduces unified store `order_write_idempotency` (including backfill from legacy `order_run_idempotency`).
 - `LanOrderWriteApiGateway` now sends `Idempotency-Key` for create/update/items/reorder requests; verify-tests and PostgreSQL integration pack were expanded (including end-to-end idempotency regression for create/update/add/update/delete/reorder + mismatch check).
+- `order delete` API-path is now closed end-to-end: added `DELETE /api/orders/{id}` + `DeleteOrderRequest` + store command `TryDeleteOrder` (EF Core/PostgreSQL/InMemory) with optimistic concurrency and `delete-order` event; client boundary expanded with `DeleteOrderAsync/TryDeleteOrderAsync/TryDeleteOrderViaLanApiAsync`, and `OrdersWorkspaceForm` in LAN mode switched to API-first order delete (single/batch) with local disk cleanup + snapshot refresh.

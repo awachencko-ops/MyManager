@@ -87,6 +87,39 @@ public sealed class LanOrderWriteApiGatewayTests
     }
 
     [Fact]
+    public async Task DeleteOrderAsync_SendsDeleteToOrderEndpoint()
+    {
+        string requestBody = string.Empty;
+        var handler = new StubHttpMessageHandler(async (request, cancellationToken) =>
+        {
+            requestBody = await request.Content!.ReadAsStringAsync(cancellationToken);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    "{\"internalId\":\"order-2\",\"orderNumber\":\"1002\",\"status\":\"Waiting\",\"version\":12}",
+                    Encoding.UTF8,
+                    "application/json")
+            };
+        });
+
+        var gateway = new LanOrderWriteApiGateway(new HttpClient(handler));
+        var result = await gateway.DeleteOrderAsync(
+            "http://localhost:5000/",
+            "order-2",
+            new LanDeleteOrderRequest
+            {
+                ExpectedVersion = 11
+            },
+            actor: "operator-2");
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(handler.LastRequest);
+        Assert.Equal(HttpMethod.Delete, handler.LastRequest!.Method);
+        Assert.Equal("/api/orders/order-2", handler.LastRequest.RequestUri!.AbsolutePath);
+        Assert.Contains("\"expectedVersion\":11", requestBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ReorderOrderItemsAsync_SendsRequestToReorderEndpoint()
     {
         string requestBody = string.Empty;

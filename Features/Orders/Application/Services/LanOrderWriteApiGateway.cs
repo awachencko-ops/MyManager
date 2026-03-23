@@ -17,6 +17,13 @@ public interface ILanOrderWriteApiGateway
         string actor,
         CancellationToken cancellationToken = default);
 
+    Task<LanOrderWriteApiResult> DeleteOrderAsync(
+        string apiBaseUrl,
+        string orderInternalId,
+        LanDeleteOrderRequest request,
+        string actor,
+        CancellationToken cancellationToken = default);
+
     Task<LanOrderWriteApiResult> UpdateOrderAsync(
         string apiBaseUrl,
         string orderInternalId,
@@ -89,6 +96,29 @@ public sealed class LanOrderWriteApiGateway : ILanOrderWriteApiGateway
         return SendAsync(
             requestUri,
             HttpMethod.Post,
+            request,
+            actor,
+            cancellationToken);
+    }
+
+    public Task<LanOrderWriteApiResult> DeleteOrderAsync(
+        string apiBaseUrl,
+        string orderInternalId,
+        LanDeleteOrderRequest request,
+        string actor,
+        CancellationToken cancellationToken = default)
+    {
+        if (request == null)
+            return Task.FromResult(LanOrderWriteApiResult.BadRequest("request body is required"));
+        if (string.IsNullOrWhiteSpace(orderInternalId))
+            return Task.FromResult(LanOrderWriteApiResult.BadRequest("order internal id is required"));
+
+        if (!TryBuildUpdateUri(apiBaseUrl, orderInternalId, out var requestUri))
+            return Task.FromResult(LanOrderWriteApiResult.Unavailable("invalid LAN API base URL"));
+
+        return SendAsync(
+            requestUri,
+            HttpMethod.Delete,
             request,
             actor,
             cancellationToken);
@@ -431,6 +461,11 @@ public sealed class LanUpdateOrderRequest
     public string? FolderName { get; set; }
     public string? PitStopAction { get; set; }
     public string? ImposingAction { get; set; }
+}
+
+public sealed class LanDeleteOrderRequest
+{
+    public long ExpectedVersion { get; set; }
 }
 
 public sealed class LanReorderOrderItemsRequest

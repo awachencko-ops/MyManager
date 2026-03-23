@@ -119,6 +119,11 @@ public sealed class OrdersControllerActorValidationTests
             throw new NotImplementedException();
         }
 
+        public StoreOperationResult TryDeleteOrder(string orderId, DeleteOrderRequest request, string actor)
+        {
+            throw new NotImplementedException();
+        }
+
         public StoreOperationResult TryAddItem(string orderId, AddOrderItemRequest request, string actor)
         {
             throw new NotImplementedException();

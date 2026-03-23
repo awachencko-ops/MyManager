@@ -61,6 +61,32 @@ public sealed class LanOrderWriteCommandService
         return ToCommandResult(apiResult);
     }
 
+    public async Task<LanOrderWriteCommandResult> TryDeleteOrderAsync(
+        OrderData order,
+        string lanApiBaseUrl,
+        string actor,
+        CancellationToken cancellationToken = default)
+    {
+        if (order == null)
+            return LanOrderWriteCommandResult.BadRequest("order is required");
+
+        if (string.IsNullOrWhiteSpace(order.InternalId))
+            return LanOrderWriteCommandResult.BadRequest("order internal id is required");
+
+        var request = new LanDeleteOrderRequest
+        {
+            ExpectedVersion = order.StorageVersion
+        };
+        var apiResult = await _lanOrderWriteApiGateway.DeleteOrderAsync(
+            lanApiBaseUrl,
+            order.InternalId,
+            request,
+            actor,
+            cancellationToken);
+
+        return ToCommandResult(apiResult);
+    }
+
     public async Task<LanOrderWriteCommandResult> TryReorderItemsAsync(
         OrderData order,
         string lanApiBaseUrl,

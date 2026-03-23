@@ -913,6 +913,16 @@ namespace Replica
             }
 
             var removeFilesFromDisk = decision == DialogResult.Yes;
+            if (ShouldUseLanRunApi())
+            {
+                RemoveSelectedOrdersViaLanApi(
+                    selectedOrders,
+                    removeFilesFromDisk,
+                    isBatchDelete,
+                    firstOrder);
+                return;
+            }
+
             var commandResult = _orderApplicationService.DeleteOrders(
                 _orderHistory,
                 selectedOrders,
@@ -965,6 +975,179 @@ namespace Replica
                 isBatchDelete ? "Удаление заказов" : "Удаление заказа",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
+        }
+
+        private void RemoveSelectedOrdersViaLanApi(
+            IReadOnlyCollection<OrderData> selectedOrders,
+            bool removeFilesFromDisk,
+            bool isBatchDelete,
+            OrderData firstOrder)
+        {
+            if (selectedOrders == null || selectedOrders.Count == 0)
+                return;
+
+            var normalizedOrders = selectedOrders
+                .Where(order => order != null)
+                .DistinctBy(order => order.InternalId, StringComparer.Ordinal)
+                .ToList();
+
+            var removedCount = 0;
+            var failures = new List<string>();
+            foreach (var order in normalizedOrders)
+            {
+                if (removeFilesFromDisk && !TryDeleteOrderArtifactsFromDisk(order, _ordersRootPath, out var fileDeleteError))
+                {
+                    failures.Add($"{GetOrderDisplayId(order)}: {fileDeleteError}");
+                    continue;
+                }
+
+                var deleteResult = _orderApplicationService
+                    .TryDeleteOrderViaLanApiAsync(
+                        order,
+                        _lanApiBaseUrl,
+                        ResolveLanApiActor())
+                    .GetAwaiter()
+                    .GetResult();
+
+                if (deleteResult.IsSuccess)
+                {
+                    if (_runTokensByOrder.TryGetValue(order.InternalId, out var cts))
+                    {
+                        cts.Cancel();
+                        cts.Dispose();
+                        _runTokensByOrder.Remove(order.InternalId);
+                    }
+
+                    _runProgressByOrderInternalId.Remove(order.InternalId);
+                    _expandedOrderIds.Remove(order.InternalId);
+                    _orderHistory.Remove(order);
+                    AppendOrderOperationLog(
+                        order,
+                        OrderOperationNames.Delete,
+                        removeFilesFromDisk
+                            ? "Удален из списка и с диска"
+                            : "Удален из списка");
+                    removedCount++;
+                    continue;
+                }
+
+                if (deleteResult.CurrentVersion > 0)
+                    order.StorageVersion = deleteResult.CurrentVersion;
+
+                var errorText = string.IsNullOrWhiteSpace(deleteResult.Error)
+                    ? "LAN API delete order failed"
+                    : deleteResult.Error;
+                failures.Add($"{GetOrderDisplayId(order)}: {errorText}");
+            }
+
+            UpdateTrayProgressIndicator();
+
+            if (removedCount > 0)
+            {
+                SaveHistory();
+                TryRefreshRepositorySnapshotFromStorage(_orderHistory, "lan-api-remove-selected-orders");
+                RebuildOrdersGrid();
+                UpdateActionButtonsState();
+                SetBottomStatus(isBatchDelete
+                    ? $"Удалено заказов: {removedCount}"
+                    : $"Заказ {GetOrderDisplayId(firstOrder)} удален");
+            }
+            else
+            {
+                SetBottomStatus("Удаление не выполнено");
+            }
+
+            if (failures.Count == 0)
+                return;
+
+            var failedPreview = string.Join(Environment.NewLine, failures.Take(5));
+            if (failures.Count > 5)
+                failedPreview += $"{Environment.NewLine}... ещё: {failures.Count - 5}";
+
+            MessageBox.Show(
+                this,
+                $"Не удалось удалить некоторые заказы:{Environment.NewLine}{failedPreview}",
+                isBatchDelete ? "Удаление заказов" : "Удаление заказа",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+
+        private static bool TryDeleteOrderArtifactsFromDisk(OrderData order, string ordersRootPath, out string error)
+        {
+            error = string.Empty;
+            if (order == null)
+                return true;
+
+            var orderFolder = string.IsNullOrWhiteSpace(order.FolderName)
+                ? string.Empty
+                : Path.Combine(ordersRootPath ?? string.Empty, order.FolderName);
+            if (!string.IsNullOrWhiteSpace(orderFolder) && Directory.Exists(orderFolder))
+            {
+                try
+                {
+                    Directory.Delete(orderFolder, recursive: true);
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    error = $"Не удалось удалить папку заказа: {ex.Message}";
+                    return false;
+                }
+            }
+
+            foreach (var rawPath in EnumerateKnownOrderFilePaths(order))
+            {
+                var path = CleanPath(rawPath);
+                if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+                    continue;
+
+                try
+                {
+                    File.Delete(path);
+                }
+                catch (Exception ex)
+                {
+                    error = $"Не удалось удалить файл {Path.GetFileName(path)}: {ex.Message}";
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static IEnumerable<string> EnumerateKnownOrderFilePaths(OrderData order)
+        {
+            if (order == null)
+                yield break;
+
+            if (!string.IsNullOrWhiteSpace(order.SourcePath))
+                yield return order.SourcePath;
+            if (!string.IsNullOrWhiteSpace(order.PreparedPath))
+                yield return order.PreparedPath;
+            if (!string.IsNullOrWhiteSpace(order.PrintPath))
+                yield return order.PrintPath;
+
+            if (order.Items == null)
+                yield break;
+
+            foreach (var item in order.Items.Where(item => item != null))
+            {
+                if (!string.IsNullOrWhiteSpace(item.SourcePath))
+                    yield return item.SourcePath;
+                if (!string.IsNullOrWhiteSpace(item.PreparedPath))
+                    yield return item.PreparedPath;
+                if (!string.IsNullOrWhiteSpace(item.PrintPath))
+                    yield return item.PrintPath;
+
+                if (item.TechnicalFiles == null)
+                    continue;
+
+                foreach (var technicalFile in item.TechnicalFiles)
+                {
+                    if (!string.IsNullOrWhiteSpace(technicalFile))
+                        yield return technicalFile;
+                }
+            }
         }
 
         private void RemoveSelectedOrderItems(List<(OrderData Order, OrderFileItem Item)> selectedOrderItems)

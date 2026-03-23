@@ -114,6 +114,39 @@ public sealed class LanOrderWriteCommandServiceTests
     }
 
     [Fact]
+    public async Task TryDeleteOrderAsync_UsesDeleteEndpointWithExpectedVersion()
+    {
+        var gateway = new StubGateway
+        {
+            DeleteOrderResponse = LanOrderWriteApiResult.Success(new SharedOrder
+            {
+                InternalId = "o-del-1",
+                Version = 33,
+                Status = "Waiting"
+            })
+        };
+
+        var service = new LanOrderWriteCommandService(gateway);
+        var order = new OrderData
+        {
+            InternalId = "o-del-1",
+            StorageVersion = 32
+        };
+
+        var result = await service.TryDeleteOrderAsync(
+            order,
+            "http://localhost:5000/",
+            "operator-del");
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(gateway.LastDeleteOrderRequest);
+        Assert.Equal(32, gateway.LastDeleteOrderRequest!.ExpectedVersion);
+        Assert.Equal("o-del-1", gateway.LastDeleteOrderId);
+        Assert.NotNull(result.Order);
+        Assert.Equal(33, result.Order!.StorageVersion);
+    }
+
+    [Fact]
     public async Task TryReorderItemsAsync_SendsSortedOrderedIdsAndVersion()
     {
         var gateway = new StubGateway
@@ -310,6 +343,8 @@ public sealed class LanOrderWriteCommandServiceTests
     {
         public LanCreateOrderRequest? LastCreateRequest { get; private set; }
         public LanUpdateOrderRequest? LastUpdateRequest { get; private set; }
+        public LanDeleteOrderRequest? LastDeleteOrderRequest { get; private set; }
+        public string? LastDeleteOrderId { get; private set; }
         public LanReorderOrderItemsRequest? LastReorderRequest { get; private set; }
         public LanAddOrderItemRequest? LastAddItemRequest { get; private set; }
         public LanUpdateOrderItemRequest? LastUpdateItemRequest { get; private set; }
@@ -318,6 +353,7 @@ public sealed class LanOrderWriteCommandServiceTests
         public string? LastDeleteItemId { get; private set; }
         public LanOrderWriteApiResult CreateResponse { get; set; } = LanOrderWriteApiResult.Failed("no response");
         public LanOrderWriteApiResult UpdateResponse { get; set; } = LanOrderWriteApiResult.Failed("no response");
+        public LanOrderWriteApiResult DeleteOrderResponse { get; set; } = LanOrderWriteApiResult.Failed("no response");
         public LanOrderWriteApiResult ReorderResponse { get; set; } = LanOrderWriteApiResult.Failed("no response");
         public LanOrderWriteApiResult AddItemResponse { get; set; } = LanOrderWriteApiResult.Failed("no response");
         public LanOrderWriteApiResult UpdateItemResponse { get; set; } = LanOrderWriteApiResult.Failed("no response");
@@ -342,6 +378,18 @@ public sealed class LanOrderWriteCommandServiceTests
         {
             LastUpdateRequest = request;
             return Task.FromResult(UpdateResponse);
+        }
+
+        public Task<LanOrderWriteApiResult> DeleteOrderAsync(
+            string apiBaseUrl,
+            string orderInternalId,
+            LanDeleteOrderRequest request,
+            string actor,
+            CancellationToken cancellationToken = default)
+        {
+            LastDeleteOrderRequest = request;
+            LastDeleteOrderId = orderInternalId;
+            return Task.FromResult(DeleteOrderResponse);
         }
 
         public Task<LanOrderWriteApiResult> ReorderOrderItemsAsync(
