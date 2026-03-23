@@ -420,6 +420,60 @@ namespace Replica
             TryRefreshRepositorySnapshotFromStorage(_orderHistory, $"lan-api-item-reorder-{reason}");
         }
 
+        private void TrySyncLanOrderItemUpsert(OrderData order, OrderFileItem item, string reason)
+        {
+            if (!ShouldUseLanRunApi() || order == null || item == null)
+                return;
+
+            var upsertResult = _orderApplicationService
+                .TryUpsertOrderItemViaLanApiAsync(
+                    order,
+                    item,
+                    _lanApiBaseUrl,
+                    ResolveLanApiActor())
+                .GetAwaiter()
+                .GetResult();
+
+            if (upsertResult.IsSuccess && upsertResult.Order != null)
+            {
+                ApplyLanOrderItemVersionsSnapshot(order, upsertResult.Order);
+                TryRefreshRepositorySnapshotFromStorage(_orderHistory, $"lan-api-item-upsert-{reason}");
+                return;
+            }
+
+            if (upsertResult.CurrentVersion > 0)
+                order.StorageVersion = upsertResult.CurrentVersion;
+
+            var errorText = string.IsNullOrWhiteSpace(upsertResult.Error)
+                ? "LAN item upsert failed"
+                : upsertResult.Error;
+            Logger.Warn(
+                $"LAN-API | item-upsert-sync-failed | reason={reason} | order={GetOrderDisplayId(order)} | item={item.ItemId} | conflict={(upsertResult.IsConflict ? "1" : "0")} | unavailable={(upsertResult.IsUnavailable ? "1" : "0")} | {errorText}");
+            TryRefreshRepositorySnapshotFromStorage(_orderHistory, $"lan-api-item-upsert-failed-{reason}");
+        }
+
+        private static void ApplyLanOrderItemVersionsSnapshot(OrderData localOrder, OrderData serverOrder)
+        {
+            if (localOrder == null || serverOrder == null)
+                return;
+
+            if (serverOrder.StorageVersion > 0)
+                localOrder.StorageVersion = serverOrder.StorageVersion;
+
+            var serverItemsById = (serverOrder.Items ?? [])
+                .Where(item => item != null && !string.IsNullOrWhiteSpace(item.ItemId))
+                .ToDictionary(item => item.ItemId, item => item, StringComparer.Ordinal);
+
+            foreach (var localItem in (localOrder.Items ?? []).Where(item => item != null))
+            {
+                if (!serverItemsById.TryGetValue(localItem.ItemId, out var serverItem))
+                    continue;
+
+                if (serverItem.StorageVersion > 0)
+                    localItem.StorageVersion = serverItem.StorageVersion;
+            }
+        }
+
         private void UpsertOrderInHistory(OrderData updatedOrder)
         {
             if (updatedOrder == null)

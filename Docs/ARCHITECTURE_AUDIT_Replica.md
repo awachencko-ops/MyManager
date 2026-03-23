@@ -83,6 +83,8 @@
 > Актуализация на 2026-03-20 (risk-burndown, срез 38): добавлены `IOrderApplicationService` + `OrderApplicationService`; `OrdersWorkspaceForm` переключён с набора точечных service-полей на единый application boundary для run/create/edit/delete/item/file команд (включая run-feedback/status-transition/storage-version sync), подтверждены unit-тесты `OrderApplicationServiceTests` + build + full test + PostgreSQL integration regression.
 >
 > Актуализация на 2026-03-20 (risk-burndown, срез 39): `IOrderApplicationService` расширен history/folder orchestration точками (`Configure/Load/Save/AppendEvent` для history, `ApplyPostLoad/PreSave`, topology/hash maintenance, folder resolve); `OrdersWorkspaceForm` убрал прямые зависимости от `OrdersHistoryRepositoryCoordinator`/`OrdersHistoryMaintenanceService`/`OrderFolderPathResolutionService` и работает через единый boundary, подтверждены unit-тесты `OrderApplicationServiceTests` + build + full test + PostgreSQL integration regression.
+>
+> Актуализация на 2026-03-23 (risk-burndown, срез 40): LAN write-boundary расширен на item upsert (`POST /api/orders/{id}/items`, `PATCH /api/orders/{id}/items/{itemId}`) через `LanOrderWriteApiGateway`/`LanOrderWriteCommandService`; в `OrdersWorkspaceForm` добавлена API-first sync-точка `TrySyncLanOrderItemUpsert` и она подключена в item file-workflow (`add item file`, `rename item file`) с snapshot/version refresh после server response; добавлены unit-тесты gateway/command-service на add/update item сценарии, подтверждены build + full test + PostgreSQL integration regression.
 
 ## Executive summary
 
@@ -337,6 +339,9 @@
 33. Итерация 33 (2026-03-23, адресная): закрыт следующий write-boundary срез для LAN item-order sync (`reorder`).
    - Что сделано: `LanOrderWriteApiGateway` и `LanOrderWriteCommandService` расширены командой `ReorderOrderItemsAsync/TryReorderItemsAsync` (`POST /api/orders/{id}/items/reorder`), `IOrderApplicationService` расширен методом `TryReorderOrderItemsViaLanApiAsync`; в `OrdersWorkspaceForm` добавлен post-delete sync helper `TrySyncLanItemReorderForOrders`, который для затронутых multi-item заказов отправляет API `reorder` после успешного локального persistence шага и синхронизирует snapshot/version.
    - Эффект: снижён риск дрейфа item-sequence между UI и server-side state после batch/remove item workflow в LAN режиме; команда reorder теперь проходит через application boundary и покрыта автотестами.
+34. Итерация 34 (2026-03-23, адресная): закрыт следующий write-boundary срез для LAN item upsert (`add/update item`).
+   - Что сделано: `LanOrderWriteApiGateway` и `LanOrderWriteCommandService` расширены `AddOrderItemAsync/UpdateOrderItemAsync` + `TryUpsertItemAsync`; `IOrderApplicationService` расширен методом `TryUpsertOrderItemViaLanApiAsync`; в `OrdersWorkspaceForm` добавлен helper `TrySyncLanOrderItemUpsert` (apply server snapshot/version) и подключён в `StageFileOps` для item file-операций `AddFileToItemAsync` и `RenameFileForItem`; добавлены unit-тесты `LanOrderWriteApiGatewayTests` и `LanOrderWriteCommandServiceTests` на add/update item path.
+   - Эффект: снижён риск версионного рассинхрона item-данных при изменении файлов item в LAN режиме, изменения быстрее фиксируются в server source-of-truth и подтверждаются автотестами.
 
 ---
 

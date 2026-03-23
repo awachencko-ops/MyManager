@@ -235,6 +235,7 @@ namespace Replica
                 : await CopyIntoStageAsync(order, stage, plan.CleanSourcePath, plan.TargetFileName);
 
             UpdateItemFilePath(order, item, stage, newPath);
+            TrySyncLanOrderItemUpsert(order, item, $"add-item-file-stage-{stage}");
             return true;
         }
 
@@ -507,6 +508,7 @@ namespace Replica
                 statusUpdate.Reason,
                 persistHistory: false,
                 rebuildGrid: false);
+            TrySyncLanOrderItemUpsert(order, item, $"rename-item-file-stage-{stage}");
             PersistGridChanges(OrderGridLogic.BuildItemTag(order.InternalId, item.ItemId));
             SetBottomStatus("Файл item переименован");
         }

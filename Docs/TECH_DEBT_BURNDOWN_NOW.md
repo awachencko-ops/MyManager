@@ -1,6 +1,6 @@
 # Технический долг: что «сжечь и переписать» сейчас
 
-Актуально на `2026-03-20`.
+Актуально на `2026-03-23`.
 
 ## Цель
 
@@ -45,3 +45,5 @@
 - API contracts/store implementations now accept and persist `OrderNumber` + `ManagerOrderDate` in update path, so simple order edit no longer depends on local snapshot write for these fields.
 - Status persistence in LAN mode moved to API-first path (`SetOrderStatus` -> `TryUpdateOrderViaLanApiAsync`), with local history save kept only as controlled fallback when API update fails.
 - Item reorder path is now wired through LAN API (`/api/orders/{id}/items/reorder`) via application service boundary and called after item-delete workflows for affected multi-item orders.
+- Item add/update path is now wired through LAN API (`POST /api/orders/{id}/items`, `PATCH /api/orders/{id}/items/{itemId}`) via `TryUpsertOrderItemViaLanApiAsync`; `OrdersWorkspaceForm` applies server item/order versions after response to reduce optimistic concurrency drift in file-item workflows.
+- `StageFileOps` now triggers LAN item upsert sync on `add item file` and `rename item file`; gateway/command-service tests were expanded for add/update item flows and pass in full regression runs.

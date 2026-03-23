@@ -120,6 +120,83 @@ public sealed class LanOrderWriteApiGatewayTests
     }
 
     [Fact]
+    public async Task AddOrderItemAsync_SendsRequestToItemsEndpoint()
+    {
+        string requestBody = string.Empty;
+        var handler = new StubHttpMessageHandler(async (request, cancellationToken) =>
+        {
+            requestBody = await request.Content!.ReadAsStringAsync(cancellationToken);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    "{\"internalId\":\"order-4\",\"version\":13,\"items\":[{\"itemId\":\"i-1\",\"sequenceNo\":0,\"version\":2}]}",
+                    Encoding.UTF8,
+                    "application/json")
+            };
+        });
+
+        var gateway = new LanOrderWriteApiGateway(new HttpClient(handler));
+        var result = await gateway.AddOrderItemAsync(
+            "http://localhost:5000/",
+            "order-4",
+            new LanAddOrderItemRequest
+            {
+                ExpectedOrderVersion = 12,
+                Item = new Replica.Shared.Models.SharedOrderItem
+                {
+                    ItemId = "i-1",
+                    SequenceNo = 0
+                }
+            },
+            actor: "operator-4");
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(handler.LastRequest);
+        Assert.Equal(HttpMethod.Post, handler.LastRequest!.Method);
+        Assert.Equal("/api/orders/order-4/items", handler.LastRequest.RequestUri!.AbsolutePath);
+        Assert.Contains("\"expectedOrderVersion\":12", requestBody, StringComparison.Ordinal);
+        Assert.Contains("\"itemId\":\"i-1\"", requestBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task UpdateOrderItemAsync_SendsPatchToItemEndpoint()
+    {
+        string requestBody = string.Empty;
+        var handler = new StubHttpMessageHandler(async (request, cancellationToken) =>
+        {
+            requestBody = await request.Content!.ReadAsStringAsync(cancellationToken);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    "{\"internalId\":\"order-5\",\"version\":18,\"items\":[{\"itemId\":\"i-5\",\"sequenceNo\":0,\"version\":7}]}",
+                    Encoding.UTF8,
+                    "application/json")
+            };
+        });
+
+        var gateway = new LanOrderWriteApiGateway(new HttpClient(handler));
+        var result = await gateway.UpdateOrderItemAsync(
+            "http://localhost:5000/",
+            "order-5",
+            "i-5",
+            new LanUpdateOrderItemRequest
+            {
+                ExpectedOrderVersion = 17,
+                ExpectedItemVersion = 6,
+                FileStatus = "Waiting"
+            },
+            actor: "operator-5");
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(handler.LastRequest);
+        Assert.Equal(HttpMethod.Patch, handler.LastRequest!.Method);
+        Assert.Equal("/api/orders/order-5/items/i-5", handler.LastRequest.RequestUri!.AbsolutePath);
+        Assert.Contains("\"expectedOrderVersion\":17", requestBody, StringComparison.Ordinal);
+        Assert.Contains("\"expectedItemVersion\":6", requestBody, StringComparison.Ordinal);
+        Assert.Contains("\"fileStatus\":\"Waiting\"", requestBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task CreateOrderAsync_WithInvalidBaseUrl_ReturnsUnavailable()
     {
         var handler = new StubHttpMessageHandler((_, _) =>

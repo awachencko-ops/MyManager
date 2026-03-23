@@ -96,6 +96,46 @@ public sealed class LanOrderWriteCommandService
         return ToCommandResult(apiResult);
     }
 
+    public async Task<LanOrderWriteCommandResult> TryUpsertItemAsync(
+        OrderData order,
+        OrderFileItem item,
+        string lanApiBaseUrl,
+        string actor,
+        CancellationToken cancellationToken = default)
+    {
+        if (order == null || item == null)
+            return LanOrderWriteCommandResult.BadRequest("order/item is required");
+        if (string.IsNullOrWhiteSpace(order.InternalId))
+            return LanOrderWriteCommandResult.BadRequest("order internal id is required");
+        if (string.IsNullOrWhiteSpace(item.ItemId))
+            return LanOrderWriteCommandResult.BadRequest("item id is required");
+
+        LanOrderWriteApiResult apiResult;
+        if (item.StorageVersion > 0)
+        {
+            var updateRequest = BuildUpdateItemRequest(order, item);
+            apiResult = await _lanOrderWriteApiGateway.UpdateOrderItemAsync(
+                lanApiBaseUrl,
+                order.InternalId,
+                item.ItemId,
+                updateRequest,
+                actor,
+                cancellationToken);
+        }
+        else
+        {
+            var addRequest = BuildAddItemRequest(order, item);
+            apiResult = await _lanOrderWriteApiGateway.AddOrderItemAsync(
+                lanApiBaseUrl,
+                order.InternalId,
+                addRequest,
+                actor,
+                cancellationToken);
+        }
+
+        return ToCommandResult(apiResult);
+    }
+
     private static LanCreateOrderRequest BuildCreateRequest(
         OrderData source,
         string actor,
@@ -181,6 +221,36 @@ public sealed class LanOrderWriteCommandService
             FolderName = updatedOrder.FolderName?.Trim() ?? string.Empty,
             PitStopAction = NormalizeAction(updatedOrder.PitStopAction),
             ImposingAction = NormalizeAction(updatedOrder.ImposingAction)
+        };
+    }
+
+    private static LanAddOrderItemRequest BuildAddItemRequest(OrderData order, OrderFileItem item)
+    {
+        return new LanAddOrderItemRequest
+        {
+            ExpectedOrderVersion = order.StorageVersion,
+            Item = MapItem(item)
+        };
+    }
+
+    private static LanUpdateOrderItemRequest BuildUpdateItemRequest(OrderData order, OrderFileItem item)
+    {
+        return new LanUpdateOrderItemRequest
+        {
+            ExpectedOrderVersion = order.StorageVersion,
+            ExpectedItemVersion = item.StorageVersion,
+            ClientFileLabel = item.ClientFileLabel ?? string.Empty,
+            Variant = item.Variant ?? string.Empty,
+            FileStatus = NormalizeStatus(item.FileStatus),
+            LastReason = item.LastReason ?? string.Empty,
+            SourcePath = item.SourcePath ?? string.Empty,
+            PreparedPath = item.PreparedPath ?? string.Empty,
+            PrintPath = item.PrintPath ?? string.Empty,
+            SourceFileHash = item.SourceFileHash ?? string.Empty,
+            PreparedFileHash = item.PreparedFileHash ?? string.Empty,
+            PrintFileHash = item.PrintFileHash ?? string.Empty,
+            PitStopAction = NormalizeAction(item.PitStopAction),
+            ImposingAction = NormalizeAction(item.ImposingAction)
         };
     }
 

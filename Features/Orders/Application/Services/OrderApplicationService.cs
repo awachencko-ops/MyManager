@@ -52,6 +52,12 @@ public interface IOrderApplicationService
         string lanApiBaseUrl,
         string actor,
         CancellationToken cancellationToken = default);
+    Task<LanOrderWriteCommandResult> TryUpsertOrderItemViaLanApiAsync(
+        OrderData order,
+        OrderFileItem item,
+        string lanApiBaseUrl,
+        string actor,
+        CancellationToken cancellationToken = default);
 
     Task<OrderRunStartPhaseResult> PrepareAndBeginRunAsync(
         IReadOnlyCollection<OrderData> selectedOrders,
@@ -296,6 +302,19 @@ public sealed class OrderApplicationService : IOrderApplicationService
         CancellationToken cancellationToken = default)
         => _lanOrderWriteCommandService.TryReorderItemsAsync(
             order,
+            lanApiBaseUrl,
+            actor,
+            cancellationToken);
+
+    public Task<LanOrderWriteCommandResult> TryUpsertOrderItemViaLanApiAsync(
+        OrderData order,
+        OrderFileItem item,
+        string lanApiBaseUrl,
+        string actor,
+        CancellationToken cancellationToken = default)
+        => _lanOrderWriteCommandService.TryUpsertItemAsync(
+            order,
+            item,
             lanApiBaseUrl,
             actor,
             cancellationToken);
