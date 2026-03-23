@@ -5,6 +5,9 @@ using System.Drawing.Drawing2D;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -16,6 +19,7 @@ namespace Replica
     {
         private void InitializeTrayIndicators()
         {
+            statusStrip1.ShowItemToolTips = true;
             toolStatus.Spring = true;
             toolStatus.TextAlign = ContentAlignment.MiddleLeft;
 
@@ -28,6 +32,12 @@ namespace Replica
             toolAlerts.IsLink = true;
             toolAlerts.LinkBehavior = LinkBehavior.HoverUnderline;
             toolAlerts.Click += ToolAlerts_Click;
+            toolConnection.MouseEnter -= ToolConnection_MouseEnter;
+            toolConnection.MouseEnter += ToolConnection_MouseEnter;
+
+            _lanServerProbeCts?.Cancel();
+            _lanServerProbeCts?.Dispose();
+            _lanServerProbeCts = new CancellationTokenSource();
 
             _trayIndicatorsTimer ??= new System.Windows.Forms.Timer
             {
@@ -39,6 +49,7 @@ namespace Replica
 
             _acknowledgedErrorCount = CountOrdersWithErrors();
             RefreshTrayIndicators();
+            RequestLanServerProbe("startup", force: true);
         }
 
         private void ToolAlerts_Click(object? sender, EventArgs e)
@@ -47,12 +58,19 @@ namespace Replica
             OpenLogForSelectionOrManager();
         }
 
+        private void ToolConnection_MouseEnter(object? sender, EventArgs e)
+        {
+            RequestLanServerProbe("hover", force: true);
+            UpdateTrayConnectionIndicator();
+        }
+
         private void TrayIndicatorsTimer_Tick(object? sender, EventArgs e)
         {
             RefreshArchivedStatuses();
             if (BackfillMissingFileHashesIncrementally(maxFilesToHash: 2))
                 SaveHistory();
             RefreshUsersDirectoryIfNeeded();
+            RequestLanServerProbe("timer");
             UpdateTrayConnectionIndicator();
             UpdateTrayDiskIndicator();
         }
@@ -82,13 +100,20 @@ namespace Replica
                 _tileHoverActivateTimer = null;
             }
 
-            if (_trayIndicatorsTimer == null)
-                return;
+            toolConnection.MouseEnter -= ToolConnection_MouseEnter;
 
-            _trayIndicatorsTimer.Stop();
-            _trayIndicatorsTimer.Tick -= TrayIndicatorsTimer_Tick;
-            _trayIndicatorsTimer.Dispose();
-            _trayIndicatorsTimer = null;
+            if (_trayIndicatorsTimer != null)
+            {
+                _trayIndicatorsTimer.Stop();
+                _trayIndicatorsTimer.Tick -= TrayIndicatorsTimer_Tick;
+                _trayIndicatorsTimer.Dispose();
+                _trayIndicatorsTimer = null;
+            }
+
+            _lanServerProbeCts?.Cancel();
+            _lanServerProbeCts?.Dispose();
+            _lanServerProbeCts = null;
+            _lanStatusHttpClient.Dispose();
         }
 
         private void RefreshTrayIndicators()
@@ -139,29 +164,40 @@ namespace Replica
             if (toolConnection.IsDisposed)
                 return;
 
-            var isConnected = CanAccessPath(_ordersRootPath);
             var dependencyHealthLevel = GetWorstDependencyHealthLevel();
+            if (ShouldUseLanRunApi())
+            {
+                RequestLanServerProbe("status-refresh");
+                UpdateLanApiConnectionIndicator(dependencyHealthLevel);
+                return;
+            }
+
+            var isConnected = CanAccessPath(_ordersRootPath);
+            string shortStatusText;
+            Color statusColor;
             if (!isConnected)
             {
-                toolConnection.Text = "● Сервер: автономно";
-                toolConnection.ForeColor = Color.Firebrick;
+                shortStatusText = "автономно";
+                statusColor = Color.Firebrick;
             }
             else if (dependencyHealthLevel == DependencyHealthLevel.Unavailable)
             {
-                toolConnection.Text = "● Сервер: hotfolder недоступен";
-                toolConnection.ForeColor = Color.Firebrick;
+                shortStatusText = "hotfolder недоступен";
+                statusColor = Color.Firebrick;
             }
             else if (dependencyHealthLevel == DependencyHealthLevel.Degraded)
             {
-                toolConnection.Text = "● Сервер: подключен (деградация)";
-                toolConnection.ForeColor = Color.DarkOrange;
+                shortStatusText = "подключен (деградация)";
+                statusColor = Color.DarkOrange;
             }
             else
             {
-                toolConnection.Text = "● Сервер: подключен";
-                toolConnection.ForeColor = Color.SeaGreen;
+                shortStatusText = "подключен";
+                statusColor = Color.SeaGreen;
             }
 
+            toolConnection.Text = $"● Сервер: {shortStatusText}";
+            toolConnection.ForeColor = statusColor;
             var connectionStatusText = isConnected
                 ? "Рабочая папка заказов доступна."
                 : "Рабочая папка заказов недоступна.";
@@ -169,7 +205,7 @@ namespace Replica
             toolConnection.ToolTipText = string.IsNullOrWhiteSpace(dependencyHealthSummary)
                 ? $"{connectionStatusText}\n{_usersDirectoryStatusText}"
                 : $"{connectionStatusText}\n{dependencyHealthSummary}\n{_usersDirectoryStatusText}";
-            UpdateServerHeaderConnectionState(isConnected, dependencyHealthLevel);
+            UpdateServerHeaderConnectionState(shortStatusText, statusColor);
         }
 
         private void ApplyProcessorDependencyHealthSignal(DependencyHealthSignal signal)
@@ -220,6 +256,465 @@ namespace Replica
             }
 
             return "Hotfolder health: " + string.Join(", ", parts);
+        }
+
+        private void UpdateLanApiConnectionIndicator(DependencyHealthLevel dependencyHealthLevel)
+        {
+            var snapshot = GetLanServerProbeSnapshot(out var probeInProgress, out var requestCount);
+
+            string shortStatusText;
+            Color statusColor;
+            if (probeInProgress && snapshot.CompletedAtUtc == DateTime.MinValue)
+            {
+                shortStatusText = "проверка...";
+                statusColor = Color.DarkOrange;
+            }
+            else if (!snapshot.ApiReachable)
+            {
+                shortStatusText = snapshot.CompletedAtUtc == DateTime.MinValue
+                    ? "проверка..."
+                    : "нет ответа API";
+                statusColor = Color.Firebrick;
+            }
+            else if (!snapshot.IsReady)
+            {
+                shortStatusText = "не готов";
+                statusColor = Color.Firebrick;
+            }
+            else if (snapshot.IsDegraded
+                     || !snapshot.SloHealthy
+                     || dependencyHealthLevel != DependencyHealthLevel.Healthy)
+            {
+                shortStatusText = "подключен (деградация)";
+                statusColor = Color.DarkOrange;
+            }
+            else
+            {
+                shortStatusText = "подключен";
+                statusColor = Color.SeaGreen;
+            }
+
+            toolConnection.Text = $"● Сервер: {shortStatusText}";
+            toolConnection.ForeColor = statusColor;
+            toolConnection.ToolTipText = BuildLanConnectionToolTip(snapshot, dependencyHealthLevel, probeInProgress, requestCount);
+            UpdateServerHeaderConnectionState(shortStatusText, statusColor);
+        }
+
+        private string BuildLanConnectionToolTip(
+            LanServerProbeSnapshot snapshot,
+            DependencyHealthLevel dependencyHealthLevel,
+            bool probeInProgress,
+            int requestCount)
+        {
+            var lines = new List<string>
+            {
+                "Режим: LAN PostgreSQL",
+                $"API: {NormalizeLanApiUrlForUi(_lanApiBaseUrl)}",
+                $"Состояние live/ready/slo: {snapshot.LiveStatus}/{snapshot.ReadyStatus}/{snapshot.SloStatus}"
+            };
+
+            if (snapshot.RequestedAtUtc > DateTime.MinValue)
+                lines.Add($"Последний запрос: {FormatLanProbeStamp(snapshot.RequestedAtUtc)}");
+            if (snapshot.CompletedAtUtc > DateTime.MinValue)
+                lines.Add($"Последний ответ: {FormatLanProbeStamp(snapshot.CompletedAtUtc)}");
+            if (snapshot.SuccessfulAtUtc > DateTime.MinValue)
+                lines.Add($"Последний успешный ответ: {FormatLanProbeStamp(snapshot.SuccessfulAtUtc)}");
+
+            if (snapshot.AvailabilityRatio >= 0
+                && snapshot.LatencyP95Ms >= 0
+                && snapshot.WriteSuccessRatio >= 0)
+            {
+                lines.Add(
+                    $"SLO: avail={snapshot.AvailabilityRatio:0.000}, p95={snapshot.LatencyP95Ms:0.#} ms, write={snapshot.WriteSuccessRatio:0.000}");
+            }
+
+            lines.Add($"Проверок за сессию: {requestCount}");
+
+            if (probeInProgress)
+                lines.Add("Проверка выполняется...");
+            if (!string.IsNullOrWhiteSpace(snapshot.Error))
+                lines.Add($"Ошибка: {snapshot.Error}");
+            if (dependencyHealthLevel != DependencyHealthLevel.Healthy)
+                lines.Add($"Hotfolder: {BuildDependencyHealthSummary()}");
+            if (!string.IsNullOrWhiteSpace(_usersDirectoryStatusText))
+                lines.Add(_usersDirectoryStatusText);
+
+            return string.Join(Environment.NewLine, lines.Where(line => !string.IsNullOrWhiteSpace(line)));
+        }
+
+        private void RequestLanServerProbe(string reason, bool force = false)
+        {
+            if (!ShouldUseLanRunApi() || Disposing || IsDisposed)
+                return;
+
+            var token = CancellationToken.None;
+            lock (_lanServerProbeSync)
+            {
+                if (_lanServerProbeInProgress)
+                    return;
+
+                var nowUtc = DateTime.UtcNow;
+                if (!force
+                    && _lanServerProbeLastRequestedUtc > DateTime.MinValue
+                    && (nowUtc - _lanServerProbeLastRequestedUtc).TotalMilliseconds < LanServerProbeMinIntervalMs)
+                {
+                    return;
+                }
+
+                _lanServerProbeInProgress = true;
+                _lanServerProbeLastRequestedUtc = nowUtc;
+                _lanServerProbeRequestCount++;
+                token = _lanServerProbeCts?.Token ?? CancellationToken.None;
+            }
+
+            UpdateTrayConnectionIndicator();
+            _ = ProbeLanServerAsync(reason, token);
+        }
+
+        private async Task ProbeLanServerAsync(string reason, CancellationToken cancellationToken)
+        {
+            var requestedAtUtc = DateTime.UtcNow;
+            var completedAtUtc = requestedAtUtc;
+
+            LanServerProbeSnapshot nextSnapshot;
+            try
+            {
+                if (!TryResolveLanApiBaseUri(_lanApiBaseUrl, out var baseUri))
+                    throw new InvalidOperationException("Некорректный URL LAN API.");
+
+                var liveProbe = await ProbeEndpointStatusAsync(baseUri, "live", cancellationToken);
+                var readyProbe = await ProbeEndpointStatusAsync(baseUri, "ready", cancellationToken);
+                var sloProbe = await ProbeEndpointStatusAsync(baseUri, "slo", cancellationToken);
+                completedAtUtc = DateTime.UtcNow;
+
+                var apiReachable = liveProbe.IsReachable || readyProbe.IsReachable || sloProbe.IsReachable;
+                var liveStatus = liveProbe.Status;
+                var readyStatus = readyProbe.Status;
+                var sloStatus = sloProbe.Status;
+
+                var isReady = string.Equals(readyStatus, "ready", StringComparison.OrdinalIgnoreCase)
+                              || string.Equals(readyStatus, "degraded", StringComparison.OrdinalIgnoreCase);
+                var isDegraded = string.Equals(readyStatus, "degraded", StringComparison.OrdinalIgnoreCase)
+                                 || string.Equals(sloStatus, "degraded", StringComparison.OrdinalIgnoreCase);
+                var sloHealthy = string.Equals(sloStatus, "ok", StringComparison.OrdinalIgnoreCase);
+
+                var availabilityRatio = -1d;
+                var latencyP95 = -1d;
+                var writeSuccess = -1d;
+                if (!string.IsNullOrWhiteSpace(sloProbe.Payload))
+                {
+                    TryGetSloCurrentMetric(sloProbe.Payload, "HttpAvailabilityRatio", out availabilityRatio);
+                    TryGetSloCurrentMetric(sloProbe.Payload, "HttpLatencyP95Ms", out latencyP95);
+                    TryGetSloCurrentMetric(sloProbe.Payload, "WriteSuccessRatio", out writeSuccess);
+                }
+
+                var serverNowUtc = DateTime.MinValue;
+                if (!string.IsNullOrWhiteSpace(liveProbe.Payload))
+                    TryExtractUtcDateTime(liveProbe.Payload, "now", out serverNowUtc);
+
+                var mergedError = string.Join(
+                    " | ",
+                    new[] { liveProbe.Error, readyProbe.Error, sloProbe.Error }
+                        .Where(error => !string.IsNullOrWhiteSpace(error)));
+
+                nextSnapshot = new LanServerProbeSnapshot
+                {
+                    ApiReachable = apiReachable,
+                    IsReady = isReady,
+                    IsDegraded = isDegraded,
+                    SloHealthy = sloHealthy,
+                    RequestedAtUtc = requestedAtUtc,
+                    CompletedAtUtc = completedAtUtc,
+                    SuccessfulAtUtc = apiReachable && isReady ? completedAtUtc : DateTime.MinValue,
+                    ServerNowAtUtc = serverNowUtc,
+                    LiveStatus = liveStatus,
+                    ReadyStatus = readyStatus,
+                    SloStatus = sloStatus,
+                    Error = mergedError,
+                    ProbeReason = reason ?? string.Empty,
+                    AvailabilityRatio = availabilityRatio,
+                    LatencyP95Ms = latencyP95,
+                    WriteSuccessRatio = writeSuccess
+                };
+            }
+            catch (OperationCanceledException)
+            {
+                nextSnapshot = new LanServerProbeSnapshot
+                {
+                    ApiReachable = false,
+                    IsReady = false,
+                    IsDegraded = false,
+                    SloHealthy = false,
+                    RequestedAtUtc = requestedAtUtc,
+                    CompletedAtUtc = DateTime.UtcNow,
+                    SuccessfulAtUtc = DateTime.MinValue,
+                    LiveStatus = "cancelled",
+                    ReadyStatus = "cancelled",
+                    SloStatus = "cancelled",
+                    Error = "Проверка отменена.",
+                    ProbeReason = reason ?? string.Empty
+                };
+            }
+            catch (Exception ex)
+            {
+                nextSnapshot = new LanServerProbeSnapshot
+                {
+                    ApiReachable = false,
+                    IsReady = false,
+                    IsDegraded = false,
+                    SloHealthy = false,
+                    RequestedAtUtc = requestedAtUtc,
+                    CompletedAtUtc = DateTime.UtcNow,
+                    SuccessfulAtUtc = DateTime.MinValue,
+                    LiveStatus = "error",
+                    ReadyStatus = "error",
+                    SloStatus = "error",
+                    Error = ex.Message,
+                    ProbeReason = reason ?? string.Empty
+                };
+            }
+
+            lock (_lanServerProbeSync)
+            {
+                var previousSuccessUtc = _lanServerProbeSnapshot.SuccessfulAtUtc;
+                if (nextSnapshot.SuccessfulAtUtc == DateTime.MinValue && previousSuccessUtc > DateTime.MinValue)
+                {
+                    nextSnapshot = new LanServerProbeSnapshot
+                    {
+                        ApiReachable = nextSnapshot.ApiReachable,
+                        IsReady = nextSnapshot.IsReady,
+                        IsDegraded = nextSnapshot.IsDegraded,
+                        SloHealthy = nextSnapshot.SloHealthy,
+                        RequestedAtUtc = nextSnapshot.RequestedAtUtc,
+                        CompletedAtUtc = nextSnapshot.CompletedAtUtc,
+                        SuccessfulAtUtc = previousSuccessUtc,
+                        ServerNowAtUtc = nextSnapshot.ServerNowAtUtc,
+                        LiveStatus = nextSnapshot.LiveStatus,
+                        ReadyStatus = nextSnapshot.ReadyStatus,
+                        SloStatus = nextSnapshot.SloStatus,
+                        Error = nextSnapshot.Error,
+                        ProbeReason = nextSnapshot.ProbeReason,
+                        AvailabilityRatio = nextSnapshot.AvailabilityRatio,
+                        LatencyP95Ms = nextSnapshot.LatencyP95Ms,
+                        WriteSuccessRatio = nextSnapshot.WriteSuccessRatio
+                    };
+                }
+
+                _lanServerProbeSnapshot = nextSnapshot;
+                _lanServerProbeInProgress = false;
+            }
+
+            RunOnUiThread(UpdateTrayConnectionIndicator);
+        }
+
+        private LanServerProbeSnapshot GetLanServerProbeSnapshot(out bool probeInProgress, out int requestCount)
+        {
+            lock (_lanServerProbeSync)
+            {
+                probeInProgress = _lanServerProbeInProgress;
+                requestCount = _lanServerProbeRequestCount;
+                return _lanServerProbeSnapshot;
+            }
+        }
+
+        private async Task<EndpointProbeResult> ProbeEndpointStatusAsync(Uri baseUri, string endpointPath, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var endpointUri = new Uri(baseUri, endpointPath);
+                using var request = new HttpRequestMessage(HttpMethod.Get, endpointUri);
+                using var response = await _lanStatusHttpClient.SendAsync(request, cancellationToken);
+                var payload = await response.Content.ReadAsStringAsync(cancellationToken);
+                var fallbackStatus = response.IsSuccessStatusCode
+                    ? "ok"
+                    : response.StatusCode == HttpStatusCode.ServiceUnavailable
+                        ? "not_ready"
+                        : "error";
+                var status = ExtractStatusFromJsonPayload(payload, fallbackStatus);
+
+                return new EndpointProbeResult
+                {
+                    IsReachable = true,
+                    Status = status,
+                    Payload = payload,
+                    Error = response.IsSuccessStatusCode
+                        ? string.Empty
+                        : $"{endpointPath}: HTTP {(int)response.StatusCode} ({response.StatusCode})"
+                };
+            }
+            catch (Exception ex)
+            {
+                return new EndpointProbeResult
+                {
+                    IsReachable = false,
+                    Status = "unavailable",
+                    Payload = string.Empty,
+                    Error = $"{endpointPath}: {ex.Message}"
+                };
+            }
+        }
+
+        private static bool TryResolveLanApiBaseUri(string? rawBaseUrl, out Uri baseUri)
+        {
+            baseUri = default!;
+            if (string.IsNullOrWhiteSpace(rawBaseUrl))
+                return false;
+
+            var candidate = rawBaseUrl.Trim();
+            if (Uri.TryCreate(candidate, UriKind.Absolute, out var parsedBaseUri)
+                && parsedBaseUri != null)
+            {
+                baseUri = parsedBaseUri;
+                return true;
+            }
+
+            if (Uri.TryCreate($"http://{candidate}", UriKind.Absolute, out parsedBaseUri)
+                && parsedBaseUri != null)
+            {
+                baseUri = parsedBaseUri;
+                return true;
+            }
+
+            return false;
+        }
+
+        private static string NormalizeLanApiUrlForUi(string? rawBaseUrl)
+        {
+            if (!TryResolveLanApiBaseUri(rawBaseUrl, out var baseUri))
+                return "н/д";
+
+            return baseUri.GetLeftPart(UriPartial.Authority);
+        }
+
+        private static string ExtractStatusFromJsonPayload(string payload, string fallbackStatus)
+        {
+            if (string.IsNullOrWhiteSpace(payload))
+                return fallbackStatus;
+
+            try
+            {
+                using var document = JsonDocument.Parse(payload);
+                if (document.RootElement.ValueKind != JsonValueKind.Object)
+                    return fallbackStatus;
+
+                if (TryGetPropertyIgnoreCase(document.RootElement, "status", out var statusElement)
+                    && statusElement.ValueKind == JsonValueKind.String)
+                {
+                    var value = statusElement.GetString();
+                    if (!string.IsNullOrWhiteSpace(value))
+                        return value.Trim().ToLowerInvariant();
+                }
+            }
+            catch
+            {
+                // ignore malformed payload
+            }
+
+            return fallbackStatus;
+        }
+
+        private static bool TryGetSloCurrentMetric(string payload, string metricName, out double value)
+        {
+            value = -1;
+            if (string.IsNullOrWhiteSpace(payload))
+                return false;
+
+            try
+            {
+                using var document = JsonDocument.Parse(payload);
+                if (document.RootElement.ValueKind != JsonValueKind.Object)
+                    return false;
+
+                if (!TryGetPropertyIgnoreCase(document.RootElement, "current", out var currentElement)
+                    || currentElement.ValueKind != JsonValueKind.Object)
+                {
+                    return false;
+                }
+
+                if (!TryGetPropertyIgnoreCase(currentElement, metricName, out var valueElement))
+                    return false;
+
+                if (valueElement.ValueKind == JsonValueKind.Number && valueElement.TryGetDouble(out value))
+                    return true;
+            }
+            catch
+            {
+                // ignore malformed payload
+            }
+
+            return false;
+        }
+
+        private static bool TryExtractUtcDateTime(string payload, string propertyName, out DateTime value)
+        {
+            value = DateTime.MinValue;
+            if (string.IsNullOrWhiteSpace(payload))
+                return false;
+
+            try
+            {
+                using var document = JsonDocument.Parse(payload);
+                if (document.RootElement.ValueKind != JsonValueKind.Object)
+                    return false;
+
+                if (!TryGetPropertyIgnoreCase(document.RootElement, propertyName, out var propertyElement))
+                    return false;
+                if (propertyElement.ValueKind != JsonValueKind.String)
+                    return false;
+
+                var raw = propertyElement.GetString();
+                if (string.IsNullOrWhiteSpace(raw))
+                    return false;
+
+                if (DateTime.TryParse(
+                    raw,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                    out var parsed))
+                {
+                    value = parsed;
+                    return true;
+                }
+            }
+            catch
+            {
+                // ignore malformed payload
+            }
+
+            return false;
+        }
+
+        private static bool TryGetPropertyIgnoreCase(JsonElement element, string propertyName, out JsonElement value)
+        {
+            foreach (var property in element.EnumerateObject())
+            {
+                if (!string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                value = property.Value;
+                return true;
+            }
+
+            value = default;
+            return false;
+        }
+
+        private static string FormatLanProbeStamp(DateTime utcValue)
+        {
+            if (utcValue <= DateTime.MinValue)
+                return "н/д";
+
+            return utcValue
+                .ToLocalTime()
+                .ToString("dd.MM.yyyy HH:mm:ss", CultureInfo.InvariantCulture);
+        }
+
+        private sealed class EndpointProbeResult
+        {
+            public bool IsReachable { get; init; }
+            public string Status { get; init; } = "unknown";
+            public string Payload { get; init; } = string.Empty;
+            public string Error { get; init; } = string.Empty;
         }
 
         private void UpdateTrayDiskIndicator()

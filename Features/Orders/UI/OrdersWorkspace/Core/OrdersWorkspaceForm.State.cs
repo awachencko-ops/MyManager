@@ -8,6 +8,7 @@ using System.Drawing.Imaging;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -36,6 +37,8 @@ namespace Replica
         private readonly Dictionary<string, CancellationTokenSource> _runTokensByOrder = new(StringComparer.Ordinal);
         private readonly Dictionary<string, int> _runProgressByOrderInternalId = new(StringComparer.Ordinal);
         private readonly Dictionary<string, DependencyHealthLevel> _dependencyHealthByName = new(StringComparer.OrdinalIgnoreCase);
+        private readonly HttpClient _lanStatusHttpClient = new() { Timeout = TimeSpan.FromSeconds(5) };
+        private readonly object _lanServerProbeSync = new();
         private readonly ISettingsProvider _settingsProvider;
         private readonly HashSet<string> _archivedFileNames = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, List<string>> _archivedFilePathsByName = new(StringComparer.OrdinalIgnoreCase);
@@ -78,6 +81,11 @@ namespace Replica
         private Rectangle _dragBoxFromMouseDown = Rectangle.Empty;
         private int _dragSourceRowIndex = -1;
         private int _dragSourceColumnIndex = -1;
+        private bool _lanServerProbeInProgress;
+        private int _lanServerProbeRequestCount;
+        private DateTime _lanServerProbeLastRequestedUtc = DateTime.MinValue;
+        private CancellationTokenSource? _lanServerProbeCts;
+        private LanServerProbeSnapshot _lanServerProbeSnapshot = LanServerProbeSnapshot.CreateInitial();
         private OrdersViewMode _ordersViewMode = OrdersViewMode.List;
 
         private readonly List<string> _users = ["Сервер \"Таудеми\""];
@@ -104,6 +112,7 @@ namespace Replica
         private const string ReceivedDateFilterLabelText = "Заказ принят";
         private const string DefaultTrayStatusText = "Готово";
         private const int TrayIndicatorsRefreshIntervalMs = 15000;
+        private const int LanServerProbeMinIntervalMs = 5000;
         private static readonly TimeSpan ArchiveIndexLifetime = TimeSpan.FromSeconds(15);
         private const int OrdersGridWarmupIntervalMs = 3000;
         private const int GridHoverActivateDelayMs = 500;
@@ -302,6 +311,37 @@ namespace Replica
             {
                 return $"{UserName} ({Count})";
             }
+        }
+
+        private sealed class LanServerProbeSnapshot
+        {
+            public static LanServerProbeSnapshot CreateInitial()
+            {
+                return new LanServerProbeSnapshot
+                {
+                    ReadyStatus = "unknown",
+                    SloStatus = "unknown",
+                    LiveStatus = "unknown",
+                    ProbeReason = "startup"
+                };
+            }
+
+            public bool ApiReachable { get; init; }
+            public bool IsReady { get; init; }
+            public bool IsDegraded { get; init; }
+            public bool SloHealthy { get; init; }
+            public DateTime RequestedAtUtc { get; init; }
+            public DateTime CompletedAtUtc { get; init; }
+            public DateTime SuccessfulAtUtc { get; init; }
+            public DateTime ServerNowAtUtc { get; init; }
+            public string LiveStatus { get; init; } = "unknown";
+            public string ReadyStatus { get; init; } = "unknown";
+            public string SloStatus { get; init; } = "unknown";
+            public string Error { get; init; } = string.Empty;
+            public string ProbeReason { get; init; } = string.Empty;
+            public double AvailabilityRatio { get; init; } = -1;
+            public double LatencyP95Ms { get; init; } = -1;
+            public double WriteSuccessRatio { get; init; } = -1;
         }
 
         private enum CreatedDateFilterKind

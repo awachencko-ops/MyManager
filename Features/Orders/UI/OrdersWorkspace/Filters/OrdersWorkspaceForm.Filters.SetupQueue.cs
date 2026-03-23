@@ -387,6 +387,11 @@ namespace Replica
                 }
             }
 
+            UpdateServerHeaderConnectionState(statusText, statusColor);
+        }
+
+        private void UpdateServerHeaderConnectionState(string statusText, Color statusColor)
+        {
             if (_serverHeaderStatusDot != null)
                 _serverHeaderStatusDot.BackColor = statusColor;
 
