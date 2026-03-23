@@ -54,4 +54,5 @@
 - `order delete` API-path is now closed end-to-end: added `DELETE /api/orders/{id}` + `DeleteOrderRequest` + store command `TryDeleteOrder` (EF Core/PostgreSQL/InMemory) with optimistic concurrency and `delete-order` event; client boundary expanded with `DeleteOrderAsync/TryDeleteOrderAsync/TryDeleteOrderViaLanApiAsync`, and `OrdersWorkspaceForm` in LAN mode switched to API-first order delete (single/batch) with local disk cleanup + snapshot refresh.
 
 - Observability/SLO baseline is now closed in API runtime: added request metrics aggregator (`ReplicaApiObservability`), write-command outcome counters in `OrdersController`, idempotency hit/miss/mismatch telemetry in `EfCoreLanOrderStore`, and operational endpoints `/live`, `/ready`, `/metrics`, `/slo`; covered by new verify tests (`ReplicaApiObservabilityTests`) and full regression runs.
+- Operational runbook for on-call/owners: [OPERATIONS_SLO_RUNBOOK.md](OPERATIONS_SLO_RUNBOOK.md).
 
