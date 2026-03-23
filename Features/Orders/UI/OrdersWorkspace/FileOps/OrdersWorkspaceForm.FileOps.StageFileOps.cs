@@ -376,6 +376,11 @@ namespace Replica
                     order,
                     OrderOperationNames.RemoveItem,
                     $"Удален пустой item после удаления файла: {removedFileName} | stage-{stage}");
+                TrySyncLanOrderItemDelete(order, item, $"remove-file-stage-{stage}");
+            }
+            else
+            {
+                TrySyncLanOrderItemUpsert(order, item, $"remove-file-stage-{stage}");
             }
 
             var demotedToSingleOrder = ApplyTopologyMutationResult(

@@ -136,6 +136,32 @@ public sealed class LanOrderWriteCommandService
         return ToCommandResult(apiResult);
     }
 
+    public async Task<LanOrderWriteCommandResult> TryDeleteItemAsync(
+        OrderData order,
+        OrderFileItem item,
+        string lanApiBaseUrl,
+        string actor,
+        CancellationToken cancellationToken = default)
+    {
+        if (order == null || item == null)
+            return LanOrderWriteCommandResult.BadRequest("order/item is required");
+        if (string.IsNullOrWhiteSpace(order.InternalId))
+            return LanOrderWriteCommandResult.BadRequest("order internal id is required");
+        if (string.IsNullOrWhiteSpace(item.ItemId))
+            return LanOrderWriteCommandResult.BadRequest("item id is required");
+
+        var request = BuildDeleteItemRequest(order, item);
+        var apiResult = await _lanOrderWriteApiGateway.DeleteOrderItemAsync(
+            lanApiBaseUrl,
+            order.InternalId,
+            item.ItemId,
+            request,
+            actor,
+            cancellationToken);
+
+        return ToCommandResult(apiResult);
+    }
+
     private static LanCreateOrderRequest BuildCreateRequest(
         OrderData source,
         string actor,
@@ -251,6 +277,15 @@ public sealed class LanOrderWriteCommandService
             PrintFileHash = item.PrintFileHash ?? string.Empty,
             PitStopAction = NormalizeAction(item.PitStopAction),
             ImposingAction = NormalizeAction(item.ImposingAction)
+        };
+    }
+
+    private static LanDeleteOrderItemRequest BuildDeleteItemRequest(OrderData order, OrderFileItem item)
+    {
+        return new LanDeleteOrderItemRequest
+        {
+            ExpectedOrderVersion = order.StorageVersion,
+            ExpectedItemVersion = item.StorageVersion
         };
     }
 

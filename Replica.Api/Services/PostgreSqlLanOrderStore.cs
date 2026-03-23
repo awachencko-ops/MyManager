@@ -303,6 +303,43 @@ public sealed class PostgreSqlLanOrderStore : ILanOrderStore
         return StoreOperationResult.Success(updated ?? order);
     }
 
+    public StoreOperationResult TryDeleteItem(string orderId, string itemId, DeleteOrderItemRequest request, string actor)
+    {
+        if (string.IsNullOrWhiteSpace(orderId) || string.IsNullOrWhiteSpace(itemId))
+            return StoreOperationResult.BadRequest("order id and item id are required");
+
+        using var connection = OpenConnection();
+        EnsureSchema(connection);
+        using var tx = connection.BeginTransaction();
+
+        if (!TryLoadOrderForUpdate(connection, tx, orderId.Trim(), out var order, out var currentVersion))
+            return StoreOperationResult.NotFound();
+
+        if (currentVersion != request.ExpectedOrderVersion)
+            return StoreOperationResult.Conflict(currentVersion, "order version mismatch");
+
+        var normalizedItemId = itemId.Trim();
+        if (!TryLoadItemForUpdate(connection, tx, order.InternalId, normalizedItemId, out _, out var itemVersion))
+            return StoreOperationResult.NotFound();
+
+        if (request.ExpectedItemVersion > 0 && itemVersion != request.ExpectedItemVersion)
+            return StoreOperationResult.Conflict(currentVersion, "item version mismatch");
+
+        DeleteItem(connection, tx, order.InternalId, normalizedItemId);
+
+        var remainingItemIds = GetOrderItemIds(connection, tx, order.InternalId);
+        for (var i = 0; i < remainingItemIds.Count; i++)
+            UpdateItemSequence(connection, tx, order.InternalId, remainingItemIds[i], i);
+
+        UpdateOrder(connection, tx, order, currentVersion);
+        AppendEvent(connection, tx, order.InternalId, normalizedItemId, "delete-item", "api", actor, new { item_id = normalizedItemId, order_version = currentVersion + 1 });
+
+        var updated = LoadOrderById(connection, tx, order.InternalId);
+        tx.Commit();
+
+        return StoreOperationResult.Success(updated ?? order);
+    }
+
     public StoreOperationResult TryReorderItems(string orderId, ReorderOrderItemsRequest request, string actor)
     {
         if (string.IsNullOrWhiteSpace(orderId))
@@ -514,6 +551,23 @@ public sealed class PostgreSqlLanOrderStore : ILanOrderStore
             connection,
             tx);
         cmd.Parameters.AddWithValue("sequence_no", sequenceNo);
+        cmd.Parameters.AddWithValue("order_internal_id", orderInternalId);
+        cmd.Parameters.AddWithValue("item_id", itemId);
+
+        if (cmd.ExecuteNonQuery() != 1)
+            throw new InvalidOperationException($"item not found: {itemId}");
+    }
+
+    private static void DeleteItem(NpgsqlConnection connection, NpgsqlTransaction tx, string orderInternalId, string itemId)
+    {
+        using var cmd = new NpgsqlCommand(
+            $"""
+            delete from {ItemsTable}
+            where order_internal_id = @order_internal_id and item_id = @item_id;
+            """,
+            connection,
+            tx);
+
         cmd.Parameters.AddWithValue("order_internal_id", orderInternalId);
         cmd.Parameters.AddWithValue("item_id", itemId);
 

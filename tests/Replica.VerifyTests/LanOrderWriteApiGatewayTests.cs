@@ -197,6 +197,42 @@ public sealed class LanOrderWriteApiGatewayTests
     }
 
     [Fact]
+    public async Task DeleteOrderItemAsync_SendsDeleteToItemEndpoint()
+    {
+        string requestBody = string.Empty;
+        var handler = new StubHttpMessageHandler(async (request, cancellationToken) =>
+        {
+            requestBody = await request.Content!.ReadAsStringAsync(cancellationToken);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    "{\"internalId\":\"order-6\",\"version\":19,\"items\":[{\"itemId\":\"i-6b\",\"sequenceNo\":0,\"version\":2}]}",
+                    Encoding.UTF8,
+                    "application/json")
+            };
+        });
+
+        var gateway = new LanOrderWriteApiGateway(new HttpClient(handler));
+        var result = await gateway.DeleteOrderItemAsync(
+            "http://localhost:5000/",
+            "order-6",
+            "i-6a",
+            new LanDeleteOrderItemRequest
+            {
+                ExpectedOrderVersion = 18,
+                ExpectedItemVersion = 4
+            },
+            actor: "operator-6");
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(handler.LastRequest);
+        Assert.Equal(HttpMethod.Delete, handler.LastRequest!.Method);
+        Assert.Equal("/api/orders/order-6/items/i-6a", handler.LastRequest.RequestUri!.AbsolutePath);
+        Assert.Contains("\"expectedOrderVersion\":18", requestBody, StringComparison.Ordinal);
+        Assert.Contains("\"expectedItemVersion\":4", requestBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task CreateOrderAsync_WithInvalidBaseUrl_ReturnsUnavailable()
     {
         var handler = new StubHttpMessageHandler((_, _) =>

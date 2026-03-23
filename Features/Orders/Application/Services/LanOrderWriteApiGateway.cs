@@ -45,6 +45,14 @@ public interface ILanOrderWriteApiGateway
         LanUpdateOrderItemRequest request,
         string actor,
         CancellationToken cancellationToken = default);
+
+    Task<LanOrderWriteApiResult> DeleteOrderItemAsync(
+        string apiBaseUrl,
+        string orderInternalId,
+        string itemId,
+        LanDeleteOrderItemRequest request,
+        string actor,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed class LanOrderWriteApiGateway : ILanOrderWriteApiGateway
@@ -175,6 +183,32 @@ public sealed class LanOrderWriteApiGateway : ILanOrderWriteApiGateway
         return SendAsync(
             requestUri,
             HttpMethod.Patch,
+            request,
+            actor,
+            cancellationToken);
+    }
+
+    public Task<LanOrderWriteApiResult> DeleteOrderItemAsync(
+        string apiBaseUrl,
+        string orderInternalId,
+        string itemId,
+        LanDeleteOrderItemRequest request,
+        string actor,
+        CancellationToken cancellationToken = default)
+    {
+        if (request == null)
+            return Task.FromResult(LanOrderWriteApiResult.BadRequest("request body is required"));
+        if (string.IsNullOrWhiteSpace(orderInternalId))
+            return Task.FromResult(LanOrderWriteApiResult.BadRequest("order internal id is required"));
+        if (string.IsNullOrWhiteSpace(itemId))
+            return Task.FromResult(LanOrderWriteApiResult.BadRequest("item id is required"));
+
+        if (!TryBuildUpdateItemUri(apiBaseUrl, orderInternalId, itemId, out var requestUri))
+            return Task.FromResult(LanOrderWriteApiResult.Unavailable("invalid LAN API base URL"));
+
+        return SendAsync(
+            requestUri,
+            HttpMethod.Delete,
             request,
             actor,
             cancellationToken);
@@ -415,6 +449,12 @@ public sealed class LanUpdateOrderItemRequest
     public string? PrintFileHash { get; set; }
     public string? PitStopAction { get; set; }
     public string? ImposingAction { get; set; }
+}
+
+public sealed class LanDeleteOrderItemRequest
+{
+    public long ExpectedOrderVersion { get; set; }
+    public long ExpectedItemVersion { get; set; }
 }
 
 public sealed class LanOrderWriteApiResult

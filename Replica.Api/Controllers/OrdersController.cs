@@ -135,6 +135,31 @@ public sealed class OrdersController : ControllerBase
         return BadRequest(new { error = result.Error });
     }
 
+    [HttpDelete("{id}/items/{itemId}")]
+    [ProducesResponseType(typeof(SharedOrder), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public ActionResult<SharedOrder> DeleteOrderItem(string id, string itemId, [FromBody] DeleteOrderItemRequest request)
+    {
+        if (request == null)
+            return BadRequest(new { error = "request body is required" });
+
+        if (!TryResolveValidatedActor(out var actor, out var validationError))
+            return validationError!;
+
+        var result = _store.TryDeleteItem(id, itemId, request, actor);
+        if (result.IsSuccess)
+            return Ok(result.Order);
+        if (result.IsNotFound)
+            return NotFound(new { error = result.Error });
+        if (result.IsConflict)
+            return Conflict(new { error = result.Error, currentVersion = result.CurrentVersion });
+        return BadRequest(new { error = result.Error });
+    }
+
     [HttpPost("{id}/items/reorder")]
     [ProducesResponseType(typeof(SharedOrder), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]

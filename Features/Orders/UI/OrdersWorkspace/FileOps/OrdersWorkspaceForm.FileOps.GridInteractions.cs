@@ -911,7 +911,11 @@ namespace Replica
             }
 
             UpdateItemFilePath(sourceCell.Order, sourceCell.Item!, sourceCell.Stage, string.Empty);
-            RemoveItemIfEmpty(sourceCell.Order, sourceCell.Item!);
+            var removedFromOrder = RemoveItemIfEmpty(sourceCell.Order, sourceCell.Item!);
+            if (removedFromOrder)
+                TrySyncLanOrderItemDelete(sourceCell.Order, sourceCell.Item!, $"drag-move-clear-source-stage-{sourceCell.Stage}");
+            else
+                TrySyncLanOrderItemUpsert(sourceCell.Order, sourceCell.Item!, $"drag-move-clear-source-stage-{sourceCell.Stage}");
             NormalizeOrderTopologyAfterItemMutation(
                 sourceCell.Order,
                 wasMultiOrderBeforeMutation,

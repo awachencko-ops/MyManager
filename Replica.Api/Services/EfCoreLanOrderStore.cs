@@ -363,6 +363,69 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
         return StoreOperationResult.Success(updated);
     }
 
+    public StoreOperationResult TryDeleteItem(string orderId, string itemId, DeleteOrderItemRequest request, string actor)
+    {
+        if (string.IsNullOrWhiteSpace(orderId) || string.IsNullOrWhiteSpace(itemId))
+            return StoreOperationResult.BadRequest("order id and item id are required");
+
+        using var db = _dbContextFactory.CreateDbContext();
+        using var tx = db.Database.BeginTransaction();
+
+        var normalizedOrderId = orderId.Trim();
+        var normalizedItemId = itemId.Trim();
+
+        var orderRecord = db.Orders.FirstOrDefault(x => x.InternalId == normalizedOrderId);
+        if (orderRecord == null)
+            return StoreOperationResult.NotFound();
+
+        if (orderRecord.Version != request.ExpectedOrderVersion)
+            return StoreOperationResult.Conflict(orderRecord.Version, "order version mismatch");
+
+        var itemRecord = db.OrderItems.FirstOrDefault(x => x.OrderInternalId == normalizedOrderId && x.ItemId == normalizedItemId);
+        if (itemRecord == null)
+            return StoreOperationResult.NotFound();
+
+        if (request.ExpectedItemVersion > 0 && itemRecord.Version != request.ExpectedItemVersion)
+            return StoreOperationResult.Conflict(orderRecord.Version, "item version mismatch");
+
+        db.OrderItems.Remove(itemRecord);
+        db.SaveChanges();
+
+        var remainingRecords = db.OrderItems
+            .Where(x => x.OrderInternalId == normalizedOrderId && x.ItemId != normalizedItemId)
+            .OrderBy(x => x.SequenceNo)
+            .ThenBy(x => x.ItemId)
+            .ToList();
+        for (var i = 0; i < remainingRecords.Count; i++)
+        {
+            var row = remainingRecords[i];
+            var mapped = DeserializeItem(row);
+            mapped.SequenceNo = i;
+            mapped.Version = row.Version + 1;
+            mapped.UpdatedAt = DateTime.Now;
+            ApplyOrderItemRecord(row, mapped);
+        }
+
+        var order = DeserializeOrder(orderRecord);
+        order.Version = orderRecord.Version + 1;
+        ApplyOrderRecord(orderRecord, order);
+
+        db.OrderEvents.Add(BuildEventRecord(orderRecord.InternalId, normalizedItemId, "delete-item", "api", actor, new { item_id = normalizedItemId, order_version = order.Version }));
+
+        try
+        {
+            db.SaveChanges();
+            tx.Commit();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return StoreOperationResult.Conflict(orderRecord.Version, "item/order version mismatch");
+        }
+
+        var updated = LoadOrder(db, orderRecord.InternalId) ?? order;
+        return StoreOperationResult.Success(updated);
+    }
+
     public StoreOperationResult TryReorderItems(string orderId, ReorderOrderItemsRequest request, string actor)
     {
         if (string.IsNullOrWhiteSpace(orderId))

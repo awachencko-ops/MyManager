@@ -360,6 +360,54 @@ public sealed class PostgreSqlIntegrationTests
     }
 
     [Fact]
+    public void PostgreSqlIntegration_EfCoreStore_DeleteItem_ReindexesAndAppendsEvent()
+    {
+        if (!IsIntegrationEnabled())
+            return;
+
+        using var db = TemporaryPostgreSqlDatabase.Create();
+        var store = CreateEfCoreStore(db.ConnectionString);
+
+        var created = store.CreateOrder(new CreateOrderRequest
+        {
+            OrderNumber = "DEL-ITEM-100",
+            UserName = "Integration User",
+            CreatedById = "integration-user",
+            CreatedByUser = "integration-user",
+            Status = WorkflowStatusNames.Waiting,
+            Items = new List<Replica.Shared.Models.SharedOrderItem>
+            {
+                new() { ItemId = "i-a", SequenceNo = 0, FileStatus = WorkflowStatusNames.Waiting },
+                new() { ItemId = "i-b", SequenceNo = 1, FileStatus = WorkflowStatusNames.Waiting }
+            }
+        }, "integration-user");
+
+        Assert.Equal(2, created.Items.Count);
+
+        var deleteResult = store.TryDeleteItem(
+            created.InternalId,
+            "i-a",
+            new DeleteOrderItemRequest
+            {
+                ExpectedOrderVersion = created.Version,
+                ExpectedItemVersion = created.Items.First(x => x.ItemId == "i-a").Version
+            },
+            "integration-user");
+
+        Assert.True(deleteResult.IsSuccess, deleteResult.Error);
+        Assert.NotNull(deleteResult.Order);
+        var updated = deleteResult.Order!;
+        Assert.Equal(created.Version + 1, updated.Version);
+        Assert.Single(updated.Items);
+        Assert.Equal("i-b", updated.Items[0].ItemId);
+        Assert.Equal(0, updated.Items[0].SequenceNo);
+
+        using var verifyDb = CreateReplicaDbContext(db.ConnectionString);
+        var deleteEvents = verifyDb.OrderEvents.Count(x => x.OrderInternalId == created.InternalId && x.EventType == "delete-item");
+        Assert.Equal(1, deleteEvents);
+    }
+
+    [Fact]
     public void PostgreSqlIntegration_Coordinator_SynchronizesFileAndLanHistories()
     {
         if (!IsIntegrationEnabled())

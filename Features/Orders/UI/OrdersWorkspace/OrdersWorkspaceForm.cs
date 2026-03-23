@@ -452,6 +452,39 @@ namespace Replica
             TryRefreshRepositorySnapshotFromStorage(_orderHistory, $"lan-api-item-upsert-failed-{reason}");
         }
 
+        private bool TrySyncLanOrderItemDelete(OrderData order, OrderFileItem item, string reason)
+        {
+            if (!ShouldUseLanRunApi() || order == null || item == null)
+                return false;
+
+            var deleteResult = _orderApplicationService
+                .TryDeleteOrderItemViaLanApiAsync(
+                    order,
+                    item,
+                    _lanApiBaseUrl,
+                    ResolveLanApiActor())
+                .GetAwaiter()
+                .GetResult();
+
+            if (deleteResult.IsSuccess && deleteResult.Order != null)
+            {
+                ApplyLanOrderItemDeleteSnapshot(order, deleteResult.Order);
+                TryRefreshRepositorySnapshotFromStorage(_orderHistory, $"lan-api-item-delete-{reason}");
+                return true;
+            }
+
+            if (deleteResult.CurrentVersion > 0)
+                order.StorageVersion = deleteResult.CurrentVersion;
+
+            var errorText = string.IsNullOrWhiteSpace(deleteResult.Error)
+                ? "LAN item delete failed"
+                : deleteResult.Error;
+            Logger.Warn(
+                $"LAN-API | item-delete-sync-failed | reason={reason} | order={GetOrderDisplayId(order)} | item={item.ItemId} | conflict={(deleteResult.IsConflict ? "1" : "0")} | unavailable={(deleteResult.IsUnavailable ? "1" : "0")} | {errorText}");
+            TryRefreshRepositorySnapshotFromStorage(_orderHistory, $"lan-api-item-delete-failed-{reason}");
+            return false;
+        }
+
         private static void ApplyLanOrderItemVersionsSnapshot(OrderData localOrder, OrderData serverOrder)
         {
             if (localOrder == null || serverOrder == null)
@@ -472,6 +505,25 @@ namespace Replica
                 if (serverItem.StorageVersion > 0)
                     localItem.StorageVersion = serverItem.StorageVersion;
             }
+        }
+
+        private static void ApplyLanOrderItemDeleteSnapshot(OrderData localOrder, OrderData serverOrder)
+        {
+            if (localOrder == null || serverOrder == null)
+                return;
+
+            if (serverOrder.StorageVersion > 0)
+                localOrder.StorageVersion = serverOrder.StorageVersion;
+
+            var serverIds = (serverOrder.Items ?? [])
+                .Where(item => item != null && !string.IsNullOrWhiteSpace(item.ItemId))
+                .Select(item => item.ItemId)
+                .ToHashSet(StringComparer.Ordinal);
+
+            if (localOrder.Items != null)
+                localOrder.Items.RemoveAll(localItem => localItem == null || !serverIds.Contains(localItem.ItemId));
+
+            ApplyLanOrderItemVersionsSnapshot(localOrder, serverOrder);
         }
 
         private void UpsertOrderInHistory(OrderData updatedOrder)

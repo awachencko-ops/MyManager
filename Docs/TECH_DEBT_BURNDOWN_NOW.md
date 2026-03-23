@@ -11,7 +11,7 @@
 | Область | Текущее состояние | Что переписываем | Критерий закрытия |
 |---|---|---|---|
 | `MainForm` (god-object orchestration) | Shell переименован в `OrdersWorkspaceForm`, код `Orders` перенесён в `Features/Orders/UI/*`, введён единый `IOrderApplicationService` (включая run/create/edit/delete/item/file + history/folder orchestration) | Дожать presenter-only слой: убрать остаточные orchestration ветки из UI и завершить DI cutover | `OrdersWorkspaceForm` не управляет бизнес-циклами напрямую, только UI/presenter |
-| Write-command boundary | `run/stop` уже server-side + idempotency, остальные write-flow частично клиентские | Перевести `create/update/items/reorder/status` в server command handling | Все mutating операции идут через API-команды и server invariants |
+| Write-command boundary | `DONE` для целевого LAN scope: `create/update/items/reorder/status` + `item delete` идут через API boundary (включая remove/move item-сценарии) | Расширять на `order delete` API-path и full idempotency всех mutating endpoints | Все mutating операции идут через API-команды и server invariants |
 | JSON/file как рабочее хранилище | LAN sync работает, но file fallback влияет на поведение | Зафиксировать PostgreSQL как primary source of truth, file оставить только import/export fallback | Runtime в LAN режиме не зависит от `history.json` для актуального состояния |
 | Audit/observability | Есть `order_events` + correlation, но нет единой схемы и метрик | Ввести единый structured schema + метрики/дашборды | Инцидент можно отследить end-to-end по `correlation_id` + есть базовые SLO графики |
 
@@ -26,8 +26,8 @@
 
 ## Следующие 3 итерации
 
-1. Довести server command boundary для `create/update/items/reorder/status`.
-2. Расширить `Idempotency-Key` на все mutating endpoints (не только `run/stop`).
+1. Расширить `Idempotency-Key` на все mutating endpoints (не только `run/stop`).
+2. Завершить API-path для `order delete` и убрать client-side fallback orchestration из LAN ветки.
 3. Финализировать observability baseline (единая схема логов + SLO метрики + dashboard).
 
 ## Правило завершения блока «сжечь и переписать»
@@ -47,3 +47,5 @@
 - Item reorder path is now wired through LAN API (`/api/orders/{id}/items/reorder`) via application service boundary and called after item-delete workflows for affected multi-item orders.
 - Item add/update path is now wired through LAN API (`POST /api/orders/{id}/items`, `PATCH /api/orders/{id}/items/{itemId}`) via `TryUpsertOrderItemViaLanApiAsync`; `OrdersWorkspaceForm` applies server item/order versions after response to reduce optimistic concurrency drift in file-item workflows.
 - `StageFileOps` now triggers LAN item upsert sync on `add item file` and `rename item file`; gateway/command-service tests were expanded for add/update item flows and pass in full regression runs.
+- Item delete path is now wired through LAN API (`DELETE /api/orders/{id}/items/{itemId}`) via `TryDeleteOrderItemViaLanApiAsync`; in LAN mode `RemoveSelectedOrderItems` switched to API-first item delete, and remove/move branches (`RemoveFileFromItem`, drag-move source clear) now sync delete/upsert through LAN API.
+- Added server-side `TryDeleteItem` implementations (EF Core/PostgreSQL/InMemory) with optimistic concurrency + sequence reindex + `delete-item` event, plus test coverage in gateway/command-service and PostgreSQL integration pack.
