@@ -99,7 +99,8 @@ namespace Replica
             try
             {
                 SetBottomStatus("Проверяем подключение к LAN API...");
-                if (TryStartLocalLanApiIfNeeded(out var recoveryMessage) && !string.IsNullOrWhiteSpace(recoveryMessage))
+                TryStartLocalLanApiIfNeeded(out var recoveryMessage);
+                if (!string.IsNullOrWhiteSpace(recoveryMessage))
                     SetBottomStatus(recoveryMessage);
 
                 RequestLanServerProbe("manual-refresh", force: true);
@@ -163,6 +164,8 @@ namespace Replica
             }
 
             toolConnection.MouseEnter -= ToolConnection_MouseEnter;
+            toolConnectionRefresh.Click -= ToolConnectionRefresh_Click;
+            toolConnectionRefresh.MouseEnter -= ToolConnectionRefresh_MouseEnter;
 
             if (_trayIndicatorsTimer != null)
             {
@@ -170,6 +173,14 @@ namespace Replica
                 _trayIndicatorsTimer.Tick -= TrayIndicatorsTimer_Tick;
                 _trayIndicatorsTimer.Dispose();
                 _trayIndicatorsTimer = null;
+            }
+
+            if (_lanProbeActionAnimationTimer != null)
+            {
+                _lanProbeActionAnimationTimer.Stop();
+                _lanProbeActionAnimationTimer.Tick -= LanProbeActionAnimationTimer_Tick;
+                _lanProbeActionAnimationTimer.Dispose();
+                _lanProbeActionAnimationTimer = null;
             }
 
             _lanServerProbeCts?.Cancel();
@@ -182,6 +193,7 @@ namespace Replica
         {
             UpdateTrayStatsIndicator();
             UpdateTrayConnectionIndicator();
+            UpdateLanProbeActionIndicator();
             UpdateTrayDiskIndicator();
             UpdateTrayErrorIndicator();
             UpdateTrayProgressIndicator();
@@ -231,6 +243,7 @@ namespace Replica
             {
                 RequestLanServerProbe("status-refresh");
                 UpdateLanApiConnectionIndicator(dependencyHealthLevel);
+                UpdateLanProbeActionIndicator();
                 return;
             }
 
@@ -268,6 +281,7 @@ namespace Replica
                 ? $"{connectionStatusText}\n{_usersDirectoryStatusText}"
                 : $"{connectionStatusText}\n{dependencyHealthSummary}\n{_usersDirectoryStatusText}";
             UpdateServerHeaderConnectionState(shortStatusText, statusColor);
+            UpdateLanProbeActionIndicator();
         }
 
         private void ApplyProcessorDependencyHealthSignal(DependencyHealthSignal signal)
@@ -362,6 +376,52 @@ namespace Replica
             UpdateServerHeaderConnectionState(shortStatusText, statusColor);
         }
 
+        private void UpdateLanProbeActionIndicator()
+        {
+            if (toolConnectionRefresh.IsDisposed)
+                return;
+
+            if (!ShouldUseLanRunApi())
+            {
+                toolConnectionRefresh.Visible = false;
+                return;
+            }
+
+            toolConnectionRefresh.Visible = true;
+            var snapshot = GetLanServerProbeSnapshot(out var probeInProgress, out _);
+            var isBusy = _lanApiRecoveryInProgress || probeInProgress;
+
+            if (isBusy)
+            {
+                var spinnerGlyph = LanProbeSpinnerFrames[_lanProbeActionAnimationFrame % LanProbeSpinnerFrames.Length];
+                toolConnectionRefresh.Text = $"{spinnerGlyph} Обновление";
+                toolConnectionRefresh.ForeColor = Color.DarkOrange;
+                toolConnectionRefresh.ToolTipText = "Выполняется проверка сервера.";
+                toolConnectionRefresh.Enabled = false;
+                return;
+            }
+
+            toolConnectionRefresh.Enabled = true;
+            toolConnectionRefresh.IsLink = true;
+            toolConnectionRefresh.LinkBehavior = LinkBehavior.HoverUnderline;
+
+            var canAutoRecover = snapshot.CompletedAtUtc > DateTime.MinValue
+                                 && (!snapshot.ApiReachable || !snapshot.IsReady)
+                                 && IsLanApiLocalHost();
+            if (canAutoRecover)
+            {
+                toolConnectionRefresh.Text = "↻ Восстановить";
+                toolConnectionRefresh.ForeColor = Color.Firebrick;
+                toolConnectionRefresh.ToolTipText =
+                    "Запустить локальный Replica.Api и перепроверить подключение.";
+                return;
+            }
+
+            toolConnectionRefresh.Text = "↻ Проверить";
+            toolConnectionRefresh.ForeColor = Color.SteelBlue;
+            toolConnectionRefresh.ToolTipText = "Обновить статус LAN API прямо сейчас.";
+        }
+
         private string BuildLanConnectionToolTip(
             LanServerProbeSnapshot snapshot,
             DependencyHealthLevel dependencyHealthLevel,
@@ -398,6 +458,7 @@ namespace Replica
                 lines.Add($"Ошибка: {snapshot.Error}");
             if (dependencyHealthLevel != DependencyHealthLevel.Healthy)
                 lines.Add($"Hotfolder: {BuildDependencyHealthSummary()}");
+            lines.Add("Действие: нажмите ↻ для ручной проверки/восстановления.");
             if (!string.IsNullOrWhiteSpace(_usersDirectoryStatusText))
                 lines.Add(_usersDirectoryStatusText);
 
@@ -563,6 +624,8 @@ namespace Replica
                 }
 
                 _lanServerProbeSnapshot = nextSnapshot;
+                if (nextSnapshot.SuccessfulAtUtc > DateTime.MinValue)
+                    _lanServerProbeLastSuccessfulUtc = nextSnapshot.SuccessfulAtUtc;
                 _lanServerProbeInProgress = false;
             }
 
@@ -577,6 +640,115 @@ namespace Replica
                 requestCount = _lanServerProbeRequestCount;
                 return _lanServerProbeSnapshot;
             }
+        }
+
+        private async Task WaitForLanProbeCompletionAsync(TimeSpan timeout)
+        {
+            var startedAt = DateTime.UtcNow;
+            while (DateTime.UtcNow - startedAt < timeout)
+            {
+                lock (_lanServerProbeSync)
+                {
+                    if (!_lanServerProbeInProgress)
+                        return;
+                }
+
+                await Task.Delay(120);
+            }
+        }
+
+        private bool TryStartLocalLanApiIfNeeded(out string message)
+        {
+            message = string.Empty;
+            if (!IsLanApiLocalHost())
+            {
+                message = "Автовосстановление доступно только для localhost API.";
+                return false;
+            }
+
+            var runningApiProcesses = Process.GetProcessesByName("Replica.Api");
+            if (runningApiProcesses.Length > 0)
+            {
+                message = "Replica.Api уже запущен. Выполняем повторную проверку.";
+                return false;
+            }
+
+            foreach (var exeCandidate in ResolveReplicaApiExecutableCandidates())
+            {
+                if (!File.Exists(exeCandidate))
+                    continue;
+
+                try
+                {
+                    var startInfo = new ProcessStartInfo
+                    {
+                        FileName = exeCandidate,
+                        WorkingDirectory = Path.GetDirectoryName(exeCandidate) ?? AppContext.BaseDirectory,
+                        UseShellExecute = true
+                    };
+                    Process.Start(startInfo);
+                    message = "Запущен локальный Replica.Api, ждём готовность...";
+                    return true;
+                }
+                catch
+                {
+                    // попробуем следующий кандидат
+                }
+            }
+
+            foreach (var dllCandidate in ResolveReplicaApiDllCandidates())
+            {
+                if (!File.Exists(dllCandidate))
+                    continue;
+
+                try
+                {
+                    var startInfo = new ProcessStartInfo
+                    {
+                        FileName = "dotnet",
+                        Arguments = $"\"{dllCandidate}\"",
+                        WorkingDirectory = Path.GetDirectoryName(dllCandidate) ?? AppContext.BaseDirectory,
+                        UseShellExecute = true
+                    };
+                    Process.Start(startInfo);
+                    message = "Запущен локальный Replica.Api (dotnet), ждём готовность...";
+                    return true;
+                }
+                catch
+                {
+                    // попробуем следующий кандидат
+                }
+            }
+
+            message = "Replica.Api не найден рядом с клиентом. Запустите API вручную.";
+            return false;
+        }
+
+        private bool IsLanApiLocalHost()
+        {
+            if (!TryResolveLanApiBaseUri(_lanApiBaseUrl, out var baseUri))
+                return false;
+
+            var host = baseUri.Host;
+            return string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(host, "127.0.0.1", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(host, "::1", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static IEnumerable<string> ResolveReplicaApiExecutableCandidates()
+        {
+            var baseDir = AppContext.BaseDirectory;
+            yield return Path.Combine(baseDir, "Replica.Api.exe");
+            yield return Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "Replica.Api", "bin", "Debug", "net8.0", "Replica.Api.exe"));
+            yield return Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "Replica.Api", "bin", "Release", "net8.0", "Replica.Api.exe"));
+        }
+
+        private static IEnumerable<string> ResolveReplicaApiDllCandidates()
+        {
+            var baseDir = AppContext.BaseDirectory;
+            yield return Path.Combine(baseDir, "Replica.Api.dll");
+            yield return Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "Replica.Api", "bin", "Debug", "net8.0", "Replica.Api.dll"));
+            yield return Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "Replica.Api", "bin", "Release", "net8.0", "Replica.Api.dll"));
         }
 
         private async Task<EndpointProbeResult> ProbeEndpointStatusAsync(Uri baseUri, string endpointPath, CancellationToken cancellationToken)

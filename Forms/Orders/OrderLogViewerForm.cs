@@ -15,8 +15,8 @@ namespace Replica
             _path = path;
             Text = $"Лог заказа: {orderId}";
             StartPosition = FormStartPosition.CenterParent;
-            Size = new Size(1320, 780);
-            MinimumSize = new Size(960, 600);
+            Size = new Size(1520, 780);
+            MinimumSize = new Size(1200, 600);
 
             _text = new TextBox
             {
