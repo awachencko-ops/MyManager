@@ -1,5 +1,7 @@
 # Operational Runbook: Replica API Observability/SLO
 
+Статус: Completed
+
 Актуально на `2026-03-23`.
 
 ## Для кого
