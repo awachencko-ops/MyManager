@@ -665,12 +665,9 @@ namespace Replica
 
                 try
                 {
-                    var startInfo = new ProcessStartInfo
-                    {
-                        FileName = exeCandidate,
-                        WorkingDirectory = Path.GetDirectoryName(exeCandidate) ?? AppContext.BaseDirectory,
-                        UseShellExecute = true
-                    };
+                    var startInfo = BuildHiddenReplicaApiStartInfo(
+                        exeCandidate,
+                        workingDirectory: Path.GetDirectoryName(exeCandidate) ?? AppContext.BaseDirectory);
                     Process.Start(startInfo);
                     message = "Запущен локальный Replica.Api, ждём готовность...";
                     return true;
@@ -688,13 +685,10 @@ namespace Replica
 
                 try
                 {
-                    var startInfo = new ProcessStartInfo
-                    {
-                        FileName = "dotnet",
-                        Arguments = $"\"{dllCandidate}\"",
-                        WorkingDirectory = Path.GetDirectoryName(dllCandidate) ?? AppContext.BaseDirectory,
-                        UseShellExecute = true
-                    };
+                    var startInfo = BuildHiddenReplicaApiStartInfo(
+                        "dotnet",
+                        arguments: $"\"{dllCandidate}\"",
+                        workingDirectory: Path.GetDirectoryName(dllCandidate) ?? AppContext.BaseDirectory);
                     Process.Start(startInfo);
                     message = "Запущен локальный Replica.Api (dotnet), ждём готовность...";
                     return true;
@@ -728,6 +722,22 @@ namespace Replica
         private static IEnumerable<string> ResolveReplicaApiDllCandidates()
         {
             return ReplicaApiLaunchLocator.ResolveDllCandidates(AppContext.BaseDirectory);
+        }
+
+        private static ProcessStartInfo BuildHiddenReplicaApiStartInfo(
+            string fileName,
+            string arguments = "",
+            string? workingDirectory = null)
+        {
+            return new ProcessStartInfo
+            {
+                FileName = fileName,
+                Arguments = arguments ?? string.Empty,
+                WorkingDirectory = string.IsNullOrWhiteSpace(workingDirectory) ? AppContext.BaseDirectory : workingDirectory,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden
+            };
         }
 
         private async Task<EndpointProbeResult> ProbeEndpointStatusAsync(Uri baseUri, string endpointPath, CancellationToken cancellationToken)
