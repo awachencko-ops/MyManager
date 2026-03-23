@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Globalization;
@@ -17,6 +18,8 @@ namespace Replica
 {
     public partial class OrdersWorkspaceForm
     {
+        private static readonly string[] LanProbeSpinnerFrames = ["↻", "↺", "↻", "↺"];
+
         private void InitializeTrayIndicators()
         {
             statusStrip1.ShowItemToolTips = true;
@@ -32,12 +35,27 @@ namespace Replica
             toolAlerts.IsLink = true;
             toolAlerts.LinkBehavior = LinkBehavior.HoverUnderline;
             toolAlerts.Click += ToolAlerts_Click;
+
             toolConnection.MouseEnter -= ToolConnection_MouseEnter;
             toolConnection.MouseEnter += ToolConnection_MouseEnter;
+            toolConnectionRefresh.IsLink = true;
+            toolConnectionRefresh.LinkBehavior = LinkBehavior.HoverUnderline;
+            toolConnectionRefresh.Click -= ToolConnectionRefresh_Click;
+            toolConnectionRefresh.Click += ToolConnectionRefresh_Click;
+            toolConnectionRefresh.MouseEnter -= ToolConnectionRefresh_MouseEnter;
+            toolConnectionRefresh.MouseEnter += ToolConnectionRefresh_MouseEnter;
 
             _lanServerProbeCts?.Cancel();
             _lanServerProbeCts?.Dispose();
             _lanServerProbeCts = new CancellationTokenSource();
+
+            _lanProbeActionAnimationTimer ??= new System.Windows.Forms.Timer
+            {
+                Interval = LanProbeActionAnimationIntervalMs
+            };
+            _lanProbeActionAnimationTimer.Tick -= LanProbeActionAnimationTimer_Tick;
+            _lanProbeActionAnimationTimer.Tick += LanProbeActionAnimationTimer_Tick;
+            _lanProbeActionAnimationTimer.Start();
 
             _trayIndicatorsTimer ??= new System.Windows.Forms.Timer
             {
@@ -62,6 +80,50 @@ namespace Replica
         {
             RequestLanServerProbe("hover", force: true);
             UpdateTrayConnectionIndicator();
+        }
+
+        private void ToolConnectionRefresh_MouseEnter(object? sender, EventArgs e)
+        {
+            RequestLanServerProbe("refresh-hover", force: true);
+            UpdateLanProbeActionIndicator();
+        }
+
+        private async void ToolConnectionRefresh_Click(object? sender, EventArgs e)
+        {
+            if (!ShouldUseLanRunApi() || _lanApiRecoveryInProgress)
+                return;
+
+            _lanApiRecoveryInProgress = true;
+            UpdateLanProbeActionIndicator();
+
+            try
+            {
+                SetBottomStatus("Проверяем подключение к LAN API...");
+                if (TryStartLocalLanApiIfNeeded(out var recoveryMessage) && !string.IsNullOrWhiteSpace(recoveryMessage))
+                    SetBottomStatus(recoveryMessage);
+
+                RequestLanServerProbe("manual-refresh", force: true);
+                await WaitForLanProbeCompletionAsync(TimeSpan.FromSeconds(8));
+
+                var snapshot = GetLanServerProbeSnapshot(out _, out _);
+                if (snapshot.ApiReachable && snapshot.IsReady)
+                    SetBottomStatus("Подключение к LAN API активно.");
+                else if (_lanServerProbeLastSuccessfulUtc > DateTime.MinValue)
+                    SetBottomStatus("Сервер временно недоступен, ждём восстановление.");
+                else
+                    SetBottomStatus("LAN API недоступен. Проверьте сервер или URL.");
+            }
+            finally
+            {
+                _lanApiRecoveryInProgress = false;
+                UpdateTrayConnectionIndicator();
+            }
+        }
+
+        private void LanProbeActionAnimationTimer_Tick(object? sender, EventArgs e)
+        {
+            _lanProbeActionAnimationFrame = (_lanProbeActionAnimationFrame + 1) % LanProbeSpinnerFrames.Length;
+            UpdateLanProbeActionIndicator();
         }
 
         private void TrayIndicatorsTimer_Tick(object? sender, EventArgs e)
