@@ -61,6 +61,41 @@ public sealed class LanOrderWriteCommandService
         return ToCommandResult(apiResult);
     }
 
+    public async Task<LanOrderWriteCommandResult> TryReorderItemsAsync(
+        OrderData order,
+        string lanApiBaseUrl,
+        string actor,
+        CancellationToken cancellationToken = default)
+    {
+        if (order == null)
+            return LanOrderWriteCommandResult.BadRequest("order is required");
+        if (string.IsNullOrWhiteSpace(order.InternalId))
+            return LanOrderWriteCommandResult.BadRequest("order internal id is required");
+
+        var orderedIds = (order.Items ?? new List<OrderFileItem>())
+            .Where(item => item != null && !string.IsNullOrWhiteSpace(item.ItemId))
+            .OrderBy(item => item.SequenceNo)
+            .ThenBy(item => item.ItemId, StringComparer.Ordinal)
+            .Select(item => item.ItemId.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        var request = new LanReorderOrderItemsRequest
+        {
+            ExpectedOrderVersion = order.StorageVersion,
+            OrderedItemIds = orderedIds
+        };
+
+        var apiResult = await _lanOrderWriteApiGateway.ReorderOrderItemsAsync(
+            lanApiBaseUrl,
+            order.InternalId,
+            request,
+            actor,
+            cancellationToken);
+
+        return ToCommandResult(apiResult);
+    }
+
     private static LanCreateOrderRequest BuildCreateRequest(
         OrderData source,
         string actor,

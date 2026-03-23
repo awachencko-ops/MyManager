@@ -1003,6 +1003,11 @@ namespace Replica
             }
 
             var removeFilesFromDisk = decision == DialogResult.Yes;
+            var affectedOrders = selectedOrderItems
+                .Select(selection => selection.Order)
+                .Where(order => order != null)
+                .DistinctBy(order => order.InternalId, StringComparer.Ordinal)
+                .ToList();
             var commandResult = _orderApplicationService.DeleteOrderItems(
                 selectedOrderItems.Select(x => new OrderItemSelection(x.Order, x.Item)).ToList(),
                 removeFilesFromDisk,
@@ -1028,6 +1033,7 @@ namespace Replica
             if (deleteResult.RemovedCount > 0)
             {
                 SaveHistory();
+                TrySyncLanItemReorderForOrders(affectedOrders, "remove-selected-items");
                 RebuildOrdersGrid();
                 UpdateActionButtonsState();
                 SetBottomStatus(isBatchDelete

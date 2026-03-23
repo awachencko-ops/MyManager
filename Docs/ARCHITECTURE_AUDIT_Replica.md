@@ -334,6 +334,9 @@
 32. Итерация 32 (2026-03-23, адресная): закрыт следующий write-boundary срез для LAN status persistence.
    - Что сделано: `SetOrderStatus(..., persistHistory: true)` в `OrdersWorkspaceForm` переведён на приоритетный LAN API update-path (`TryUpdateOrderViaLanApiAsync`) через новый helper `TryPersistOrderStatusViaLanApi`; добавлен apply-снимка статуса (`version/status/last-status-*`) из server response и автоматический snapshot-refresh после успешного update; локальный `SaveHistory` оставлен только как controlled fallback при недоступности/конфликте API.
    - Эффект: снижена доля статусных изменений, проходящих мимо server command boundary в LAN-режиме, и уменьшен риск «тихого» расхождения статусов между UI и PostgreSQL при длительных run/file-workflow сценариях.
+33. Итерация 33 (2026-03-23, адресная): закрыт следующий write-boundary срез для LAN item-order sync (`reorder`).
+   - Что сделано: `LanOrderWriteApiGateway` и `LanOrderWriteCommandService` расширены командой `ReorderOrderItemsAsync/TryReorderItemsAsync` (`POST /api/orders/{id}/items/reorder`), `IOrderApplicationService` расширен методом `TryReorderOrderItemsViaLanApiAsync`; в `OrdersWorkspaceForm` добавлен post-delete sync helper `TrySyncLanItemReorderForOrders`, который для затронутых multi-item заказов отправляет API `reorder` после успешного локального persistence шага и синхронизирует snapshot/version.
+   - Эффект: снижён риск дрейфа item-sequence между UI и server-side state после batch/remove item workflow в LAN режиме; команда reorder теперь проходит через application boundary и покрыта автотестами.
 
 ---
 

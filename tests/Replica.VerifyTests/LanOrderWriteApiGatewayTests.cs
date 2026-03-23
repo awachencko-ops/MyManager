@@ -85,6 +85,41 @@ public sealed class LanOrderWriteApiGatewayTests
     }
 
     [Fact]
+    public async Task ReorderOrderItemsAsync_SendsRequestToReorderEndpoint()
+    {
+        string requestBody = string.Empty;
+        var handler = new StubHttpMessageHandler(async (request, cancellationToken) =>
+        {
+            requestBody = await request.Content!.ReadAsStringAsync(cancellationToken);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    "{\"internalId\":\"order-3\",\"version\":9,\"items\":[{\"itemId\":\"i2\",\"sequenceNo\":0},{\"itemId\":\"i1\",\"sequenceNo\":1}]}",
+                    Encoding.UTF8,
+                    "application/json")
+            };
+        });
+
+        var gateway = new LanOrderWriteApiGateway(new HttpClient(handler));
+        var result = await gateway.ReorderOrderItemsAsync(
+            "http://localhost:5000/",
+            "order-3",
+            new LanReorderOrderItemsRequest
+            {
+                ExpectedOrderVersion = 8,
+                OrderedItemIds = { "i2", "i1" }
+            },
+            actor: "operator-3");
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(handler.LastRequest);
+        Assert.Equal(HttpMethod.Post, handler.LastRequest!.Method);
+        Assert.Equal("/api/orders/order-3/items/reorder", handler.LastRequest.RequestUri!.AbsolutePath);
+        Assert.Contains("\"expectedOrderVersion\":8", requestBody, StringComparison.Ordinal);
+        Assert.Contains("\"orderedItemIds\":[\"i2\",\"i1\"]", requestBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task CreateOrderAsync_WithInvalidBaseUrl_ReturnsUnavailable()
     {
         var handler = new StubHttpMessageHandler((_, _) =>

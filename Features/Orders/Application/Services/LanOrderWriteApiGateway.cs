@@ -23,6 +23,13 @@ public interface ILanOrderWriteApiGateway
         LanUpdateOrderRequest request,
         string actor,
         CancellationToken cancellationToken = default);
+
+    Task<LanOrderWriteApiResult> ReorderOrderItemsAsync(
+        string apiBaseUrl,
+        string orderInternalId,
+        LanReorderOrderItemsRequest request,
+        string actor,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed class LanOrderWriteApiGateway : ILanOrderWriteApiGateway
@@ -81,6 +88,29 @@ public sealed class LanOrderWriteApiGateway : ILanOrderWriteApiGateway
         return SendAsync(
             requestUri,
             HttpMethod.Patch,
+            request,
+            actor,
+            cancellationToken);
+    }
+
+    public Task<LanOrderWriteApiResult> ReorderOrderItemsAsync(
+        string apiBaseUrl,
+        string orderInternalId,
+        LanReorderOrderItemsRequest request,
+        string actor,
+        CancellationToken cancellationToken = default)
+    {
+        if (request == null)
+            return Task.FromResult(LanOrderWriteApiResult.BadRequest("request body is required"));
+        if (string.IsNullOrWhiteSpace(orderInternalId))
+            return Task.FromResult(LanOrderWriteApiResult.BadRequest("order internal id is required"));
+
+        if (!TryBuildReorderUri(apiBaseUrl, orderInternalId, out var requestUri))
+            return Task.FromResult(LanOrderWriteApiResult.Unavailable("invalid LAN API base URL"));
+
+        return SendAsync(
+            requestUri,
+            HttpMethod.Post,
             request,
             actor,
             cancellationToken);
@@ -182,6 +212,20 @@ public sealed class LanOrderWriteApiGateway : ILanOrderWriteApiGateway
         return true;
     }
 
+    private static bool TryBuildReorderUri(string apiBaseUrl, string orderInternalId, out Uri requestUri)
+    {
+        requestUri = null!;
+        if (string.IsNullOrWhiteSpace(apiBaseUrl))
+            return false;
+
+        if (!Uri.TryCreate(apiBaseUrl.Trim(), UriKind.Absolute, out var baseUri))
+            return false;
+
+        var orderIdSegment = Uri.EscapeDataString(orderInternalId.Trim());
+        requestUri = new Uri(baseUri, $"api/orders/{orderIdSegment}/items/reorder");
+        return true;
+    }
+
     private static SharedOrder? DeserializeOrder(string payload)
     {
         if (string.IsNullOrWhiteSpace(payload))
@@ -248,6 +292,12 @@ public sealed class LanUpdateOrderRequest
     public string? FolderName { get; set; }
     public string? PitStopAction { get; set; }
     public string? ImposingAction { get; set; }
+}
+
+public sealed class LanReorderOrderItemsRequest
+{
+    public long ExpectedOrderVersion { get; set; }
+    public System.Collections.Generic.List<string> OrderedItemIds { get; set; } = new();
 }
 
 public sealed class LanOrderWriteApiResult

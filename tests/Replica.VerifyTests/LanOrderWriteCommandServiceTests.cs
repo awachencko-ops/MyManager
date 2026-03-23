@@ -113,12 +113,56 @@ public sealed class LanOrderWriteCommandServiceTests
         Assert.Equal(15, result.Order!.StorageVersion);
     }
 
+    [Fact]
+    public async Task TryReorderItemsAsync_SendsSortedOrderedIdsAndVersion()
+    {
+        var gateway = new StubGateway
+        {
+            ReorderResponse = LanOrderWriteApiResult.Success(new SharedOrder
+            {
+                InternalId = "o-3",
+                Version = 22,
+                Items =
+                {
+                    new SharedOrderItem { ItemId = "i-2", SequenceNo = 0, FileStatus = "Waiting" },
+                    new SharedOrderItem { ItemId = "i-1", SequenceNo = 1, FileStatus = "Waiting" }
+                }
+            })
+        };
+
+        var service = new LanOrderWriteCommandService(gateway);
+        var order = new OrderData
+        {
+            InternalId = "o-3",
+            StorageVersion = 21,
+            Items =
+            {
+                new OrderFileItem { ItemId = "i-1", SequenceNo = 5 },
+                new OrderFileItem { ItemId = "i-2", SequenceNo = 1 }
+            }
+        };
+
+        var result = await service.TryReorderItemsAsync(
+            order,
+            "http://localhost:5000/",
+            "operator-3");
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(gateway.LastReorderRequest);
+        Assert.Equal(21, gateway.LastReorderRequest!.ExpectedOrderVersion);
+        Assert.Equal(new[] { "i-2", "i-1" }, gateway.LastReorderRequest.OrderedItemIds);
+        Assert.NotNull(result.Order);
+        Assert.Equal(22, result.Order!.StorageVersion);
+    }
+
     private sealed class StubGateway : ILanOrderWriteApiGateway
     {
         public LanCreateOrderRequest? LastCreateRequest { get; private set; }
         public LanUpdateOrderRequest? LastUpdateRequest { get; private set; }
+        public LanReorderOrderItemsRequest? LastReorderRequest { get; private set; }
         public LanOrderWriteApiResult CreateResponse { get; set; } = LanOrderWriteApiResult.Failed("no response");
         public LanOrderWriteApiResult UpdateResponse { get; set; } = LanOrderWriteApiResult.Failed("no response");
+        public LanOrderWriteApiResult ReorderResponse { get; set; } = LanOrderWriteApiResult.Failed("no response");
 
         public Task<LanOrderWriteApiResult> CreateOrderAsync(
             string apiBaseUrl,
@@ -139,6 +183,17 @@ public sealed class LanOrderWriteCommandServiceTests
         {
             LastUpdateRequest = request;
             return Task.FromResult(UpdateResponse);
+        }
+
+        public Task<LanOrderWriteApiResult> ReorderOrderItemsAsync(
+            string apiBaseUrl,
+            string orderInternalId,
+            LanReorderOrderItemsRequest request,
+            string actor,
+            CancellationToken cancellationToken = default)
+        {
+            LastReorderRequest = request;
+            return Task.FromResult(ReorderResponse);
         }
     }
 }

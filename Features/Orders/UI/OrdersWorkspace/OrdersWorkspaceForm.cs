@@ -377,6 +377,49 @@ namespace Replica
                 localOrder.LastStatusAt = serverOrder.LastStatusAt;
         }
 
+        private void TrySyncLanItemReorderForOrders(IEnumerable<OrderData> orders, string reason)
+        {
+            if (!ShouldUseLanRunApi() || orders == null)
+                return;
+
+            var normalizedOrders = orders
+                .Where(order => order != null && !string.IsNullOrWhiteSpace(order.InternalId))
+                .GroupBy(order => order.InternalId, StringComparer.Ordinal)
+                .Select(group => group.First())
+                .Where(order => (order.Items?.Count ?? 0) > 1)
+                .ToList();
+            if (normalizedOrders.Count == 0)
+                return;
+
+            foreach (var order in normalizedOrders)
+            {
+                var reorderResult = _orderApplicationService
+                    .TryReorderOrderItemsViaLanApiAsync(
+                        order,
+                        _lanApiBaseUrl,
+                        ResolveLanApiActor())
+                    .GetAwaiter()
+                    .GetResult();
+
+                if (reorderResult.IsSuccess && reorderResult.Order != null)
+                {
+                    UpsertOrderInHistory(reorderResult.Order);
+                    continue;
+                }
+
+                if (reorderResult.CurrentVersion > 0)
+                    order.StorageVersion = reorderResult.CurrentVersion;
+
+                var errorText = string.IsNullOrWhiteSpace(reorderResult.Error)
+                    ? "LAN reorder failed"
+                    : reorderResult.Error;
+                Logger.Warn(
+                    $"LAN-API | item-reorder-sync-failed | reason={reason} | order={GetOrderDisplayId(order)} | conflict={(reorderResult.IsConflict ? "1" : "0")} | unavailable={(reorderResult.IsUnavailable ? "1" : "0")} | {errorText}");
+            }
+
+            TryRefreshRepositorySnapshotFromStorage(_orderHistory, $"lan-api-item-reorder-{reason}");
+        }
+
         private void UpsertOrderInHistory(OrderData updatedOrder)
         {
             if (updatedOrder == null)
