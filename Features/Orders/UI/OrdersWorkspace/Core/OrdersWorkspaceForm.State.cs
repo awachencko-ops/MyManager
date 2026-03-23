@@ -97,6 +97,7 @@ namespace Replica
         private bool _lanApiRecoveryInProgress;
         private bool _lanConnectionRecoveryActionEnabled;
         private bool _connectionStatusToolTipVisible;
+        private bool _pendingConnectionIndicatorRefresh;
         private string _connectionStatusToolTipContent = string.Empty;
         private string _connectionStatusToolTipText = string.Empty;
         private OrdersViewMode _ordersViewMode = OrdersViewMode.List;

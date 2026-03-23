@@ -243,6 +243,14 @@ namespace Replica
             if (toolConnection.IsDisposed)
                 return;
 
+            if (_connectionStatusToolTipVisible)
+            {
+                _pendingConnectionIndicatorRefresh = true;
+                return;
+            }
+
+            _pendingConnectionIndicatorRefresh = false;
+
             var dependencyHealthLevel = GetWorstDependencyHealthLevel();
             if (ShouldUseLanRunApi())
             {
@@ -457,6 +465,9 @@ namespace Replica
                 _connectionStatusToolTip.Hide(statusStrip1);
             _connectionStatusToolTipVisible = false;
             _connectionStatusToolTipText = string.Empty;
+
+            if (_pendingConnectionIndicatorRefresh && !toolConnection.IsDisposed)
+                UpdateTrayConnectionIndicator();
         }
 
         private string BuildLanConnectionToolTip(
