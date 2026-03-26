@@ -83,6 +83,10 @@
     - `RequestCoalescedGridRefresh` + `GridRefreshCoalesceTimer` batches frequent `SetOrderStatus(..., source=processor, rebuildGrid=true)` into one deferred grid refresh.
     - Non-processor status sources keep immediate behavior (fast refresh/fallback rebuild).
     - Timer cleanup/reset is wired into `MainForm_FormClosed` to avoid stale UI callbacks.
+  - Added coalescing for derived grid UI refresh (`HandleOrdersGridChanged`):
+    - Heavy post-grid cascade (`ApplyStatusFilterToGrid`, filter captions/checklists, queue presentation, print tiles, tray indicators) now runs through `RequestCoalescedGridDerivedRefresh` + `GridDerivedRefreshCoalesceTimer`.
+    - This reduces redundant repeated recomputations during bursts of row/cell/status updates.
+    - Cleanup/reset is wired into `MainForm_FormClosed`.
   - Validation:
     - `dotnet build Replica.csproj -c Debug` passed.
     - `dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj -c Release --filter \"OrderStatusTransitionServiceTests\"` passed (5/5).

@@ -63,6 +63,7 @@ namespace Replica
         private System.Windows.Forms.Timer? _trayIndicatorsTimer;
         private System.Windows.Forms.Timer? _searchDebounceTimer;
         private System.Windows.Forms.Timer? _gridRefreshCoalesceTimer;
+        private System.Windows.Forms.Timer? _gridDerivedRefreshCoalesceTimer;
         private System.Windows.Forms.Timer? _gridHoverActivateTimer;
         private System.Windows.Forms.Timer? _tileHoverActivateTimer;
         private bool _isRebuildingGrid;
@@ -70,6 +71,7 @@ namespace Replica
         private bool _gridRefreshPendingForceFullRebuild;
         private string? _gridRefreshPendingSelectedTag;
         private string? _gridRefreshPendingTargetOrderInternalId;
+        private bool _gridDerivedRefreshPending;
         private bool _isSyncingTileSelection;
         private bool _isSyncingGridSelection;
         private string? _gridHoverCandidateOrderInternalId;
@@ -150,6 +152,7 @@ namespace Replica
         private const int UsersDirectoryRefreshIntervalMs = 60000;
         private const int SearchDebounceIntervalMs = 180;
         private const int GridRefreshCoalesceIntervalMs = 70;
+        private const int GridDerivedRefreshCoalesceIntervalMs = 90;
         private const double OrdersGridRebuildWarnThresholdMs = 140d;
         private const long DiskWarningThresholdBytes = 10L * 1024 * 1024 * 1024;
         private const long DiskCriticalThresholdBytes = 5L * 1024 * 1024 * 1024;

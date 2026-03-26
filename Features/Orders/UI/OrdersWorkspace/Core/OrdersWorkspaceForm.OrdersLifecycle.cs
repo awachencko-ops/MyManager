@@ -88,6 +88,63 @@ namespace Replica
 
         private void HandleOrdersGridChanged()
         {
+            RequestCoalescedGridDerivedRefresh();
+        }
+
+        private void EnsureGridDerivedRefreshCoalesceTimer()
+        {
+            _gridDerivedRefreshCoalesceTimer ??= new System.Windows.Forms.Timer
+            {
+                Interval = GridDerivedRefreshCoalesceIntervalMs
+            };
+
+            _gridDerivedRefreshCoalesceTimer.Tick -= GridDerivedRefreshCoalesceTimer_Tick;
+            _gridDerivedRefreshCoalesceTimer.Tick += GridDerivedRefreshCoalesceTimer_Tick;
+        }
+
+        private void RequestCoalescedGridDerivedRefresh(bool forceImmediate = false)
+        {
+            if (Disposing || IsDisposed)
+                return;
+
+            if (InvokeRequired)
+            {
+                BeginInvoke((Action)(() => RequestCoalescedGridDerivedRefresh(forceImmediate)));
+                return;
+            }
+
+            if (forceImmediate)
+            {
+                _gridDerivedRefreshPending = false;
+                _gridDerivedRefreshCoalesceTimer?.Stop();
+                ApplyOrdersGridDerivedRefreshCore();
+                return;
+            }
+
+            EnsureGridDerivedRefreshCoalesceTimer();
+            _gridDerivedRefreshPending = true;
+            _gridDerivedRefreshCoalesceTimer!.Stop();
+            _gridDerivedRefreshCoalesceTimer.Start();
+        }
+
+        private void GridDerivedRefreshCoalesceTimer_Tick(object? sender, EventArgs e)
+        {
+            _gridDerivedRefreshCoalesceTimer?.Stop();
+            if (!_gridDerivedRefreshPending)
+                return;
+
+            if (_isRebuildingGrid)
+            {
+                _gridDerivedRefreshCoalesceTimer?.Start();
+                return;
+            }
+
+            _gridDerivedRefreshPending = false;
+            ApplyOrdersGridDerivedRefreshCore();
+        }
+
+        private void ApplyOrdersGridDerivedRefreshCore()
+        {
             if (_isRebuildingGrid)
                 return;
 

@@ -187,6 +187,14 @@ namespace Replica
             _gridRefreshPendingForceFullRebuild = false;
             _gridRefreshPendingSelectedTag = null;
             _gridRefreshPendingTargetOrderInternalId = null;
+            _gridDerivedRefreshCoalesceTimer?.Stop();
+            if (_gridDerivedRefreshCoalesceTimer != null)
+            {
+                _gridDerivedRefreshCoalesceTimer.Tick -= GridDerivedRefreshCoalesceTimer_Tick;
+                _gridDerivedRefreshCoalesceTimer.Dispose();
+                _gridDerivedRefreshCoalesceTimer = null;
+            }
+            _gridDerivedRefreshPending = false;
 
             toolConnection.MouseEnter -= ToolConnection_MouseEnter;
             toolConnection.MouseLeave -= ToolConnection_MouseLeave;
