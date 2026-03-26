@@ -1,42 +1,42 @@
-﻿# РўРµС…РЅРёС‡РµСЃРєРёР№ РґРѕР»Рі: С‡С‚Рѕ В«СЃР¶РµС‡СЊ Рё РїРµСЂРµРїРёСЃР°С‚СЊВ» СЃРµР№С‡Р°СЃ
+﻿# Технический долг: что «сжечь и переписать» сейчас
 
-РђРєС‚СѓР°Р»СЊРЅРѕ РЅР° `2026-03-23`.
+Актуально на `2026-03-23`.
 
-## Р¦РµР»СЊ
+## Цель
 
-Р—Р°РєСЂС‹С‚СЊ Р°СЂС…РёС‚РµРєС‚СѓСЂРЅС‹Рµ РґРѕР»РіРё, РєРѕС‚РѕСЂС‹Рµ РїСЂСЏРјРѕ Р±СЊСЋС‚ РїРѕ РЅР°РґРµР¶РЅРѕСЃС‚Рё LAN/PostgreSQL СЂРµР¶РёРјР° Рё РјРµС€Р°СЋС‚ РјР°СЃС€С‚Р°Р±РёСЂРѕРІР°РЅРёСЋ.
+Закрыть архитектурные долги, которые прямо бьют по надежности LAN/PostgreSQL режима и мешают масштабированию.
 
-## P0 Burn-List (СЃРµР№С‡Р°СЃ)
+## P0 Burn-List (сейчас)
 
-| РћР±Р»Р°СЃС‚СЊ | РўРµРєСѓС‰РµРµ СЃРѕСЃС‚РѕСЏРЅРёРµ | Р§С‚Рѕ РїРµСЂРµРїРёСЃС‹РІР°РµРј | РљСЂРёС‚РµСЂРёР№ Р·Р°РєСЂС‹С‚РёСЏ |
+| Область | Текущее состояние | Что переписываем | Критерий закрытия |
 |---|---|---|---|
-| `MainForm` (god-object orchestration) | Shell РїРµСЂРµРёРјРµРЅРѕРІР°РЅ РІ `OrdersWorkspaceForm`, РєРѕРґ `Orders` РїРµСЂРµРЅРµСЃС‘РЅ РІ `Features/Orders/UI/*`, РІРІРµРґС‘РЅ РµРґРёРЅС‹Р№ `IOrderApplicationService` (РІРєР»СЋС‡Р°СЏ run/create/edit/delete/item/file + history/folder orchestration) | Р”РѕР¶Р°С‚СЊ presenter-only СЃР»РѕР№: СѓР±СЂР°С‚СЊ РѕСЃС‚Р°С‚РѕС‡РЅС‹Рµ orchestration РІРµС‚РєРё РёР· UI Рё Р·Р°РІРµСЂС€РёС‚СЊ DI cutover | `OrdersWorkspaceForm` РЅРµ СѓРїСЂР°РІР»СЏРµС‚ Р±РёР·РЅРµСЃ-С†РёРєР»Р°РјРё РЅР°РїСЂСЏРјСѓСЋ, С‚РѕР»СЊРєРѕ UI/presenter |
-| Write-command boundary | `DONE` РґР»СЏ С†РµР»РµРІРѕРіРѕ LAN scope: `create/update/items/reorder/status` + `item delete` + `order delete` РёРґСѓС‚ С‡РµСЂРµР· API boundary (РІРєР»СЋС‡Р°СЏ remove/move item-СЃС†РµРЅР°СЂРёРё Рё batch order delete) | РџРѕРґРґРµСЂР¶РёРІР°С‚СЊ РµРґРёРЅС‹Р№ API-first РїСѓС‚СЊ Рё СѓР±РёСЂР°С‚СЊ legacy fallback РІРµС‚РєРё | Р’СЃРµ mutating РѕРїРµСЂР°С†РёРё РёРґСѓС‚ С‡РµСЂРµР· API-РєРѕРјР°РЅРґС‹ Рё server invariants |
-| JSON/file РєР°Рє СЂР°Р±РѕС‡РµРµ С…СЂР°РЅРёР»РёС‰Рµ | LAN sync СЂР°Р±РѕС‚Р°РµС‚, РЅРѕ file fallback РІР»РёСЏРµС‚ РЅР° РїРѕРІРµРґРµРЅРёРµ | Р—Р°С„РёРєСЃРёСЂРѕРІР°С‚СЊ PostgreSQL РєР°Рє primary source of truth, file РѕСЃС‚Р°РІРёС‚СЊ С‚РѕР»СЊРєРѕ import/export fallback | Runtime РІ LAN СЂРµР¶РёРјРµ РЅРµ Р·Р°РІРёСЃРёС‚ РѕС‚ `history.json` РґР»СЏ Р°РєС‚СѓР°Р»СЊРЅРѕРіРѕ СЃРѕСЃС‚РѕСЏРЅРёСЏ |
-| Audit/observability | Р•СЃС‚СЊ `order_events` + correlation, РЅРѕ РЅРµС‚ РµРґРёРЅРѕР№ СЃС…РµРјС‹ Рё РјРµС‚СЂРёРє | Р’РІРµСЃС‚Рё РµРґРёРЅС‹Р№ structured schema + РјРµС‚СЂРёРєРё/РґР°С€Р±РѕСЂРґС‹ | РРЅС†РёРґРµРЅС‚ РјРѕР¶РЅРѕ РѕС‚СЃР»РµРґРёС‚СЊ end-to-end РїРѕ `correlation_id` + РµСЃС‚СЊ Р±Р°Р·РѕРІС‹Рµ SLO РіСЂР°С„РёРєРё |
+| `MainForm` (god-object orchestration) | Shell переименован в `OrdersWorkspaceForm`, код `Orders` перенесён в `Features/Orders/UI/*`, введён единый `IOrderApplicationService` (включая run/create/edit/delete/item/file + history/folder orchestration) | Дожать presenter-only слой: убрать остаточные orchestration ветки из UI и завершить DI cutover | `OrdersWorkspaceForm` не управляет бизнес-циклами напрямую, только UI/presenter |
+| Write-command boundary | `DONE` для целевого LAN scope: `create/update/items/reorder/status` + `item delete` + `order delete` идут через API boundary (включая remove/move item-сценарии и batch order delete) | Поддерживать единый API-first путь и убирать legacy fallback ветки | Все mutating операции идут через API-команды и server invariants |
+| JSON/file как рабочее хранилище | LAN sync работает, но file fallback влияет на поведение | Зафиксировать PostgreSQL как primary source of truth, file оставить только import/export fallback | Runtime в LAN режиме не зависит от `history.json` для актуального состояния |
+| Audit/observability | Есть `order_events` + correlation, но нет единой схемы и метрик | Ввести единый structured schema + метрики/дашборды | Инцидент можно отследить end-to-end по `correlation_id` + есть базовые SLO графики |
 
-## P1 (СЃР»РµРґРѕРј Р·Р° P0)
+## P1 (следом за P0)
 
-| РћР±Р»Р°СЃС‚СЊ | РЎС‚Р°С‚СѓСЃ |
+| Область | Статус |
 |---|---|
 | Optimistic concurrency | `DONE` (LAN path) |
-| Idempotency write API | `DONE` (`Idempotency-Key` РЅР° `create/update/items(add/update/delete/reorder)/run/stop`, РµРґРёРЅС‹Р№ dedupe-store `order_write_idempotency` + fingerprint validation) |
-| Resilience (retry/circuit/bulkhead/timeout) | `DONE` РґР»СЏ file-workflow |
-| Health/readiness + SLO метрики | `DONE (baseline)` |
+| Idempotency write API | `DONE` (`Idempotency-Key` на `create/update/items(add/update/delete/reorder)/run/stop`, единый dedupe-store `order_write_idempotency` + fingerprint validation) |
+| Resilience (retry/circuit/bulkhead/timeout) | `DONE` для file-workflow |
+| Health/readiness + SLO ������� | `DONE (baseline)` |
 
-## РЎР»РµРґСѓСЋС‰РёРµ 3 РёС‚РµСЂР°С†РёРё
+## Следующие 3 итерации
 
-1. Поддерживать observability baseline (`/live`, `/ready`, `/metrics`, `/slo`) и развивать dashboards/alerts.
-2. Р”РѕР¶Р°С‚СЊ presenter-only СЃР»РѕР№ РґР»СЏ `OrdersWorkspaceForm` (СѓР±СЂР°С‚СЊ РѕСЃС‚Р°С‚РѕС‡РЅС‹Рµ orchestration-РІРµС‚РєРё РёР· UI).
-3. Р—Р°С„РёРєСЃРёСЂРѕРІР°С‚СЊ PostgreSQL РєР°Рє primary source-of-truth РІ runtime (РјРёРЅРёРјРёР·РёСЂРѕРІР°С‚СЊ РІР»РёСЏРЅРёРµ file fallback).
+1. ������������ observability baseline (`/live`, `/ready`, `/metrics`, `/slo`) � ��������� dashboards/alerts.
+2. Дожать presenter-only слой для `OrdersWorkspaceForm` (убрать остаточные orchestration-ветки из UI).
+3. Зафиксировать PostgreSQL как primary source-of-truth в runtime (минимизировать влияние file fallback).
 
-## РџСЂР°РІРёР»Рѕ Р·Р°РІРµСЂС€РµРЅРёСЏ Р±Р»РѕРєР° В«СЃР¶РµС‡СЊ Рё РїРµСЂРµРїРёСЃР°С‚СЊВ»
+## Правило завершения блока «сжечь и переписать»
 
-Р‘Р»РѕРє СЃС‡РёС‚Р°РµС‚СЃСЏ Р·Р°РєСЂС‹С‚С‹Рј, РєРѕРіРґР° РІСЃРµ РїСѓРЅРєС‚С‹ P0 РёРјРµСЋС‚ СЃС‚Р°С‚СѓСЃ `DONE`, Р° `MainForm` РѕСЃС‚Р°РµС‚СЃСЏ С‚РѕР»СЊРєРѕ UI-СЃР»РѕРµРј Р±РµР· РїСЂСЏРјРѕР№ Р±РёР·РЅРµСЃ-РѕСЂРєРµСЃС‚СЂР°С†РёРё Рё persistence-СЂРµС€РµРЅРёР№.
+Блок считается закрытым, когда все пункты P0 имеют статус `DONE`, а `MainForm` остается только UI-слоем без прямой бизнес-оркестрации и persistence-решений.
 
 ## Legacy policy
 
-`Legacy/` СЂР°Р±РѕС‚Р°РµС‚ РєР°Рє РІСЂРµРјРµРЅРЅС‹Р№ quarantine. Р’С…РѕРґ/РІС‹С…РѕРґ Рё СѓСЃР»РѕРІРёСЏ СѓРґР°Р»РµРЅРёСЏ РѕРїРёСЃР°РЅС‹ РІ [Legacy/README.md](/C:/Users/user/Desktop/MyManager%201.0.1/Legacy/README.md).
+`Legacy/` работает как временный quarantine. Вход/выход и условия удаления описаны в [Legacy/README.md](/C:/Users/user/Desktop/MyManager%201.0.1/Legacy/README.md).
 
 ## Update 2026-03-23
 
@@ -103,7 +103,7 @@
       - Stop flow now applies `BuildStopPostPhaseUiEffectsPlan(stopPhase, stopUiFeedback)` for tray/buttons updates.
     - Consolidated run/stop feedback rendering in `OrdersWorkspaceForm` via dedicated render-pipeline methods (`RenderRunStartUiFeedback`, `RenderRunStartProgressUiFeedback`, `RenderRunCompletionUiFeedback`, `RenderRunStopUiFeedback`) to remove repeated `SetBottomStatus/ShowDialog/ApplyLogs` branches from workflow methods.
     - UI freeze mitigation for tray/startup maintenance:
-      - Archive index scan (`Directory.EnumerateFiles` over `Готово`) moved off UI thread; refresh now builds name/hash indexes asynchronously and applies result back on UI.
+      - Archive index scan (`Directory.EnumerateFiles` over `������`) moved off UI thread; refresh now builds name/hash indexes asynchronously and applies result back on UI.
       - Added archive sync cadence guard (`RefreshArchivedStatusesIfDue`) and switched tray timer to run archive sync by interval instead of every tick.
       - Removed per-tick hash backfill/save from tray timer hot path; startup archive refresh is now queued after UI handle is ready.
     - Async orders-data bootstrap on form startup:
@@ -119,5 +119,10 @@
     - Cache is invalidated on grid-change pipeline (`HandleOrdersGridChanged`) and rebuilt lazily once per refresh cycle.
     - Derived refresh no longer rebuilds print tiles in list mode; `RefreshPrintTilesFromVisibleRows` now runs only when tiles mode is active.
     - Added no-op guards for queue selection handlers: re-selecting already active status in `treeView1/cbQueue` no longer triggers full derived refresh.
+    - Enabled double buffering for `treeView1` and reduced filter pass redraw pressure (`row.Visible` updates only on actual value change + batched `SuspendLayout/ResumeLayout`).
+    - Queue switch path now suppresses redundant queue repaint in the next derived refresh cycle (`_suppressNextQueuePresentationRefresh`), reducing visible flicker during `treeView1` selection change.
+    - Derived refresh now updates status/user filter checklists only when corresponding popup is open (`_statusFilterDropDown.Visible`, `_userFilterDropDown.Visible`), removing extra list rebuilds on every queue click.
+    - Added lightweight tray refresh path for grid/filter changes (`RefreshTrayIndicatorsForGridChange`) to avoid unnecessary LAN/disk probe updates on each queue switch.
+    - `ApplyStatusFilterToGrid` fast-paths optional predicates (status/user/orderNo/date) and caches visible-orders count for tray stats, reducing per-row work during queue transitions.
     - Re-validated by `dotnet build Replica.csproj -c Release` and targeted verify tests (`35/35`).
 

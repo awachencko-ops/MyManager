@@ -134,6 +134,8 @@ namespace Replica
         private Dictionary<string, int>? _queueStatusCountsCache;
         private int _queueTotalOrdersCountCache;
         private bool _queueStatusCountsCacheValid;
+        private int _visibleOrdersCountCache;
+        private bool _visibleOrdersCountCacheValid;
 
         private static readonly string[] QueueStatuses = QueueStatusNames.All;
 
@@ -169,6 +171,7 @@ namespace Replica
         private static readonly IReadOnlyDictionary<string, string[]> QueueStatusMappings = WorkflowStatusNames.QueueMappings;
 
         private bool _isSyncingQueueSelection;
+        private bool _suppressNextQueuePresentationRefresh;
         private TreeNode? _hoveredQueueNode;
         private string _currentUserName = string.Empty;
         private string _currentUserRoleText = "Права не определены";

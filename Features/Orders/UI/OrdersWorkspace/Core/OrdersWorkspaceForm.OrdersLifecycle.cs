@@ -89,6 +89,7 @@ namespace Replica
         private void HandleOrdersGridChanged()
         {
             InvalidateQueueStatusCountsCache();
+            InvalidateVisibleOrdersCountCache();
             RequestCoalescedGridDerivedRefresh();
         }
 
@@ -155,13 +156,18 @@ namespace Replica
             UpdateUserFilterCaption();
             UpdateCreatedDateFilterCaption();
             UpdateReceivedDateFilterCaption();
-            RefreshStatusFilterChecklist();
-            RefreshUserFilterChecklist();
-            RefreshQueuePresentation();
+            if (_statusFilterDropDown?.Visible == true)
+                RefreshStatusFilterChecklist();
+            if (_userFilterDropDown?.Visible == true)
+                RefreshUserFilterChecklist();
+            if (_suppressNextQueuePresentationRefresh)
+                _suppressNextQueuePresentationRefresh = false;
+            else
+                RefreshQueuePresentation();
             if (_ordersViewMode == OrdersViewMode.Tiles)
                 RefreshPrintTilesFromVisibleRows();
             UpdateActionButtonsState();
-            RefreshTrayIndicators();
+            RefreshTrayIndicatorsForGridChange();
         }
 
         private void EnsureOrdersRepository()

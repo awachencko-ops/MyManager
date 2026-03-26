@@ -225,6 +225,13 @@ namespace Replica
             UpdateTrayProgressIndicator();
         }
 
+        private void RefreshTrayIndicatorsForGridChange()
+        {
+            UpdateTrayStatsIndicator();
+            UpdateTrayErrorIndicator();
+            UpdateTrayProgressIndicator();
+        }
+
         private void UpdateTrayStatsIndicator()
         {
             if (toolStats.IsDisposed || dgvJobs.IsDisposed)
@@ -236,14 +243,7 @@ namespace Replica
                 return;
             }
 
-            var visibleOrders = 0;
-            foreach (DataGridViewRow row in dgvJobs.Rows)
-            {
-                if (row.IsNewRow || !row.Visible)
-                    continue;
-
-                visibleOrders++;
-            }
+            var visibleOrders = GetVisibleOrdersCountForStats();
 
             var selectedOrderIds = new HashSet<string>(StringComparer.Ordinal);
             foreach (DataGridViewRow row in dgvJobs.SelectedRows)
@@ -257,6 +257,25 @@ namespace Replica
             }
 
             toolStats.Text = $"Строк: {visibleOrders} | Выделено: {selectedOrderIds.Count}";
+        }
+
+        private int GetVisibleOrdersCountForStats()
+        {
+            if (_visibleOrdersCountCacheValid)
+                return _visibleOrdersCountCache;
+
+            var visibleOrders = 0;
+            foreach (DataGridViewRow row in dgvJobs.Rows)
+            {
+                if (row.IsNewRow || !row.Visible)
+                    continue;
+
+                visibleOrders++;
+            }
+
+            _visibleOrdersCountCache = visibleOrders;
+            _visibleOrdersCountCacheValid = true;
+            return visibleOrders;
         }
 
         private void UpdateTrayConnectionIndicator()

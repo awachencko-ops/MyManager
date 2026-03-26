@@ -376,6 +376,7 @@ namespace Replica
             _isSyncingQueueSelection = true;
             FillQueueCombo(e.Node.Text);
             _isSyncingQueueSelection = false;
+            _suppressNextQueuePresentationRefresh = true;
             HandleOrdersGridChanged();
         }
 
@@ -396,6 +397,7 @@ namespace Replica
             treeView1.SelectedNode = statusNode;
             statusNode.EnsureVisible();
             _isSyncingQueueSelection = false;
+            _suppressNextQueuePresentationRefresh = true;
             HandleOrdersGridChanged();
         }
 

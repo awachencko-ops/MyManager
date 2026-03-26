@@ -122,12 +122,18 @@ namespace Replica
 
         private void UpdateStatusFilterCaption()
         {
+            if (string.Equals(lblFStatus.Text, StatusFilterLabelText, StringComparison.Ordinal))
+                return;
+
             lblFStatus.Text = StatusFilterLabelText;
             AdjustFilterLabelWidths();
         }
 
         private void UpdateOrderNoSearchCaption()
         {
+            if (string.Equals(lblFOrderNo.Text, OrderNoSearchLabelText, StringComparison.Ordinal))
+                return;
+
             lblFOrderNo.Text = OrderNoSearchLabelText;
             AdjustFilterLabelWidths();
         }
@@ -135,6 +141,9 @@ namespace Replica
         private void UpdateUserFilterCaption()
         {
             if (_userFilterLabel == null)
+                return;
+
+            if (string.Equals(_userFilterLabel.Text, UserFilterLabelText, StringComparison.Ordinal))
                 return;
 
             _userFilterLabel.Text = UserFilterLabelText;
@@ -146,6 +155,9 @@ namespace Replica
             if (_createdFilterLabel == null)
                 return;
 
+            if (string.Equals(_createdFilterLabel.Text, CreatedDateFilterLabelText, StringComparison.Ordinal))
+                return;
+
             _createdFilterLabel.Text = CreatedDateFilterLabelText;
             AdjustFilterLabelWidths();
         }
@@ -153,6 +165,9 @@ namespace Replica
         private void UpdateReceivedDateFilterCaption()
         {
             if (_receivedFilterLabel == null)
+                return;
+
+            if (string.Equals(_receivedFilterLabel.Text, ReceivedDateFilterLabelText, StringComparison.Ordinal))
                 return;
 
             _receivedFilterLabel.Text = ReceivedDateFilterLabelText;
@@ -187,73 +202,119 @@ namespace Replica
             var hasSelectedStatuses = _selectedFilterStatuses.Count > 0;
             var hasSelectedUsers = _selectedFilterUsers.Count > 0;
             var hasOrderNoFilter = !string.IsNullOrWhiteSpace(_orderNumberFilterText);
+            var hasCreatedDateFilter = _createdDateFilterKind != CreatedDateFilterKind.None;
+            var hasReceivedDateFilter = _receivedDateFilterKind != CreatedDateFilterKind.None;
             var selectedQueueStatus = GetSelectedQueueStatusName();
+            var queueFilterActive = !string.IsNullOrWhiteSpace(selectedQueueStatus)
+                && !string.Equals(selectedQueueStatus, QueueStatusNames.AllJobs, StringComparison.Ordinal);
+            var requiresNormalizedStatus = queueFilterActive || hasSelectedStatuses;
             var orderVisibilityByInternalId = new Dictionary<string, bool>(StringComparer.Ordinal);
             var ordersByInternalId = OrderGridLogic.BuildOrderIndex(_orderHistory);
+            var visibleOrdersCount = 0;
 
-            foreach (DataGridViewRow row in dgvJobs.Rows)
+            dgvJobs.SuspendLayout();
+            try
             {
-                if (row.IsNewRow)
-                    continue;
-
-                var rowTag = row.Tag?.ToString();
-                if (IsItemTag(rowTag))
-                    continue;
-
-                var statusValue = row.Cells[colStatus.Index].Value?.ToString();
-                var normalizedStatus = NormalizeStatus(statusValue);
-                var queueMatches = MatchesQueueStatus(selectedQueueStatus, normalizedStatus);
-                var statusMatches = !hasSelectedStatuses || (normalizedStatus != null && _selectedFilterStatuses.Contains(normalizedStatus));
-                var orderInternalId = ExtractOrderInternalIdFromTag(rowTag);
-                var order = OrderGridLogic.FindOrderByInternalId(ordersByInternalId, orderInternalId);
-                var orderUserName = NormalizeOrderUserName(order?.UserName);
-                var userMatches = !hasSelectedUsers || _selectedFilterUsers.Contains(orderUserName);
-                var orderNoValue = row.Cells[colOrderNumber.Index].Value?.ToString();
-                var orderNoMatches = !hasOrderNoFilter ||
-                                     (!string.IsNullOrWhiteSpace(orderNoValue) &&
-                                      orderNoValue.IndexOf(_orderNumberFilterText, StringComparison.OrdinalIgnoreCase) >= 0);
-                var createdDateValue = row.Cells[colCreated.Index].Value?.ToString();
-                var createdDateMatches = MatchesCreatedDateFilter(createdDateValue);
-                var receivedDateValue = row.Cells[colReceived.Index].Value?.ToString();
-                var receivedDateMatches = MatchesReceivedDateFilter(receivedDateValue);
-                var shouldShow = queueMatches && statusMatches && userMatches && orderNoMatches && createdDateMatches && receivedDateMatches;
-
-                if (!string.IsNullOrWhiteSpace(orderInternalId))
-                    orderVisibilityByInternalId[orderInternalId] = shouldShow;
-
-                try
+                foreach (DataGridViewRow row in dgvJobs.Rows)
                 {
-                    row.Visible = shouldShow;
+                    if (row.IsNewRow)
+                        continue;
+
+                    var rowTag = row.Tag?.ToString();
+                    if (IsItemTag(rowTag))
+                        continue;
+
+                    string? normalizedStatus = null;
+                    if (requiresNormalizedStatus)
+                    {
+                        var statusValue = row.Cells[colStatus.Index].Value?.ToString();
+                        normalizedStatus = NormalizeStatus(statusValue);
+                    }
+
+                    var queueMatches = !queueFilterActive || MatchesQueueStatus(selectedQueueStatus, normalizedStatus);
+                    var statusMatches = !hasSelectedStatuses || (normalizedStatus != null && _selectedFilterStatuses.Contains(normalizedStatus));
+                    var orderInternalId = ExtractOrderInternalIdFromTag(rowTag);
+                    var userMatches = true;
+                    if (hasSelectedUsers)
+                    {
+                        var order = OrderGridLogic.FindOrderByInternalId(ordersByInternalId, orderInternalId);
+                        var orderUserName = NormalizeOrderUserName(order?.UserName);
+                        userMatches = _selectedFilterUsers.Contains(orderUserName);
+                    }
+
+                    var orderNoMatches = true;
+                    if (hasOrderNoFilter)
+                    {
+                        var orderNoValue = row.Cells[colOrderNumber.Index].Value?.ToString();
+                        orderNoMatches = !string.IsNullOrWhiteSpace(orderNoValue)
+                            && orderNoValue.IndexOf(_orderNumberFilterText, StringComparison.OrdinalIgnoreCase) >= 0;
+                    }
+
+                    var createdDateMatches = true;
+                    if (hasCreatedDateFilter)
+                    {
+                        var createdDateValue = row.Cells[colCreated.Index].Value?.ToString();
+                        createdDateMatches = MatchesCreatedDateFilter(createdDateValue);
+                    }
+
+                    var receivedDateMatches = true;
+                    if (hasReceivedDateFilter)
+                    {
+                        var receivedDateValue = row.Cells[colReceived.Index].Value?.ToString();
+                        receivedDateMatches = MatchesReceivedDateFilter(receivedDateValue);
+                    }
+
+                    var shouldShow = queueMatches && statusMatches && userMatches && orderNoMatches && createdDateMatches && receivedDateMatches;
+
+                    if (!string.IsNullOrWhiteSpace(orderInternalId))
+                        orderVisibilityByInternalId[orderInternalId] = shouldShow;
+
+                    if (shouldShow)
+                        visibleOrdersCount++;
+
+                    try
+                    {
+                        if (row.Visible != shouldShow)
+                            row.Visible = shouldShow;
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // Если строка управляется внешним DataSource, пропускаем скрытие без падения формы.
+                    }
                 }
-                catch (InvalidOperationException)
+
+                foreach (DataGridViewRow row in dgvJobs.Rows)
                 {
-                    // Если строка управляется внешним DataSource, пропускаем скрытие без падения формы.
+                    if (row.IsNewRow)
+                        continue;
+
+                    var rowTag = row.Tag?.ToString();
+                    if (!IsItemTag(rowTag))
+                        continue;
+
+                    var orderInternalId = ExtractOrderInternalIdFromTag(rowTag);
+                    var shouldShow = !string.IsNullOrWhiteSpace(orderInternalId) &&
+                                     orderVisibilityByInternalId.TryGetValue(orderInternalId, out var visible) &&
+                                     visible;
+
+                    try
+                    {
+                        if (row.Visible != shouldShow)
+                            row.Visible = shouldShow;
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // Если строка управляется внешним DataSource, пропускаем скрытие без падения формы.
+                    }
                 }
             }
-
-            foreach (DataGridViewRow row in dgvJobs.Rows)
+            finally
             {
-                if (row.IsNewRow)
-                    continue;
-
-                var rowTag = row.Tag?.ToString();
-                if (!IsItemTag(rowTag))
-                    continue;
-
-                var orderInternalId = ExtractOrderInternalIdFromTag(rowTag);
-                var shouldShow = !string.IsNullOrWhiteSpace(orderInternalId) &&
-                                 orderVisibilityByInternalId.TryGetValue(orderInternalId, out var visible) &&
-                                 visible;
-
-                try
-                {
-                    row.Visible = shouldShow;
-                }
-                catch (InvalidOperationException)
-                {
-                    // Если строка управляется внешним DataSource, пропускаем скрытие без падения формы.
-                }
+                dgvJobs.ResumeLayout(performLayout: false);
             }
+
+            _visibleOrdersCountCache = visibleOrdersCount;
+            _visibleOrdersCountCacheValid = true;
         }
 
         private void FillQueueCombo(string? preferredStatus)
@@ -465,6 +526,11 @@ namespace Replica
         private void InvalidateQueueStatusCountsCache()
         {
             _queueStatusCountsCacheValid = false;
+        }
+
+        private void InvalidateVisibleOrdersCountCache()
+        {
+            _visibleOrdersCountCacheValid = false;
         }
 
         private void EnsureQueueStatusCountsCache()

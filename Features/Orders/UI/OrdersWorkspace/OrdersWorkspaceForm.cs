@@ -719,6 +719,7 @@ namespace Replica
             treeView1.ItemHeight = 48;
             treeView1.Indent = 20;
             treeView1.LineColor = QueuePanelBackColor;
+            EnableDoubleBufferedControl(treeView1);
             treeView1.DrawNode -= TreeView1_DrawNode;
             treeView1.DrawNode += TreeView1_DrawNode;
             treeView1.MouseMove -= TreeView1_MouseMove;
