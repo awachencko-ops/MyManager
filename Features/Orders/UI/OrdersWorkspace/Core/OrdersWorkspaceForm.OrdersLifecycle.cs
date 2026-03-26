@@ -447,6 +447,98 @@ namespace Replica
             cell.Value = normalizedNextValue;
         }
 
+        private void EnsureGridRefreshCoalesceTimer()
+        {
+            _gridRefreshCoalesceTimer ??= new System.Windows.Forms.Timer
+            {
+                Interval = GridRefreshCoalesceIntervalMs
+            };
+
+            _gridRefreshCoalesceTimer.Tick -= GridRefreshCoalesceTimer_Tick;
+            _gridRefreshCoalesceTimer.Tick += GridRefreshCoalesceTimer_Tick;
+        }
+
+        private void RequestCoalescedGridRefresh(
+            string? selectedTag = null,
+            string? targetOrderInternalId = null,
+            bool preferFullRebuild = false)
+        {
+            if (Disposing || IsDisposed)
+                return;
+
+            if (InvokeRequired)
+            {
+                BeginInvoke((Action)(() =>
+                    RequestCoalescedGridRefresh(selectedTag, targetOrderInternalId, preferFullRebuild)));
+                return;
+            }
+
+            EnsureGridRefreshCoalesceTimer();
+            _gridRefreshPending = true;
+            _gridRefreshPendingForceFullRebuild |= preferFullRebuild;
+
+            if (!string.IsNullOrWhiteSpace(selectedTag))
+                _gridRefreshPendingSelectedTag = selectedTag;
+
+            if (string.IsNullOrWhiteSpace(targetOrderInternalId))
+            {
+                _gridRefreshPendingTargetOrderInternalId = null;
+            }
+            else if (string.IsNullOrWhiteSpace(_gridRefreshPendingTargetOrderInternalId))
+            {
+                _gridRefreshPendingTargetOrderInternalId = targetOrderInternalId;
+            }
+            else if (!string.Equals(_gridRefreshPendingTargetOrderInternalId, targetOrderInternalId, StringComparison.Ordinal))
+            {
+                _gridRefreshPendingTargetOrderInternalId = null;
+            }
+
+            _gridRefreshCoalesceTimer!.Stop();
+            _gridRefreshCoalesceTimer.Start();
+        }
+
+        private void GridRefreshCoalesceTimer_Tick(object? sender, EventArgs e)
+        {
+            _gridRefreshCoalesceTimer?.Stop();
+            ApplyPendingCoalescedGridRefresh();
+        }
+
+        private void ApplyPendingCoalescedGridRefresh()
+        {
+            if (!_gridRefreshPending || Disposing || IsDisposed)
+                return;
+
+            if (_isRebuildingGrid)
+            {
+                _gridRefreshCoalesceTimer?.Start();
+                return;
+            }
+
+            var selectedTag = _gridRefreshPendingSelectedTag;
+            var targetOrderInternalId = _gridRefreshPendingTargetOrderInternalId;
+            var forceFullRebuild = _gridRefreshPendingForceFullRebuild;
+
+            _gridRefreshPending = false;
+            _gridRefreshPendingForceFullRebuild = false;
+            _gridRefreshPendingSelectedTag = null;
+            _gridRefreshPendingTargetOrderInternalId = null;
+
+            if (forceFullRebuild)
+            {
+                RebuildOrdersGrid();
+                if (!string.IsNullOrWhiteSpace(selectedTag))
+                    TryRestoreSelectedRowByTag(selectedTag);
+                return;
+            }
+
+            if (TryRefreshGridRowsWithoutRebuild(selectedTag, targetOrderInternalId))
+                return;
+
+            RebuildOrdersGrid();
+            if (!string.IsNullOrWhiteSpace(selectedTag))
+                TryRestoreSelectedRowByTag(selectedTag);
+        }
+
         private void AddOrderRowsToGrid(OrderData order)
         {
             if (order == null)
@@ -1814,8 +1906,14 @@ namespace Replica
             if (rebuildGrid)
             {
                 var selectedTag = dgvJobs.CurrentRow?.Tag?.ToString();
-                if (!TryRefreshGridRowsWithoutRebuild(selectedTag, order.InternalId))
+                if (string.Equals(transition.Source, OrderStatusSourceNames.Processor, StringComparison.OrdinalIgnoreCase))
+                {
+                    RequestCoalescedGridRefresh(selectedTag, order.InternalId);
+                }
+                else if (!TryRefreshGridRowsWithoutRebuild(selectedTag, order.InternalId))
+                {
                     RebuildOrdersGrid();
+                }
             }
 
             UpdateTrayErrorIndicator();

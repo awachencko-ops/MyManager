@@ -176,6 +176,17 @@ namespace Replica
                 _searchDebounceTimer.Dispose();
                 _searchDebounceTimer = null;
             }
+            _gridRefreshCoalesceTimer?.Stop();
+            if (_gridRefreshCoalesceTimer != null)
+            {
+                _gridRefreshCoalesceTimer.Tick -= GridRefreshCoalesceTimer_Tick;
+                _gridRefreshCoalesceTimer.Dispose();
+                _gridRefreshCoalesceTimer = null;
+            }
+            _gridRefreshPending = false;
+            _gridRefreshPendingForceFullRebuild = false;
+            _gridRefreshPendingSelectedTag = null;
+            _gridRefreshPendingTargetOrderInternalId = null;
 
             toolConnection.MouseEnter -= ToolConnection_MouseEnter;
             toolConnection.MouseLeave -= ToolConnection_MouseLeave;

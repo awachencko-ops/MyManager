@@ -79,4 +79,11 @@
   - Wired fast-path into hot status transitions (`SetOrderStatusCore`) and run workflow batch points where previously full grid rebuild was forced.
   - `PersistGridChanges` now tries fast refresh first; full rebuild remains as safety fallback for structural mutations.
   - Verified by `dotnet build Replica.csproj -c Debug` (0 errors, 0 warnings).
+  - Added short coalescing window for noisy processor status updates:
+    - `RequestCoalescedGridRefresh` + `GridRefreshCoalesceTimer` batches frequent `SetOrderStatus(..., source=processor, rebuildGrid=true)` into one deferred grid refresh.
+    - Non-processor status sources keep immediate behavior (fast refresh/fallback rebuild).
+    - Timer cleanup/reset is wired into `MainForm_FormClosed` to avoid stale UI callbacks.
+  - Validation:
+    - `dotnet build Replica.csproj -c Debug` passed.
+    - `dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj -c Release --filter \"OrderStatusTransitionServiceTests\"` passed (5/5).
 
