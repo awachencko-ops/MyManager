@@ -178,6 +178,9 @@ public sealed class LanOrderRunApiGateway : ILanOrderRunApiGateway
         if (CurrentUserHeaderCodec.RequiresEncoding(normalizedActor))
         {
             request.Headers.TryAddWithoutValidation(
+                CurrentUserHeaderCodec.HeaderName,
+                CurrentUserHeaderCodec.BuildAsciiFallback(normalizedActor));
+            request.Headers.TryAddWithoutValidation(
                 CurrentUserHeaderCodec.EncodedHeaderName,
                 CurrentUserHeaderCodec.Encode(normalizedActor));
             return;

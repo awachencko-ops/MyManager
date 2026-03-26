@@ -395,6 +395,9 @@ public sealed class LanOrderWriteApiGateway : ILanOrderWriteApiGateway
         if (CurrentUserHeaderCodec.RequiresEncoding(normalizedActor))
         {
             request.Headers.TryAddWithoutValidation(
+                CurrentUserHeaderCodec.HeaderName,
+                CurrentUserHeaderCodec.BuildAsciiFallback(normalizedActor));
+            request.Headers.TryAddWithoutValidation(
                 CurrentUserHeaderCodec.EncodedHeaderName,
                 CurrentUserHeaderCodec.Encode(normalizedActor));
             return;

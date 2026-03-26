@@ -269,7 +269,7 @@ public sealed class LanOrderWriteApiGatewayTests
     }
 
     [Fact]
-    public async Task CreateOrderAsync_WithNonAsciiActor_SendsEncodedActorHeader()
+    public async Task CreateOrderAsync_WithNonAsciiActor_SendsEncodedAndAsciiFallbackHeaders()
     {
         var handler = new StubHttpMessageHandler((_, _) =>
             Task.FromResult(new HttpResponseMessage(HttpStatusCode.Created)
@@ -293,7 +293,8 @@ public sealed class LanOrderWriteApiGatewayTests
 
         Assert.True(result.IsSuccess);
         Assert.NotNull(handler.LastRequest);
-        Assert.False(handler.LastRequest!.Headers.TryGetValues(CurrentUserHeaderCodec.HeaderName, out _));
+        Assert.True(handler.LastRequest!.Headers.TryGetValues(CurrentUserHeaderCodec.HeaderName, out var fallbackActors));
+        Assert.Equal(CurrentUserHeaderCodec.BuildAsciiFallback(actorName), fallbackActors.Single());
         Assert.True(handler.LastRequest.Headers.TryGetValues(CurrentUserHeaderCodec.EncodedHeaderName, out var encodedActors));
         Assert.True(CurrentUserHeaderCodec.TryDecode(encodedActors.Single(), out var actor));
         Assert.Equal(actorName, actor);

@@ -84,6 +84,21 @@ public sealed class OrdersControllerActorValidationTests
     }
 
     [Fact]
+    public void CreateOrder_WithBothHeaders_PrefersDecodedActor()
+    {
+        var store = new StubLanOrderStore();
+        var controller = CreateController(store, actor: CurrentUserHeaderCodec.BuildAsciiFallback("Сергей"), encodedActor: "Сергей");
+
+        var result = controller.CreateOrder(new CreateOrderRequest { OrderNumber = "1005A" });
+
+        var created = Assert.IsType<CreatedAtActionResult>(result.Result);
+        var order = Assert.IsType<SharedOrder>(created.Value);
+        Assert.Equal("Сергей", store.LastActor);
+        Assert.Equal("Сергей", order.CreatedByUser);
+        Assert.Equal("Сергей", order.CreatedById);
+    }
+
+    [Fact]
     public void CreateOrder_WithLegacyBootstrapUser_AllowsNewActor()
     {
         var store = new StubLanOrderStore();

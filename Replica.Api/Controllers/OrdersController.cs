@@ -264,11 +264,11 @@ public sealed class OrdersController : ControllerBase
         actor = string.Empty;
         validationError = null;
 
-        if (Request.Headers.TryGetValue(CurrentUserHeaderCodec.HeaderName, out var actorHeader))
-            actor = actorHeader.ToString().Trim();
-        else if (Request.Headers.TryGetValue(CurrentUserHeaderCodec.EncodedHeaderName, out var encodedActorHeader)
+        if (Request.Headers.TryGetValue(CurrentUserHeaderCodec.EncodedHeaderName, out var encodedActorHeader)
             && CurrentUserHeaderCodec.TryDecode(encodedActorHeader.ToString(), out var decodedActor))
             actor = decodedActor;
+        else if (Request.Headers.TryGetValue(CurrentUserHeaderCodec.HeaderName, out var actorHeader))
+            actor = actorHeader.ToString().Trim();
 
         if (string.IsNullOrWhiteSpace(actor))
         {

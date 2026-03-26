@@ -27,6 +27,16 @@ public static class CurrentUserHeaderCodec
         return Convert.ToBase64String(Encoding.UTF8.GetBytes(value.Trim()));
     }
 
+    public static string BuildAsciiFallback(string value)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(value);
+
+        var normalized = value.Trim();
+        return RequiresEncoding(normalized)
+            ? Convert.ToBase64String(Encoding.UTF8.GetBytes(normalized))
+            : normalized;
+    }
+
     public static bool TryDecode(string? encodedValue, out string value)
     {
         value = string.Empty;
