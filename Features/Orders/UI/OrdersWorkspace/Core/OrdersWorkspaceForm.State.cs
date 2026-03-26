@@ -145,9 +145,6 @@ namespace Replica
 
         private bool _isSyncingQueueSelection;
         private TreeNode? _hoveredQueueNode;
-        private Panel? _serverHeaderStatusDot;
-        private Label? _serverHeaderTitleLabel;
-        private Label? _serverHeaderStatusLabel;
         private string _currentUserName = string.Empty;
         private string _currentUserRoleText = "Права не определены";
         private Label? _userProfileNameLabel;
@@ -222,7 +219,6 @@ namespace Replica
         private Button? _receivedCalendarOkButton;
         private DateTimePicker? _receivedCalendarTargetPicker;
         private int _acknowledgedErrorCount;
-        private readonly Panel pnlServerHeader = new();
 
         private const int QueueCounterPillHeight = 22;
         private const int QueueCounterPillMinWidth = 22;

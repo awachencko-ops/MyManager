@@ -888,7 +888,7 @@ namespace Replica
             return true;
         }
 
-        private void RemoveSelectedOrder()
+        private async Task RemoveSelectedOrderAsync()
         {
             if (!EnsureServerWriteAllowed("Удаление заказа"))
                 return;
@@ -897,7 +897,7 @@ namespace Replica
             var hasSelectedOrderContainers = HasSelectedOrderContainerRow();
             if (!hasSelectedOrderContainers && selectedOrderItems.Count > 0)
             {
-                RemoveSelectedOrderItems(selectedOrderItems);
+                await RemoveSelectedOrderItemsAsync(selectedOrderItems);
                 return;
             }
 
@@ -939,7 +939,7 @@ namespace Replica
             var removeFilesFromDisk = decision == DialogResult.Yes;
             if (ShouldUseLanRunApi())
             {
-                RemoveSelectedOrdersViaLanApi(
+                await RemoveSelectedOrdersViaLanApiAsync(
                     selectedOrders,
                     removeFilesFromDisk,
                     isBatchDelete,
@@ -1001,7 +1001,7 @@ namespace Replica
                 MessageBoxIcon.Error);
         }
 
-        private void RemoveSelectedOrdersViaLanApi(
+        private async Task RemoveSelectedOrdersViaLanApiAsync(
             IReadOnlyCollection<OrderData> selectedOrders,
             bool removeFilesFromDisk,
             bool isBatchDelete,
@@ -1019,21 +1019,29 @@ namespace Replica
             var failures = new List<string>();
             foreach (var order in normalizedOrders)
             {
-                if (removeFilesFromDisk && !TryDeleteOrderArtifactsFromDisk(order, _ordersRootPath, out var fileDeleteError))
+                if (removeFilesFromDisk)
                 {
-                    failures.Add($"{GetOrderDisplayId(order)}: {fileDeleteError}");
-                    continue;
+                    var fileDeleteResult = await Task.Run(() =>
+                    {
+                        var success = TryDeleteOrderArtifactsFromDisk(order, _ordersRootPath, out var fileDeleteError);
+                        return (success, fileDeleteError);
+                    });
+
+                    if (!fileDeleteResult.success)
+                    {
+                        failures.Add($"{GetOrderDisplayId(order)}: {fileDeleteResult.fileDeleteError}");
+                        continue;
+                    }
                 }
 
                 var deleteResult = _orderApplicationService
                     .TryDeleteOrderViaLanApiAsync(
                         order,
                         _lanApiBaseUrl,
-                        ResolveLanApiActor())
-                    .GetAwaiter()
-                    .GetResult();
+                        ResolveLanApiActor());
+                var deleteResultValue = await deleteResult;
 
-                if (deleteResult.IsSuccess)
+                if (deleteResultValue.IsSuccess)
                 {
                     if (_runTokensByOrder.TryGetValue(order.InternalId, out var cts))
                     {
@@ -1055,12 +1063,12 @@ namespace Replica
                     continue;
                 }
 
-                if (deleteResult.CurrentVersion > 0)
-                    order.StorageVersion = deleteResult.CurrentVersion;
+                if (deleteResultValue.CurrentVersion > 0)
+                    order.StorageVersion = deleteResultValue.CurrentVersion;
 
-                var errorText = string.IsNullOrWhiteSpace(deleteResult.Error)
+                var errorText = string.IsNullOrWhiteSpace(deleteResultValue.Error)
                     ? "LAN API delete order failed"
-                    : deleteResult.Error;
+                    : deleteResultValue.Error;
                 failures.Add($"{GetOrderDisplayId(order)}: {errorText}");
             }
 
@@ -1174,7 +1182,7 @@ namespace Replica
             }
         }
 
-        private void RemoveSelectedOrderItems(List<(OrderData Order, OrderFileItem Item)> selectedOrderItems)
+        private async Task RemoveSelectedOrderItemsAsync(List<(OrderData Order, OrderFileItem Item)> selectedOrderItems)
         {
             if (selectedOrderItems == null || selectedOrderItems.Count == 0)
             {
@@ -1212,7 +1220,7 @@ namespace Replica
             var removeFilesFromDisk = decision == DialogResult.Yes;
             if (ShouldUseLanRunApi())
             {
-                RemoveSelectedOrderItemsViaLanApi(
+                await RemoveSelectedOrderItemsViaLanApiAsync(
                     selectedOrderItems,
                     removeFilesFromDisk,
                     isBatchDelete,
@@ -1281,7 +1289,7 @@ namespace Replica
                 MessageBoxIcon.Error);
         }
 
-        private void RemoveSelectedOrderItemsViaLanApi(
+        private async Task RemoveSelectedOrderItemsViaLanApiAsync(
             IReadOnlyCollection<(OrderData Order, OrderFileItem Item)> selectedOrderItems,
             bool removeFilesFromDisk,
             bool isBatchDelete,
@@ -1299,10 +1307,19 @@ namespace Replica
             var failures = new List<string>();
             foreach (var (order, item) in normalizedSelections)
             {
-                if (removeFilesFromDisk && !TryDeleteOrderItemFilesFromDisk(item, out var fileDeleteError))
+                if (removeFilesFromDisk)
                 {
-                    failures.Add($"{GetOrderDisplayId(order)} / {OrderDeletionWorkflowService.BuildOrderItemDisplayName(item)}: {fileDeleteError}");
-                    continue;
+                    var fileDeleteResult = await Task.Run(() =>
+                    {
+                        var success = TryDeleteOrderItemFilesFromDisk(item, out var fileDeleteError);
+                        return (success, fileDeleteError);
+                    });
+
+                    if (!fileDeleteResult.success)
+                    {
+                        failures.Add($"{GetOrderDisplayId(order)} / {OrderDeletionWorkflowService.BuildOrderItemDisplayName(item)}: {fileDeleteResult.fileDeleteError}");
+                        continue;
+                    }
                 }
 
                 var deleteResult = _orderApplicationService
@@ -1310,13 +1327,12 @@ namespace Replica
                         order,
                         item,
                         _lanApiBaseUrl,
-                        ResolveLanApiActor())
-                    .GetAwaiter()
-                    .GetResult();
+                        ResolveLanApiActor());
+                var deleteResultValue = await deleteResult;
 
-                if (deleteResult.IsSuccess && deleteResult.Order != null)
+                if (deleteResultValue.IsSuccess && deleteResultValue.Order != null)
                 {
-                    UpsertOrderInHistory(deleteResult.Order);
+                    UpsertOrderInHistory(deleteResultValue.Order);
                     AppendOrderOperationLog(
                         order,
                         OrderOperationNames.RemoveItem,
@@ -1327,12 +1343,12 @@ namespace Replica
                     continue;
                 }
 
-                if (deleteResult.CurrentVersion > 0)
-                    order.StorageVersion = deleteResult.CurrentVersion;
+                if (deleteResultValue.CurrentVersion > 0)
+                    order.StorageVersion = deleteResultValue.CurrentVersion;
 
-                var errorText = string.IsNullOrWhiteSpace(deleteResult.Error)
+                var errorText = string.IsNullOrWhiteSpace(deleteResultValue.Error)
                     ? "LAN API delete item failed"
-                    : deleteResult.Error;
+                    : deleteResultValue.Error;
                 failures.Add($"{GetOrderDisplayId(order)} / {OrderDeletionWorkflowService.BuildOrderItemDisplayName(item)}: {errorText}");
             }
 

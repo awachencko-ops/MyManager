@@ -129,7 +129,7 @@ public sealed class InMemoryLanOrderStore : ILanOrderStore
                 UserName = request.UserName?.Trim() ?? string.Empty,
                 CreatedById = request.CreatedById?.Trim() ?? string.Empty,
                 CreatedByUser = request.CreatedByUser?.Trim() ?? string.Empty,
-                Status = request.Status?.Trim() ?? "Waiting",
+                Status = ReplicaApiWorkflowStatusNormalizer.NormalizeOrDefault(request.Status),
                 Keyword = request.Keyword?.Trim() ?? string.Empty,
                 FolderName = request.FolderName?.Trim() ?? string.Empty,
                 StartMode = request.StartMode,
@@ -150,6 +150,7 @@ public sealed class InMemoryLanOrderStore : ILanOrderStore
                 item.SequenceNo = i;
                 item.Version = 1;
                 item.UpdatedAt = DateTime.Now;
+                item.FileStatus = ReplicaApiWorkflowStatusNormalizer.NormalizeOrDefault(item.FileStatus);
                 order.Items.Add(item);
                 AppendEvent(order.InternalId, item.ItemId, "add-item", "api", actor, new { item_id = item.ItemId, sequence_no = item.SequenceNo });
             }
@@ -203,7 +204,7 @@ public sealed class InMemoryLanOrderStore : ILanOrderStore
                 order.UserName = request.UserName.Trim();
             if (request.Status != null)
             {
-                order.Status = request.Status.Trim();
+                order.Status = ReplicaApiWorkflowStatusNormalizer.NormalizeOrDefault(request.Status);
                 order.LastStatusSource = "api";
                 order.LastStatusReason = "patch-order";
                 order.LastStatusAt = DateTime.Now;
@@ -238,6 +239,7 @@ public sealed class InMemoryLanOrderStore : ILanOrderStore
             item.SequenceNo = order.Items.Count;
             item.Version = 1;
             item.UpdatedAt = DateTime.Now;
+            item.FileStatus = ReplicaApiWorkflowStatusNormalizer.NormalizeOrDefault(item.FileStatus);
             order.Items.Add(item);
             order.Version++;
 
@@ -268,7 +270,7 @@ public sealed class InMemoryLanOrderStore : ILanOrderStore
             if (request.Variant != null)
                 item.Variant = request.Variant.Trim();
             if (request.FileStatus != null)
-                item.FileStatus = request.FileStatus.Trim();
+                item.FileStatus = ReplicaApiWorkflowStatusNormalizer.NormalizeOrDefault(request.FileStatus);
             if (request.LastReason != null)
                 item.LastReason = request.LastReason.Trim();
             if (request.SourcePath != null)

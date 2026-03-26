@@ -158,9 +158,6 @@ namespace Replica
 
             if (_userProfileRoleLabel != null)
                 _userProfileRoleLabel.Text = _currentUserRoleText;
-
-            if (_serverHeaderTitleLabel != null)
-                _serverHeaderTitleLabel.Text = _currentUserName;
         }
 
         private string ResolveCurrentUserDisplayName(string? preferredName, string? fallbackName)

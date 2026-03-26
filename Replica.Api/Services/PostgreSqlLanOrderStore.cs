@@ -181,7 +181,7 @@ public sealed class PostgreSqlLanOrderStore : ILanOrderStore
             UserName = request.UserName?.Trim() ?? string.Empty,
             CreatedById = request.CreatedById?.Trim() ?? actor?.Trim() ?? string.Empty,
             CreatedByUser = request.CreatedByUser?.Trim() ?? actor?.Trim() ?? string.Empty,
-            Status = request.Status?.Trim() ?? "Waiting",
+            Status = ReplicaApiWorkflowStatusNormalizer.NormalizeOrDefault(request.Status),
             Keyword = request.Keyword?.Trim() ?? string.Empty,
             FolderName = request.FolderName?.Trim() ?? string.Empty,
             StartMode = request.StartMode,
@@ -207,7 +207,7 @@ public sealed class PostgreSqlLanOrderStore : ILanOrderStore
             item.SequenceNo = i;
             item.Version = 1;
             item.UpdatedAt = now;
-            item.FileStatus = string.IsNullOrWhiteSpace(item.FileStatus) ? "Waiting" : item.FileStatus.Trim();
+            item.FileStatus = ReplicaApiWorkflowStatusNormalizer.NormalizeOrDefault(item.FileStatus);
             order.Items.Add(item);
 
             InsertItem(connection, tx, order.InternalId, item);
@@ -275,7 +275,7 @@ public sealed class PostgreSqlLanOrderStore : ILanOrderStore
             order.UserName = request.UserName.Trim();
         if (request.Status != null)
         {
-            order.Status = request.Status.Trim();
+            order.Status = ReplicaApiWorkflowStatusNormalizer.NormalizeOrDefault(request.Status);
             order.LastStatusAt = DateTime.Now;
             order.LastStatusSource = "api";
             order.LastStatusReason = "patch-order";
@@ -319,7 +319,7 @@ public sealed class PostgreSqlLanOrderStore : ILanOrderStore
         item.SequenceNo = nextSequenceNo;
         item.Version = 1;
         item.UpdatedAt = DateTime.Now;
-        item.FileStatus = string.IsNullOrWhiteSpace(item.FileStatus) ? "Waiting" : item.FileStatus.Trim();
+        item.FileStatus = ReplicaApiWorkflowStatusNormalizer.NormalizeOrDefault(item.FileStatus);
 
         InsertItem(connection, tx, order.InternalId, item);
         UpdateOrder(connection, tx, order, currentVersion);
@@ -357,8 +357,8 @@ public sealed class PostgreSqlLanOrderStore : ILanOrderStore
             item.ClientFileLabel = request.ClientFileLabel.Trim();
         if (request.Variant != null)
             item.Variant = request.Variant.Trim();
-        if (request.FileStatus != null)
-            item.FileStatus = request.FileStatus.Trim();
+            if (request.FileStatus != null)
+                item.FileStatus = ReplicaApiWorkflowStatusNormalizer.NormalizeOrDefault(request.FileStatus);
         if (request.LastReason != null)
             item.LastReason = request.LastReason.Trim();
         if (request.SourcePath != null)

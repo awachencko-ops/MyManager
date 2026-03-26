@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Replica.Api.Infrastructure;
 using Replica.Shared.Models;
 
 namespace Replica.Api.Contracts;
@@ -10,7 +11,7 @@ public sealed class CreateOrderRequest
     public string UserName { get; set; } = string.Empty;
     public string CreatedById { get; set; } = string.Empty;
     public string CreatedByUser { get; set; } = string.Empty;
-    public string Status { get; set; } = "Waiting";
+    public string Status { get; set; } = ReplicaApiWorkflowStatusNormalizer.Waiting;
     public string Keyword { get; set; } = string.Empty;
     public string FolderName { get; set; } = string.Empty;
     public SharedOrderStartMode StartMode { get; set; } = SharedOrderStartMode.Unknown;

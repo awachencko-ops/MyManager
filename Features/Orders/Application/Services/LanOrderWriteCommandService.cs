@@ -440,9 +440,7 @@ public sealed class LanOrderWriteCommandService
 
     private static string NormalizeStatus(string? status)
     {
-        return string.IsNullOrWhiteSpace(status)
-            ? WorkflowStatusNames.Waiting
-            : status.Trim();
+        return WorkflowStatusNames.Normalize(status) ?? WorkflowStatusNames.Waiting;
     }
 
     private static string NormalizeAction(string? action)

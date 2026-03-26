@@ -51,11 +51,14 @@ public sealed class LanOrderWriteCommandServiceTests
         Assert.Equal("o-1", result.Order!.InternalId);
         Assert.Equal(7, result.Order.StorageVersion);
         Assert.Equal("1001", result.Order.Id);
+        Assert.Equal(WorkflowStatusNames.Waiting, result.Order.Status);
         Assert.Single(result.Order.Items);
+        Assert.Equal(WorkflowStatusNames.Waiting, result.Order.Items[0].FileStatus);
         Assert.Equal(@"C:\orders\1001\in.pdf", result.Order.SourcePath);
         Assert.NotNull(gateway.LastCreateRequest);
         Assert.Equal("1001", gateway.LastCreateRequest!.OrderNumber);
         Assert.Equal("operator-1", gateway.LastCreateRequest.UserName);
+        Assert.Equal(WorkflowStatusNames.Waiting, gateway.LastCreateRequest.Status);
     }
 
     [Fact]
@@ -108,9 +111,10 @@ public sealed class LanOrderWriteCommandServiceTests
         Assert.Equal("2002", gateway.LastUpdateRequest.OrderNumber);
         Assert.Equal(new DateTime(2026, 3, 24), gateway.LastUpdateRequest.ManagerOrderDate);
         Assert.Equal("operator-2", gateway.LastUpdateRequest.UserName);
-        Assert.Equal("Waiting", gateway.LastUpdateRequest.Status);
+        Assert.Equal(WorkflowStatusNames.Waiting, gateway.LastUpdateRequest.Status);
         Assert.NotNull(result.Order);
         Assert.Equal(15, result.Order!.StorageVersion);
+        Assert.Equal(WorkflowStatusNames.Waiting, result.Order.Status);
     }
 
     [Fact]

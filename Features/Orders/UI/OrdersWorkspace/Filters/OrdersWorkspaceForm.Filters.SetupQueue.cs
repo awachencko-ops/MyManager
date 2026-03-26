@@ -278,85 +278,25 @@ namespace Replica
 
         private void InitializeServerHeaderVisuals()
         {
-            if (pnlServerHeader.IsDisposed)
-                return;
-
-            EnsureQueuePanelLayoutOrder();
-            pnlServerHeader.SuspendLayout();
-            pnlServerHeader.BackColor = QueueHeaderBackColor;
-            pnlServerHeader.Padding = new Padding(0);
-            pnlServerHeader.Height = Math.Max(64, pnlServerHeader.Height);
-            pnlServerHeader.Resize -= PnlServerHeader_Resize;
-            pnlServerHeader.Resize += PnlServerHeader_Resize;
-            EnsureServerHeaderControls();
-            LayoutServerHeaderControls();
             UpdateServerHeaderTitle();
-            UpdateServerHeaderConnectionState(IsQueueServerConnected());
-            pnlServerHeader.ResumeLayout(performLayout: false);
         }
 
         private void EnsureServerHeaderControls()
         {
-            _serverHeaderTitleLabel ??= new Label
-            {
-                Name = "lblServerHeaderTitle",
-                AutoEllipsis = true,
-                Font = new Font("Segoe UI Semibold", 18f, FontStyle.Regular, GraphicsUnit.Pixel),
-                ForeColor = QueueHeaderTextColor,
-                BackColor = Color.Transparent,
-                TextAlign = ContentAlignment.MiddleLeft
-            };
-
-            _serverHeaderStatusLabel ??= new Label
-            {
-                Name = "lblServerHeaderStatus",
-                AutoEllipsis = true,
-                Font = new Font("Segoe UI", 12f, FontStyle.Regular, GraphicsUnit.Pixel),
-                ForeColor = QueueHeaderSecondaryTextColor,
-                BackColor = Color.Transparent,
-                TextAlign = ContentAlignment.MiddleLeft
-            };
-
-            _serverHeaderStatusDot ??= new Panel
-            {
-                Name = "pnlServerHeaderStatusDot",
-                Size = new Size(8, 8),
-                BackColor = QueueHeaderOfflineIndicatorColor
-            };
-
-            if (!pnlServerHeader.Controls.Contains(_serverHeaderTitleLabel))
-                pnlServerHeader.Controls.Add(_serverHeaderTitleLabel);
-            if (!pnlServerHeader.Controls.Contains(_serverHeaderStatusLabel))
-                pnlServerHeader.Controls.Add(_serverHeaderStatusLabel);
-            if (!pnlServerHeader.Controls.Contains(_serverHeaderStatusDot))
-                pnlServerHeader.Controls.Add(_serverHeaderStatusDot);
         }
 
         private void LayoutServerHeaderControls()
         {
-            if (_serverHeaderTitleLabel == null || _serverHeaderStatusLabel == null || _serverHeaderStatusDot == null)
-                return;
-
-            var width = Math.Max(0, pnlServerHeader.ClientSize.Width);
-            _serverHeaderTitleLabel.Bounds = new Rectangle(14, 10, Math.Max(0, width - 26), 28);
-            _serverHeaderStatusDot.Location = new Point(14, 42);
-            _serverHeaderStatusLabel.Bounds = new Rectangle(28, 34, Math.Max(0, width - 40), 24);
         }
 
         private void PnlServerHeader_Resize(object? sender, EventArgs e)
         {
-            LayoutServerHeaderControls();
         }
 
         private void UpdateServerHeaderTitle()
         {
-            if (_serverHeaderTitleLabel == null)
-                return;
-
             if (string.IsNullOrWhiteSpace(_currentUserName))
                 _currentUserName = GetDefaultUserName();
-
-            _serverHeaderTitleLabel.Text = _currentUserName;
         }
 
         private void UpdateServerHeaderConnectionState(bool isConnected)
@@ -393,11 +333,6 @@ namespace Replica
 
         private void UpdateServerHeaderConnectionState(string statusText, Color statusColor)
         {
-            if (_serverHeaderStatusDot != null)
-                _serverHeaderStatusDot.BackColor = statusColor;
-
-            if (_serverHeaderStatusLabel != null)
-                _serverHeaderStatusLabel.Text = statusText;
         }
 
         private void PopulateQueueTree()

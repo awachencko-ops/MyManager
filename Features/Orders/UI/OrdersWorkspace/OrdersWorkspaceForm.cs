@@ -111,7 +111,7 @@ namespace Replica
             {
                 if (!EnsureServerWriteAllowed("Удаление заказа"))
                     return;
-                RemoveSelectedOrder();
+                await RemoveSelectedOrderAsync();
                 return;
             }
 
@@ -676,7 +676,6 @@ namespace Replica
             scMain.Panel1.Padding = new Padding(1, 0, 0, 0);
             scMain.Panel1.BackColor = QueuePanelDividerColor;
             EnsureQueuePanelLayoutOrder();
-            InitializeServerHeaderVisuals();
 
             treeView1.HideSelection = false;
             treeView1.DrawMode = TreeViewDrawMode.OwnerDrawText;
@@ -702,20 +701,7 @@ namespace Replica
 
         private void EnsureQueuePanelLayoutOrder()
         {
-            pnlServerHeader.Dock = DockStyle.Top;
             treeView1.Dock = DockStyle.Fill;
-
-            var panel1Controls = scMain.Panel1.Controls;
-            if (!panel1Controls.Contains(pnlServerHeader))
-                panel1Controls.Add(pnlServerHeader);
-
-            if (!panel1Controls.Contains(treeView1))
-                return;
-
-            // For WinForms docking, Fill should be earlier in z-order than Top.
-            // This guarantees that Top reserves space instead of overlaying Fill.
-            panel1Controls.SetChildIndex(treeView1, 0);
-            panel1Controls.SetChildIndex(pnlServerHeader, 1);
             scMain.Panel1.PerformLayout();
         }
 
@@ -860,7 +846,7 @@ namespace Replica
             KeyDown += MainForm_KeyDown;
         }
 
-        private void MainForm_KeyDown(object? sender, KeyEventArgs e)
+        private async void MainForm_KeyDown(object? sender, KeyEventArgs e)
         {
             if (e.KeyCode != Keys.Delete && e.KeyCode != Keys.Back)
                 return;
@@ -872,7 +858,7 @@ namespace Replica
             e.SuppressKeyPress = true;
             if (!EnsureServerWriteAllowed("Удаление заказа"))
                 return;
-            RemoveSelectedOrder();
+            await RemoveSelectedOrderAsync();
         }
 
         private void UpdateActionButtonsState()

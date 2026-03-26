@@ -231,7 +231,7 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
             UserName = request.UserName?.Trim() ?? string.Empty,
             CreatedById = request.CreatedById?.Trim() ?? normalizedActor,
             CreatedByUser = request.CreatedByUser?.Trim() ?? normalizedActor,
-            Status = request.Status?.Trim() ?? "Waiting",
+            Status = ReplicaApiWorkflowStatusNormalizer.NormalizeOrDefault(request.Status),
             Keyword = request.Keyword?.Trim() ?? string.Empty,
             FolderName = request.FolderName?.Trim() ?? string.Empty,
             StartMode = request.StartMode,
@@ -257,7 +257,7 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
             item.SequenceNo = i;
             item.Version = 1;
             item.UpdatedAt = now;
-            item.FileStatus = string.IsNullOrWhiteSpace(item.FileStatus) ? "Waiting" : item.FileStatus.Trim();
+            item.FileStatus = ReplicaApiWorkflowStatusNormalizer.NormalizeOrDefault(item.FileStatus);
             order.Items.Add(item);
 
             db.OrderItems.Add(BuildOrderItemRecord(order.InternalId, item));
@@ -389,7 +389,7 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
             order.UserName = request.UserName.Trim();
         if (request.Status != null)
         {
-            order.Status = request.Status.Trim();
+            order.Status = ReplicaApiWorkflowStatusNormalizer.NormalizeOrDefault(request.Status);
             order.LastStatusAt = DateTime.Now;
             order.LastStatusSource = "api";
             order.LastStatusReason = "patch-order";
@@ -479,7 +479,7 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
         item.SequenceNo = nextSequenceNo;
         item.Version = 1;
         item.UpdatedAt = DateTime.Now;
-        item.FileStatus = string.IsNullOrWhiteSpace(item.FileStatus) ? "Waiting" : item.FileStatus.Trim();
+        item.FileStatus = ReplicaApiWorkflowStatusNormalizer.NormalizeOrDefault(item.FileStatus);
 
         db.OrderItems.Add(BuildOrderItemRecord(orderRecord.InternalId, item));
 
@@ -573,8 +573,8 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
             item.ClientFileLabel = request.ClientFileLabel.Trim();
         if (request.Variant != null)
             item.Variant = request.Variant.Trim();
-        if (request.FileStatus != null)
-            item.FileStatus = request.FileStatus.Trim();
+            if (request.FileStatus != null)
+                item.FileStatus = ReplicaApiWorkflowStatusNormalizer.NormalizeOrDefault(request.FileStatus);
         if (request.LastReason != null)
             item.LastReason = request.LastReason.Trim();
         if (request.SourcePath != null)

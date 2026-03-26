@@ -35,10 +35,10 @@ namespace Replica
                 if (order != null)
                     OpenOrderStageFolder(order, stage);
             };
-            _gridMenu.Delete = () =>
+            _gridMenu.Delete = async () =>
             {
                 if (TrySelectContextRow())
-                    RemoveSelectedOrder();
+                    await RemoveSelectedOrderAsync();
             };
             _gridMenu.Run = async () =>
             {
