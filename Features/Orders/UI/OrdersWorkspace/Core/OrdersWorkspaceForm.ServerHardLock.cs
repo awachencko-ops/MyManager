@@ -1,6 +1,5 @@
 using System;
 using System.Drawing;
-using System.Net.Sockets;
 using System.Windows.Forms;
 
 namespace Replica
@@ -22,28 +21,6 @@ namespace Replica
         {
             if (!ShouldUseLanRunApi())
                 return true;
-
-            if (!CanQuickReachLanApiHost())
-            {
-                RequestLanServerProbe("write-guard", force: true);
-                var quickCheckDetails = "\u0411\u044b\u0441\u0442\u0440\u0430\u044f TCP-\u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0430 \u0434\u043e API \u043d\u0435 \u043f\u0440\u043e\u0448\u043b\u0430.";
-                ApplyServerHardLockState(shouldLock: true, quickCheckDetails);
-                SetBottomStatus($"{operationCaption}: \u043d\u0435\u0442 \u0441\u043e\u0435\u0434\u0438\u043d\u0435\u043d\u0438\u044f \u0441 \u0441\u0435\u0440\u0432\u0435\u0440\u043e\u043c");
-
-                var nowUtcQuick = DateTime.UtcNow;
-                if ((nowUtcQuick - _serverHardLockLastDialogUtc).TotalMilliseconds >= 1200)
-                {
-                    _serverHardLockLastDialogUtc = nowUtcQuick;
-                    MessageBox.Show(
-                        this,
-                        $"{operationCaption} \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u043d\u043e.{Environment.NewLine}{ServerHardLockTitle}.{Environment.NewLine}{quickCheckDetails}",
-                        operationCaption,
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Warning);
-                }
-
-                return false;
-            }
 
             var snapshot = GetLanServerProbeSnapshot(out var probeInProgress, out _);
             if (snapshot.ApiReachable && snapshot.IsReady)
@@ -67,24 +44,6 @@ namespace Replica
             }
 
             return false;
-        }
-
-        private bool CanQuickReachLanApiHost()
-        {
-            if (!TryResolveLanApiBaseUri(_lanApiBaseUrl, out var baseUri))
-                return false;
-
-            try
-            {
-                using var tcpClient = new TcpClient();
-                var connectTask = tcpClient.ConnectAsync(baseUri.Host, baseUri.Port);
-                var connectedInTime = connectTask.Wait(TimeSpan.FromMilliseconds(450));
-                return connectedInTime && tcpClient.Connected;
-            }
-            catch
-            {
-                return false;
-            }
         }
 
         private void ApplyServerHardLockFromLanSnapshot(LanServerProbeSnapshot snapshot, bool probeInProgress)

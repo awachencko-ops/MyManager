@@ -211,6 +211,8 @@ namespace Replica
             if (_isRebuildingGrid)
                 return;
 
+            var rebuildTimer = Stopwatch.StartNew();
+
             if (NormalizeOrderTopologyInHistory(logIssues: false))
                 SaveHistory();
 
@@ -256,6 +258,23 @@ namespace Replica
             _ordersViewWarmupCoordinator?.SyncGridSignature();
 
             HandleOrdersGridChanged();
+            rebuildTimer.Stop();
+            RecordOrdersGridRebuildDuration(rebuildTimer.Elapsed.TotalMilliseconds);
+        }
+
+        private void RecordOrdersGridRebuildDuration(double elapsedMs)
+        {
+            _ordersGridRebuildCount++;
+            _ordersGridRebuildLastMs = elapsedMs;
+            if (elapsedMs > _ordersGridRebuildMaxMs)
+                _ordersGridRebuildMaxMs = elapsedMs;
+
+            if (_ordersGridRebuildCount <= 3 || elapsedMs >= OrdersGridRebuildWarnThresholdMs)
+            {
+                var level = elapsedMs >= OrdersGridRebuildWarnThresholdMs ? "WARN" : "INFO";
+                Logger.Info(
+                    $"UI-PERF | level={level} | op=rebuild-grid | elapsedMs={elapsedMs:F1} | rows={dgvJobs.Rows.Count} | orders={_orderHistory.Count} | maxMs={_ordersGridRebuildMaxMs:F1} | count={_ordersGridRebuildCount}");
+            }
         }
 
         private void AddOrderRowsToGrid(OrderData order)

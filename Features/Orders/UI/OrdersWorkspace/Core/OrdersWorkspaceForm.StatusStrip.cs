@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -8,7 +8,6 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
-using System.Net.Sockets;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -115,9 +114,7 @@ namespace Replica
             try
             {
                 SetBottomStatus("Проверяем подключение к LAN API...");
-                TryStartLocalLanApiIfNeeded(out var recoveryMessage);
-                if (!string.IsNullOrWhiteSpace(recoveryMessage))
-                    SetBottomStatus(recoveryMessage);
+                await TryStartLocalLanApiIfNeededAsync();
 
                 RequestLanServerProbe("manual-refresh", force: true);
                 await WaitForLanProbeCompletionAsync(TimeSpan.FromSeconds(8));
@@ -171,6 +168,13 @@ namespace Replica
                 _tileHoverActivateTimer.Tick -= TileHoverActivateTimer_Tick;
                 _tileHoverActivateTimer.Dispose();
                 _tileHoverActivateTimer = null;
+            }
+            _searchDebounceTimer?.Stop();
+            if (_searchDebounceTimer != null)
+            {
+                _searchDebounceTimer.Tick -= SearchDebounceTimer_Tick;
+                _searchDebounceTimer.Dispose();
+                _searchDebounceTimer = null;
             }
 
             toolConnection.MouseEnter -= ToolConnection_MouseEnter;
@@ -855,26 +859,26 @@ namespace Replica
             }
         }
 
-        private bool TryStartLocalLanApiIfNeeded(out string message)
+        private Task<bool> TryStartLocalLanApiIfNeededAsync()
         {
-            message = string.Empty;
             if (!IsLanApiLocalHost())
             {
-                message = "Автовосстановление доступно только для localhost API.";
-                return false;
+                SetBottomStatus("Автовосстановление доступно только для localhost API.");
+                return Task.FromResult(false);
             }
 
-            if (IsLanApiPortListening())
+            var snapshot = GetLanServerProbeSnapshot(out _, out _);
+            if (snapshot.ApiReachable)
             {
-                message = "LAN API уже слушает локальный порт. Выполняем повторную проверку.";
-                return false;
+                SetBottomStatus("LAN API уже доступен. Выполняем повторную проверку.");
+                return Task.FromResult(false);
             }
 
             var runningApiProcesses = Process.GetProcessesByName("Replica.Api");
             if (runningApiProcesses.Length > 0)
             {
-                message = "Replica.Api уже запущен. Выполняем повторную проверку.";
-                return false;
+                SetBottomStatus("Replica.Api уже запущен. Выполняем повторную проверку.");
+                return Task.FromResult(false);
             }
 
             foreach (var exeCandidate in ResolveReplicaApiExecutableCandidates())
@@ -888,8 +892,8 @@ namespace Replica
                         exeCandidate,
                         workingDirectory: Path.GetDirectoryName(exeCandidate) ?? AppContext.BaseDirectory);
                     Process.Start(startInfo);
-                    message = "Запущен локальный Replica.Api, ждём готовность...";
-                    return true;
+                    SetBottomStatus("Запущен локальный Replica.Api, ждём готовность...");
+                    return Task.FromResult(true);
                 }
                 catch
                 {
@@ -909,8 +913,8 @@ namespace Replica
                         arguments: $"\"{dllCandidate}\"",
                         workingDirectory: Path.GetDirectoryName(dllCandidate) ?? AppContext.BaseDirectory);
                     Process.Start(startInfo);
-                    message = "Запущен локальный Replica.Api (dotnet), ждём готовность...";
-                    return true;
+                    SetBottomStatus("Запущен локальный Replica.Api (dotnet), ждём готовность...");
+                    return Task.FromResult(true);
                 }
                 catch
                 {
@@ -930,8 +934,8 @@ namespace Replica
                         arguments: $"run --project \"{projectCandidate}\"",
                         workingDirectory: Path.GetDirectoryName(projectCandidate) ?? AppContext.BaseDirectory);
                     Process.Start(startInfo);
-                    message = "Запущен локальный Replica.Api (dotnet run), ждём готовность...";
-                    return true;
+                    SetBottomStatus("Запущен локальный Replica.Api (dotnet run), ждём готовность...");
+                    return Task.FromResult(true);
                 }
                 catch
                 {
@@ -939,8 +943,8 @@ namespace Replica
                 }
             }
 
-            message = "Replica.Api не найден рядом с клиентом. Запустите API вручную.";
-            return false;
+            SetBottomStatus("Replica.Api не найден рядом с клиентом. Запустите API вручную.");
+            return Task.FromResult(false);
         }
 
         private bool IsLanApiLocalHost()
@@ -954,34 +958,12 @@ namespace Replica
                    || string.Equals(host, "::1", StringComparison.OrdinalIgnoreCase);
         }
 
-        private void EnsureLocalLanApiStartup()
+        private async void EnsureLocalLanApiStartup()
         {
             if (!ShouldUseLanRunApi() || !IsLanApiLocalHost())
                 return;
 
-            if (!TryStartLocalLanApiIfNeeded(out var startupMessage))
-                return;
-
-            if (!string.IsNullOrWhiteSpace(startupMessage))
-                SetBottomStatus(startupMessage);
-        }
-
-        private bool IsLanApiPortListening()
-        {
-            if (!TryResolveLanApiBaseUri(_lanApiBaseUrl, out var baseUri))
-                return false;
-
-            try
-            {
-                using var tcpClient = new TcpClient();
-                var connectTask = tcpClient.ConnectAsync(baseUri.Host, baseUri.Port);
-                var connectedInTime = connectTask.Wait(TimeSpan.FromMilliseconds(350));
-                return connectedInTime && tcpClient.Connected;
-            }
-            catch
-            {
-                return false;
-            }
+            await TryStartLocalLanApiIfNeededAsync();
         }
 
         private static IEnumerable<string> ResolveReplicaApiExecutableCandidates()

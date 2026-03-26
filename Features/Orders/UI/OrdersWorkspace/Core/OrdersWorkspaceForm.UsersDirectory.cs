@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Replica.Shared;
 
 namespace Replica
@@ -20,106 +23,142 @@ namespace Replica
 
         private void RefreshUsersDirectory(bool forceRefresh, bool refreshGrid)
         {
-            var nowUtc = DateTime.UtcNow;
-            if (!forceRefresh &&
-                nowUtc - _usersDirectoryLastRefreshAt < TimeSpan.FromMilliseconds(UsersDirectoryRefreshIntervalMs))
+            QueueUsersDirectoryRefresh(forceRefresh, refreshGrid);
+        }
+
+        private async void QueueUsersDirectoryRefresh(bool forceRefresh, bool refreshGrid)
+        {
+            try
             {
-                return;
+                await RefreshUsersDirectoryCoreAsync(forceRefresh, refreshGrid);
             }
-
-            _usersDirectoryLastRefreshAt = nowUtc;
-
-            var fallbackUsers = _filterUsers.Count > 0
-                ? _filterUsers
-                : _users;
-
-            UsersDirectoryService.LoadResult loadResult;
-            var lanBackendEnabled = _ordersStorageBackend == OrdersStorageMode.LanPostgreSql;
-            if (lanBackendEnabled)
+            catch (Exception ex)
             {
-                if (TryLoadUsersDirectoryFromLanApi(out var apiUsers, out var apiServerUsers, out var apiStatusText))
+                Logger.Warn($"USERS-DIRECTORY | refresh-failed | {ex.Message}");
+            }
+        }
+
+        private async Task RefreshUsersDirectoryCoreAsync(bool forceRefresh, bool refreshGrid)
+        {
+            if (Interlocked.CompareExchange(ref _usersDirectoryRefreshInProgress, 1, 0) != 0)
+                return;
+
+            var timer = Stopwatch.StartNew();
+            var refreshSource = "unknown";
+
+            try
+            {
+                var nowUtc = DateTime.UtcNow;
+                if (!forceRefresh
+                    && nowUtc - _usersDirectoryLastRefreshAt < TimeSpan.FromMilliseconds(UsersDirectoryRefreshIntervalMs))
                 {
-                    loadResult = new UsersDirectoryService.LoadResult
+                    return;
+                }
+
+                _usersDirectoryLastRefreshAt = nowUtc;
+
+                var fallbackUsers = _filterUsers.Count > 0
+                    ? _filterUsers
+                    : _users;
+                var fallbackUsersSnapshot = fallbackUsers.ToList();
+
+                UsersDirectoryService.LoadResult loadResult;
+                var lanBackendEnabled = _ordersStorageBackend == OrdersStorageMode.LanPostgreSql;
+                if (lanBackendEnabled)
+                {
+                    var apiLoadResult = await TryLoadUsersDirectoryFromLanApiAsync();
+                    if (apiLoadResult.IsSuccess)
                     {
-                        Users = apiUsers,
-                        ServerUsersByDisplayName = apiServerUsers,
-                        LoadedFromSource = true,
-                        LoadedFromCache = false,
-                        StatusText = apiStatusText
-                    };
+                        refreshSource = "lan-api";
+                        loadResult = new UsersDirectoryService.LoadResult
+                        {
+                            Users = apiLoadResult.Users,
+                            ServerUsersByDisplayName = apiLoadResult.ServerUsersByDisplayName,
+                            LoadedFromSource = true,
+                            LoadedFromCache = false,
+                            StatusText = apiLoadResult.StatusText
+                        };
+                    }
+                    else
+                    {
+                        refreshSource = "lan-api-fallback";
+                        var statusText = string.IsNullOrWhiteSpace(apiLoadResult.StatusText)
+                            ? "РџРѕР»СЊР·РѕРІР°С‚РµР»Рё: API РЅРµРґРѕСЃС‚СѓРїРµРЅ, СЃРїРёСЃРѕРє РЅРµ РѕР±РЅРѕРІР»РµРЅ"
+                            : apiLoadResult.StatusText;
+                        loadResult = new UsersDirectoryService.LoadResult
+                        {
+                            Users = fallbackUsersSnapshot.ToList(),
+                            ServerUsersByDisplayName = BuildDefaultServerUsersMap(fallbackUsersSnapshot),
+                            LoadedFromSource = false,
+                            LoadedFromCache = false,
+                            StatusText = statusText
+                        };
+                    }
                 }
                 else
                 {
-                    var statusText = string.IsNullOrWhiteSpace(apiStatusText)
-                        ? "Пользователи: API недоступен, список не обновлен"
-                        : apiStatusText;
-                    loadResult = new UsersDirectoryService.LoadResult
-                    {
-                        Users = fallbackUsers.ToList(),
-                        ServerUsersByDisplayName = BuildDefaultServerUsersMap(fallbackUsers),
-                        LoadedFromSource = false,
-                        LoadedFromCache = false,
-                        StatusText = statusText
-                    };
+                    refreshSource = "files";
+                    loadResult = await Task.Run(() =>
+                        UsersDirectoryService.Load(_usersSourceFilePath, _usersCacheFilePath, fallbackUsersSnapshot));
+                }
+
+                if (Disposing || IsDisposed)
+                    return;
+
+                _usersLoadedFromCache = loadResult.LoadedFromCache;
+                _usersDirectoryStatusText = loadResult.StatusText;
+
+                var nextUsers = loadResult.Users.Count > 0
+                    ? loadResult.Users
+                    : fallbackUsersSnapshot;
+                var nextServerUsers = loadResult.ServerUsersByDisplayName.Count > 0
+                    ? loadResult.ServerUsersByDisplayName
+                    : BuildDefaultServerUsersMap(nextUsers);
+
+                RefreshCurrentUserProfile(forceRefresh);
+                if (AreUserListsEqual(_filterUsers, nextUsers) && AreUserMappingsEqual(_serverUsersByDisplayName, nextServerUsers))
+                    return;
+
+                _users.Clear();
+                _users.AddRange(nextUsers);
+                _filterUsers.Clear();
+                _filterUsers.AddRange(nextUsers);
+                _serverUsersByDisplayName.Clear();
+                foreach (var entry in nextServerUsers)
+                    _serverUsersByDisplayName[entry.Key] = entry.Value;
+
+                var selectedUsersChanged = RemoveUnavailableSelectedUsers();
+                var historyChanged = NormalizeOrderUsersInHistory();
+                if (historyChanged)
+                    SaveHistory();
+
+                if (refreshGrid || selectedUsersChanged || historyChanged)
+                    HandleOrdersGridChanged();
+                else
+                    RefreshUserFilterChecklist();
+            }
+            finally
+            {
+                timer.Stop();
+                Interlocked.Exchange(ref _usersDirectoryRefreshInProgress, 0);
+                if (timer.Elapsed.TotalMilliseconds >= 350d)
+                {
+                    Logger.Warn(
+                        $"UI-PERF | op=users-directory-refresh | source={refreshSource} | elapsedMs={timer.Elapsed.TotalMilliseconds:F1}");
                 }
             }
-            else
-            {
-                loadResult = UsersDirectoryService.Load(_usersSourceFilePath, _usersCacheFilePath, fallbackUsers);
-            }
-            _usersLoadedFromCache = loadResult.LoadedFromCache;
-            _usersDirectoryStatusText = loadResult.StatusText;
-
-            var nextUsers = loadResult.Users.Count > 0
-                ? loadResult.Users
-                : fallbackUsers;
-            var nextServerUsers = loadResult.ServerUsersByDisplayName.Count > 0
-                ? loadResult.ServerUsersByDisplayName
-                : BuildDefaultServerUsersMap(nextUsers);
-
-            RefreshCurrentUserProfile(forceRefresh);
-            if (AreUserListsEqual(_filterUsers, nextUsers) && AreUserMappingsEqual(_serverUsersByDisplayName, nextServerUsers))
-                return;
-
-            _users.Clear();
-            _users.AddRange(nextUsers);
-            _filterUsers.Clear();
-            _filterUsers.AddRange(nextUsers);
-            _serverUsersByDisplayName.Clear();
-            foreach (var entry in nextServerUsers)
-                _serverUsersByDisplayName[entry.Key] = entry.Value;
-
-            var selectedUsersChanged = RemoveUnavailableSelectedUsers();
-            var historyChanged = NormalizeOrderUsersInHistory();
-            if (historyChanged)
-                SaveHistory();
-
-            if (refreshGrid || selectedUsersChanged || historyChanged)
-                HandleOrdersGridChanged();
-            else
-                RefreshUserFilterChecklist();
         }
 
-        private bool TryLoadUsersDirectoryFromLanApi(
-            out IReadOnlyList<string> users,
-            out IReadOnlyDictionary<string, string> serverUsersByDisplayName,
-            out string statusText)
+        private async Task<(bool IsSuccess, IReadOnlyList<string> Users, IReadOnlyDictionary<string, string> ServerUsersByDisplayName, string StatusText)> TryLoadUsersDirectoryFromLanApiAsync()
         {
-            users = Array.Empty<string>();
-            serverUsersByDisplayName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            statusText = string.Empty;
-
-            if (_ordersStorageBackend != OrdersStorageMode.LanPostgreSql
-                || !ShouldUseLanRunApi())
+            if (_ordersStorageBackend != OrdersStorageMode.LanPostgreSql || !ShouldUseLanRunApi())
             {
-                statusText = "Пользователи: LAN API выключен";
-                return false;
+                return (false, Array.Empty<string>(), new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), "РџРѕР»СЊР·РѕРІР°С‚РµР»Рё: LAN API РІС‹РєР»СЋС‡РµРЅ");
             }
 
             if (!TryResolveLanApiBaseUri(_lanApiBaseUrl, out var baseUri))
             {
-                statusText = "Пользователи: API URL не задан";
-                return false;
+                return (false, Array.Empty<string>(), new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), "РџРѕР»СЊР·РѕРІР°С‚РµР»Рё: API URL РЅРµ Р·Р°РґР°РЅ");
             }
 
             try
@@ -127,22 +166,15 @@ namespace Replica
                 var usersUri = new Uri(baseUri, "api/users");
                 using var request = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Get, usersUri);
                 AddLanApiActorHeaders(request, ResolveLanApiActor());
-                using var timeoutCts = new System.Threading.CancellationTokenSource(TimeSpan.FromMilliseconds(1200));
-                using var response = _lanStatusHttpClient
-                    .SendAsync(request, timeoutCts.Token)
-                    .GetAwaiter()
-                    .GetResult();
+                using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(1200));
+                using var response = await _lanStatusHttpClient.SendAsync(request, timeoutCts.Token);
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    statusText = $"Пользователи: API вернул {(int)response.StatusCode}";
-                    return false;
+                    return (false, Array.Empty<string>(), new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), $"РџРѕР»СЊР·РѕРІР°С‚РµР»Рё: API РІРµСЂРЅСѓР» {(int)response.StatusCode}");
                 }
 
-                var payload = response.Content
-                    .ReadAsStringAsync(timeoutCts.Token)
-                    .GetAwaiter()
-                    .GetResult();
+                var payload = await response.Content.ReadAsStringAsync(timeoutCts.Token);
                 var apiUsers = System.Text.Json.JsonSerializer.Deserialize<List<LanApiUserContract>>(
                     payload,
                     new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)
@@ -166,22 +198,20 @@ namespace Replica
 
                 if (userList.Count == 0)
                 {
-                    statusText = "Пользователи: API вернул пустой список";
-                    return false;
+                    return (false, Array.Empty<string>(), new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), "РџРѕР»СЊР·РѕРІР°С‚РµР»Рё: API РІРµСЂРЅСѓР» РїСѓСЃС‚РѕР№ СЃРїРёСЃРѕРє");
                 }
 
-                users = userList;
-                serverUsersByDisplayName = userMap;
-                statusText = $"Пользователи: API ({usersUri.Host}:{usersUri.Port})";
-                return true;
+                return (true, userList, userMap, $"РџРѕР»СЊР·РѕРІР°С‚РµР»Рё: API ({usersUri.Host}:{usersUri.Port})");
+            }
+            catch (OperationCanceledException)
+            {
+                return (false, Array.Empty<string>(), new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), "РџРѕР»СЊР·РѕРІР°С‚РµР»Рё: API timeout");
             }
             catch
             {
-                statusText = "Пользователи: API недоступен";
-                return false;
+                return (false, Array.Empty<string>(), new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), "РџРѕР»СЊР·РѕРІР°С‚РµР»Рё: API РЅРµРґРѕСЃС‚СѓРїРµРЅ");
             }
         }
-
         private string GetDefaultUserName()
         {
             if (!string.IsNullOrWhiteSpace(_currentUserName))

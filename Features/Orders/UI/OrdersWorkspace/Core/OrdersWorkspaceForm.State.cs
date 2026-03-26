@@ -61,6 +61,7 @@ namespace Replica
         private Font? _printTileOrderFont;
         private OrderProcessor? _processor;
         private System.Windows.Forms.Timer? _trayIndicatorsTimer;
+        private System.Windows.Forms.Timer? _searchDebounceTimer;
         private System.Windows.Forms.Timer? _gridHoverActivateTimer;
         private System.Windows.Forms.Timer? _tileHoverActivateTimer;
         private bool _isRebuildingGrid;
@@ -114,6 +115,10 @@ namespace Replica
         private bool _usersLoadedFromCache;
         private string _usersDirectoryStatusText = "Пользователи: не проверены";
         private DateTime _usersDirectoryLastRefreshAt = DateTime.MinValue;
+        private int _usersDirectoryRefreshInProgress;
+        private long _ordersGridRebuildCount;
+        private double _ordersGridRebuildLastMs;
+        private double _ordersGridRebuildMaxMs;
 
         private static readonly string[] QueueStatuses = QueueStatusNames.All;
 
@@ -138,6 +143,8 @@ namespace Replica
         private const int GridHoverActivateDelayMs = 500;
         private const int TileHoverActivateDelayMs = 500;
         private const int UsersDirectoryRefreshIntervalMs = 60000;
+        private const int SearchDebounceIntervalMs = 180;
+        private const double OrdersGridRebuildWarnThresholdMs = 140d;
         private const long DiskWarningThresholdBytes = 10L * 1024 * 1024 * 1024;
         private const long DiskCriticalThresholdBytes = 5L * 1024 * 1024 * 1024;
 

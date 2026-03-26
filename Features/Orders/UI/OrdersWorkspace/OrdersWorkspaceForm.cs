@@ -225,7 +225,19 @@ namespace Replica
         // Backward-compatible sync entry point used by legacy reflective smoke harness.
         private void AddCreatedOrder(OrderData order)
         {
-            AddCreatedOrderAsync(order).GetAwaiter().GetResult();
+            QueueAddCreatedOrder(order);
+        }
+
+        private async void QueueAddCreatedOrder(OrderData order)
+        {
+            try
+            {
+                await AddCreatedOrderAsync(order);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn($"ORDER-CREATE | async-wrapper-failed | {ex.Message}");
+            }
         }
 
         private void EditOrderFromGrid(int rowIndex)
@@ -745,11 +757,41 @@ namespace Replica
 
         private void InitializeOrdersDataFlow()
         {
-            tbSearch.TextChanged += (_, _) => RebuildOrdersGrid();
+            EnsureSearchDebounceTimer();
+            tbSearch.TextChanged -= TbSearch_TextChanged;
+            tbSearch.TextChanged += TbSearch_TextChanged;
             LoadHistory();
             RefreshArchivedStatuses(forceArchiveIndexRefresh: true, rebuildGridIfChanged: false);
             RebuildOrdersGrid();
             InitializeOrdersViewsWarmupCoordinator();
+        }
+
+        private void EnsureSearchDebounceTimer()
+        {
+            _searchDebounceTimer ??= new System.Windows.Forms.Timer
+            {
+                Interval = SearchDebounceIntervalMs
+            };
+            _searchDebounceTimer.Tick -= SearchDebounceTimer_Tick;
+            _searchDebounceTimer.Tick += SearchDebounceTimer_Tick;
+        }
+
+        private void TbSearch_TextChanged(object? sender, EventArgs e)
+        {
+            if (_searchDebounceTimer == null)
+            {
+                RebuildOrdersGrid();
+                return;
+            }
+
+            _searchDebounceTimer.Stop();
+            _searchDebounceTimer.Start();
+        }
+
+        private void SearchDebounceTimer_Tick(object? sender, EventArgs e)
+        {
+            _searchDebounceTimer?.Stop();
+            RebuildOrdersGrid();
         }
 
         private void InitializeOrdersGridVisuals()
