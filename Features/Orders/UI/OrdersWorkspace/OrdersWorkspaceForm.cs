@@ -199,17 +199,18 @@ namespace Replica
                         ResolveLanApiActor(),
                         NormalizeOrderUserName);
                 var writeResultValue = await writeResult;
-
-                if (!writeResultValue.IsSuccess || writeResultValue.Order == null)
-                {
-                    ShowLanWriteError(writeResultValue, "Создание заказа");
+                var writeOutcome = _orderApplicationService.ApplyLanOrderWriteResult(
+                    _orderHistory,
+                    targetOrder: null,
+                    writeResultValue,
+                    operationCaption: "Создание заказа",
+                    successSnapshotReason: "lan-api-create-order");
+                ApplyLanOrderWriteOutcome(writeOutcome);
+                if (!writeOutcome.IsSuccess || writeOutcome.Order == null)
                     return;
-                }
 
-                UpsertOrderInHistory(writeResultValue.Order);
-                TryRefreshRepositorySnapshotFromStorage(_orderHistory, "lan-api-create-order");
                 RebuildOrdersGrid();
-                TryRestoreSelectedRowByTag(OrderGridLogic.BuildOrderTag(writeResultValue.Order.InternalId));
+                TryRestoreSelectedRowByTag(OrderGridLogic.BuildOrderTag(writeOutcome.Order.InternalId));
                 return;
             }
 
@@ -296,8 +297,14 @@ namespace Replica
                         NormalizeOrderUserName)
                     .GetAwaiter()
                     .GetResult();
-
-                if (!TryApplyLanOrderUpdateResult(order, writeResult, "Редактирование заказа"))
+                var writeOutcome = _orderApplicationService.ApplyLanOrderWriteResult(
+                    _orderHistory,
+                    targetOrder: order,
+                    writeResult,
+                    operationCaption: "Редактирование заказа",
+                    successSnapshotReason: "lan-api-update-order");
+                ApplyLanOrderWriteOutcome(writeOutcome);
+                if (!writeOutcome.IsSuccess)
                     return;
 
                 RebuildOrdersGrid();
@@ -329,8 +336,14 @@ namespace Replica
                         NormalizeOrderUserName)
                     .GetAwaiter()
                     .GetResult();
-
-                if (!TryApplyLanOrderUpdateResult(order, writeResult, "Редактирование заказа"))
+                var writeOutcome = _orderApplicationService.ApplyLanOrderWriteResult(
+                    _orderHistory,
+                    targetOrder: order,
+                    writeResult,
+                    operationCaption: "Редактирование заказа",
+                    successSnapshotReason: "lan-api-update-order");
+                ApplyLanOrderWriteOutcome(writeOutcome);
+                if (!writeOutcome.IsSuccess)
                     return;
 
                 RebuildOrdersGrid();
@@ -345,25 +358,18 @@ namespace Replica
             TryRestoreSelectedRowByTag(OrderGridLogic.BuildOrderTag(order.InternalId));
         }
 
-        private bool TryApplyLanOrderUpdateResult(OrderData targetOrder, LanOrderWriteCommandResult writeResult, string operationCaption)
+        private void ApplyLanOrderWriteOutcome(LanOrderWriteApplyOutcome writeOutcome)
         {
-            if (targetOrder == null)
-                return false;
+            if (writeOutcome == null)
+                return;
 
-            if (writeResult.IsSuccess && writeResult.Order != null)
-            {
-                if (string.Equals(targetOrder.InternalId, writeResult.Order.InternalId, StringComparison.Ordinal))
-                    UpsertOrderInHistory(writeResult.Order);
+            if (writeOutcome.ShouldRefreshSnapshot && !string.IsNullOrWhiteSpace(writeOutcome.SnapshotRefreshReason))
+                TryRefreshRepositorySnapshotFromStorage(_orderHistory, writeOutcome.SnapshotRefreshReason);
 
-                TryRefreshRepositorySnapshotFromStorage(_orderHistory, "lan-api-update-order");
-                return true;
-            }
+            if (!string.IsNullOrWhiteSpace(writeOutcome.BottomStatus))
+                SetBottomStatus(writeOutcome.BottomStatus);
 
-            if (writeResult.CurrentVersion > 0)
-                targetOrder.StorageVersion = writeResult.CurrentVersion;
-
-            ShowLanWriteError(writeResult, operationCaption);
-            return false;
+            ShowOrderRunFeedbackDialog(writeOutcome.Dialog);
         }
 
         private bool TryPersistOrderStatusViaLanApi(OrderData order, string source, string reason)
@@ -395,7 +401,7 @@ namespace Replica
 
             if (writeResult.IsSuccess && writeResult.Order != null)
             {
-                ApplyLanStatusSnapshot(order, writeResult.Order);
+                _orderApplicationService.ApplyLanStatusSnapshot(order, writeResult.Order);
                 TryRefreshRepositorySnapshotFromStorage(_orderHistory, "lan-api-status-update");
                 return true;
             }
@@ -411,64 +417,25 @@ namespace Replica
             return false;
         }
 
-        private static void ApplyLanStatusSnapshot(OrderData localOrder, OrderData serverOrder)
-        {
-            if (localOrder == null || serverOrder == null)
-                return;
-
-            if (serverOrder.StorageVersion > 0)
-                localOrder.StorageVersion = serverOrder.StorageVersion;
-            if (!string.IsNullOrWhiteSpace(serverOrder.Status))
-                localOrder.Status = serverOrder.Status.Trim();
-            if (!string.IsNullOrWhiteSpace(serverOrder.LastStatusSource))
-                localOrder.LastStatusSource = serverOrder.LastStatusSource.Trim();
-            if (!string.IsNullOrWhiteSpace(serverOrder.LastStatusReason))
-                localOrder.LastStatusReason = serverOrder.LastStatusReason.Trim();
-            if (serverOrder.LastStatusAt != default)
-                localOrder.LastStatusAt = serverOrder.LastStatusAt;
-        }
-
         private void TrySyncLanItemReorderForOrders(IEnumerable<OrderData> orders, string reason)
         {
             if (!ShouldUseLanRunApi() || orders == null)
                 return;
 
-            var normalizedOrders = orders
-                .Where(order => order != null && !string.IsNullOrWhiteSpace(order.InternalId))
-                .GroupBy(order => order.InternalId, StringComparer.Ordinal)
-                .Select(group => group.First())
-                .Where(order => (order.Items?.Count ?? 0) > 1)
-                .ToList();
-            if (normalizedOrders.Count == 0)
-                return;
+            var syncOutcome = _orderApplicationService
+                .SyncLanItemReorderForOrdersAsync(
+                    orders,
+                    _orderHistory,
+                    _lanApiBaseUrl,
+                    ResolveLanApiActor(),
+                    reason,
+                    GetOrderDisplayId)
+                .GetAwaiter()
+                .GetResult();
 
-            foreach (var order in normalizedOrders)
-            {
-                var reorderResult = _orderApplicationService
-                    .TryReorderOrderItemsViaLanApiAsync(
-                        order,
-                        _lanApiBaseUrl,
-                        ResolveLanApiActor())
-                    .GetAwaiter()
-                    .GetResult();
-
-                if (reorderResult.IsSuccess && reorderResult.Order != null)
-                {
-                    UpsertOrderInHistory(reorderResult.Order);
-                    continue;
-                }
-
-                if (reorderResult.CurrentVersion > 0)
-                    order.StorageVersion = reorderResult.CurrentVersion;
-
-                var errorText = string.IsNullOrWhiteSpace(reorderResult.Error)
-                    ? "LAN reorder failed"
-                    : reorderResult.Error;
-                Logger.Warn(
-                    $"LAN-API | item-reorder-sync-failed | reason={reason} | order={GetOrderDisplayId(order)} | conflict={(reorderResult.IsConflict ? "1" : "0")} | unavailable={(reorderResult.IsUnavailable ? "1" : "0")} | {errorText}");
-            }
-
-            TryRefreshRepositorySnapshotFromStorage(_orderHistory, $"lan-api-item-reorder-{reason}");
+            ApplyOrderRunFeedbackLogs(syncOutcome.Logs);
+            if (syncOutcome.ShouldRefreshSnapshot && !string.IsNullOrWhiteSpace(syncOutcome.SnapshotRefreshReason))
+                TryRefreshRepositorySnapshotFromStorage(_orderHistory, syncOutcome.SnapshotRefreshReason);
         }
 
         private void TrySyncLanOrderItemUpsert(OrderData order, OrderFileItem item, string reason)
@@ -476,31 +443,20 @@ namespace Replica
             if (!ShouldUseLanRunApi() || order == null || item == null)
                 return;
 
-            var upsertResult = _orderApplicationService
-                .TryUpsertOrderItemViaLanApiAsync(
+            var syncOutcome = _orderApplicationService
+                .SyncLanOrderItemUpsertAsync(
                     order,
                     item,
                     _lanApiBaseUrl,
-                    ResolveLanApiActor())
+                    ResolveLanApiActor(),
+                    reason,
+                    GetOrderDisplayId)
                 .GetAwaiter()
                 .GetResult();
 
-            if (upsertResult.IsSuccess && upsertResult.Order != null)
-            {
-                ApplyLanOrderItemVersionsSnapshot(order, upsertResult.Order);
-                TryRefreshRepositorySnapshotFromStorage(_orderHistory, $"lan-api-item-upsert-{reason}");
-                return;
-            }
-
-            if (upsertResult.CurrentVersion > 0)
-                order.StorageVersion = upsertResult.CurrentVersion;
-
-            var errorText = string.IsNullOrWhiteSpace(upsertResult.Error)
-                ? "LAN item upsert failed"
-                : upsertResult.Error;
-            Logger.Warn(
-                $"LAN-API | item-upsert-sync-failed | reason={reason} | order={GetOrderDisplayId(order)} | item={item.ItemId} | conflict={(upsertResult.IsConflict ? "1" : "0")} | unavailable={(upsertResult.IsUnavailable ? "1" : "0")} | {errorText}");
-            TryRefreshRepositorySnapshotFromStorage(_orderHistory, $"lan-api-item-upsert-failed-{reason}");
+            ApplyOrderRunFeedbackLogs(syncOutcome.Logs);
+            if (syncOutcome.ShouldRefreshSnapshot && !string.IsNullOrWhiteSpace(syncOutcome.SnapshotRefreshReason))
+                TryRefreshRepositorySnapshotFromStorage(_orderHistory, syncOutcome.SnapshotRefreshReason);
         }
 
         private bool TrySyncLanOrderItemDelete(OrderData order, OrderFileItem item, string reason)
@@ -508,120 +464,21 @@ namespace Replica
             if (!ShouldUseLanRunApi() || order == null || item == null)
                 return false;
 
-            var deleteResult = _orderApplicationService
-                .TryDeleteOrderItemViaLanApiAsync(
+            var syncOutcome = _orderApplicationService
+                .SyncLanOrderItemDeleteAsync(
                     order,
                     item,
                     _lanApiBaseUrl,
-                    ResolveLanApiActor())
+                    ResolveLanApiActor(),
+                    reason,
+                    GetOrderDisplayId)
                 .GetAwaiter()
                 .GetResult();
 
-            if (deleteResult.IsSuccess && deleteResult.Order != null)
-            {
-                ApplyLanOrderItemDeleteSnapshot(order, deleteResult.Order);
-                TryRefreshRepositorySnapshotFromStorage(_orderHistory, $"lan-api-item-delete-{reason}");
-                return true;
-            }
-
-            if (deleteResult.CurrentVersion > 0)
-                order.StorageVersion = deleteResult.CurrentVersion;
-
-            var errorText = string.IsNullOrWhiteSpace(deleteResult.Error)
-                ? "LAN item delete failed"
-                : deleteResult.Error;
-            Logger.Warn(
-                $"LAN-API | item-delete-sync-failed | reason={reason} | order={GetOrderDisplayId(order)} | item={item.ItemId} | conflict={(deleteResult.IsConflict ? "1" : "0")} | unavailable={(deleteResult.IsUnavailable ? "1" : "0")} | {errorText}");
-            TryRefreshRepositorySnapshotFromStorage(_orderHistory, $"lan-api-item-delete-failed-{reason}");
-            return false;
-        }
-
-        private static void ApplyLanOrderItemVersionsSnapshot(OrderData localOrder, OrderData serverOrder)
-        {
-            if (localOrder == null || serverOrder == null)
-                return;
-
-            if (serverOrder.StorageVersion > 0)
-                localOrder.StorageVersion = serverOrder.StorageVersion;
-
-            var serverItemsById = (serverOrder.Items ?? [])
-                .Where(item => item != null && !string.IsNullOrWhiteSpace(item.ItemId))
-                .ToDictionary(item => item.ItemId, item => item, StringComparer.Ordinal);
-
-            foreach (var localItem in (localOrder.Items ?? []).Where(item => item != null))
-            {
-                if (!serverItemsById.TryGetValue(localItem.ItemId, out var serverItem))
-                    continue;
-
-                if (serverItem.StorageVersion > 0)
-                    localItem.StorageVersion = serverItem.StorageVersion;
-            }
-        }
-
-        private static void ApplyLanOrderItemDeleteSnapshot(OrderData localOrder, OrderData serverOrder)
-        {
-            if (localOrder == null || serverOrder == null)
-                return;
-
-            if (serverOrder.StorageVersion > 0)
-                localOrder.StorageVersion = serverOrder.StorageVersion;
-
-            var serverIds = (serverOrder.Items ?? [])
-                .Where(item => item != null && !string.IsNullOrWhiteSpace(item.ItemId))
-                .Select(item => item.ItemId)
-                .ToHashSet(StringComparer.Ordinal);
-
-            if (localOrder.Items != null)
-                localOrder.Items.RemoveAll(localItem => localItem == null || !serverIds.Contains(localItem.ItemId));
-
-            ApplyLanOrderItemVersionsSnapshot(localOrder, serverOrder);
-        }
-
-        private void UpsertOrderInHistory(OrderData updatedOrder)
-        {
-            if (updatedOrder == null)
-                return;
-
-            var index = _orderHistory.FindIndex(order =>
-                order != null
-                && string.Equals(order.InternalId, updatedOrder.InternalId, StringComparison.Ordinal));
-
-            if (index >= 0)
-            {
-                _orderHistory[index] = updatedOrder;
-                return;
-            }
-
-            _orderHistory.Add(updatedOrder);
-        }
-
-        private void ShowLanWriteError(LanOrderWriteCommandResult writeResult, string operationCaption)
-        {
-            var defaultError = "LAN API недоступен";
-            var errorText = string.IsNullOrWhiteSpace(writeResult.Error)
-                ? defaultError
-                : writeResult.Error;
-
-            if (writeResult.IsConflict)
-            {
-                TryRefreshRepositorySnapshotFromStorage(_orderHistory, "lan-api-write-conflict");
-                SetBottomStatus($"{operationCaption}: конфликт версии");
-                MessageBox.Show(
-                    this,
-                    $"Сервер отклонил запись из-за конфликта версии.{Environment.NewLine}{errorText}",
-                    operationCaption,
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
-                return;
-            }
-
-            SetBottomStatus($"{operationCaption} не выполнено");
-            MessageBox.Show(
-                this,
-                $"{operationCaption} не выполнено.{Environment.NewLine}{errorText}",
-                operationCaption,
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Warning);
+            ApplyOrderRunFeedbackLogs(syncOutcome.Logs);
+            if (syncOutcome.ShouldRefreshSnapshot && !string.IsNullOrWhiteSpace(syncOutcome.SnapshotRefreshReason))
+                TryRefreshRepositorySnapshotFromStorage(_orderHistory, syncOutcome.SnapshotRefreshReason);
+            return syncOutcome.IsSuccess;
         }
 
         private void LoadSettings()

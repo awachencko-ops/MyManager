@@ -1635,7 +1635,7 @@ namespace Replica
 
                 if (deleteResultValue.IsSuccess && deleteResultValue.Order != null)
                 {
-                    UpsertOrderInHistory(deleteResultValue.Order);
+                    _orderApplicationService.UpsertOrderInHistory(_orderHistory, deleteResultValue.Order);
                     AppendOrderOperationLog(
                         order,
                         OrderOperationNames.RemoveItem,

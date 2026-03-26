@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 using Xunit;
 
 namespace Replica.VerifyTests;
@@ -242,6 +243,235 @@ public sealed class OrderApplicationServiceTests
         Assert.Equal(1, updated);
         Assert.Equal(10, localOrders[0].StorageVersion);
         Assert.Equal(2, localOrders[1].StorageVersion);
+    }
+
+    [Fact]
+    public void UpsertOrderInHistory_AddsAndUpdatesByInternalId()
+    {
+        var service = CreateService();
+        var history = new List<OrderData>
+        {
+            new() { InternalId = "ord-1", Id = "1001" }
+        };
+
+        var added = new OrderData { InternalId = "ord-2", Id = "1002" };
+        service.UpsertOrderInHistory(history, added);
+        Assert.Equal(2, history.Count);
+        Assert.Same(added, history[1]);
+
+        var updated = new OrderData { InternalId = "ord-1", Id = "1001-updated" };
+        service.UpsertOrderInHistory(history, updated);
+        Assert.Equal(2, history.Count);
+        Assert.Same(updated, history[0]);
+    }
+
+    [Fact]
+    public void ApplyLanStatusSnapshot_UpdatesStatusFieldsFromServer()
+    {
+        var service = CreateService();
+        var local = new OrderData
+        {
+            StorageVersion = 1,
+            Status = WorkflowStatusNames.Waiting,
+            LastStatusSource = "local",
+            LastStatusReason = "pending"
+        };
+        var timestamp = new DateTime(2026, 3, 26, 16, 40, 0, DateTimeKind.Local);
+        var server = new OrderData
+        {
+            StorageVersion = 12,
+            Status = " Завершено ",
+            LastStatusSource = " api ",
+            LastStatusReason = " done ",
+            LastStatusAt = timestamp
+        };
+
+        service.ApplyLanStatusSnapshot(local, server);
+
+        Assert.Equal(12, local.StorageVersion);
+        Assert.Equal("Завершено", local.Status);
+        Assert.Equal("api", local.LastStatusSource);
+        Assert.Equal("done", local.LastStatusReason);
+        Assert.Equal(timestamp, local.LastStatusAt);
+    }
+
+    [Fact]
+    public void ApplyLanOrderItemVersionsSnapshot_UpdatesOnlyMatchingItems()
+    {
+        var service = CreateService();
+        var local = new OrderData
+        {
+            InternalId = "ord-1",
+            StorageVersion = 2,
+            Items =
+            [
+                new OrderFileItem { ItemId = "i-1", StorageVersion = 1 },
+                new OrderFileItem { ItemId = "i-2", StorageVersion = 1 }
+            ]
+        };
+        var server = new OrderData
+        {
+            InternalId = "ord-1",
+            StorageVersion = 9,
+            Items =
+            [
+                new OrderFileItem { ItemId = "i-1", StorageVersion = 7 },
+                new OrderFileItem { ItemId = "i-3", StorageVersion = 5 }
+            ]
+        };
+
+        service.ApplyLanOrderItemVersionsSnapshot(local, server);
+
+        Assert.Equal(9, local.StorageVersion);
+        Assert.Equal(7, local.Items![0].StorageVersion);
+        Assert.Equal(1, local.Items[1].StorageVersion);
+    }
+
+    [Fact]
+    public void ApplyLanOrderItemDeleteSnapshot_RemovesMissingItemsAndSyncsVersions()
+    {
+        var service = CreateService();
+        var local = new OrderData
+        {
+            InternalId = "ord-1",
+            StorageVersion = 3,
+            Items =
+            [
+                new OrderFileItem { ItemId = "i-1", StorageVersion = 1 },
+                new OrderFileItem { ItemId = "i-2", StorageVersion = 1 }
+            ]
+        };
+        var server = new OrderData
+        {
+            InternalId = "ord-1",
+            StorageVersion = 11,
+            Items =
+            [
+                new OrderFileItem { ItemId = "i-2", StorageVersion = 8 }
+            ]
+        };
+
+        service.ApplyLanOrderItemDeleteSnapshot(local, server);
+
+        Assert.Equal(11, local.StorageVersion);
+        Assert.Single(local.Items!);
+        Assert.Equal("i-2", local.Items[0].ItemId);
+        Assert.Equal(8, local.Items[0].StorageVersion);
+    }
+
+    [Fact]
+    public void ApplyLanOrderWriteResult_OnSuccess_UpsertsHistoryAndReturnsRefreshReason()
+    {
+        var service = CreateService();
+        var local = new OrderData { InternalId = "ord-1", Id = "1001" };
+        var history = new List<OrderData> { local };
+        var server = new OrderData { InternalId = "ord-1", Id = "1001", StorageVersion = 15 };
+
+        var outcome = service.ApplyLanOrderWriteResult(
+            history,
+            targetOrder: local,
+            LanOrderWriteCommandResult.Success(server),
+            operationCaption: "Редактирование заказа",
+            successSnapshotReason: "lan-api-update-order");
+
+        Assert.True(outcome.IsSuccess);
+        Assert.Same(server, outcome.Order);
+        Assert.Same(server, history[0]);
+        Assert.True(outcome.ShouldRefreshSnapshot);
+        Assert.Equal("lan-api-update-order", outcome.SnapshotRefreshReason);
+        Assert.Null(outcome.Dialog);
+        Assert.True(string.IsNullOrWhiteSpace(outcome.BottomStatus));
+    }
+
+    [Fact]
+    public void ApplyLanOrderWriteResult_OnConflict_SetsStorageVersionAndBuildsUiFeedback()
+    {
+        var service = CreateService();
+        var local = new OrderData { InternalId = "ord-1", StorageVersion = 1 };
+        var history = new List<OrderData> { local };
+
+        var outcome = service.ApplyLanOrderWriteResult(
+            history,
+            targetOrder: local,
+            LanOrderWriteCommandResult.Conflict("version conflict", currentVersion: 42),
+            operationCaption: "Редактирование заказа",
+            successSnapshotReason: "lan-api-update-order");
+
+        Assert.False(outcome.IsSuccess);
+        Assert.Equal(42, local.StorageVersion);
+        Assert.True(outcome.ShouldRefreshSnapshot);
+        Assert.Equal("lan-api-write-conflict", outcome.SnapshotRefreshReason);
+        Assert.Contains("конфликт", outcome.BottomStatus, StringComparison.OrdinalIgnoreCase);
+        Assert.NotNull(outcome.Dialog);
+        Assert.Equal(OrderRunFeedbackSeverity.Information, outcome.Dialog!.Severity);
+    }
+
+    [Fact]
+    public async Task SyncLanOrderItemUpsertAsync_OnGatewayFailure_ReturnsWarningAndFailedRefreshReason()
+    {
+        var service = CreateService();
+        var item = new OrderFileItem { ItemId = "item-1", StorageVersion = 2 };
+        var order = new OrderData
+        {
+            InternalId = "ord-1",
+            Id = "00526",
+            Items = [item]
+        };
+
+        var outcome = await service.SyncLanOrderItemUpsertAsync(
+            order,
+            item,
+            lanApiBaseUrl: string.Empty,
+            actor: "tester",
+            reason: "unit-test",
+            orderDisplayIdResolver: _ => "00526");
+
+        Assert.False(outcome.IsSuccess);
+        Assert.True(outcome.ShouldRefreshSnapshot);
+        Assert.Equal("lan-api-item-upsert-failed-unit-test", outcome.SnapshotRefreshReason);
+        var log = Assert.Single(outcome.Logs);
+        Assert.True(log.IsWarning);
+        Assert.Contains("item-upsert-sync-failed", log.Message);
+        Assert.Contains("item=item-1", log.Message);
+    }
+
+    [Fact]
+    public async Task SyncLanItemReorderForOrdersAsync_DeduplicatesByInternalId_AndBuildsSingleFailureLog()
+    {
+        var service = CreateService();
+        var orderA = new OrderData
+        {
+            InternalId = "ord-a",
+            Id = "00526",
+            Items = [new OrderFileItem { ItemId = "a1" }, new OrderFileItem { ItemId = "a2" }]
+        };
+        var duplicateOrderA = new OrderData
+        {
+            InternalId = "ord-a",
+            Id = "00526-copy",
+            Items = [new OrderFileItem { ItemId = "x1" }, new OrderFileItem { ItemId = "x2" }]
+        };
+        var singleItemOrder = new OrderData
+        {
+            InternalId = "ord-b",
+            Id = "00527",
+            Items = [new OrderFileItem { ItemId = "b1" }]
+        };
+
+        var outcome = await service.SyncLanItemReorderForOrdersAsync(
+            orders: [orderA, duplicateOrderA, singleItemOrder],
+            orderHistory: new List<OrderData> { orderA, singleItemOrder },
+            lanApiBaseUrl: string.Empty,
+            actor: "tester",
+            reason: "unit-test",
+            orderDisplayIdResolver: o => o.Id ?? string.Empty);
+
+        Assert.True(outcome.ShouldRefreshSnapshot);
+        Assert.Equal("lan-api-item-reorder-unit-test", outcome.SnapshotRefreshReason);
+        var log = Assert.Single(outcome.Logs);
+        Assert.True(log.IsWarning);
+        Assert.Contains("item-reorder-sync-failed", log.Message);
+        Assert.Contains("order=00526", log.Message);
     }
 
     [Fact]

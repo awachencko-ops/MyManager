@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -187,6 +188,40 @@ public interface IOrderApplicationService
     FileSyncStatusUpdate CalculateOrderStatusFromItems(OrderData order);
 
     int SyncStorageVersions(IReadOnlyCollection<OrderData> localOrders, IReadOnlyCollection<OrderData> storageOrders);
+    void UpsertOrderInHistory(IList<OrderData> orderHistory, OrderData updatedOrder);
+    void ApplyLanStatusSnapshot(OrderData localOrder, OrderData serverOrder);
+    void ApplyLanOrderItemVersionsSnapshot(OrderData localOrder, OrderData serverOrder);
+    void ApplyLanOrderItemDeleteSnapshot(OrderData localOrder, OrderData serverOrder);
+    LanOrderWriteApplyOutcome ApplyLanOrderWriteResult(
+        IList<OrderData> orderHistory,
+        OrderData? targetOrder,
+        LanOrderWriteCommandResult writeResult,
+        string operationCaption,
+        string successSnapshotReason);
+    Task<LanOrderItemsReorderSyncOutcome> SyncLanItemReorderForOrdersAsync(
+        IEnumerable<OrderData> orders,
+        IList<OrderData> orderHistory,
+        string lanApiBaseUrl,
+        string actor,
+        string reason,
+        Func<OrderData, string> orderDisplayIdResolver,
+        CancellationToken cancellationToken = default);
+    Task<LanOrderItemSyncOutcome> SyncLanOrderItemUpsertAsync(
+        OrderData order,
+        OrderFileItem item,
+        string lanApiBaseUrl,
+        string actor,
+        string reason,
+        Func<OrderData, string> orderDisplayIdResolver,
+        CancellationToken cancellationToken = default);
+    Task<LanOrderItemSyncOutcome> SyncLanOrderItemDeleteAsync(
+        OrderData order,
+        OrderFileItem item,
+        string lanApiBaseUrl,
+        string actor,
+        string reason,
+        Func<OrderData, string> orderDisplayIdResolver,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed class OrderApplicationService : IOrderApplicationService
@@ -609,4 +644,398 @@ public sealed class OrderApplicationService : IOrderApplicationService
 
     public int SyncStorageVersions(IReadOnlyCollection<OrderData> localOrders, IReadOnlyCollection<OrderData> storageOrders)
         => _orderStorageVersionSyncService.SyncLocalVersions(localOrders, storageOrders);
+
+    public void UpsertOrderInHistory(IList<OrderData> orderHistory, OrderData updatedOrder)
+    {
+        if (orderHistory == null || updatedOrder == null)
+            return;
+
+        var index = -1;
+        for (var i = 0; i < orderHistory.Count; i++)
+        {
+            var order = orderHistory[i];
+            if (order == null)
+                continue;
+
+            if (!string.Equals(order.InternalId, updatedOrder.InternalId, StringComparison.Ordinal))
+                continue;
+
+            index = i;
+            break;
+        }
+
+        if (index >= 0)
+        {
+            orderHistory[index] = updatedOrder;
+            return;
+        }
+
+        orderHistory.Add(updatedOrder);
+    }
+
+    public void ApplyLanStatusSnapshot(OrderData localOrder, OrderData serverOrder)
+    {
+        if (localOrder == null || serverOrder == null)
+            return;
+
+        if (serverOrder.StorageVersion > 0)
+            localOrder.StorageVersion = serverOrder.StorageVersion;
+        if (!string.IsNullOrWhiteSpace(serverOrder.Status))
+            localOrder.Status = serverOrder.Status.Trim();
+        if (!string.IsNullOrWhiteSpace(serverOrder.LastStatusSource))
+            localOrder.LastStatusSource = serverOrder.LastStatusSource.Trim();
+        if (!string.IsNullOrWhiteSpace(serverOrder.LastStatusReason))
+            localOrder.LastStatusReason = serverOrder.LastStatusReason.Trim();
+        if (serverOrder.LastStatusAt != default)
+            localOrder.LastStatusAt = serverOrder.LastStatusAt;
+    }
+
+    public void ApplyLanOrderItemVersionsSnapshot(OrderData localOrder, OrderData serverOrder)
+    {
+        if (localOrder == null || serverOrder == null)
+            return;
+
+        if (serverOrder.StorageVersion > 0)
+            localOrder.StorageVersion = serverOrder.StorageVersion;
+
+        var serverItemsById = (serverOrder.Items ?? [])
+            .Where(item => item != null && !string.IsNullOrWhiteSpace(item.ItemId))
+            .ToDictionary(item => item.ItemId, item => item, StringComparer.Ordinal);
+
+        foreach (var localItem in (localOrder.Items ?? []).Where(item => item != null))
+        {
+            if (!serverItemsById.TryGetValue(localItem.ItemId, out var serverItem))
+                continue;
+
+            if (serverItem.StorageVersion > 0)
+                localItem.StorageVersion = serverItem.StorageVersion;
+        }
+    }
+
+    public void ApplyLanOrderItemDeleteSnapshot(OrderData localOrder, OrderData serverOrder)
+    {
+        if (localOrder == null || serverOrder == null)
+            return;
+
+        if (serverOrder.StorageVersion > 0)
+            localOrder.StorageVersion = serverOrder.StorageVersion;
+
+        var serverIds = (serverOrder.Items ?? [])
+            .Where(item => item != null && !string.IsNullOrWhiteSpace(item.ItemId))
+            .Select(item => item.ItemId)
+            .ToHashSet(StringComparer.Ordinal);
+
+        if (localOrder.Items != null)
+            localOrder.Items.RemoveAll(localItem => localItem == null || !serverIds.Contains(localItem.ItemId));
+
+        ApplyLanOrderItemVersionsSnapshot(localOrder, serverOrder);
+    }
+
+    public LanOrderWriteApplyOutcome ApplyLanOrderWriteResult(
+        IList<OrderData> orderHistory,
+        OrderData? targetOrder,
+        LanOrderWriteCommandResult writeResult,
+        string operationCaption,
+        string successSnapshotReason)
+    {
+        if (writeResult != null && writeResult.IsSuccess && writeResult.Order != null)
+        {
+            UpsertOrderInHistory(orderHistory, writeResult.Order);
+            return LanOrderWriteApplyOutcome.Success(writeResult.Order, successSnapshotReason);
+        }
+
+        if (targetOrder != null && writeResult != null && writeResult.CurrentVersion > 0)
+            targetOrder.StorageVersion = writeResult.CurrentVersion;
+
+        var caption = string.IsNullOrWhiteSpace(operationCaption)
+            ? "LAN API"
+            : operationCaption.Trim();
+        var defaultError = "LAN API недоступен";
+        var errorText = writeResult == null || string.IsNullOrWhiteSpace(writeResult.Error)
+            ? defaultError
+            : writeResult.Error;
+
+        if (writeResult != null && writeResult.IsConflict)
+        {
+            return LanOrderWriteApplyOutcome.Failed(
+                bottomStatus: $"{caption}: конфликт версии",
+                dialog: new OrderRunFeedbackDialog(
+                    caption,
+                    $"Сервер отклонил запись из-за конфликта версии.{Environment.NewLine}{errorText}",
+                    OrderRunFeedbackSeverity.Information),
+                shouldRefreshSnapshot: true,
+                snapshotRefreshReason: "lan-api-write-conflict");
+        }
+
+        return LanOrderWriteApplyOutcome.Failed(
+            bottomStatus: $"{caption} не выполнено",
+            dialog: new OrderRunFeedbackDialog(
+                caption,
+                $"{caption} не выполнено.{Environment.NewLine}{errorText}",
+                OrderRunFeedbackSeverity.Warning),
+            shouldRefreshSnapshot: false,
+            snapshotRefreshReason: string.Empty);
+    }
+
+    public async Task<LanOrderItemsReorderSyncOutcome> SyncLanItemReorderForOrdersAsync(
+        IEnumerable<OrderData> orders,
+        IList<OrderData> orderHistory,
+        string lanApiBaseUrl,
+        string actor,
+        string reason,
+        Func<OrderData, string> orderDisplayIdResolver,
+        CancellationToken cancellationToken = default)
+    {
+        if (orders == null)
+            return LanOrderItemsReorderSyncOutcome.Noop();
+
+        var normalizedOrders = orders
+            .Where(order => order != null && !string.IsNullOrWhiteSpace(order.InternalId))
+            .GroupBy(order => order.InternalId, StringComparer.Ordinal)
+            .Select(group => group.First())
+            .Where(order => (order.Items?.Count ?? 0) > 1)
+            .ToList();
+        if (normalizedOrders.Count == 0)
+            return LanOrderItemsReorderSyncOutcome.Noop();
+
+        var logs = new List<OrderRunFeedbackLogEntry>();
+        foreach (var order in normalizedOrders)
+        {
+            var reorderResult = await TryReorderOrderItemsViaLanApiAsync(
+                order,
+                lanApiBaseUrl,
+                actor,
+                cancellationToken);
+
+            if (reorderResult.IsSuccess && reorderResult.Order != null)
+            {
+                UpsertOrderInHistory(orderHistory, reorderResult.Order);
+                continue;
+            }
+
+            if (reorderResult.CurrentVersion > 0)
+                order.StorageVersion = reorderResult.CurrentVersion;
+
+            var errorText = string.IsNullOrWhiteSpace(reorderResult.Error)
+                ? "LAN reorder failed"
+                : reorderResult.Error;
+            logs.Add(new OrderRunFeedbackLogEntry(
+                $"LAN-API | item-reorder-sync-failed | reason={reason} | order={ResolveOrderDisplayId(order, orderDisplayIdResolver)} | conflict={(reorderResult.IsConflict ? "1" : "0")} | unavailable={(reorderResult.IsUnavailable ? "1" : "0")} | {errorText}",
+                isWarning: true));
+        }
+
+        return LanOrderItemsReorderSyncOutcome.From($"lan-api-item-reorder-{reason}", logs);
+    }
+
+    public async Task<LanOrderItemSyncOutcome> SyncLanOrderItemUpsertAsync(
+        OrderData order,
+        OrderFileItem item,
+        string lanApiBaseUrl,
+        string actor,
+        string reason,
+        Func<OrderData, string> orderDisplayIdResolver,
+        CancellationToken cancellationToken = default)
+    {
+        if (order == null || item == null)
+            return LanOrderItemSyncOutcome.Noop();
+
+        var upsertResult = await TryUpsertOrderItemViaLanApiAsync(
+            order,
+            item,
+            lanApiBaseUrl,
+            actor,
+            cancellationToken);
+
+        if (upsertResult.IsSuccess && upsertResult.Order != null)
+        {
+            ApplyLanOrderItemVersionsSnapshot(order, upsertResult.Order);
+            return LanOrderItemSyncOutcome.Success($"lan-api-item-upsert-{reason}");
+        }
+
+        if (upsertResult.CurrentVersion > 0)
+            order.StorageVersion = upsertResult.CurrentVersion;
+
+        var errorText = string.IsNullOrWhiteSpace(upsertResult.Error)
+            ? "LAN item upsert failed"
+            : upsertResult.Error;
+        return LanOrderItemSyncOutcome.Failed(
+            snapshotRefreshReason: $"lan-api-item-upsert-failed-{reason}",
+            logs:
+            [
+                new OrderRunFeedbackLogEntry(
+                    $"LAN-API | item-upsert-sync-failed | reason={reason} | order={ResolveOrderDisplayId(order, orderDisplayIdResolver)} | item={item.ItemId} | conflict={(upsertResult.IsConflict ? "1" : "0")} | unavailable={(upsertResult.IsUnavailable ? "1" : "0")} | {errorText}",
+                    isWarning: true)
+            ]);
+    }
+
+    public async Task<LanOrderItemSyncOutcome> SyncLanOrderItemDeleteAsync(
+        OrderData order,
+        OrderFileItem item,
+        string lanApiBaseUrl,
+        string actor,
+        string reason,
+        Func<OrderData, string> orderDisplayIdResolver,
+        CancellationToken cancellationToken = default)
+    {
+        if (order == null || item == null)
+            return LanOrderItemSyncOutcome.Noop();
+
+        var deleteResult = await TryDeleteOrderItemViaLanApiAsync(
+            order,
+            item,
+            lanApiBaseUrl,
+            actor,
+            cancellationToken);
+
+        if (deleteResult.IsSuccess && deleteResult.Order != null)
+        {
+            ApplyLanOrderItemDeleteSnapshot(order, deleteResult.Order);
+            return LanOrderItemSyncOutcome.Success($"lan-api-item-delete-{reason}");
+        }
+
+        if (deleteResult.CurrentVersion > 0)
+            order.StorageVersion = deleteResult.CurrentVersion;
+
+        var errorText = string.IsNullOrWhiteSpace(deleteResult.Error)
+            ? "LAN item delete failed"
+            : deleteResult.Error;
+        return LanOrderItemSyncOutcome.Failed(
+            snapshotRefreshReason: $"lan-api-item-delete-failed-{reason}",
+            logs:
+            [
+                new OrderRunFeedbackLogEntry(
+                    $"LAN-API | item-delete-sync-failed | reason={reason} | order={ResolveOrderDisplayId(order, orderDisplayIdResolver)} | item={item.ItemId} | conflict={(deleteResult.IsConflict ? "1" : "0")} | unavailable={(deleteResult.IsUnavailable ? "1" : "0")} | {errorText}",
+                    isWarning: true)
+            ]);
+    }
+
+    private static string ResolveOrderDisplayId(OrderData order, Func<OrderData, string> orderDisplayIdResolver)
+    {
+        if (order == null)
+            return "-";
+
+        if (orderDisplayIdResolver != null)
+        {
+            var resolved = orderDisplayIdResolver(order);
+            if (!string.IsNullOrWhiteSpace(resolved))
+                return resolved.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(order.Id))
+            return order.Id.Trim();
+        if (!string.IsNullOrWhiteSpace(order.InternalId))
+            return order.InternalId.Trim();
+        return "-";
+    }
+}
+
+public sealed class LanOrderWriteApplyOutcome
+{
+    private LanOrderWriteApplyOutcome(
+        bool isSuccess,
+        OrderData? order,
+        bool shouldRefreshSnapshot,
+        string snapshotRefreshReason,
+        string bottomStatus,
+        OrderRunFeedbackDialog? dialog)
+    {
+        IsSuccess = isSuccess;
+        Order = order;
+        ShouldRefreshSnapshot = shouldRefreshSnapshot;
+        SnapshotRefreshReason = snapshotRefreshReason ?? string.Empty;
+        BottomStatus = bottomStatus ?? string.Empty;
+        Dialog = dialog;
+    }
+
+    public bool IsSuccess { get; }
+    public OrderData? Order { get; }
+    public bool ShouldRefreshSnapshot { get; }
+    public string SnapshotRefreshReason { get; }
+    public string BottomStatus { get; }
+    public OrderRunFeedbackDialog? Dialog { get; }
+
+    public static LanOrderWriteApplyOutcome Success(OrderData order, string snapshotRefreshReason)
+        => new(
+            isSuccess: true,
+            order: order,
+            shouldRefreshSnapshot: !string.IsNullOrWhiteSpace(snapshotRefreshReason),
+            snapshotRefreshReason: snapshotRefreshReason,
+            bottomStatus: string.Empty,
+            dialog: null);
+
+    public static LanOrderWriteApplyOutcome Failed(
+        string bottomStatus,
+        OrderRunFeedbackDialog? dialog,
+        bool shouldRefreshSnapshot,
+        string snapshotRefreshReason)
+        => new(
+            isSuccess: false,
+            order: null,
+            shouldRefreshSnapshot: shouldRefreshSnapshot,
+            snapshotRefreshReason: snapshotRefreshReason,
+            bottomStatus: bottomStatus,
+            dialog: dialog);
+}
+
+public sealed class LanOrderItemsReorderSyncOutcome
+{
+    private LanOrderItemsReorderSyncOutcome(bool shouldRefreshSnapshot, string snapshotRefreshReason, IReadOnlyList<OrderRunFeedbackLogEntry>? logs)
+    {
+        ShouldRefreshSnapshot = shouldRefreshSnapshot;
+        SnapshotRefreshReason = snapshotRefreshReason ?? string.Empty;
+        Logs = logs ?? Array.Empty<OrderRunFeedbackLogEntry>();
+    }
+
+    public bool ShouldRefreshSnapshot { get; }
+    public string SnapshotRefreshReason { get; }
+    public IReadOnlyList<OrderRunFeedbackLogEntry> Logs { get; }
+
+    public static LanOrderItemsReorderSyncOutcome Noop()
+        => new(
+            shouldRefreshSnapshot: false,
+            snapshotRefreshReason: string.Empty,
+            logs: Array.Empty<OrderRunFeedbackLogEntry>());
+
+    public static LanOrderItemsReorderSyncOutcome From(string snapshotRefreshReason, IReadOnlyList<OrderRunFeedbackLogEntry>? logs)
+        => new(
+            shouldRefreshSnapshot: !string.IsNullOrWhiteSpace(snapshotRefreshReason),
+            snapshotRefreshReason: snapshotRefreshReason,
+            logs: logs);
+}
+
+public sealed class LanOrderItemSyncOutcome
+{
+    private LanOrderItemSyncOutcome(bool isSuccess, bool shouldRefreshSnapshot, string snapshotRefreshReason, IReadOnlyList<OrderRunFeedbackLogEntry>? logs)
+    {
+        IsSuccess = isSuccess;
+        ShouldRefreshSnapshot = shouldRefreshSnapshot;
+        SnapshotRefreshReason = snapshotRefreshReason ?? string.Empty;
+        Logs = logs ?? Array.Empty<OrderRunFeedbackLogEntry>();
+    }
+
+    public bool IsSuccess { get; }
+    public bool ShouldRefreshSnapshot { get; }
+    public string SnapshotRefreshReason { get; }
+    public IReadOnlyList<OrderRunFeedbackLogEntry> Logs { get; }
+
+    public static LanOrderItemSyncOutcome Noop()
+        => new(
+            isSuccess: false,
+            shouldRefreshSnapshot: false,
+            snapshotRefreshReason: string.Empty,
+            logs: Array.Empty<OrderRunFeedbackLogEntry>());
+
+    public static LanOrderItemSyncOutcome Success(string snapshotRefreshReason)
+        => new(
+            isSuccess: true,
+            shouldRefreshSnapshot: !string.IsNullOrWhiteSpace(snapshotRefreshReason),
+            snapshotRefreshReason: snapshotRefreshReason,
+            logs: Array.Empty<OrderRunFeedbackLogEntry>());
+
+    public static LanOrderItemSyncOutcome Failed(string snapshotRefreshReason, IReadOnlyList<OrderRunFeedbackLogEntry>? logs)
+        => new(
+            isSuccess: false,
+            shouldRefreshSnapshot: !string.IsNullOrWhiteSpace(snapshotRefreshReason),
+            snapshotRefreshReason: snapshotRefreshReason,
+            logs: logs);
 }
