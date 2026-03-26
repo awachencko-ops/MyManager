@@ -1029,16 +1029,18 @@ namespace Replica
                         ? "not_ready"
                         : "error";
                 var status = ExtractStatusFromJsonPayload(payload, fallbackStatus);
-                var isOptionalNotFound = optionalEndpoint
+                var isOptionalUnavailable = optionalEndpoint
                     && (response.StatusCode == HttpStatusCode.NotFound
-                        || response.StatusCode == HttpStatusCode.MethodNotAllowed);
+                        || response.StatusCode == HttpStatusCode.MethodNotAllowed
+                        || response.StatusCode == HttpStatusCode.Unauthorized
+                        || response.StatusCode == HttpStatusCode.Forbidden);
 
                 return new EndpointProbeResult
                 {
                     IsReachable = true,
-                    Status = status,
+                    Status = isOptionalUnavailable ? "optional-unavailable" : status,
                     Payload = payload,
-                    Error = response.IsSuccessStatusCode || isOptionalNotFound
+                    Error = response.IsSuccessStatusCode || isOptionalUnavailable
                         ? string.Empty
                         : $"{endpointPath}: HTTP {(int)response.StatusCode} ({response.StatusCode})"
                 };

@@ -1,7 +1,7 @@
 # Этап 5: Security/Auth boundary, cutover и production hardening
 
 Дата актуализации: 2026-03-26  
-Статус: In Progress
+Статус: Completed
 
 ## 1. Контекст этапа
 
@@ -168,3 +168,14 @@
 
 1. Stage 6A: полноценный authN (JWT/API keys, password hashes, login flow, token lifetime).
 2. Stage 6B: orchestration/runtime layer (toolbox API, queue orchestration, audit split, reactive signaling).
+
+## 12. Closure Notes (2026-03-26)
+
+1. Auth cutover выполнен: `ReplicaApi:Auth:Mode` переведён в `Strict`.
+2. Legacy strict-flag синхронизирован: `ReplicaApi:StrictActorValidation=true`.
+3. Живой API подтверждает режим: `GET /live` возвращает `authMode: "Strict"`.
+4. Проверка доступа подтверждена:
+   - известный активный actor -> `200`;
+   - неизвестный actor -> `403`.
+5. Операционный checklist зафиксирован:
+   - `Docs/ready/5_STRICT_AUTH_CUTOVER_CHECKLIST_2026-03-26.md`.

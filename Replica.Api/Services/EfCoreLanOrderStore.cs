@@ -389,10 +389,21 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
             order.UserName = request.UserName.Trim();
         if (request.Status != null)
         {
-            order.Status = ReplicaApiWorkflowStatusNormalizer.NormalizeOrDefault(request.Status);
+            var normalizedStatus = ReplicaApiWorkflowStatusNormalizer.NormalizeOrDefault(request.Status);
+            order.Status = normalizedStatus;
             order.LastStatusAt = DateTime.Now;
             order.LastStatusSource = "api";
             order.LastStatusReason = "patch-order";
+
+            if (!IsRunStatusActive(normalizedStatus))
+            {
+                var lockRecord = db.OrderRunLocks.FirstOrDefault(x => x.OrderInternalId == orderId);
+                if (lockRecord != null && lockRecord.IsActive)
+                {
+                    lockRecord.IsActive = false;
+                    lockRecord.UpdatedAt = DateTime.Now;
+                }
+            }
         }
         if (request.Keyword != null)
             order.Keyword = request.Keyword.Trim();
@@ -936,9 +947,16 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
         if (request.ExpectedOrderVersion > 0 && orderRecord.Version != request.ExpectedOrderVersion)
             return StoreOperationResult.Conflict(orderRecord.Version, "order version mismatch");
 
+        var order = DeserializeOrder(orderRecord);
         var lockRecord = db.OrderRunLocks.FirstOrDefault(x => x.OrderInternalId == orderId);
         if (lockRecord != null && lockRecord.IsActive)
-            return StoreOperationResult.Conflict(orderRecord.Version, "run already active");
+        {
+            if (IsRunStatusActive(order.Status))
+                return StoreOperationResult.Conflict(orderRecord.Version, "run already active");
+
+            lockRecord.IsActive = false;
+            lockRecord.UpdatedAt = DateTime.Now;
+        }
 
         var leaseToken = Guid.NewGuid().ToString("N");
         if (lockRecord == null)
@@ -962,7 +980,6 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
             lockRecord.UpdatedAt = DateTime.Now;
         }
 
-        var order = DeserializeOrder(orderRecord);
         order.Version = orderRecord.Version + 1;
         order.Status = "Processing";
         order.LastStatusAt = DateTime.Now;
@@ -1178,6 +1195,13 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
         var source = $"{commandName}|{orderId}|{actor}|{payloadJson}";
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(source));
         return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    private static bool IsRunStatusActive(string? status)
+    {
+        var normalized = ReplicaApiWorkflowStatusNormalizer.NormalizeOrDefault(status);
+        return string.Equals(normalized, ReplicaApiWorkflowStatusNormalizer.Processing, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(normalized, ReplicaApiWorkflowStatusNormalizer.Building, StringComparison.OrdinalIgnoreCase);
     }
 
     private static SharedOrder? LoadOrder(ReplicaDbContext db, string orderInternalId)

@@ -204,10 +204,14 @@ public sealed class InMemoryLanOrderStore : ILanOrderStore
                 order.UserName = request.UserName.Trim();
             if (request.Status != null)
             {
-                order.Status = ReplicaApiWorkflowStatusNormalizer.NormalizeOrDefault(request.Status);
+                var normalizedStatus = ReplicaApiWorkflowStatusNormalizer.NormalizeOrDefault(request.Status);
+                order.Status = normalizedStatus;
                 order.LastStatusSource = "api";
                 order.LastStatusReason = "patch-order";
                 order.LastStatusAt = DateTime.Now;
+
+                if (!IsRunStatusActive(normalizedStatus))
+                    _activeRunTokensByOrder.Remove(order.InternalId);
             }
             if (request.Keyword != null)
                 order.Keyword = request.Keyword.Trim();
@@ -391,7 +395,12 @@ public sealed class InMemoryLanOrderStore : ILanOrderStore
                 return StoreOperationResult.Conflict(order.Version, "order version mismatch");
 
             if (_activeRunTokensByOrder.ContainsKey(order.InternalId))
-                return StoreOperationResult.Conflict(order.Version, "run already active");
+            {
+                if (IsRunStatusActive(order.Status))
+                    return StoreOperationResult.Conflict(order.Version, "run already active");
+
+                _activeRunTokensByOrder.Remove(order.InternalId);
+            }
 
             var token = Guid.NewGuid().ToString("N");
             _activeRunTokensByOrder[order.InternalId] = token;
@@ -454,6 +463,13 @@ public sealed class InMemoryLanOrderStore : ILanOrderStore
             CreatedAt = DateTime.Now,
             PayloadJson = JsonSerializer.Serialize(payload)
         });
+    }
+
+    private static bool IsRunStatusActive(string? status)
+    {
+        var normalized = ReplicaApiWorkflowStatusNormalizer.NormalizeOrDefault(status);
+        return string.Equals(normalized, ReplicaApiWorkflowStatusNormalizer.Processing, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(normalized, ReplicaApiWorkflowStatusNormalizer.Building, StringComparison.OrdinalIgnoreCase);
     }
 
     private static SharedOrder CloneOrder(SharedOrder source)
