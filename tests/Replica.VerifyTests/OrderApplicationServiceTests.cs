@@ -475,6 +475,67 @@ public sealed class OrderApplicationServiceTests
     }
 
     [Fact]
+    public async Task TryPersistOrderStatusViaLanApiAsync_OnUnavailableGateway_ReturnsWarningLog()
+    {
+        var service = CreateService();
+        var order = new OrderData
+        {
+            InternalId = "ord-1",
+            Id = "00526",
+            Status = WorkflowStatusNames.Processing,
+            UserName = "tester"
+        };
+
+        var outcome = await service.TryPersistOrderStatusViaLanApiAsync(
+            order,
+            lanApiBaseUrl: string.Empty,
+            actor: "tester",
+            normalizeUserName: value => value ?? string.Empty,
+            source: OrderStatusSourceNames.Ui,
+            reason: "unit-test",
+            orderDisplayIdResolver: o => o.Id ?? string.Empty);
+
+        Assert.False(outcome.IsPersisted);
+        Assert.False(outcome.ShouldRefreshSnapshot);
+        Assert.True(string.IsNullOrWhiteSpace(outcome.SnapshotRefreshReason));
+        var log = Assert.Single(outcome.Logs);
+        Assert.True(log.IsWarning);
+        Assert.Contains("status-update-failed", log.Message);
+        Assert.Contains("order=00526", log.Message);
+        Assert.Contains("unavailable=1", log.Message);
+    }
+
+    [Fact]
+    public async Task TryPersistOrderStatusViaLanApiAsync_OnConflict_UpdatesOrderVersionAndReturnsWarningLog()
+    {
+        var service = CreateService(new StubLanOrderWriteApiGateway(_ => LanOrderWriteApiResult.Conflict("version conflict", currentVersion: 42)));
+        var order = new OrderData
+        {
+            InternalId = "ord-1",
+            Id = "00526",
+            StorageVersion = 5,
+            Status = WorkflowStatusNames.Processing,
+            UserName = "tester"
+        };
+
+        var outcome = await service.TryPersistOrderStatusViaLanApiAsync(
+            order,
+            lanApiBaseUrl: "http://localhost:5000",
+            actor: "tester",
+            normalizeUserName: value => value ?? string.Empty,
+            source: OrderStatusSourceNames.Processor,
+            reason: "conflict-test",
+            orderDisplayIdResolver: o => o.Id ?? string.Empty);
+
+        Assert.False(outcome.IsPersisted);
+        Assert.Equal(42, order.StorageVersion);
+        var log = Assert.Single(outcome.Logs);
+        Assert.True(log.IsWarning);
+        Assert.Contains("status-update-failed", log.Message);
+        Assert.Contains("conflict=1", log.Message);
+    }
+
+    [Fact]
     public void TryBuildRenamedPath_ReturnsSuccessForAvailableTarget()
     {
         var service = CreateService();
@@ -508,7 +569,7 @@ public sealed class OrderApplicationServiceTests
         Assert.Equal(Path.Combine(@"C:\orders", "A-100"), resolved);
     }
 
-    private static OrderApplicationService CreateService()
+    private static OrderApplicationService CreateService(ILanOrderWriteApiGateway? lanOrderWriteApiGateway = null)
     {
         var now = new DateTime(2026, 3, 20, 12, 0, 0, DateTimeKind.Local);
         var orderRunStateService = new OrderRunStateService();
@@ -541,6 +602,37 @@ public sealed class OrderApplicationServiceTests
             orderItemDeleteCommandService: new OrderItemDeleteCommandService(itemMutationService: orderItemMutationService),
             orderStatusTransitionService: new OrderStatusTransitionService(),
             orderStorageVersionSyncService: new OrderStorageVersionSyncService(),
-            lanOrderWriteCommandService: new LanOrderWriteCommandService(new LanOrderWriteApiGateway()));
+            lanOrderWriteCommandService: new LanOrderWriteCommandService(lanOrderWriteApiGateway ?? new LanOrderWriteApiGateway()));
+    }
+
+    private sealed class StubLanOrderWriteApiGateway : ILanOrderWriteApiGateway
+    {
+        private readonly Func<LanUpdateOrderRequest, LanOrderWriteApiResult> _updateOrder;
+
+        public StubLanOrderWriteApiGateway(Func<LanUpdateOrderRequest, LanOrderWriteApiResult> updateOrder)
+        {
+            _updateOrder = updateOrder;
+        }
+
+        public Task<LanOrderWriteApiResult> CreateOrderAsync(string apiBaseUrl, LanCreateOrderRequest request, string actor, CancellationToken cancellationToken = default)
+            => Task.FromResult(LanOrderWriteApiResult.Failed("not-implemented"));
+
+        public Task<LanOrderWriteApiResult> DeleteOrderAsync(string apiBaseUrl, string orderInternalId, LanDeleteOrderRequest request, string actor, CancellationToken cancellationToken = default)
+            => Task.FromResult(LanOrderWriteApiResult.Failed("not-implemented"));
+
+        public Task<LanOrderWriteApiResult> UpdateOrderAsync(string apiBaseUrl, string orderInternalId, LanUpdateOrderRequest request, string actor, CancellationToken cancellationToken = default)
+            => Task.FromResult(_updateOrder(request));
+
+        public Task<LanOrderWriteApiResult> ReorderOrderItemsAsync(string apiBaseUrl, string orderInternalId, LanReorderOrderItemsRequest request, string actor, CancellationToken cancellationToken = default)
+            => Task.FromResult(LanOrderWriteApiResult.Failed("not-implemented"));
+
+        public Task<LanOrderWriteApiResult> AddOrderItemAsync(string apiBaseUrl, string orderInternalId, LanAddOrderItemRequest request, string actor, CancellationToken cancellationToken = default)
+            => Task.FromResult(LanOrderWriteApiResult.Failed("not-implemented"));
+
+        public Task<LanOrderWriteApiResult> UpdateOrderItemAsync(string apiBaseUrl, string orderInternalId, string itemId, LanUpdateOrderItemRequest request, string actor, CancellationToken cancellationToken = default)
+            => Task.FromResult(LanOrderWriteApiResult.Failed("not-implemented"));
+
+        public Task<LanOrderWriteApiResult> DeleteOrderItemAsync(string apiBaseUrl, string orderInternalId, string itemId, LanDeleteOrderItemRequest request, string actor, CancellationToken cancellationToken = default)
+            => Task.FromResult(LanOrderWriteApiResult.Failed("not-implemented"));
     }
 }

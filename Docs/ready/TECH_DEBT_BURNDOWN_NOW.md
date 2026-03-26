@@ -73,3 +73,9 @@
 3. [3_STAGE3_STAGE4_CONSOLIDATED_GO_NO_GO_2026-03-20.md](/C:/Users/user/Desktop/MyManager%201.0.1/Docs/ready/3_STAGE3_STAGE4_CONSOLIDATED_GO_NO_GO_2026-03-20.md)
 4. [4_STAGE4_RELEASE_RUNBOOK.md](/C:/Users/user/Desktop/MyManager%201.0.1/Docs/ready/4_STAGE4_RELEASE_RUNBOOK.md)
 5. [OPERATIONS_SLO_RUNBOOK.md](/C:/Users/user/Desktop/MyManager%201.0.1/Docs/ready/OPERATIONS_SLO_RUNBOOK.md)
+
+## Update 2026-03-26 (Presenter-only slice)
+
+1. `OrdersWorkspaceForm.TryPersistOrderStatusViaLanApi` no longer orchestrates LAN command details directly.
+2. Status persistence LAN path moved into `IOrderApplicationService.TryPersistOrderStatusViaLanApiAsync(...)` with unified outcome model (`LanOrderStatusPersistOutcome`).
+3. UI now only applies outcome (`logs + snapshot refresh + fallback decision`) which reduces local orchestration in form code.

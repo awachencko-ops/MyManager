@@ -70,6 +70,15 @@ public interface IOrderApplicationService
         string lanApiBaseUrl,
         string actor,
         CancellationToken cancellationToken = default);
+    Task<LanOrderStatusPersistOutcome> TryPersistOrderStatusViaLanApiAsync(
+        OrderData order,
+        string lanApiBaseUrl,
+        string actor,
+        Func<string, string> normalizeUserName,
+        string source,
+        string reason,
+        Func<OrderData, string> orderDisplayIdResolver,
+        CancellationToken cancellationToken = default);
 
     Task<OrderRunStartPhaseResult> PrepareAndBeginRunAsync(
         IReadOnlyCollection<OrderData> selectedOrders,
@@ -412,6 +421,60 @@ public sealed class OrderApplicationService : IOrderApplicationService
             lanApiBaseUrl,
             actor,
             cancellationToken);
+
+    public async Task<LanOrderStatusPersistOutcome> TryPersistOrderStatusViaLanApiAsync(
+        OrderData order,
+        string lanApiBaseUrl,
+        string actor,
+        Func<string, string> normalizeUserName,
+        string source,
+        string reason,
+        Func<OrderData, string> orderDisplayIdResolver,
+        CancellationToken cancellationToken = default)
+    {
+        if (order == null)
+            return LanOrderStatusPersistOutcome.NotPersisted(logs: Array.Empty<OrderRunFeedbackLogEntry>());
+
+        var statusUpdateModel = new OrderData
+        {
+            Id = order.Id,
+            OrderDate = order.OrderDate,
+            UserName = order.UserName,
+            Status = order.Status,
+            Keyword = order.Keyword,
+            FolderName = order.FolderName,
+            PitStopAction = order.PitStopAction,
+            ImposingAction = order.ImposingAction
+        };
+
+        var writeResult = await TryUpdateOrderViaLanApiAsync(
+            order,
+            statusUpdateModel,
+            lanApiBaseUrl,
+            actor,
+            normalizeUserName,
+            cancellationToken);
+
+        if (writeResult.IsSuccess && writeResult.Order != null)
+        {
+            ApplyLanStatusSnapshot(order, writeResult.Order);
+            return LanOrderStatusPersistOutcome.Persisted("lan-api-status-update");
+        }
+
+        if (writeResult.CurrentVersion > 0)
+            order.StorageVersion = writeResult.CurrentVersion;
+
+        var errorText = string.IsNullOrWhiteSpace(writeResult.Error)
+            ? "LAN status update failed"
+            : writeResult.Error;
+        return LanOrderStatusPersistOutcome.NotPersisted(
+            logs:
+            [
+                new OrderRunFeedbackLogEntry(
+                    $"LAN-API | status-update-failed | order={ResolveOrderDisplayId(order, orderDisplayIdResolver)} | source={source} | reason={reason} | conflict={(writeResult.IsConflict ? "1" : "0")} | unavailable={(writeResult.IsUnavailable ? "1" : "0")} | {errorText}",
+                    isWarning: true)
+            ]);
+    }
 
     public Task<OrderRunStartPhaseResult> PrepareAndBeginRunAsync(
         IReadOnlyCollection<OrderData> selectedOrders,
@@ -1037,5 +1100,35 @@ public sealed class LanOrderItemSyncOutcome
             isSuccess: false,
             shouldRefreshSnapshot: !string.IsNullOrWhiteSpace(snapshotRefreshReason),
             snapshotRefreshReason: snapshotRefreshReason,
+            logs: logs);
+}
+
+public sealed class LanOrderStatusPersistOutcome
+{
+    private LanOrderStatusPersistOutcome(bool isPersisted, bool shouldRefreshSnapshot, string snapshotRefreshReason, IReadOnlyList<OrderRunFeedbackLogEntry>? logs)
+    {
+        IsPersisted = isPersisted;
+        ShouldRefreshSnapshot = shouldRefreshSnapshot;
+        SnapshotRefreshReason = snapshotRefreshReason ?? string.Empty;
+        Logs = logs ?? Array.Empty<OrderRunFeedbackLogEntry>();
+    }
+
+    public bool IsPersisted { get; }
+    public bool ShouldRefreshSnapshot { get; }
+    public string SnapshotRefreshReason { get; }
+    public IReadOnlyList<OrderRunFeedbackLogEntry> Logs { get; }
+
+    public static LanOrderStatusPersistOutcome Persisted(string snapshotRefreshReason)
+        => new(
+            isPersisted: true,
+            shouldRefreshSnapshot: !string.IsNullOrWhiteSpace(snapshotRefreshReason),
+            snapshotRefreshReason: snapshotRefreshReason,
+            logs: Array.Empty<OrderRunFeedbackLogEntry>());
+
+    public static LanOrderStatusPersistOutcome NotPersisted(IReadOnlyList<OrderRunFeedbackLogEntry>? logs)
+        => new(
+            isPersisted: false,
+            shouldRefreshSnapshot: false,
+            snapshotRefreshReason: string.Empty,
             logs: logs);
 }

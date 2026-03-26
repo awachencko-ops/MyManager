@@ -377,44 +377,22 @@ namespace Replica
             if (order == null || !ShouldUseLanRunApi())
                 return false;
 
-            var statusUpdateModel = new OrderData
-            {
-                Id = order.Id,
-                OrderDate = order.OrderDate,
-                UserName = order.UserName,
-                Status = order.Status,
-                Keyword = order.Keyword,
-                FolderName = order.FolderName,
-                PitStopAction = order.PitStopAction,
-                ImposingAction = order.ImposingAction
-            };
-
-            var writeResult = _orderApplicationService
-                .TryUpdateOrderViaLanApiAsync(
+            var persistOutcome = _orderApplicationService
+                .TryPersistOrderStatusViaLanApiAsync(
                     order,
-                    statusUpdateModel,
                     _lanApiBaseUrl,
                     ResolveLanApiActor(),
-                    NormalizeOrderUserName)
+                    NormalizeOrderUserName,
+                    source,
+                    reason,
+                    GetOrderDisplayId)
                 .GetAwaiter()
                 .GetResult();
 
-            if (writeResult.IsSuccess && writeResult.Order != null)
-            {
-                _orderApplicationService.ApplyLanStatusSnapshot(order, writeResult.Order);
-                TryRefreshRepositorySnapshotFromStorage(_orderHistory, "lan-api-status-update");
-                return true;
-            }
-
-            if (writeResult.CurrentVersion > 0)
-                order.StorageVersion = writeResult.CurrentVersion;
-
-            var errorText = string.IsNullOrWhiteSpace(writeResult.Error)
-                ? "LAN status update failed"
-                : writeResult.Error;
-            Logger.Warn(
-                $"LAN-API | status-update-failed | order={GetOrderDisplayId(order)} | source={source} | reason={reason} | conflict={(writeResult.IsConflict ? "1" : "0")} | unavailable={(writeResult.IsUnavailable ? "1" : "0")} | {errorText}");
-            return false;
+            ApplyOrderRunFeedbackLogs(persistOutcome.Logs);
+            if (persistOutcome.ShouldRefreshSnapshot && !string.IsNullOrWhiteSpace(persistOutcome.SnapshotRefreshReason))
+                TryRefreshRepositorySnapshotFromStorage(_orderHistory, persistOutcome.SnapshotRefreshReason);
+            return persistOutcome.IsPersisted;
         }
 
         private void TrySyncLanItemReorderForOrders(IEnumerable<OrderData> orders, string reason)
