@@ -87,7 +87,14 @@
     - Heavy post-grid cascade (`ApplyStatusFilterToGrid`, filter captions/checklists, queue presentation, print tiles, tray indicators) now runs through `RequestCoalescedGridDerivedRefresh` + `GridDerivedRefreshCoalesceTimer`.
     - This reduces redundant repeated recomputations during bursts of row/cell/status updates.
     - Cleanup/reset is wired into `MainForm_FormClosed`.
+  - Run/Stop orchestration decomposition (application feedback layer):
+    - Added typed feedback models in `OrderRunFeedbackService` (`OrderRunStartUiFeedback`, `OrderRunStopUiFeedback`, dialog/log entries, severity).
+    - Moved phase interpretation (fatal/no-runnable/server-rejected for run-start, and stop outcomes including conflict/unavailable/server-failure logs) out of `OrdersWorkspaceForm` into application service methods.
+    - `OrdersWorkspaceForm` now applies prepared feedback (status bar text, optional dialog, warning/info logs) instead of branching on phase internals.
+    - Added post-run feedback models (`OrderRunStartProgressUiFeedback`, `OrderRunCompletionUiFeedback`) and moved start-progress/completion summaries (skipped reasons, server-skipped dialog, error summary, batch completion status) into `OrderRunFeedbackService`.
+    - `RunSelectedOrderAsync` now delegates these decisions to application feedback methods and only renders the returned UI feedback.
   - Validation:
     - `dotnet build Replica.csproj -c Debug` passed.
     - `dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj -c Release --filter \"OrderStatusTransitionServiceTests\"` passed (5/5).
+    - `dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj -c Release --filter \"OrderRunFeedbackServiceTests|OrderApplicationServiceTests\"` passed (20/20).
 

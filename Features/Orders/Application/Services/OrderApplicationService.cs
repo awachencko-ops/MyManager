@@ -107,6 +107,16 @@ public interface IOrderApplicationService
         IReadOnlyCollection<OrderRunExecutionError>? errors,
         Func<OrderData, string> orderDisplayIdResolver,
         int previewLimit = 5);
+    OrderRunStartUiFeedback BuildRunStartUiFeedback(OrderRunStartPhaseResult startPhase);
+    OrderRunStartProgressUiFeedback BuildRunStartProgressUiFeedback(
+        int runnableOrdersCount,
+        OrderRunStateService.RunPlan runPlan,
+        IReadOnlyCollection<string>? serverSkipped);
+    OrderRunCompletionUiFeedback BuildRunCompletionUiFeedback(
+        IReadOnlyCollection<OrderRunExecutionError>? errors,
+        int runnableOrdersCount,
+        Func<OrderData, string> orderDisplayIdResolver);
+    OrderRunStopUiFeedback BuildRunStopUiFeedback(OrderRunStopPhaseResult stopPhase, string orderDisplayId);
 
     OrderDeleteCommandResult DeleteOrders(
         IList<OrderData> orderHistory,
@@ -424,6 +434,24 @@ public sealed class OrderApplicationService : IOrderApplicationService
         Func<OrderData, string> orderDisplayIdResolver,
         int previewLimit = 5)
         => _orderRunFeedbackService.BuildExecutionErrorsPreview(errors, orderDisplayIdResolver, previewLimit);
+
+    public OrderRunStartUiFeedback BuildRunStartUiFeedback(OrderRunStartPhaseResult startPhase)
+        => _orderRunFeedbackService.BuildStartUiFeedback(startPhase);
+
+    public OrderRunStartProgressUiFeedback BuildRunStartProgressUiFeedback(
+        int runnableOrdersCount,
+        OrderRunStateService.RunPlan runPlan,
+        IReadOnlyCollection<string>? serverSkipped)
+        => _orderRunFeedbackService.BuildStartProgressUiFeedback(runnableOrdersCount, runPlan, serverSkipped);
+
+    public OrderRunCompletionUiFeedback BuildRunCompletionUiFeedback(
+        IReadOnlyCollection<OrderRunExecutionError>? errors,
+        int runnableOrdersCount,
+        Func<OrderData, string> orderDisplayIdResolver)
+        => _orderRunFeedbackService.BuildCompletionUiFeedback(errors, runnableOrdersCount, orderDisplayIdResolver);
+
+    public OrderRunStopUiFeedback BuildRunStopUiFeedback(OrderRunStopPhaseResult stopPhase, string orderDisplayId)
+        => _orderRunFeedbackService.BuildStopUiFeedback(stopPhase, orderDisplayId);
 
     public OrderDeleteCommandResult DeleteOrders(
         IList<OrderData> orderHistory,

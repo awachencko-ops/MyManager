@@ -911,57 +911,18 @@ namespace Replica
                 tryRefreshSnapshotFromStorage: TryRefreshRepositorySnapshotFromStorage);
 
             var runPreparation = startPhase.Preparation;
-            if (startPhase.Status == OrderRunStartPhaseStatus.Fatal)
+            var startUiFeedback = _orderApplicationService.BuildRunStartUiFeedback(startPhase);
+            ApplyOrderRunFeedbackLogs(startUiFeedback.Logs);
+            if (startUiFeedback.ShouldAbort)
             {
-                var fatalReason = string.IsNullOrWhiteSpace(runPreparation.FatalError)
-                    ? "LAN API недоступен"
-                    : runPreparation.FatalError;
-                Logger.Warn($"RUN | command-fatal | {fatalReason}");
-                SetBottomStatus($"Сервер недоступен: {fatalReason}");
-                MessageBox.Show(
-                    this,
-                    $"Не удалось запустить заказ через LAN API: {fatalReason}",
-                    "Запуск",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
+                SetBottomStatus(startUiFeedback.BottomStatus);
+                ShowOrderRunFeedbackDialog(startUiFeedback.Dialog);
                 return;
             }
 
             var runPlan = runPreparation.RunPlan;
             var runnableOrders = runPreparation.RunnableOrders;
             var serverSkipped = runPreparation.SkippedByServer;
-
-            if (startPhase.Status == OrderRunStartPhaseStatus.NoRunnable)
-            {
-                var details = string.IsNullOrWhiteSpace(startPhase.NoRunnableDetails)
-                    ? OrderRunStateService.BuildNoRunnableDetails(runPlan)
-                    : startPhase.NoRunnableDetails;
-                SetBottomStatus($"Нет заказов для запуска ({details})");
-                MessageBox.Show(
-                    this,
-                    $"Нет заказов для запуска ({details}).",
-                    "Запуск",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
-                return;
-            }
-
-            if (startPhase.Status == OrderRunStartPhaseStatus.ServerRejected)
-            {
-                Logger.Warn("RUN | command-rejected-by-server");
-                var skippedPreview = _orderApplicationService.BuildRunServerSkippedPreview(serverSkipped);
-
-                SetBottomStatus("Сервер не подтвердил запуск выбранных заказов");
-                MessageBox.Show(
-                    this,
-                    string.IsNullOrWhiteSpace(skippedPreview)
-                        ? "Сервер не подтвердил запуск выбранных заказов."
-                        : $"Сервер не подтвердил запуск выбранных заказов:{Environment.NewLine}{skippedPreview}",
-                    "Запуск",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
-                return;
-            }
 
             if (_processor == null)
                 InitializeProcessor();
@@ -997,32 +958,12 @@ namespace Replica
             if (!TryRefreshGridRowsWithoutRebuild())
                 RebuildOrdersGrid();
 
-            if (runnableOrders.Count == 1)
-                SetBottomStatus($"Запущен заказ {GetOrderDisplayId(runnableOrders[0])}");
-            else
-                SetBottomStatus($"Запущено заказов: {runnableOrders.Count}");
-
-            if (runPlan.OrdersWithoutNumber.Count > 0 || runPlan.AlreadyRunningOrders.Count > 0 || serverSkipped.Count > 0)
-            {
-                var skippedDetails = _orderApplicationService.BuildRunSkippedDetails(runPlan, serverSkipped);
-                SetBottomStatus(string.IsNullOrWhiteSpace(skippedDetails)
-                    ? "Часть заказов пропущена"
-                    : $"Часть заказов пропущена ({skippedDetails})");
-
-                if (serverSkipped.Count > 0)
-                {
-                    var skippedPreview = _orderApplicationService.BuildRunServerSkippedPreview(serverSkipped);
-
-                    MessageBox.Show(
-                        this,
-                        string.IsNullOrWhiteSpace(skippedPreview)
-                            ? "Часть заказов не запущена сервером."
-                            : $"Часть заказов не запущена сервером:{Environment.NewLine}{skippedPreview}",
-                        "Запуск",
-                        MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
-                }
-            }
+            var startProgressUiFeedback = _orderApplicationService.BuildRunStartProgressUiFeedback(
+                runnableOrders.Count,
+                runPlan,
+                serverSkipped);
+            SetBottomStatus(startProgressUiFeedback.BottomStatus);
+            ShowOrderRunFeedbackDialog(startProgressUiFeedback.Dialog);
 
             var runExecutionResult = await _orderApplicationService.ExecuteRunAsync(
                 runSessions,
@@ -1059,22 +1000,13 @@ namespace Replica
                 RebuildOrdersGrid();
             UpdateActionButtonsState();
 
-            if (runExecutionResult.Errors.Count > 0)
-            {
-                var errorsPreview = _orderApplicationService.BuildRunExecutionErrorsPreview(runExecutionResult.Errors, GetOrderDisplayId);
-
-                SetBottomStatus($"Ошибок запуска: {runExecutionResult.Errors.Count}");
-                MessageBox.Show(
-                    this,
-                    $"Некоторые заказы завершились с ошибкой:{Environment.NewLine}{errorsPreview}",
-                    "Запуск",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
-            }
-            else if (runnableOrders.Count > 1)
-            {
-                SetBottomStatus($"Пакетная обработка завершена: {runnableOrders.Count}");
-            }
+            var completionUiFeedback = _orderApplicationService.BuildRunCompletionUiFeedback(
+                runExecutionResult.Errors,
+                runnableOrders.Count,
+                GetOrderDisplayId);
+            if (!string.IsNullOrWhiteSpace(completionUiFeedback.BottomStatus))
+                SetBottomStatus(completionUiFeedback.BottomStatus);
+            ShowOrderRunFeedbackDialog(completionUiFeedback.Dialog);
 
             Logger.Info($"RUN | command-finish | started={runnableOrders.Count} | errors={runExecutionResult.Errors.Count}");
         }
@@ -1124,14 +1056,6 @@ namespace Replica
 
             var stopPreparation = stopPhase.Preparation;
 
-            if (!stopPreparation.CanProceed)
-            {
-                Logger.Warn("RUN | stop-command-skipped | reason=not-running");
-                SetBottomStatus($"Заказ {GetOrderDisplayId(order)} сейчас не выполняется");
-                MessageBox.Show(this, $"Заказ {GetOrderDisplayId(order)} сейчас не выполняется.", "Остановка", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-            }
-
             if (stopPreparation.LocalCancellationRequested)
             {
                 UpdateTrayProgressIndicator();
@@ -1142,47 +1066,44 @@ namespace Replica
                 Logger.Warn($"RUN | snapshot-refresh-failed | reason=run-stop | order={GetOrderDisplayId(order)}");
             }
 
-            if (stopPhase.ShouldWarnServerUnavailable)
-            {
-                Logger.Warn($"RUN | stop-server-unavailable | order={GetOrderDisplayId(order)} | {stopPhase.ServerReason}");
-                var unavailableMessage = stopPhase.Status == OrderRunStopPhaseStatus.LocalStatusApplied
-                    ? $"Остановка на сервере не подтверждена ({stopPhase.ServerReason}).{Environment.NewLine}Локальная остановка будет выполнена, но серверный lock может остаться активным."
-                    : $"Остановка на сервере не подтверждена ({stopPhase.ServerReason}).";
-                MessageBox.Show(
-                    this,
-                    unavailableMessage,
-                    "Остановка",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
-            }
-
-            if (stopPhase.ShouldLogServerFailure)
-            {
-                Logger.Warn($"RUN | stop-server-failed | order={GetOrderDisplayId(order)} | {stopPhase.ServerReason}");
-            }
-
-            if (stopPhase.Status == OrderRunStopPhaseStatus.LocalStatusApplied)
-            {
+            var stopUiFeedback = _orderApplicationService.BuildRunStopUiFeedback(stopPhase, GetOrderDisplayId(order));
+            ApplyOrderRunFeedbackLogs(stopUiFeedback.Logs);
+            SetBottomStatus(stopUiFeedback.BottomStatus);
+            ShowOrderRunFeedbackDialog(stopUiFeedback.Dialog);
+            if (stopUiFeedback.ShouldUpdateActionButtons)
                 UpdateActionButtonsState();
-                SetBottomStatus($"Остановлен заказ {GetOrderDisplayId(order)}");
-                Logger.Info("RUN | stop-command-finish | local-status-applied=1");
-                return;
-            }
+        }
 
-            if (stopPhase.Status == OrderRunStopPhaseStatus.Conflict)
+        private void ApplyOrderRunFeedbackLogs(IReadOnlyCollection<OrderRunFeedbackLogEntry>? logs)
+        {
+            if (logs == null)
+                return;
+
+            foreach (var logEntry in logs)
             {
-                SetBottomStatus($"Остановка не подтверждена: конфликт версии ({GetOrderDisplayId(order)})");
-                MessageBox.Show(
-                    this,
-                    "Сервер отклонил остановку из-за конфликта версии. Обновите заказ и повторите операцию.",
-                    "Остановка",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
-                return;
-            }
+                if (logEntry == null || string.IsNullOrWhiteSpace(logEntry.Message))
+                    continue;
 
-            SetBottomStatus($"Сервер не подтвердил остановку {GetOrderDisplayId(order)}");
-            Logger.Warn("RUN | stop-command-finish | local-status-applied=0");
+                if (logEntry.IsWarning)
+                    Logger.Warn(logEntry.Message);
+                else
+                    Logger.Info(logEntry.Message);
+            }
+        }
+
+        private void ShowOrderRunFeedbackDialog(OrderRunFeedbackDialog? dialog)
+        {
+            if (dialog == null || string.IsNullOrWhiteSpace(dialog.Message))
+                return;
+
+            MessageBox.Show(
+                this,
+                dialog.Message,
+                string.IsNullOrWhiteSpace(dialog.Caption) ? "Запуск" : dialog.Caption,
+                MessageBoxButtons.OK,
+                dialog.Severity == OrderRunFeedbackSeverity.Warning
+                    ? MessageBoxIcon.Warning
+                    : MessageBoxIcon.Information);
         }
 
         private bool ShouldUseLanRunApi()

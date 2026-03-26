@@ -41,6 +41,74 @@ public sealed class OrderApplicationServiceTests
     }
 
     [Fact]
+    public void BuildRunStartUiFeedback_ForFatalPhase_ReturnsAbort()
+    {
+        var service = CreateService();
+        var runPlan = new OrderRunStateService.RunPlan(RunnableOrders: [], OrdersWithoutNumber: [], AlreadyRunningOrders: []);
+        var startPhase = OrderRunStartPhaseResult.Fatal(RunStartPreparationResult.Fatal(runPlan, "fatal"));
+
+        var feedback = service.BuildRunStartUiFeedback(startPhase);
+
+        Assert.True(feedback.ShouldAbort);
+        Assert.Equal(OrderRunFeedbackSeverity.Warning, feedback.Dialog?.Severity);
+    }
+
+    [Fact]
+    public void BuildRunStopUiFeedback_ForConflict_ReturnsConflictBottomStatus()
+    {
+        var service = CreateService();
+        var stopPlan = new OrderRunStateService.StopPlan(
+            CanProceed: true,
+            HasLocalRunSession: false,
+            ShouldSendServerStop: true,
+            LocalCancellationTokenSource: null);
+        var stopPreparation = RunStopPreparationResult.From(
+            stopPlan,
+            stopCommandResult: LanRunStopCommandResult.NotUsed(),
+            canApplyLocalStopStatus: false,
+            localCancellationRequested: false,
+            snapshotRefreshFailed: false);
+        var stopPhase = OrderRunStopPhaseResult.Conflict(stopPreparation, "version conflict");
+
+        var feedback = service.BuildRunStopUiFeedback(stopPhase, "00526");
+
+        Assert.Equal("Остановка не подтверждена: конфликт версии (00526)", feedback.BottomStatus);
+        Assert.Equal(OrderRunFeedbackSeverity.Information, feedback.Dialog?.Severity);
+    }
+
+    [Fact]
+    public void BuildRunStartProgressUiFeedback_WhenServerSkipped_ReturnsDialog()
+    {
+        var service = CreateService();
+        var runPlan = new OrderRunStateService.RunPlan(
+            RunnableOrders: [new OrderData()],
+            OrdersWithoutNumber: [],
+            AlreadyRunningOrders: []);
+
+        var feedback = service.BuildRunStartProgressUiFeedback(
+            runnableOrdersCount: 1,
+            runPlan: runPlan,
+            serverSkipped: ["order-1: locked"]);
+
+        Assert.NotNull(feedback.Dialog);
+        Assert.Contains("order-1: locked", feedback.Dialog!.Message);
+    }
+
+    [Fact]
+    public void BuildRunCompletionUiFeedback_WhenNoErrorsAndBatch_ReturnsBatchStatus()
+    {
+        var service = CreateService();
+
+        var feedback = service.BuildRunCompletionUiFeedback(
+            errors: [],
+            runnableOrdersCount: 2,
+            orderDisplayIdResolver: _ => "order");
+
+        Assert.Equal("Пакетная обработка завершена: 2", feedback.BottomStatus);
+        Assert.Null(feedback.Dialog);
+    }
+
+    [Fact]
     public void SyncStorageVersions_UpdatesOnlyMatchingLocalOrders()
     {
         var service = CreateService();
