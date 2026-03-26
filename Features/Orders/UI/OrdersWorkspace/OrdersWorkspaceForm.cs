@@ -626,7 +626,7 @@ namespace Replica
                     if (order == null)
                         return;
 
-            SetOrderStatus(order, status, OrderStatusSourceNames.Processor, reason, persistHistory: false, rebuildGrid: true);
+                    SetOrderStatus(order, status, OrderStatusSourceNames.Processor, reason, persistHistory: false, rebuildGrid: true);
                 }
 
                 if (InvokeRequired)
@@ -1050,6 +1050,10 @@ namespace Replica
             }
         }
 
+        private void splitServer_Panel2_Paint(object sender, PaintEventArgs e)
+        {
+
+        }
     }
 }
 
