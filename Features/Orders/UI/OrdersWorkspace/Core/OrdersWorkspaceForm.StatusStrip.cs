@@ -477,27 +477,18 @@ namespace Replica
             bool probeInProgress,
             int requestCount)
         {
+            var operatorStatus = GetLanOperatorStatusText(snapshot, dependencyHealthLevel, probeInProgress);
             var lines = new List<string>
             {
                 "Режим: LAN PostgreSQL",
                 $"API: {NormalizeLanApiUrlForUi(_lanApiBaseUrl)}",
-                $"Состояние live/ready/slo: {snapshot.LiveStatus}/{snapshot.ReadyStatus}/{snapshot.SloStatus}"
+                $"Статус: {operatorStatus}"
             };
 
-            if (snapshot.RequestedAtUtc > DateTime.MinValue)
-                lines.Add($"Последний запрос: {FormatLanProbeStamp(snapshot.RequestedAtUtc)}");
             if (snapshot.CompletedAtUtc > DateTime.MinValue)
                 lines.Add($"Последняя проверка: {FormatLanProbeStamp(snapshot.CompletedAtUtc)}");
             if (snapshot.SuccessfulAtUtc > DateTime.MinValue)
                 lines.Add($"Последний успешный ответ: {FormatLanProbeStamp(snapshot.SuccessfulAtUtc)}");
-
-            if (snapshot.AvailabilityRatio >= 0
-                && snapshot.LatencyP95Ms >= 0
-                && snapshot.WriteSuccessRatio >= 0)
-            {
-                lines.Add(
-                    $"SLO: доступность={snapshot.AvailabilityRatio:0.000}, p95={snapshot.LatencyP95Ms:0.#} ms, write={snapshot.WriteSuccessRatio:0.000}");
-            }
 
             lines.Add($"Проверок за сессию: {requestCount}");
             if (snapshot.ConsecutiveFailureCount > 0)
@@ -506,7 +497,7 @@ namespace Replica
             if (probeInProgress)
                 lines.Add("Проверка выполняется...");
             if (!string.IsNullOrWhiteSpace(snapshot.Error))
-                lines.Add($"Ошибка: {TruncateTooltipText(snapshot.Error)}");
+                lines.Add($"Причина: {TruncateTooltipText(snapshot.Error)}");
             if (snapshot.HttpRequests5xx >= 0 || snapshot.WriteBadRequest >= 0)
             {
                 lines.Add($"Ошибки API: 5xx={Math.Max(0, snapshot.HttpRequests5xx)}, bad_request={Math.Max(0, snapshot.WriteBadRequest)}");
@@ -528,6 +519,32 @@ namespace Replica
                 lines.Add(_usersDirectoryStatusText);
 
             return string.Join(Environment.NewLine, lines.Where(line => !string.IsNullOrWhiteSpace(line)));
+        }
+
+        private string GetLanOperatorStatusText(
+            LanServerProbeSnapshot snapshot,
+            DependencyHealthLevel dependencyHealthLevel,
+            bool probeInProgress)
+        {
+            if (_lanApiRecoveryInProgress)
+                return "переподключение...";
+
+            if (probeInProgress && snapshot.CompletedAtUtc <= DateTime.MinValue)
+                return "проверка...";
+
+            if (!snapshot.ApiReachable)
+                return "нет связи с API";
+
+            if (!snapshot.IsReady)
+                return "подключен, ожидание ready";
+
+            if (!string.IsNullOrWhiteSpace(snapshot.ProcessAlert))
+                return "подключен, ошибка API";
+
+            if (snapshot.IsDegraded || !snapshot.SloHealthy || dependencyHealthLevel != DependencyHealthLevel.Healthy)
+                return "подключен, деградация";
+
+            return "подключен";
         }
 
         private static string TruncateTooltipText(string text, int maxLength = 260)
