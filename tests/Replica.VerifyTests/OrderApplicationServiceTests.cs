@@ -552,6 +552,7 @@ public sealed class OrderApplicationServiceTests
             source: OrderStatusSourceNames.Ui,
             reason: "unit-test",
             persistHistory: true,
+            rebuildGrid: true,
             useLanApi: false,
             lanApiBaseUrl: string.Empty,
             actor: "tester",
@@ -562,6 +563,7 @@ public sealed class OrderApplicationServiceTests
         Assert.NotNull(outcome.Transition);
         Assert.True(outcome.ShouldSaveLocalHistory);
         Assert.False(outcome.ShouldRefreshSnapshot);
+        Assert.Equal(OrderStatusUiRefreshMode.FastRowsThenRebuild, outcome.UiRefreshMode);
         Assert.Empty(outcome.Logs);
         Assert.Equal(WorkflowStatusNames.Processing, order.Status);
     }
@@ -583,6 +585,7 @@ public sealed class OrderApplicationServiceTests
             source: OrderStatusSourceNames.Processor,
             reason: "unit-test",
             persistHistory: true,
+            rebuildGrid: true,
             useLanApi: true,
             lanApiBaseUrl: "http://localhost:5000",
             actor: "tester",
@@ -592,6 +595,7 @@ public sealed class OrderApplicationServiceTests
         Assert.True(outcome.Changed);
         Assert.True(outcome.ShouldSaveLocalHistory);
         Assert.False(outcome.ShouldRefreshSnapshot);
+        Assert.Equal(OrderStatusUiRefreshMode.Coalesced, outcome.UiRefreshMode);
         Assert.True(outcome.Logs.Count >= 2);
         Assert.Contains(outcome.Logs, log => log.Message.Contains("status-update-failed", StringComparison.Ordinal));
         Assert.Contains(outcome.Logs, log => log.Message.Contains("status-update-fallback-local-save", StringComparison.Ordinal));

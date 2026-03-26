@@ -1898,6 +1898,7 @@ namespace Replica
                     source,
                     reason,
                     persistHistory,
+                    rebuildGrid,
                     useLanApi: ShouldUseLanRunApi(),
                     _lanApiBaseUrl,
                     ResolveLanApiActor(),
@@ -1929,17 +1930,19 @@ namespace Replica
             if (applyOutcome.ShouldSaveLocalHistory)
                 SaveHistory();
 
-            if (rebuildGrid)
+            var selectedTag = dgvJobs.CurrentRow?.Tag?.ToString();
+            switch (applyOutcome.UiRefreshMode)
             {
-                var selectedTag = dgvJobs.CurrentRow?.Tag?.ToString();
-                if (string.Equals(transition.Source, OrderStatusSourceNames.Processor, StringComparison.OrdinalIgnoreCase))
-                {
+                case OrderStatusUiRefreshMode.Coalesced:
                     RequestCoalescedGridRefresh(selectedTag, order.InternalId);
-                }
-                else if (!TryRefreshGridRowsWithoutRebuild(selectedTag, order.InternalId))
-                {
-                    RebuildOrdersGrid();
-                }
+                    break;
+                case OrderStatusUiRefreshMode.FastRowsThenRebuild:
+                    if (!TryRefreshGridRowsWithoutRebuild(selectedTag, order.InternalId))
+                        RebuildOrdersGrid();
+                    break;
+                case OrderStatusUiRefreshMode.None:
+                default:
+                    break;
             }
 
             UpdateTrayErrorIndicator();

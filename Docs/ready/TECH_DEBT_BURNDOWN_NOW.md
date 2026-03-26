@@ -80,3 +80,4 @@
 2. Status persistence LAN path moved into `IOrderApplicationService.TryPersistOrderStatusViaLanApiAsync(...)` with unified outcome model (`LanOrderStatusPersistOutcome`).
 3. UI now only applies outcome (`logs + snapshot refresh + fallback decision`) which reduces local orchestration in form code.
 4. `SetOrderStatusCore` switched to `IOrderApplicationService.ApplyStatusTransitionWithPersistenceAsync(...)`; fallback save/log policy moved out of UI into application boundary.
+5. Grid refresh branching (`processor -> coalesced`, `ui -> fast rows/rebuild`) moved to application outcome (`OrderStatusUiRefreshMode`), UI executes only selected refresh strategy.

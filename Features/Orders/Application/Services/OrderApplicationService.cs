@@ -163,6 +163,7 @@ public interface IOrderApplicationService
         string source,
         string reason,
         bool persistHistory,
+        bool rebuildGrid,
         bool useLanApi,
         string lanApiBaseUrl,
         string actor,
@@ -653,6 +654,7 @@ public sealed class OrderApplicationService : IOrderApplicationService
         string source,
         string reason,
         bool persistHistory,
+        bool rebuildGrid,
         bool useLanApi,
         string lanApiBaseUrl,
         string actor,
@@ -703,6 +705,7 @@ public sealed class OrderApplicationService : IOrderApplicationService
             shouldSaveLocalHistory,
             shouldRefreshSnapshot,
             snapshotRefreshReason,
+            uiRefreshMode: ResolveStatusUiRefreshMode(transition.Source, rebuildGrid),
             logs);
     }
 
@@ -1062,6 +1065,16 @@ public sealed class OrderApplicationService : IOrderApplicationService
             return order.InternalId.Trim();
         return "-";
     }
+
+    private static OrderStatusUiRefreshMode ResolveStatusUiRefreshMode(string source, bool rebuildGrid)
+    {
+        if (!rebuildGrid)
+            return OrderStatusUiRefreshMode.None;
+
+        return string.Equals(source, OrderStatusSourceNames.Processor, StringComparison.OrdinalIgnoreCase)
+            ? OrderStatusUiRefreshMode.Coalesced
+            : OrderStatusUiRefreshMode.FastRowsThenRebuild;
+    }
 }
 
 public sealed class LanOrderWriteApplyOutcome
@@ -1213,6 +1226,7 @@ public sealed class OrderStatusApplyOutcome
         bool shouldSaveLocalHistory,
         bool shouldRefreshSnapshot,
         string snapshotRefreshReason,
+        OrderStatusUiRefreshMode uiRefreshMode,
         IReadOnlyList<OrderRunFeedbackLogEntry>? logs)
     {
         Changed = changed;
@@ -1220,6 +1234,7 @@ public sealed class OrderStatusApplyOutcome
         ShouldSaveLocalHistory = shouldSaveLocalHistory;
         ShouldRefreshSnapshot = shouldRefreshSnapshot;
         SnapshotRefreshReason = snapshotRefreshReason ?? string.Empty;
+        UiRefreshMode = uiRefreshMode;
         Logs = logs ?? Array.Empty<OrderRunFeedbackLogEntry>();
     }
 
@@ -1228,6 +1243,7 @@ public sealed class OrderStatusApplyOutcome
     public bool ShouldSaveLocalHistory { get; }
     public bool ShouldRefreshSnapshot { get; }
     public string SnapshotRefreshReason { get; }
+    public OrderStatusUiRefreshMode UiRefreshMode { get; }
     public IReadOnlyList<OrderRunFeedbackLogEntry> Logs { get; }
 
     public static OrderStatusApplyOutcome NotChanged()
@@ -1237,6 +1253,7 @@ public sealed class OrderStatusApplyOutcome
             shouldSaveLocalHistory: false,
             shouldRefreshSnapshot: false,
             snapshotRefreshReason: string.Empty,
+            uiRefreshMode: OrderStatusUiRefreshMode.None,
             logs: Array.Empty<OrderRunFeedbackLogEntry>());
 
     public static OrderStatusApplyOutcome FromChanged(
@@ -1244,6 +1261,7 @@ public sealed class OrderStatusApplyOutcome
         bool shouldSaveLocalHistory,
         bool shouldRefreshSnapshot,
         string snapshotRefreshReason,
+        OrderStatusUiRefreshMode uiRefreshMode,
         IReadOnlyList<OrderRunFeedbackLogEntry>? logs)
         => new(
             changed: true,
@@ -1251,5 +1269,13 @@ public sealed class OrderStatusApplyOutcome
             shouldSaveLocalHistory: shouldSaveLocalHistory,
             shouldRefreshSnapshot: shouldRefreshSnapshot,
             snapshotRefreshReason: snapshotRefreshReason,
+            uiRefreshMode: uiRefreshMode,
             logs: logs);
+}
+
+public enum OrderStatusUiRefreshMode
+{
+    None = 0,
+    Coalesced = 1,
+    FastRowsThenRebuild = 2
 }

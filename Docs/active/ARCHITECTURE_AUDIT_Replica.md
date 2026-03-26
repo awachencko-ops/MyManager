@@ -56,6 +56,8 @@
 >
 > Актуализация на 2026-03-26 (risk-burndown, срез 47): `SetOrderStatusCore` переведён на единый application boundary `ApplyStatusTransitionWithPersistenceAsync`; fallback-политика `LAN status persist -> local save` и telemetry/logging перенесены из UI в `OrderApplicationService`, локальный `TryPersistOrderStatusViaLanApi` удалён из формы. Добавлены verify-тесты на status-persist + status-apply outcome сценарии, подтверждены build + targeted tests.
 >
+> Актуализация на 2026-03-26 (risk-burndown, срез 48): rule-ветка выбора `grid refresh` при status-change (`processor -> coalesced`, `ui -> fast rows/rebuild`) перенесена из `SetOrderStatusCore` в application outcome (`OrderStatusUiRefreshMode` внутри `OrderStatusApplyOutcome`); UI теперь исполняет готовый refresh-план без source-branching. Подтверждено build + verify (`OrderApplicationServiceTests`).
+>
 > Актуализация на 2026-03-20 (risk-burndown, срез 19): добавлен `OrderRunWorkflowOrchestrationService`; подготовка `run/stop` workflow (run-plan, LAN command preflight, snapshot refresh, stop preflight/cancel) вынесена из `MainForm` в application-service слой, добавлены unit-тесты orchestration (`OrderRunWorkflowOrchestrationServiceTests`).
 >
 > Актуализация на 2026-03-20 (risk-burndown, срез 20): выполнен rename и модульный перенос UI-ядра формы: entrypoint переведён на `OrdersWorkspaceForm`, код формы перемещён в `UI/Forms/OrdersWorkspace/*` (Core/FileOps/Filters/Views/Controls), сохранён переходный shim `MainForm` для обратной совместимости автотестов.
@@ -370,6 +372,9 @@
 38. Итерация 38 (2026-03-26, адресная): закрыт следующий presenter-only срез status persistence.
    - Что сделано: `SetOrderStatusCore` переведён на `ApplyStatusTransitionWithPersistenceAsync`; fallback-логика `LAN status persist -> local SaveHistory` и warning telemetry вынесены в application boundary, локальный `TryPersistOrderStatusViaLanApi` удалён из формы.
    - Эффект: уменьшена orchestration-нагрузка UI в критичном status-path, статусный lifecycle стал консистентнее с общим application-service подходом и проще для дальнейшего DI/mediator cutover.
+39. Итерация 39 (2026-03-26, адресная): закрыт следующий presenter-only срез status UI refresh policy.
+   - Что сделано: в `OrderApplicationService` добавлен `OrderStatusUiRefreshMode` и выбор режима refresh перенесён в `ApplyStatusTransitionWithPersistenceAsync`; `SetOrderStatusCore` убрал source-based branching и применяет только outcome-план.
+   - Эффект: форма дополнительно упрощена до execution-shell по статусным refresh-эффектам, а policy выбора режима обновления UI централизована и покрыта verify-тестами.
 
 ---
 
