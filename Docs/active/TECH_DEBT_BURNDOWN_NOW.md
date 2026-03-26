@@ -74,3 +74,9 @@
     - `ReplicaApiLaunchLocatorTests`
     - `PostgreSqlIntegration_Coordinator_UsesLanAsPrimaryAndMirrorsToFile`.
 
+- UI performance (Orders grid) hardening in `OrdersWorkspaceForm`:
+  - Added fast row refresh path (`TryRefreshGridRowsWithoutRebuild`) that updates existing `order|...` / `item|...` rows in-place and falls back to full `RebuildOrdersGrid()` only on topology mismatch.
+  - Wired fast-path into hot status transitions (`SetOrderStatusCore`) and run workflow batch points where previously full grid rebuild was forced.
+  - `PersistGridChanges` now tries fast refresh first; full rebuild remains as safety fallback for structural mutations.
+  - Verified by `dotnet build Replica.csproj -c Debug` (0 errors, 0 warnings).
+

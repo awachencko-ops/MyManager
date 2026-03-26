@@ -251,6 +251,9 @@ namespace Replica
         private void PersistGridChanges(string selectedTag)
         {
             SaveHistory();
+            if (TryRefreshGridRowsWithoutRebuild(selectedTag))
+                return;
+
             RebuildOrdersGrid();
             if (!string.IsNullOrWhiteSpace(selectedTag))
                 TryRestoreSelectedRowByTag(selectedTag);

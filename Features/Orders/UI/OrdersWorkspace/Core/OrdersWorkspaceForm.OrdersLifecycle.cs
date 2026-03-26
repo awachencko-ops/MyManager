@@ -277,6 +277,176 @@ namespace Replica
             }
         }
 
+        private bool TryRefreshGridRowsWithoutRebuild(string? selectedTag = null, string? targetOrderInternalId = null)
+        {
+            if (_isRebuildingGrid || dgvJobs.Rows.Count == 0)
+                return false;
+
+            selectedTag ??= dgvJobs.CurrentRow?.Tag?.ToString();
+            var ordersByInternalId = OrderGridLogic.BuildOrderIndex(_orderHistory);
+            var updatedRows = 0;
+            var topologyMismatch = false;
+            var previousRebuildState = _isRebuildingGrid;
+            _isRebuildingGrid = true;
+            dgvJobs.SuspendLayout();
+            try
+            {
+                foreach (DataGridViewRow row in dgvJobs.Rows)
+                {
+                    if (row.IsNewRow)
+                        continue;
+
+                    var rowTag = row.Tag?.ToString();
+                    if (string.IsNullOrWhiteSpace(rowTag))
+                        continue;
+
+                    var orderInternalId = ExtractOrderInternalIdFromTag(rowTag);
+                    if (string.IsNullOrWhiteSpace(orderInternalId))
+                        continue;
+
+                    if (!string.IsNullOrWhiteSpace(targetOrderInternalId)
+                        && !string.Equals(targetOrderInternalId, orderInternalId, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    var order = OrderGridLogic.FindOrderByInternalId(ordersByInternalId, orderInternalId);
+                    if (order == null)
+                    {
+                        topologyMismatch = true;
+                        continue;
+                    }
+
+                    if (IsOrderTag(rowTag))
+                    {
+                        ApplyOrderRowValues(row, order);
+                        updatedRows++;
+                        continue;
+                    }
+
+                    if (!IsItemTag(rowTag))
+                        continue;
+
+                    var itemId = ExtractItemIdFromTag(rowTag);
+                    if (string.IsNullOrWhiteSpace(itemId))
+                    {
+                        topologyMismatch = true;
+                        continue;
+                    }
+
+                    var item = order.Items?
+                        .FirstOrDefault(x => x != null && string.Equals(x.ItemId, itemId, StringComparison.Ordinal));
+                    if (item == null)
+                    {
+                        topologyMismatch = true;
+                        continue;
+                    }
+
+                    ApplyOrderItemRowValues(row, order, item);
+                    updatedRows++;
+                }
+            }
+            finally
+            {
+                dgvJobs.ResumeLayout();
+                _isRebuildingGrid = previousRebuildState;
+            }
+
+            if (topologyMismatch || updatedRows == 0)
+                return false;
+
+            if (!string.IsNullOrWhiteSpace(selectedTag))
+                TryRestoreSelectedRowByTag(selectedTag);
+
+            HandleOrdersGridChanged();
+            return true;
+        }
+
+        private void ApplyOrderRowValues(DataGridViewRow row, OrderData order)
+        {
+            var isMultiOrder = OrderTopologyService.IsMultiOrder(order);
+            var isExpanded = isMultiOrder && _expandedOrderIds.Contains(order.InternalId);
+            var normalizedStatus = NormalizeStatus(order.Status) ?? (order.Status ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(normalizedStatus))
+                normalizedStatus = WorkflowStatusNames.Waiting;
+            var displayStatus = isMultiOrder
+                ? WorkflowStatusNames.Group
+                : normalizedStatus;
+
+            var sourceDisplay = string.Empty;
+            var preparedDisplay = string.Empty;
+            var printDisplay = string.Empty;
+            var pitStopAction = NormalizeAction(order.PitStopAction);
+            var imposingAction = NormalizeAction(order.ImposingAction);
+
+            if (isMultiOrder)
+            {
+                sourceDisplay = "-";
+                preparedDisplay = "-";
+                printDisplay = "-";
+            }
+            else
+            {
+                var sourcePath = ResolveSingleOrderDisplayPath(order, OrderStages.Source);
+                var preparedPath = ResolveSingleOrderDisplayPath(order, OrderStages.Prepared);
+                var printPath = ResolveSingleOrderDisplayPath(order, OrderStages.Print);
+                sourceDisplay = GetFileName(sourcePath);
+                preparedDisplay = GetFileName(preparedPath);
+                printDisplay = GetFileName(printPath);
+                pitStopAction = ResolveSingleOrderDisplayAction(order, x => x.PitStopAction, order.PitStopAction);
+                imposingAction = ResolveSingleOrderDisplayAction(order, x => x.ImposingAction, order.ImposingAction);
+            }
+
+            SetGridCellValue(row.Cells[colStatus.Index], displayStatus);
+            SetGridCellValue(row.Cells[colOrderNumber.Index], BuildOrderRowCaption(order, isExpanded));
+            SetGridCellValue(row.Cells[colSource.Index], sourceDisplay);
+            SetGridCellValue(row.Cells[colPrep.Index], preparedDisplay);
+            SetGridCellValue(row.Cells[colPitstop.Index], pitStopAction);
+            SetGridCellValue(row.Cells[colHotimposing.Index], imposingAction);
+            SetGridCellValue(row.Cells[colPrint.Index], printDisplay);
+            SetGridCellValue(row.Cells[colReceived.Index], FormatDate(order.OrderDate));
+            SetGridCellValue(row.Cells[colCreated.Index], FormatDate(order.ArrivalDate));
+        }
+
+        private void ApplyOrderItemRowValues(DataGridViewRow row, OrderData order, OrderFileItem item)
+        {
+            var itemStatus = NormalizeStatus(item.FileStatus) ?? (item.FileStatus ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(itemStatus))
+                itemStatus = WorkflowStatusNames.Waiting;
+
+            var pitStopAction = NormalizeAction(item.PitStopAction);
+            if (string.Equals(pitStopAction, "-", StringComparison.Ordinal))
+                pitStopAction = NormalizeAction(order.PitStopAction);
+
+            var imposingAction = NormalizeAction(item.ImposingAction);
+            if (string.Equals(imposingAction, "-", StringComparison.Ordinal))
+                imposingAction = NormalizeAction(order.ImposingAction);
+
+            var orderNumberDisplay = string.IsNullOrWhiteSpace(order.Id)
+                ? string.Empty
+                : order.Id.Trim();
+
+            SetGridCellValue(row.Cells[colStatus.Index], itemStatus);
+            SetGridCellValue(row.Cells[colOrderNumber.Index], orderNumberDisplay);
+            SetGridCellValue(row.Cells[colSource.Index], GetFileName(item.SourcePath));
+            SetGridCellValue(row.Cells[colPrep.Index], GetFileName(item.PreparedPath));
+            SetGridCellValue(row.Cells[colPitstop.Index], pitStopAction);
+            SetGridCellValue(row.Cells[colHotimposing.Index], imposingAction);
+            SetGridCellValue(row.Cells[colPrint.Index], GetFileName(item.PrintPath));
+            SetGridCellValue(row.Cells[colReceived.Index], FormatDate(order.OrderDate));
+            SetGridCellValue(row.Cells[colCreated.Index], FormatDate(order.ArrivalDate));
+        }
+
+        private static void SetGridCellValue(DataGridViewCell cell, string nextValue)
+        {
+            var currentValue = cell.Value?.ToString() ?? string.Empty;
+            var normalizedNextValue = nextValue ?? string.Empty;
+            if (string.Equals(currentValue, normalizedNextValue, StringComparison.Ordinal))
+                return;
+
+            cell.Value = normalizedNextValue;
+        }
+
         private void AddOrderRowsToGrid(OrderData order)
         {
             if (order == null)
@@ -675,7 +845,8 @@ namespace Replica
 
             UpdateTrayProgressIndicator();
             SaveHistory();
-            RebuildOrdersGrid();
+            if (!TryRefreshGridRowsWithoutRebuild())
+                RebuildOrdersGrid();
 
             if (runnableOrders.Count == 1)
                 SetBottomStatus($"Запущен заказ {GetOrderDisplayId(runnableOrders[0])}");
@@ -735,7 +906,8 @@ namespace Replica
                 });
 
             SaveHistory();
-            RebuildOrdersGrid();
+            if (!TryRefreshGridRowsWithoutRebuild())
+                RebuildOrdersGrid();
             UpdateActionButtonsState();
 
             if (runExecutionResult.Errors.Count > 0)
@@ -1640,7 +1812,11 @@ namespace Replica
                 }
             }
             if (rebuildGrid)
-                RebuildOrdersGrid();
+            {
+                var selectedTag = dgvJobs.CurrentRow?.Tag?.ToString();
+                if (!TryRefreshGridRowsWithoutRebuild(selectedTag, order.InternalId))
+                    RebuildOrdersGrid();
+            }
 
             UpdateTrayErrorIndicator();
 
