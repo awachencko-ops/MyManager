@@ -1048,7 +1048,7 @@ namespace Replica
             }
         }
 
-        private void splitServer_Panel2_Paint(object? sender, PaintEventArgs e)
+        private void SplitUserPanel2Paint(object? sender, PaintEventArgs e)
         {
 
         }

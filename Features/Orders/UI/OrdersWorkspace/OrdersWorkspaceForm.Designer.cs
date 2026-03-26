@@ -670,7 +670,7 @@
             // 
             // splitUser.Panel2
             // 
-            splitUser.Panel2.Paint += splitServer_Panel2_Paint;
+            splitUser.Panel2.Paint += SplitUserPanel2Paint;
             splitUser.Size = new Size(460, 75);
             splitUser.SplitterDistance = 75;
             splitUser.TabIndex = 3;

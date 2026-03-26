@@ -33,7 +33,7 @@ namespace Replica
             splitUser.Panel1.Padding = new Padding(12, 8, 6, 8);
             splitUser.Panel2.Padding = new Padding(0, 10, 14, 10);
 
-            splitUser.Panel2.Paint -= splitServer_Panel2_Paint;
+            splitUser.Panel2.Paint -= SplitUserPanel2Paint;
             splitUser.Panel2.Controls.Clear();
 
             pictureBox5.Dock = DockStyle.None;
