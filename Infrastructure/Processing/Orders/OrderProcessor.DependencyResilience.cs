@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -9,6 +10,8 @@ namespace Replica
 {
     public partial class OrderProcessor
     {
+        private static readonly TimeSpan DependencyReadinessProbeTimeout = TimeSpan.FromSeconds(10);
+
         private void EnsureWorkflowDependenciesReady(OrderData order, HashSet<string>? selectedSet, string tempRoot)
         {
             EnsureStorageDependencyReady(tempRoot);
@@ -113,12 +116,64 @@ namespace Replica
                 path: directoryPath,
                 action: () =>
                 {
-                    if (!Directory.Exists(directoryPath))
-                        throw new DirectoryNotFoundException($"Dependency '{dependencyName}' directory not found: {directoryPath}");
+                    ExecuteDependencyReadinessProbe(
+                        dependencyName,
+                        operation,
+                        directoryPath,
+                        () =>
+                        {
+                            if (!Directory.Exists(directoryPath))
+                            {
+                                throw new DirectoryNotFoundException(
+                                    $"Dependency '{dependencyName}' directory not found: {directoryPath}");
+                            }
 
-                    using var enumerator = Directory.EnumerateFileSystemEntries(directoryPath).GetEnumerator();
-                    _ = enumerator.MoveNext();
+                            using var enumerator = Directory.EnumerateFileSystemEntries(directoryPath).GetEnumerator();
+                            _ = enumerator.MoveNext();
+                        });
                 });
+        }
+
+        private static void ExecuteDependencyReadinessProbe(
+            string dependencyName,
+            string operation,
+            string directoryPath,
+            Action probe)
+        {
+            if (probe == null)
+                throw new ArgumentNullException(nameof(probe));
+
+            Exception? capturedException = null;
+            using var completed = new ManualResetEventSlim(false);
+            var probeThread = new Thread(() =>
+            {
+                try
+                {
+                    probe();
+                }
+                catch (Exception ex)
+                {
+                    capturedException = ex;
+                }
+                finally
+                {
+                    completed.Set();
+                }
+            })
+            {
+                IsBackground = true,
+                Name = $"Replica-{dependencyName}-probe"
+            };
+
+            probeThread.Start();
+            if (!completed.Wait(DependencyReadinessProbeTimeout))
+            {
+                throw new IOException(
+                    $"Dependency '{dependencyName}' readiness probe timed out for operation '{operation}' at path '{directoryPath}' after {(int)DependencyReadinessProbeTimeout.TotalSeconds}s.");
+            }
+
+            if (capturedException != null)
+                ExceptionDispatchInfo.Capture(capturedException).Throw();
         }
 
         private bool IsFileReady(string path)
