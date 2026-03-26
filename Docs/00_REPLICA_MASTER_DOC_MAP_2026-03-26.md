@@ -9,7 +9,7 @@
 
 1. `Docs/00_REPLICA_MASTER_DOC_MAP_2026-03-26.md`
 2. `Docs/active/MEDIATOR_PERFORMANCE_DEEP_BRIEF_2026-03-26.md`
-3. `Docs/active/TECH_DEBT_BURNDOWN_NOW.md`
+3. `Docs/ready/TECH_DEBT_BURNDOWN_NOW.md`
 4. `Docs/active/ARCHITECTURE_AUDIT_Replica.md`
 
 ## 2. Сводный статус этапов
@@ -22,7 +22,7 @@
 | Stage 5 (security/auth cutover) | Completed | `Docs/ready/5_STAGE5_SECURITY_AUTH_AND_CUTOVER_BRIEF_2026-03-26.md` |
 | SLO/Operations | Completed | `Docs/ready/OPERATIONS_SLO_RUNBOOK.md` |
 | Performance + Mediator | In progress | `Docs/active/MEDIATOR_PERFORMANCE_DEEP_BRIEF_2026-03-26.md` |
-| Tech debt burn | In progress | `Docs/active/TECH_DEBT_BURNDOWN_NOW.md` |
+| Tech debt burn | Completed | `Docs/ready/TECH_DEBT_BURNDOWN_NOW.md` |
 | Installer/packaging | Planned | `Docs/active/INSTALLER_AND_DEPENDENCIES_PACKAGING_PLAN.md` |
 
 ## 3. Структура папок
@@ -31,7 +31,7 @@
 
 1. `ARCHITECTURE_AUDIT_Replica.md`
 2. `MEDIATOR_PERFORMANCE_DEEP_BRIEF_2026-03-26.md`
-3. `TECH_DEBT_BURNDOWN_NOW.md`
+3. `connection-sync-audit-2026-03-23.md`
 4. `connection-sync-audit-2026-03-23.md`
 5. `INSTALLER_AND_DEPENDENCIES_PACKAGING_PLAN.md`
 
@@ -48,6 +48,7 @@
 9. `5_STAGE5_SECURITY_AUTH_AND_CUTOVER_BRIEF_2026-03-26.md`
 10. `5_STRICT_AUTH_CUTOVER_CHECKLIST_2026-03-26.md`
 11. `OPERATIONS_SLO_RUNBOOK.md`
+12. `TECH_DEBT_BURNDOWN_NOW.md`
 
 ### 3.3 `Docs/archive` (исторические/снятые с активного контура)
 
