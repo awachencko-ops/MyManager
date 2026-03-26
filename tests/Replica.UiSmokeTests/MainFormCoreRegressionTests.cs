@@ -929,6 +929,23 @@ public sealed class MainFormCoreRegressionTests
         });
     }
 
+    [Fact]
+    public void SR23_ActionButtons_NewOrderButton_ReEnabledAfterServerHardLockIsRemoved()
+    {
+        MainFormTestHarness.RunWithIsolatedForm((form, _) =>
+        {
+            var newOrderButton = MainFormTestHarness.GetPrivateField<ToolStripButton>(form, "tsbNewJob");
+
+            MainFormTestHarness.SetPrivateField(form, "_serverHardLockActive", true);
+            MainFormTestHarness.InvokePrivate(form, "UpdateActionButtonsState");
+            Assert.False(newOrderButton.Enabled);
+
+            MainFormTestHarness.SetPrivateField(form, "_serverHardLockActive", false);
+            MainFormTestHarness.InvokePrivate(form, "UpdateActionButtonsState");
+            Assert.True(newOrderButton.Enabled);
+        });
+    }
+
     private static OrderData CreateOrder(string id, string status, string userName, DateTime createdAt, DateTime receivedAt)
     {
         return new OrderData

@@ -911,6 +911,7 @@ namespace Replica
                 && ShouldUseLanRunApi()
                 && string.Equals(NormalizeStatus(order!.Status), WorkflowStatusNames.Processing, StringComparison.OrdinalIgnoreCase);
 
+            tsbNewJob.Enabled = true;
             tsbRun.Enabled = hasOrder;
             tsbRemove.Enabled = hasOrder;
             tsbBrowse.Enabled = canOpenOrderFolder;
