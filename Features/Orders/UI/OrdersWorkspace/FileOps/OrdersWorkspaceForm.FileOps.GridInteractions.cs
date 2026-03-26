@@ -439,6 +439,8 @@ namespace Replica
             if (string.Equals(columnName, OrderGridColumnNames.PitStop, StringComparison.Ordinal)
                 || string.Equals(columnName, OrderGridColumnNames.PitStopLegacy, StringComparison.Ordinal))
             {
+                if (!EnsureServerWriteAllowed("Изменение действий PitStop"))
+                    return;
                 SelectPitStopActionFromGrid(e.RowIndex);
                 return;
             }
@@ -446,12 +448,16 @@ namespace Replica
             if (string.Equals(columnName, OrderGridColumnNames.HotImposing, StringComparison.Ordinal)
                 || string.Equals(columnName, OrderGridColumnNames.ImposingLegacy, StringComparison.Ordinal))
             {
+                if (!EnsureServerWriteAllowed("Изменение действий Imposing"))
+                    return;
                 SelectImposingActionFromGrid(e.RowIndex);
                 return;
             }
 
             if (e.ColumnIndex == colOrderNumber.Index)
             {
+                if (!EnsureServerWriteAllowed("Редактирование заказа"))
+                    return;
                 EditOrderFromGrid(e.RowIndex);
                 return;
             }
@@ -569,6 +575,12 @@ namespace Replica
                     ToggleOrderExpanded(order.InternalId);
                 }
 
+                ResetGridClickState();
+                return;
+            }
+
+            if (!EnsureServerWriteAllowed("Файловая операция"))
+            {
                 ResetGridClickState();
                 return;
             }
@@ -779,6 +791,9 @@ namespace Replica
 
         private async void DgvJobs_DragDrop(object? sender, DragEventArgs e)
         {
+            if (!EnsureServerWriteAllowed("Drag&Drop"))
+                return;
+
             if (e.Data?.GetDataPresent(DataFormats.FileDrop) != true)
                 return;
 

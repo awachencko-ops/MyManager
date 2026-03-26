@@ -93,6 +93,13 @@ namespace Replica
         private bool _connectionStatusToolTipVisible;
         private bool _pendingConnectionIndicatorRefresh;
         private string _connectionStatusToolTipContent = string.Empty;
+        private bool _serverHardLockActive;
+        private DateTime _serverHardLockLastDialogUtc = DateTime.MinValue;
+        private Panel? _serverHardLockOverlayPanelMain;
+        private Panel? _serverHardLockOverlayPanelQueue;
+        private Label? _serverHardLockOverlayTitleMain;
+        private Label? _serverHardLockOverlayDetailsMain;
+        private string _lastServerOpsProbeLogFingerprint = string.Empty;
         private OrdersViewMode _ordersViewMode = OrdersViewMode.List;
 
         private readonly List<string> _users = [UserIdentityResolver.DefaultDisplayName];
@@ -356,6 +363,13 @@ namespace Replica
             public double LatencyP95Ms { get; init; } = -1;
             public double WriteSuccessRatio { get; init; } = -1;
             public int ConsecutiveFailureCount { get; init; }
+            public long HttpRequests5xx { get; init; } = -1;
+            public long WriteBadRequest { get; init; } = -1;
+            public DateTime LastServerEventAtUtc { get; init; }
+            public string LastServerEventType { get; init; } = string.Empty;
+            public string LastServerEventOrderId { get; init; } = string.Empty;
+            public string ProcessAlert { get; init; } = string.Empty;
+            public DateTime ProcessAlertAtUtc { get; init; }
         }
 
         private enum CreatedDateFilterKind

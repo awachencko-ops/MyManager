@@ -301,6 +301,7 @@ namespace Replica
             toolConnection.ToolTipText = string.Empty;
             RefreshPersistentConnectionToolTip();
             UpdateServerHeaderConnectionState(shortStatusText, statusColor);
+            ApplyServerHardLockState(shouldLock: false, details: string.Empty);
         }
 
         private void ApplyProcessorDependencyHealthSignal(DependencyHealthSignal signal)
@@ -396,6 +397,11 @@ namespace Replica
                     : "API доступен, ждём ready";
                 statusColor = Color.DarkOrange;
             }
+            else if (!string.IsNullOrWhiteSpace(snapshot.ProcessAlert))
+            {
+                shortStatusText = "подключен (ошибки API)";
+                statusColor = Color.DarkOrange;
+            }
             else
             {
                 shortStatusText = "подключен";
@@ -417,6 +423,7 @@ namespace Replica
             toolConnection.ToolTipText = string.Empty;
             RefreshPersistentConnectionToolTip();
             UpdateServerHeaderConnectionState(shortStatusText, statusColor);
+            ApplyServerHardLockFromLanSnapshot(snapshot, probeInProgress);
         }
 
         private void RefreshPersistentConnectionToolTip()
@@ -500,6 +507,19 @@ namespace Replica
                 lines.Add("Проверка выполняется...");
             if (!string.IsNullOrWhiteSpace(snapshot.Error))
                 lines.Add($"Ошибка: {snapshot.Error}");
+            if (snapshot.HttpRequests5xx >= 0 || snapshot.WriteBadRequest >= 0)
+            {
+                lines.Add($"Ошибки API: HTTP 5xx={Math.Max(0, snapshot.HttpRequests5xx)}, write bad_request={Math.Max(0, snapshot.WriteBadRequest)}");
+            }
+            if (snapshot.LastServerEventAtUtc > DateTime.MinValue)
+            {
+                var eventOrderText = string.IsNullOrWhiteSpace(snapshot.LastServerEventOrderId)
+                    ? "-"
+                    : snapshot.LastServerEventOrderId;
+                lines.Add($"Последняя серверная операция: {snapshot.LastServerEventType} (order={eventOrderText}, {FormatLanProbeStamp(snapshot.LastServerEventAtUtc)})");
+            }
+            if (!string.IsNullOrWhiteSpace(snapshot.ProcessAlert))
+                lines.Add($"Сбой на сервере: {snapshot.ProcessAlert}");
             if (dependencyHealthLevel != DependencyHealthLevel.Healthy)
                 lines.Add($"Hotfolder: {BuildDependencyHealthSummary()}");
             if (_lanConnectionRecoveryActionEnabled)
@@ -553,11 +573,15 @@ namespace Replica
                 var liveProbeTask = ProbeEndpointStatusAsync(baseUri, "live", cancellationToken);
                 var readyProbeTask = ProbeEndpointStatusAsync(baseUri, "ready", cancellationToken);
                 var sloProbeTask = ProbeEndpointStatusAsync(baseUri, "slo", cancellationToken);
-                await Task.WhenAll(liveProbeTask, readyProbeTask, sloProbeTask);
+                var metricsProbeTask = ProbeEndpointStatusAsync(baseUri, "metrics", cancellationToken, optionalEndpoint: true);
+                var diagnosticsProbeTask = ProbeEndpointStatusAsync(baseUri, "api/diagnostics/operations/recent?limit=1", cancellationToken, optionalEndpoint: true);
+                await Task.WhenAll(liveProbeTask, readyProbeTask, sloProbeTask, metricsProbeTask, diagnosticsProbeTask);
 
                 var liveProbe = await liveProbeTask;
                 var readyProbe = await readyProbeTask;
                 var sloProbe = await sloProbeTask;
+                var metricsProbe = await metricsProbeTask;
+                var diagnosticsProbe = await diagnosticsProbeTask;
                 completedAtUtc = DateTime.UtcNow;
 
                 var apiReachable = liveProbe.IsReachable || readyProbe.IsReachable || sloProbe.IsReachable;
@@ -586,9 +610,29 @@ namespace Replica
                 if (!string.IsNullOrWhiteSpace(liveProbe.Payload))
                     TryExtractUtcDateTime(liveProbe.Payload, "now", out serverNowUtc);
 
+                var httpRequests5xx = -1L;
+                var writeBadRequest = -1L;
+                if (!string.IsNullOrWhiteSpace(metricsProbe.Payload))
+                {
+                    TryGetLongMetric(metricsProbe.Payload, "HttpRequests5xx", out httpRequests5xx);
+                    TryGetLongMetric(metricsProbe.Payload, "WriteBadRequest", out writeBadRequest);
+                }
+
+                var lastServerEventAtUtc = DateTime.MinValue;
+                var lastServerEventType = string.Empty;
+                var lastServerEventOrderId = string.Empty;
+                if (!string.IsNullOrWhiteSpace(diagnosticsProbe.Payload))
+                {
+                    TryExtractRecentServerOperation(
+                        diagnosticsProbe.Payload,
+                        out lastServerEventAtUtc,
+                        out lastServerEventType,
+                        out lastServerEventOrderId);
+                }
+
                 var mergedError = string.Join(
                     " | ",
-                    new[] { liveProbe.Error, readyProbe.Error, sloProbe.Error }
+                    new[] { liveProbe.Error, readyProbe.Error, sloProbe.Error, metricsProbe.Error, diagnosticsProbe.Error }
                         .Where(error => !string.IsNullOrWhiteSpace(error)));
 
                 nextSnapshot = new LanServerProbeSnapshot
@@ -608,7 +652,12 @@ namespace Replica
                     ProbeReason = reason ?? string.Empty,
                     AvailabilityRatio = availabilityRatio,
                     LatencyP95Ms = latencyP95,
-                    WriteSuccessRatio = writeSuccess
+                    WriteSuccessRatio = writeSuccess,
+                    HttpRequests5xx = httpRequests5xx,
+                    WriteBadRequest = writeBadRequest,
+                    LastServerEventAtUtc = lastServerEventAtUtc,
+                    LastServerEventType = lastServerEventType,
+                    LastServerEventOrderId = lastServerEventOrderId
                 };
             }
             catch (OperationCanceledException)
@@ -650,6 +699,7 @@ namespace Replica
 
             lock (_lanServerProbeSync)
             {
+                var previousSnapshot = _lanServerProbeSnapshot;
                 var previousSuccessUtc = _lanServerProbeSnapshot.SuccessfulAtUtc;
                 var previousFailureCount = _lanServerProbeSnapshot.ConsecutiveFailureCount;
                 var nextFailureCount = nextSnapshot.ApiReachable
@@ -657,6 +707,29 @@ namespace Replica
                     : string.Equals(nextSnapshot.LiveStatus, "cancelled", StringComparison.OrdinalIgnoreCase)
                         ? previousFailureCount
                         : previousFailureCount + 1;
+
+                var processAlert = string.Empty;
+                var processAlertAtUtc = DateTime.MinValue;
+                var has5xxCounters = nextSnapshot.HttpRequests5xx >= 0 && previousSnapshot.HttpRequests5xx >= 0;
+                var hasWriteBadCounters = nextSnapshot.WriteBadRequest >= 0 && previousSnapshot.WriteBadRequest >= 0;
+                var added5xx = has5xxCounters ? Math.Max(0, nextSnapshot.HttpRequests5xx - previousSnapshot.HttpRequests5xx) : 0;
+                var addedWriteBad = hasWriteBadCounters ? Math.Max(0, nextSnapshot.WriteBadRequest - previousSnapshot.WriteBadRequest) : 0;
+
+                if (added5xx > 0 || addedWriteBad > 0)
+                {
+                    processAlert = $"HTTP 5xx +{added5xx}, write bad_request +{addedWriteBad}";
+                    processAlertAtUtc = nextSnapshot.CompletedAtUtc > DateTime.MinValue
+                        ? nextSnapshot.CompletedAtUtc
+                        : DateTime.UtcNow;
+                    Logger.Warn($"LAN-SERVER | process-alert | {processAlert}");
+                }
+                else if (previousSnapshot.ProcessAlertAtUtc > DateTime.MinValue
+                         && (DateTime.UtcNow - previousSnapshot.ProcessAlertAtUtc).TotalMinutes <= 15)
+                {
+                    processAlert = previousSnapshot.ProcessAlert;
+                    processAlertAtUtc = previousSnapshot.ProcessAlertAtUtc;
+                }
+
                 if (nextSnapshot.SuccessfulAtUtc == DateTime.MinValue && previousSuccessUtc > DateTime.MinValue)
                 {
                     nextSnapshot = new LanServerProbeSnapshot
@@ -677,7 +750,14 @@ namespace Replica
                         AvailabilityRatio = nextSnapshot.AvailabilityRatio,
                         LatencyP95Ms = nextSnapshot.LatencyP95Ms,
                         WriteSuccessRatio = nextSnapshot.WriteSuccessRatio,
-                        ConsecutiveFailureCount = nextFailureCount
+                        ConsecutiveFailureCount = nextFailureCount,
+                        HttpRequests5xx = nextSnapshot.HttpRequests5xx,
+                        WriteBadRequest = nextSnapshot.WriteBadRequest,
+                        LastServerEventAtUtc = nextSnapshot.LastServerEventAtUtc,
+                        LastServerEventType = nextSnapshot.LastServerEventType,
+                        LastServerEventOrderId = nextSnapshot.LastServerEventOrderId,
+                        ProcessAlert = processAlert,
+                        ProcessAlertAtUtc = processAlertAtUtc
                     };
                 }
                 else
@@ -700,7 +780,14 @@ namespace Replica
                         AvailabilityRatio = nextSnapshot.AvailabilityRatio,
                         LatencyP95Ms = nextSnapshot.LatencyP95Ms,
                         WriteSuccessRatio = nextSnapshot.WriteSuccessRatio,
-                        ConsecutiveFailureCount = nextFailureCount
+                        ConsecutiveFailureCount = nextFailureCount,
+                        HttpRequests5xx = nextSnapshot.HttpRequests5xx,
+                        WriteBadRequest = nextSnapshot.WriteBadRequest,
+                        LastServerEventAtUtc = nextSnapshot.LastServerEventAtUtc,
+                        LastServerEventType = nextSnapshot.LastServerEventType,
+                        LastServerEventOrderId = nextSnapshot.LastServerEventOrderId,
+                        ProcessAlert = processAlert,
+                        ProcessAlertAtUtc = processAlertAtUtc
                     };
                 }
 
@@ -710,6 +797,7 @@ namespace Replica
                 _lanServerProbeInProgress = false;
             }
 
+            LogLanServerProbeSnapshot(nextSnapshot);
             RunOnUiThread(UpdateTrayConnectionIndicator);
         }
 
@@ -898,7 +986,7 @@ namespace Replica
             };
         }
 
-        private async Task<EndpointProbeResult> ProbeEndpointStatusAsync(Uri baseUri, string endpointPath, CancellationToken cancellationToken)
+        private async Task<EndpointProbeResult> ProbeEndpointStatusAsync(Uri baseUri, string endpointPath, CancellationToken cancellationToken, bool optionalEndpoint = false)
         {
             try
             {
@@ -912,19 +1000,33 @@ namespace Replica
                         ? "not_ready"
                         : "error";
                 var status = ExtractStatusFromJsonPayload(payload, fallbackStatus);
+                var isOptionalNotFound = optionalEndpoint
+                    && (response.StatusCode == HttpStatusCode.NotFound
+                        || response.StatusCode == HttpStatusCode.MethodNotAllowed);
 
                 return new EndpointProbeResult
                 {
                     IsReachable = true,
                     Status = status,
                     Payload = payload,
-                    Error = response.IsSuccessStatusCode
+                    Error = response.IsSuccessStatusCode || isOptionalNotFound
                         ? string.Empty
                         : $"{endpointPath}: HTTP {(int)response.StatusCode} ({response.StatusCode})"
                 };
             }
             catch (Exception ex)
             {
+                if (optionalEndpoint)
+                {
+                    return new EndpointProbeResult
+                    {
+                        IsReachable = true,
+                        Status = "optional-unavailable",
+                        Payload = string.Empty,
+                        Error = string.Empty
+                    };
+                }
+
                 return new EndpointProbeResult
                 {
                     IsReachable = false,
@@ -1026,6 +1128,86 @@ namespace Replica
             return false;
         }
 
+        private static bool TryGetLongMetric(string payload, string metricName, out long value)
+        {
+            value = -1;
+            if (string.IsNullOrWhiteSpace(payload))
+                return false;
+
+            try
+            {
+                using var document = JsonDocument.Parse(payload);
+                if (document.RootElement.ValueKind != JsonValueKind.Object)
+                    return false;
+
+                if (!TryGetPropertyIgnoreCase(document.RootElement, metricName, out var valueElement))
+                    return false;
+
+                if (valueElement.ValueKind == JsonValueKind.Number && valueElement.TryGetInt64(out value))
+                    return true;
+            }
+            catch
+            {
+                // ignore malformed payload
+            }
+
+            return false;
+        }
+
+        private static bool TryExtractRecentServerOperation(
+            string payload,
+            out DateTime createdAtUtc,
+            out string eventType,
+            out string orderInternalId)
+        {
+            createdAtUtc = DateTime.MinValue;
+            eventType = string.Empty;
+            orderInternalId = string.Empty;
+
+            if (string.IsNullOrWhiteSpace(payload))
+                return false;
+
+            try
+            {
+                using var document = JsonDocument.Parse(payload);
+                if (document.RootElement.ValueKind != JsonValueKind.Array || document.RootElement.GetArrayLength() == 0)
+                    return false;
+
+                var first = document.RootElement[0];
+                if (first.ValueKind != JsonValueKind.Object)
+                    return false;
+
+                if (TryGetPropertyIgnoreCase(first, "eventType", out var eventTypeElement)
+                    && eventTypeElement.ValueKind == JsonValueKind.String)
+                {
+                    eventType = eventTypeElement.GetString()?.Trim() ?? string.Empty;
+                }
+
+                if (TryGetPropertyIgnoreCase(first, "orderId", out var orderElement)
+                    && orderElement.ValueKind == JsonValueKind.String)
+                {
+                    orderInternalId = orderElement.GetString()?.Trim() ?? string.Empty;
+                }
+
+                if (TryGetPropertyIgnoreCase(first, "createdAtUtc", out var createdAtElement)
+                    && createdAtElement.ValueKind == JsonValueKind.String
+                    && DateTime.TryParse(
+                        createdAtElement.GetString(),
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                        out var parsed))
+                {
+                    createdAtUtc = parsed;
+                }
+
+                return !string.IsNullOrWhiteSpace(eventType) || createdAtUtc > DateTime.MinValue;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         private static bool TryExtractUtcDateTime(string payload, string propertyName, out DateTime value)
         {
             value = DateTime.MinValue;
@@ -1078,6 +1260,54 @@ namespace Replica
 
             value = default;
             return false;
+        }
+
+        private void LogLanServerProbeSnapshot(LanServerProbeSnapshot snapshot)
+        {
+            try
+            {
+                var fingerprint = string.Join(
+                    "|",
+                    snapshot.LiveStatus,
+                    snapshot.ReadyStatus,
+                    snapshot.SloStatus,
+                    snapshot.HttpRequests5xx.ToString(CultureInfo.InvariantCulture),
+                    snapshot.WriteBadRequest.ToString(CultureInfo.InvariantCulture),
+                    snapshot.LastServerEventType,
+                    snapshot.LastServerEventOrderId,
+                    snapshot.LastServerEventAtUtc.Ticks.ToString(CultureInfo.InvariantCulture),
+                    snapshot.ProcessAlert,
+                    snapshot.Error);
+
+                if (string.Equals(_lastServerOpsProbeLogFingerprint, fingerprint, StringComparison.Ordinal))
+                    return;
+
+                _lastServerOpsProbeLogFingerprint = fingerprint;
+
+                var logFilePath = BuildServerOpsLogFilePath();
+                var logDirectory = Path.GetDirectoryName(logFilePath);
+                if (!string.IsNullOrWhiteSpace(logDirectory))
+                    Directory.CreateDirectory(logDirectory);
+
+                var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} | live/ready/slo={snapshot.LiveStatus}/{snapshot.ReadyStatus}/{snapshot.SloStatus} | " +
+                           $"http5xx={snapshot.HttpRequests5xx} | write_bad_request={snapshot.WriteBadRequest} | " +
+                           $"event={snapshot.LastServerEventType} | order={snapshot.LastServerEventOrderId} | " +
+                           $"event_at={FormatLanProbeStamp(snapshot.LastServerEventAtUtc)} | alert={snapshot.ProcessAlert} | error={snapshot.Error}";
+                File.AppendAllText(logFilePath, line + Environment.NewLine);
+            }
+            catch
+            {
+                // Лог диагностики не должен влиять на работу клиента.
+            }
+        }
+
+        private string BuildServerOpsLogFilePath()
+        {
+            var managerLogDirectory = Path.GetDirectoryName(_managerLogFilePath);
+            if (string.IsNullOrWhiteSpace(managerLogDirectory))
+                managerLogDirectory = AppContext.BaseDirectory;
+
+            return Path.Combine(managerLogDirectory, "server-ops.log");
         }
 
         private static string FormatLanProbeStamp(DateTime utcValue)

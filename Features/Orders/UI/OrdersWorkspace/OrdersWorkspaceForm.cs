@@ -58,6 +58,7 @@ namespace Replica
             InitializeActionButtonsState();
             InitializeOrdersKeyboardShortcuts();
             InitializeTrayIndicators();
+            InitializeServerHardLockUi();
             FormClosed += MainForm_FormClosed;
             SetOrdersViewMode(OrdersViewMode.List);
             SetBottomStatus(DefaultTrayStatusText);
@@ -68,12 +69,16 @@ namespace Replica
         {
             if (e.ClickedItem == tsbNewJob)
             {
+                if (!EnsureServerWriteAllowed("Создание заказа"))
+                    return;
                 CreateNewOrder();
                 return;
             }
 
             if (e.ClickedItem == tsbAddFile)
             {
+                if (!EnsureServerWriteAllowed("Добавление файла"))
+                    return;
                 await AddFileToSelectedOrderAsync();
                 return;
             }
@@ -86,18 +91,24 @@ namespace Replica
 
             if (e.ClickedItem == tsbRun)
             {
+                if (!EnsureServerWriteAllowed("Запуск заказа"))
+                    return;
                 await RunSelectedOrderAsync();
                 return;
             }
 
             if (e.ClickedItem == tsbStop)
             {
+                if (!EnsureServerWriteAllowed("Остановка заказа"))
+                    return;
                 await StopSelectedOrderAsync();
                 return;
             }
 
             if (e.ClickedItem == tsbRemove)
             {
+                if (!EnsureServerWriteAllowed("Удаление заказа"))
+                    return;
                 RemoveSelectedOrder();
                 return;
             }
@@ -116,6 +127,9 @@ namespace Replica
 
         private void CreateNewOrder()
         {
+            if (!EnsureServerWriteAllowed("Создание заказа"))
+                return;
+
             var settings = _settingsProvider.Load();
             if (settings.UseExtendedMode)
                 CreateNewExtendedOrder();
@@ -159,6 +173,9 @@ namespace Replica
             if (order == null)
                 return;
 
+            if (!EnsureServerWriteAllowed("Создание заказа"))
+                return;
+
             if (ShouldUseLanRunApi())
             {
                 var writeResult = _orderApplicationService
@@ -194,6 +211,9 @@ namespace Replica
 
         private void EditOrderFromGrid(int rowIndex)
         {
+            if (!EnsureServerWriteAllowed("Редактирование заказа"))
+                return;
+
             if (rowIndex < 0 || rowIndex >= dgvJobs.Rows.Count)
                 return;
 
@@ -845,11 +865,27 @@ namespace Replica
 
             e.Handled = true;
             e.SuppressKeyPress = true;
+            if (!EnsureServerWriteAllowed("Удаление заказа"))
+                return;
             RemoveSelectedOrder();
         }
 
         private void UpdateActionButtonsState()
         {
+            if (_serverHardLockActive)
+            {
+                tsbNewJob.Enabled = false;
+                tsbRun.Enabled = false;
+                tsbStop.Enabled = false;
+                tsbRemove.Enabled = false;
+                tsbAddFile.Enabled = false;
+                tsbBrowse.Enabled = false;
+                tsbConsole.Enabled = true;
+                tsbAddFile.ToolTipText = "Недоступно: нет соединения с сервером.";
+                tsbBrowse.ToolTipText = "Недоступно: нет соединения с сервером.";
+                return;
+            }
+
             var order = GetSelectedOrder();
             var hasOrder = order != null;
             var hasSelectedOrderContainer = TryGetSelectedOrderContainer(out var selectedOrderContainer) && selectedOrderContainer != null;

@@ -100,6 +100,9 @@ namespace Replica
 
         private async Task AddFileToSelectedOrderAsync()
         {
+            if (!EnsureServerWriteAllowed("Добавление файла"))
+                return;
+
             if (!TryGetSelectedOrderContainer(out var order) || order == null)
             {
                 SetBottomStatus("Выберите строку заказа");
@@ -189,6 +192,9 @@ namespace Replica
 
         private async Task<bool> AddFileToOrderAsync(OrderData order, string sourceFile, int stage)
         {
+            if (!EnsureServerWriteAllowed("Добавление файла"))
+                return false;
+
             if (stage == OrderStages.Print && !await EnsureSimpleOrderInfoForPrintAsync(order))
                 return false;
 
@@ -215,6 +221,9 @@ namespace Replica
 
         private async Task<bool> AddFileToItemAsync(OrderData order, OrderFileItem item, string sourceFile, int stage)
         {
+            if (!EnsureServerWriteAllowed("Добавление файла"))
+                return false;
+
             if (stage == OrderStages.Print && !await EnsureSimpleOrderInfoForPrintAsync(order))
                 return false;
 
@@ -290,6 +299,9 @@ namespace Replica
 
         private void RemoveFileFromOrder(OrderData order, int stage)
         {
+            if (!EnsureServerWriteAllowed("Удаление файла"))
+                return;
+
             var currentPath = GetOrderStagePath(order, stage);
             if (string.IsNullOrWhiteSpace(currentPath))
                 return;
@@ -329,6 +341,9 @@ namespace Replica
 
         private void RemoveFileFromItem(OrderData order, OrderFileItem item, int stage)
         {
+            if (!EnsureServerWriteAllowed("Удаление файла"))
+                return;
+
             var currentPath = GetItemStagePath(item, stage);
             if (string.IsNullOrWhiteSpace(currentPath))
                 return;
@@ -455,6 +470,9 @@ namespace Replica
 
         private void RenameFileForOrder(OrderData order, int stage)
         {
+            if (!EnsureServerWriteAllowed("Переименование файла"))
+                return;
+
             var currentPath = GetOrderStagePath(order, stage);
             if (!HasExistingFile(currentPath))
                 return;
@@ -487,6 +505,9 @@ namespace Replica
 
         private void RenameFileForItem(OrderData order, OrderFileItem item, int stage)
         {
+            if (!EnsureServerWriteAllowed("Переименование файла"))
+                return;
+
             var currentPath = GetItemStagePath(item, stage);
             if (!HasExistingFile(currentPath))
                 return;

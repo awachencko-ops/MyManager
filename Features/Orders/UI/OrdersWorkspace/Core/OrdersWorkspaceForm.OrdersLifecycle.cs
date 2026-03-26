@@ -542,6 +542,9 @@ namespace Replica
 
         private async Task RunSelectedOrderAsync()
         {
+            if (!EnsureServerWriteAllowed("Запуск заказа"))
+                return;
+
             var selectedOrders = GetSelectedOrders();
             if (selectedOrders.Count == 0)
             {
@@ -738,6 +741,9 @@ namespace Replica
 
         private async Task StopSelectedOrderAsync()
         {
+            if (!EnsureServerWriteAllowed("Остановка заказа"))
+                return;
+
             var order = GetSelectedOrder();
             if (order == null)
             {
@@ -884,6 +890,9 @@ namespace Replica
 
         private void RemoveSelectedOrder()
         {
+            if (!EnsureServerWriteAllowed("Удаление заказа"))
+                return;
+
             var selectedOrderItems = GetSelectedOrderItems();
             var hasSelectedOrderContainers = HasSelectedOrderContainerRow();
             if (!hasSelectedOrderContainers && selectedOrderItems.Count > 0)

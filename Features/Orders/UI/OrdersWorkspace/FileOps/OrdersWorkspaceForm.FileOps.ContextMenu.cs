@@ -245,6 +245,9 @@ namespace Replica
 
         private async Task PickFileFromContextAsync(int stage)
         {
+            if (!EnsureServerWriteAllowed("Добавление файла"))
+                return;
+
             if (!OrderStages.IsFileStage(stage))
                 return;
 
@@ -271,6 +274,9 @@ namespace Replica
 
         private void RemoveFileFromContext(int stage)
         {
+            if (!EnsureServerWriteAllowed("Удаление файла"))
+                return;
+
             if (!OrderStages.IsFileStage(stage))
                 return;
 
@@ -289,6 +295,9 @@ namespace Replica
 
         private void RenameFileFromContext(int stage)
         {
+            if (!EnsureServerWriteAllowed("Переименование файла"))
+                return;
+
             if (!OrderStages.IsFileStage(stage))
                 return;
 
@@ -325,6 +334,9 @@ namespace Replica
 
         private async Task PastePathFromClipboardToContextAsync(int stage)
         {
+            if (!EnsureServerWriteAllowed("Добавление файла"))
+                return;
+
             if (!OrderStages.IsFileStage(stage))
                 return;
 
@@ -351,6 +363,9 @@ namespace Replica
 
         private void ApplyWatermarkFromContext(bool isVertical)
         {
+            if (!EnsureServerWriteAllowed("Наложение водяного знака"))
+                return;
+
             if (TryGetContextOrderItem(out var itemOrder, out var item))
             {
                 ProcessWatermark(itemOrder!, item!, isVertical);
@@ -366,6 +381,9 @@ namespace Replica
 
         private async void CopyPrintFromContextToGrandpa()
         {
+            if (!EnsureServerWriteAllowed("Копирование в Дедушку"))
+                return;
+
             try
             {
                 if (TryGetContextOrderItem(out var itemOrder, out var item))
@@ -389,6 +407,9 @@ namespace Replica
 
         private void RemovePitStopActionFromContext()
         {
+            if (!EnsureServerWriteAllowed("Изменение действий PitStop"))
+                return;
+
             if (TryGetContextOrderItem(out var itemOrder, out var item))
             {
                 RemovePitStopAction(itemOrder!, item!);
@@ -404,6 +425,9 @@ namespace Replica
 
         private void RemoveImposingActionFromContext()
         {
+            if (!EnsureServerWriteAllowed("Изменение действий Imposing"))
+                return;
+
             if (TryGetContextOrderItem(out var itemOrder, out var item))
             {
                 RemoveImposingAction(itemOrder!, item!);
@@ -419,12 +443,18 @@ namespace Replica
 
         private void OpenPitStopManager()
         {
+            if (!EnsureServerWriteAllowed("Настройка действий PitStop"))
+                return;
+
             using var form = new ActionManagerForm();
             form.ShowDialog(this);
         }
 
         private void OpenImposingManager()
         {
+            if (!EnsureServerWriteAllowed("Настройка действий Imposing"))
+                return;
+
             using var form = new ImposingManagerForm();
             form.ShowDialog(this);
         }
@@ -506,6 +536,9 @@ namespace Replica
 
         private void RemovePitStopAction(OrderData order)
         {
+            if (!EnsureServerWriteAllowed("Изменение действий PitStop"))
+                return;
+
             order.PitStopAction = "-";
             if (order.Items != null)
             {
@@ -519,6 +552,9 @@ namespace Replica
 
         private void RemoveImposingAction(OrderData order)
         {
+            if (!EnsureServerWriteAllowed("Изменение действий Imposing"))
+                return;
+
             order.ImposingAction = "-";
             if (order.Items != null)
             {
@@ -532,6 +568,9 @@ namespace Replica
 
         private void RemovePitStopAction(OrderData order, OrderFileItem item)
         {
+            if (!EnsureServerWriteAllowed("Изменение действий PitStop"))
+                return;
+
             item.PitStopAction = "-";
             PersistGridChanges(OrderGridLogic.BuildItemTag(order.InternalId, item.ItemId));
             SetBottomStatus($"PitStop очищен для item {item.ClientFileLabel}");
@@ -539,6 +578,9 @@ namespace Replica
 
         private void RemoveImposingAction(OrderData order, OrderFileItem item)
         {
+            if (!EnsureServerWriteAllowed("Изменение действий Imposing"))
+                return;
+
             item.ImposingAction = "-";
             PersistGridChanges(OrderGridLogic.BuildItemTag(order.InternalId, item.ItemId));
             SetBottomStatus($"Imposing очищен для item {item.ClientFileLabel}");
