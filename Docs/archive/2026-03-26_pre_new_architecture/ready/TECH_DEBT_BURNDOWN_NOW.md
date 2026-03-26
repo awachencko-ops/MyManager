@@ -13,7 +13,7 @@
 
 | Область | Итоговый статус | Комментарий |
 |---|---|---|
-| `MainForm` / god-object orchestration | `PARTIAL -> CONTROLLED` | Форма переименована в `OrdersWorkspaceForm`, большая часть orchestration вынесена в `Application`-сервисы; остаток — финальный presenter-only cutover и DI-полировка. |
+| `MainForm` / god-object orchestration | `DONE (current cutover)` | Форма переименована в `OrdersWorkspaceForm`, orchestration вынесена в `Application`-сервисы; последний UI-tail по refresh/delete/file-ops политике закрыт, дальше остаются только perf/UX и DI-polish задачи. |
 | Write-command boundary | `DONE` | `create/update/status/items(add/update/delete/reorder)/run/stop/order-delete` идут через API boundary (LAN path). |
 | JSON/file как runtime source | `DONE` | В `LanPostgreSql` режиме PostgreSQL закреплен как primary source of truth; `history.json` — bootstrap/mirror. |
 | Audit/observability baseline | `DONE (baseline)` | Введены `/live`, `/ready`, `/metrics`, `/slo`, метрики write/idempotency, operational runbook. |
@@ -41,13 +41,10 @@
 
 ## Остаток (не блокер релизного контура)
 
-1. Дожать `presenter-only` слой до полного `DONE`:
-   - убрать оставшиеся orchestration-ветки из UI;
-   - завершить DI/composition root до полностью сервисного сценария.
-2. Полировка UX/perf на очень больших наборах данных:
+1. Полировка UX/perf на очень больших наборах данных:
    - точечный профайлинг `ApplyStatusFilterToGrid` на production-объемах;
    - при необходимости staged-apply фильтрации.
-3. Security next-step:
+2. Security next-step:
    - полный authN/authZ (role/claim policy) поверх уже внедренной actor validation write-path.
 
 ## Правило закрытия блока «сжечь и переписать»
@@ -81,3 +78,4 @@
 3. UI now only applies outcome (`logs + snapshot refresh + fallback decision`) which reduces local orchestration in form code.
 4. `SetOrderStatusCore` switched to `IOrderApplicationService.ApplyStatusTransitionWithPersistenceAsync(...)`; fallback save/log policy moved out of UI into application boundary.
 5. Grid refresh branching (`processor -> coalesced`, `ui -> fast rows/rebuild`) moved to application outcome (`OrderStatusUiRefreshMode`), UI executes only selected refresh strategy.
+6. File-mutation refresh policy (`delete/file-ops`) moved to `OrderGridMutationUiPlan`; `PersistGridChanges(...)` and the delete paths now apply a single outcome plan instead of owning save/rebuild branching locally.

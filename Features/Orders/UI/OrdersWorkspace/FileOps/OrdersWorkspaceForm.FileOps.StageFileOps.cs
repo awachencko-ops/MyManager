@@ -250,13 +250,30 @@ namespace Replica
 
         private void PersistGridChanges(string selectedTag)
         {
-            SaveHistory();
-            if (TryRefreshGridRowsWithoutRebuild(selectedTag))
-                return;
+            ApplyPostGridMutationPlan(_orderApplicationService.BuildPostGridMutationUiPlan(), selectedTag);
+        }
 
-            RebuildOrdersGrid();
-            if (!string.IsNullOrWhiteSpace(selectedTag))
-                TryRestoreSelectedRowByTag(selectedTag);
+        private void ApplyPostGridMutationPlan(OrderGridMutationUiPlan plan, string selectedTag)
+        {
+            if (plan.ShouldSaveHistory)
+                SaveHistory();
+
+            if (plan.RefreshMode == OrderGridRefreshMode.FastRowsThenRebuild && TryRefreshGridRowsWithoutRebuild(selectedTag))
+            {
+                if (plan.ShouldUpdateActionButtons)
+                    UpdateActionButtonsState();
+                return;
+            }
+
+            if (plan.RefreshMode != OrderGridRefreshMode.None)
+            {
+                RebuildOrdersGrid();
+                if (!string.IsNullOrWhiteSpace(selectedTag))
+                    TryRestoreSelectedRowByTag(selectedTag);
+            }
+
+            if (plan.ShouldUpdateActionButtons)
+                UpdateActionButtonsState();
         }
 
         private int GetStageByColumnIndex(int columnIndex)

@@ -140,6 +140,18 @@ public sealed class OrderApplicationServiceTests
     }
 
     [Fact]
+    public void BuildPostGridMutationUiPlan_ReturnsDefaultMutationPolicy()
+    {
+        var service = CreateService();
+
+        var plan = service.BuildPostGridMutationUiPlan();
+
+        Assert.True(plan.ShouldSaveHistory);
+        Assert.True(plan.ShouldUpdateActionButtons);
+        Assert.Equal(OrderGridRefreshMode.FastRowsThenRebuild, plan.RefreshMode);
+    }
+
+    [Fact]
     public void BuildRunStopUiFeedback_ForConflict_ReturnsConflictBottomStatus()
     {
         var service = CreateService();

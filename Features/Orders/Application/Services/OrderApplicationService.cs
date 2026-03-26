@@ -141,6 +141,7 @@ public interface IOrderApplicationService
     OrderRunStopLocalUiMutation BuildRunStopLocalUiMutation();
     OrderRunStopUiFeedback BuildRunStopSelectionRequiredUiFeedback();
     OrderRunStopUiFeedback BuildRunStopUiFeedback(OrderRunStopPhaseResult stopPhase, string orderDisplayId);
+    OrderGridMutationUiPlan BuildPostGridMutationUiPlan();
 
     OrderDeleteCommandResult DeleteOrders(
         IList<OrderData> orderHistory,
@@ -622,6 +623,9 @@ public sealed class OrderApplicationService : IOrderApplicationService
 
     public OrderRunStopUiFeedback BuildRunStopUiFeedback(OrderRunStopPhaseResult stopPhase, string orderDisplayId)
         => _orderRunFeedbackService.BuildStopUiFeedback(stopPhase, orderDisplayId);
+
+    public OrderGridMutationUiPlan BuildPostGridMutationUiPlan()
+        => OrderGridMutationUiPlan.Changed();
 
     public OrderDeleteCommandResult DeleteOrders(
         IList<OrderData> orderHistory,
@@ -1278,4 +1282,37 @@ public enum OrderStatusUiRefreshMode
     None = 0,
     Coalesced = 1,
     FastRowsThenRebuild = 2
+}
+
+public enum OrderGridRefreshMode
+{
+    None = 0,
+    FastRowsThenRebuild = 1,
+    RebuildOnly = 2
+}
+
+public sealed class OrderGridMutationUiPlan
+{
+    private OrderGridMutationUiPlan(bool shouldSaveHistory, bool shouldUpdateActionButtons, OrderGridRefreshMode refreshMode)
+    {
+        ShouldSaveHistory = shouldSaveHistory;
+        ShouldUpdateActionButtons = shouldUpdateActionButtons;
+        RefreshMode = refreshMode;
+    }
+
+    public bool ShouldSaveHistory { get; }
+    public bool ShouldUpdateActionButtons { get; }
+    public OrderGridRefreshMode RefreshMode { get; }
+
+    public static OrderGridMutationUiPlan Noop()
+        => new(
+            shouldSaveHistory: false,
+            shouldUpdateActionButtons: false,
+            refreshMode: OrderGridRefreshMode.None);
+
+    public static OrderGridMutationUiPlan Changed()
+        => new(
+            shouldSaveHistory: true,
+            shouldUpdateActionButtons: true,
+            refreshMode: OrderGridRefreshMode.FastRowsThenRebuild);
 }

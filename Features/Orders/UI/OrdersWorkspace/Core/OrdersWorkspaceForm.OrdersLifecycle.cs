@@ -1560,10 +1560,8 @@ namespace Replica
             var deleteResult = commandResult.DeleteResult;
             if (deleteResult.RemovedCount > 0)
             {
-                SaveHistory();
                 TrySyncLanItemReorderForOrders(affectedOrders, "remove-selected-items");
-                RebuildOrdersGrid();
-                UpdateActionButtonsState();
+                PersistGridChanges(OrderGridLogic.BuildOrderTag(firstSelection.Order.InternalId));
                 SetBottomStatus(isBatchDelete
                     ? $"Удалено файлов: {deleteResult.RemovedCount}"
                     : $"Файл {firstItemName} удален");
@@ -1657,10 +1655,8 @@ namespace Replica
 
             if (removedCount > 0)
             {
-                SaveHistory();
                 TryRefreshRepositorySnapshotFromStorage(_orderHistory, "lan-api-remove-selected-items");
-                RebuildOrdersGrid();
-                UpdateActionButtonsState();
+                PersistGridChanges(OrderGridLogic.BuildOrderTag(normalizedSelections[0].Order.InternalId));
                 SetBottomStatus(isBatchDelete
                     ? $"Удалено файлов: {removedCount}"
                     : $"Файл {firstItemName} удален");
