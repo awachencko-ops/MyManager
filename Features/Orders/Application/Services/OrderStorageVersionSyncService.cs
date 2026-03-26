@@ -26,11 +26,29 @@ public sealed class OrderStorageVersionSyncService
             if (!storageByInternalId.TryGetValue(localOrder.InternalId, out var storageOrder))
                 continue;
 
-            if (localOrder.StorageVersion == storageOrder.StorageVersion)
-                continue;
+            if (localOrder.StorageVersion != storageOrder.StorageVersion)
+            {
+                localOrder.StorageVersion = storageOrder.StorageVersion;
+                updatedCount++;
+            }
 
-            localOrder.StorageVersion = storageOrder.StorageVersion;
-            updatedCount++;
+            var storageItemsById = (storageOrder.Items ?? new List<OrderFileItem>())
+                .Where(item => item != null && !string.IsNullOrWhiteSpace(item.ItemId))
+                .GroupBy(item => item.ItemId, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+
+            foreach (var localItem in (localOrder.Items ?? new List<OrderFileItem>())
+                         .Where(item => item != null && !string.IsNullOrWhiteSpace(item.ItemId)))
+            {
+                if (!storageItemsById.TryGetValue(localItem.ItemId, out var storageItem))
+                    continue;
+
+                if (localItem.StorageVersion == storageItem.StorageVersion)
+                    continue;
+
+                localItem.StorageVersion = storageItem.StorageVersion;
+                updatedCount++;
+            }
         }
 
         return updatedCount;

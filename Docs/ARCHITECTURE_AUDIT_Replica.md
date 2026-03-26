@@ -50,6 +50,8 @@
 >
 > Актуализация на 2026-03-23 (runtime UX): tray-индикатор LAN API теперь делает живые проверки `/live`/`/ready`/`/slo`, показывает краткий tooltip со временем запроса/ответа и SLO-срезом, а в недоступном состоянии становится action-oriented reconnect trigger прямо в статус-баре `OrdersWorkspaceForm`.
 >
+> Актуализация на 2026-03-26 (risk-burndown, срез 45): закрыт хвост по source-of-truth/sync hardening. В `OrdersHistoryRepositoryCoordinator` для `LanPostgreSql` отключён silent fallback на `history.json` при ошибках PostgreSQL load/save (PostgreSQL закреплён как runtime primary, `history.json` оставлен для bootstrap + mirror snapshot). `OrderStorageVersionSyncService` расширен до sync item-level версий (`OrderFileItem.StorageVersion` по `orderInternalId + itemId`). В `Replica.Api/Program.cs` bind переведён на `ReplicaApi:BindAddress/Port` из config (с валидацией и fallback). В `OrdersWorkspaceForm` recovery localhost API дополнен fallback запуском `dotnet run --project Replica.Api.csproj`, если `.exe/.dll` рядом не найдены. Изменения подтверждены targeted verify/integration тестами.
+>
 > Актуализация на 2026-03-20 (risk-burndown, срез 19): добавлен `OrderRunWorkflowOrchestrationService`; подготовка `run/stop` workflow (run-plan, LAN command preflight, snapshot refresh, stop preflight/cancel) вынесена из `MainForm` в application-service слой, добавлены unit-тесты orchestration (`OrderRunWorkflowOrchestrationServiceTests`).
 >
 > Актуализация на 2026-03-20 (risk-burndown, срез 20): выполнен rename и модульный перенос UI-ядра формы: entrypoint переведён на `OrdersWorkspaceForm`, код формы перемещён в `UI/Forms/OrdersWorkspace/*` (Core/FileOps/Filters/Views/Controls), сохранён переходный shim `MainForm` для обратной совместимости автотестов.

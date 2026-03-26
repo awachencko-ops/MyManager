@@ -24,4 +24,16 @@ public sealed class ReplicaApiLaunchLocatorTests
         Assert.True(wrongIndex >= 0, "Expected the old desktop-level fallback path to still be representable later in the search.");
         Assert.True(expectedIndex < wrongIndex, "The correct sibling project path should be preferred over the desktop-level fallback.");
     }
+
+    [Fact]
+    public void ResolveProjectCandidates_WhenAppRunsFromBinDebug_FindsSiblingApiProjectFile()
+    {
+        var baseDirectory = @"C:\Users\user\Desktop\MyManager 1.0.1\bin\Debug\net8.0-windows";
+
+        var candidates = ReplicaApiLaunchLocator.ResolveProjectCandidates(baseDirectory);
+        var expectedProjectCandidate = Path.GetFullPath(
+            Path.Combine(baseDirectory, @"..\..\..\Replica.Api\Replica.Api.csproj"));
+
+        Assert.Contains(candidates, path => string.Equals(path, expectedProjectCandidate, System.StringComparison.OrdinalIgnoreCase));
+    }
 }

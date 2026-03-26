@@ -51,4 +51,80 @@ public sealed class OrderStorageVersionSyncServiceTests
         Assert.Equal(1, localOrders[0].StorageVersion);
         Assert.Equal(22, localOrders[1].StorageVersion);
     }
+
+    [Fact]
+    public void SyncLocalVersions_UpdatesMatchingItemVersions()
+    {
+        var service = new OrderStorageVersionSyncService();
+        var localOrders = new List<OrderData>
+        {
+            new()
+            {
+                InternalId = "order-1",
+                StorageVersion = 1,
+                Items = new List<OrderFileItem>
+                {
+                    new() { ItemId = "item-a", StorageVersion = 1 },
+                    new() { ItemId = "item-b", StorageVersion = 2 }
+                }
+            }
+        };
+        var storageOrders = new List<OrderData>
+        {
+            new()
+            {
+                InternalId = "order-1",
+                StorageVersion = 1,
+                Items = new List<OrderFileItem>
+                {
+                    new() { ItemId = "item-a", StorageVersion = 10 },
+                    new() { ItemId = "item-b", StorageVersion = 2 }
+                }
+            }
+        };
+
+        var updatedCount = service.SyncLocalVersions(localOrders, storageOrders);
+
+        Assert.Equal(1, updatedCount);
+        Assert.Equal(10, localOrders[0].Items[0].StorageVersion);
+        Assert.Equal(2, localOrders[0].Items[1].StorageVersion);
+    }
+
+    [Fact]
+    public void SyncLocalVersions_IgnoresItemsWithEmptyItemId()
+    {
+        var service = new OrderStorageVersionSyncService();
+        var localOrders = new List<OrderData>
+        {
+            new()
+            {
+                InternalId = "order-1",
+                StorageVersion = 1,
+                Items = new List<OrderFileItem>
+                {
+                    new() { ItemId = "", StorageVersion = 3 },
+                    new() { ItemId = "item-x", StorageVersion = 4 }
+                }
+            }
+        };
+        var storageOrders = new List<OrderData>
+        {
+            new()
+            {
+                InternalId = "order-1",
+                StorageVersion = 1,
+                Items = new List<OrderFileItem>
+                {
+                    new() { ItemId = "", StorageVersion = 30 },
+                    new() { ItemId = "item-x", StorageVersion = 44 }
+                }
+            }
+        };
+
+        var updatedCount = service.SyncLocalVersions(localOrders, storageOrders);
+
+        Assert.Equal(1, updatedCount);
+        Assert.Equal(3, localOrders[0].Items[0].StorageVersion);
+        Assert.Equal(44, localOrders[0].Items[1].StorageVersion);
+    }
 }

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Net;
 using Microsoft.EntityFrameworkCore;
 using Replica.Api.Data;
 using Replica.Api.Infrastructure;
@@ -8,14 +9,34 @@ var builder = WebApplication.CreateBuilder(args);
 
 var replicaDbConnectionString = builder.Configuration.GetConnectionString("ReplicaDb") ?? string.Empty;
 var configuredStoreMode = builder.Configuration["ReplicaApi:StoreMode"]?.Trim();
+var configuredBindAddress = builder.Configuration["ReplicaApi:BindAddress"]?.Trim();
+var configuredPort = builder.Configuration.GetValue<int?>("ReplicaApi:Port") ?? 5000;
+if (configuredPort <= 0 || configuredPort > 65535)
+    configuredPort = 5000;
+
 var effectiveStoreMode = string.IsNullOrWhiteSpace(configuredStoreMode)
     ? (string.IsNullOrWhiteSpace(replicaDbConnectionString) ? "InMemory" : "PostgreSql")
     : configuredStoreMode;
 
 builder.WebHost.ConfigureKestrel(options =>
 {
-    // Stage 3 requirement: LAN API endpoint on 0.0.0.0:5000
-    options.ListenAnyIP(5000);
+    if (string.IsNullOrWhiteSpace(configuredBindAddress)
+        || string.Equals(configuredBindAddress, "0.0.0.0", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(configuredBindAddress, "::", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(configuredBindAddress, "+", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(configuredBindAddress, "*", StringComparison.OrdinalIgnoreCase))
+    {
+        options.ListenAnyIP(configuredPort);
+        return;
+    }
+
+    if (IPAddress.TryParse(configuredBindAddress, out var parsedAddress))
+    {
+        options.Listen(parsedAddress, configuredPort);
+        return;
+    }
+
+    options.ListenAnyIP(configuredPort);
 });
 
 if (string.Equals(effectiveStoreMode, "PostgreSql", StringComparison.OrdinalIgnoreCase))

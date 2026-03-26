@@ -45,7 +45,10 @@ public sealed class OrdersHistoryRepositoryCoordinator
                 TryBootstrapFromFileHistory(ref orders);
 
             if (_ordersStorageBackend == OrdersStorageMode.LanPostgreSql)
-                TrySynchronizeLanAndFileHistories(ref orders);
+            {
+                orders = NormalizeOrdersForSync(orders);
+                TryMirrorLanHistoryToFileSnapshot(orders);
+            }
 
             return true;
         }
@@ -54,6 +57,14 @@ public sealed class OrdersHistoryRepositoryCoordinator
         {
             Logger.Warn(
                 $"HISTORY | load-failed | backend={BackendName} | {primaryError}");
+        }
+
+        if (_ordersStorageBackend == OrdersStorageMode.LanPostgreSql)
+        {
+            Logger.Error(
+                $"HISTORY | lan-primary-load-failed | backend={BackendName} | {primaryError}");
+            orders = new List<OrderData>();
+            return false;
         }
 
         var fallbackRepository = OrdersRepositoryFactory.CreateFileSystem(_historyFilePath);
@@ -78,6 +89,9 @@ public sealed class OrdersHistoryRepositoryCoordinator
         if (_ordersRepository != null
             && _ordersRepository.TrySaveAll(orders, out primaryError))
         {
+            if (_ordersStorageBackend == OrdersStorageMode.LanPostgreSql)
+                TryMirrorLanHistoryToFileSnapshot(orders);
+
             error = string.Empty;
             return true;
         }
@@ -86,13 +100,16 @@ public sealed class OrdersHistoryRepositoryCoordinator
         {
             Logger.Warn(
                 $"HISTORY | save-failed | backend={BackendName} | {primaryError}");
+        }
 
-            if (_ordersStorageBackend == OrdersStorageMode.LanPostgreSql
-                && primaryError.Contains("concurrency conflict", StringComparison.OrdinalIgnoreCase))
-            {
-                error = primaryError;
-                return false;
-            }
+        if (_ordersStorageBackend == OrdersStorageMode.LanPostgreSql)
+        {
+            error = string.IsNullOrWhiteSpace(primaryError)
+                ? "postgresql save failed"
+                : primaryError;
+            Logger.Error(
+                $"HISTORY | lan-primary-save-failed | backend={BackendName} | {error}");
+            return false;
         }
 
         var fallbackRepository = OrdersRepositoryFactory.CreateFileSystem(_historyFilePath);
@@ -209,56 +226,14 @@ public sealed class OrdersHistoryRepositoryCoordinator
         WriteBootstrapMarker(postgreSqlRepository, emptyMarkerPayload, "empty-source");
     }
 
-    private void TrySynchronizeLanAndFileHistories(ref List<OrderData> lanOrders)
+    private void TryMirrorLanHistoryToFileSnapshot(IReadOnlyCollection<OrderData> lanOrders)
     {
         if (_ordersRepository is not PostgreSqlOrdersRepository)
             return;
 
         var fileRepository = OrdersRepositoryFactory.CreateFileSystem(_historyFilePath);
-        if (!fileRepository.TryLoadAll(out var fileOrders, out var fileLoadError))
-        {
-            if (!string.IsNullOrWhiteSpace(fileLoadError))
-            {
-                Logger.Warn(
-                    $"HISTORY | sync-load-file-failed | backend={fileRepository.BackendName} | {fileLoadError}");
-            }
-
-            return;
-        }
-
         var normalizedLanOrders = NormalizeOrdersForSync(lanOrders);
-        var normalizedFileOrders = NormalizeOrdersForSync(fileOrders);
-        var lanByInternalId = normalizedLanOrders
-            .Where(order => !string.IsNullOrWhiteSpace(order.InternalId))
-            .ToDictionary(order => order.InternalId, order => order, StringComparer.Ordinal);
-        var fileOnlyOrders = normalizedFileOrders
-            .Where(order => !string.IsNullOrWhiteSpace(order.InternalId) && !lanByInternalId.ContainsKey(order.InternalId))
-            .ToList();
-
-        if (fileOnlyOrders.Count > 0)
-        {
-            var mergedOrders = new List<OrderData>(normalizedLanOrders.Count + fileOnlyOrders.Count);
-            mergedOrders.AddRange(normalizedLanOrders);
-            mergedOrders.AddRange(fileOnlyOrders);
-
-            if (_ordersRepository!.TrySaveAll(mergedOrders, out var syncSaveError))
-            {
-                lanOrders = mergedOrders;
-                Logger.Warn(
-                    $"HISTORY | sync-file-to-lan | imported_orders={fileOnlyOrders.Count} | backend={BackendName}");
-            }
-            else
-            {
-                Logger.Warn(
-                    $"HISTORY | sync-file-to-lan-failed | backend={BackendName} | {syncSaveError}");
-            }
-        }
-        else
-        {
-            lanOrders = normalizedLanOrders;
-        }
-
-        if (!fileRepository.TrySaveAll(lanOrders, out var mirrorError))
+        if (!fileRepository.TrySaveAll(normalizedLanOrders, out var mirrorError))
         {
             Logger.Warn(
                 $"HISTORY | sync-lan-to-file-failed | backend={fileRepository.BackendName} | {mirrorError}");
@@ -266,7 +241,7 @@ public sealed class OrdersHistoryRepositoryCoordinator
         }
 
         Logger.Info(
-            $"HISTORY | sync-lan-to-file | orders={lanOrders.Count} | backend={fileRepository.BackendName}");
+            $"HISTORY | sync-lan-to-file | orders={normalizedLanOrders.Count} | backend={fileRepository.BackendName}");
     }
 
     private static List<OrderData> NormalizeOrdersForSync(IEnumerable<OrderData>? orders)

@@ -15,6 +15,25 @@ internal static class ReplicaApiLaunchLocator
     public static IReadOnlyList<string> ResolveDllCandidates(string baseDirectory) =>
         ResolveCandidates(baseDirectory, "Replica.Api.dll");
 
+    public static IReadOnlyList<string> ResolveProjectCandidates(string baseDirectory)
+    {
+        var normalizedBaseDirectory = NormalizeBaseDirectory(baseDirectory);
+        if (string.IsNullOrWhiteSpace(normalizedBaseDirectory))
+            return Array.Empty<string>();
+
+        var candidates = new List<string>();
+        foreach (var ancestor in EnumerateAncestors(normalizedBaseDirectory))
+        {
+            candidates.Add(Path.Combine(ancestor, "Replica.Api.csproj"));
+            candidates.Add(Path.Combine(ancestor, "Replica.Api", "Replica.Api.csproj"));
+        }
+
+        return candidates
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
     private static IReadOnlyList<string> ResolveCandidates(string baseDirectory, string fileName)
     {
         var normalizedBaseDirectory = NormalizeBaseDirectory(baseDirectory);

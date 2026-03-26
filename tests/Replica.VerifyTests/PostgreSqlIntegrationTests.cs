@@ -601,7 +601,7 @@ public sealed class PostgreSqlIntegrationTests
     }
 
     [Fact]
-    public void PostgreSqlIntegration_Coordinator_SynchronizesFileAndLanHistories()
+    public void PostgreSqlIntegration_Coordinator_UsesLanAsPrimaryAndMirrorsToFile()
     {
         if (!IsIntegrationEnabled())
             return;
@@ -645,18 +645,19 @@ public sealed class PostgreSqlIntegrationTests
             coordinator.Configure(OrdersStorageMode.LanPostgreSql, db.ConnectionString, historyPath);
 
             Assert.True(coordinator.TryLoadAll(out var synchronizedOrders));
-            Assert.Equal(2, synchronizedOrders.Count);
+            Assert.Single(synchronizedOrders);
             Assert.Contains(synchronizedOrders, order => order.InternalId == lanOrder.InternalId);
-            Assert.Contains(synchronizedOrders, order => order.InternalId == fileOrder.InternalId);
+            Assert.DoesNotContain(synchronizedOrders, order => order.InternalId == fileOrder.InternalId);
 
             var lanVerifier = new PostgreSqlOrdersRepository(db.ConnectionString);
             Assert.True(lanVerifier.TryLoadAll(out var lanAfterSync, out var lanAfterSyncError), lanAfterSyncError);
-            Assert.Equal(2, lanAfterSync.Count);
-            Assert.Contains(lanAfterSync, order => order.InternalId == fileOrder.InternalId);
+            Assert.Single(lanAfterSync);
+            Assert.DoesNotContain(lanAfterSync, order => order.InternalId == fileOrder.InternalId);
 
             Assert.True(fileRepository.TryLoadAll(out var fileAfterSync, out var fileAfterSyncError), fileAfterSyncError);
-            Assert.Equal(2, fileAfterSync.Count);
+            Assert.Single(fileAfterSync);
             Assert.Contains(fileAfterSync, order => order.InternalId == lanOrder.InternalId);
+            Assert.DoesNotContain(fileAfterSync, order => order.InternalId == fileOrder.InternalId);
         }
         finally
         {

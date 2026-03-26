@@ -56,3 +56,21 @@
 - Observability/SLO baseline is now closed in API runtime: added request metrics aggregator (`ReplicaApiObservability`), write-command outcome counters in `OrdersController`, idempotency hit/miss/mismatch telemetry in `EfCoreLanOrderStore`, and operational endpoints `/live`, `/ready`, `/metrics`, `/slo`; covered by new verify tests (`ReplicaApiObservabilityTests`) and full regression runs.
 - Operational runbook for on-call/owners: [OPERATIONS_SLO_RUNBOOK.md](ready/OPERATIONS_SLO_RUNBOOK.md).
 
+## Update 2026-03-26
+
+- P0 `JSON/file as runtime source in LAN mode`: moved from `PARTIAL` to `DONE` for runtime behavior.
+  - `OrdersHistoryRepositoryCoordinator` no longer silently falls back to `history.json` when PostgreSQL load/save fails in `LanPostgreSql` mode.
+  - LAN mode now keeps PostgreSQL as primary source of truth, while `history.json` is used only for bootstrap and best-effort mirror snapshot.
+- Runtime sync hardening:
+  - `OrderStorageVersionSyncService` now synchronizes item-level versions (`OrderFileItem.StorageVersion`) by `orderInternalId + itemId`, not only order-level version.
+- Config integrity:
+  - `Replica.Api` now reads bind settings from configuration (`ReplicaApi:BindAddress`, `ReplicaApi:Port`) with validation and safe fallback.
+- Local recovery hardening:
+  - `OrdersWorkspaceForm` local API recovery now has additional fallback launch via `dotnet run --project Replica.Api.csproj` when `.exe/.dll` candidates are absent.
+- Verification:
+  - `dotnet build Replica.Api/Replica.Api.csproj -c Release` succeeded.
+  - Targeted tests passed:
+    - `OrderStorageVersionSyncServiceTests`
+    - `ReplicaApiLaunchLocatorTests`
+    - `PostgreSqlIntegration_Coordinator_UsesLanAsPrimaryAndMirrorsToFile`.
+

@@ -210,3 +210,24 @@ Verified locally:
 - API startup log shows the server has successfully listened on port `5000`.
 - Existing targeted test run for broader sync/gateway coverage was partially blocked because `Replica.exe` is currently running and holding the build output file.
 - This means some validation remains blocked until the running desktop app is closed.
+
+## Update 2026-03-26 (closure pass)
+
+Implemented and verified:
+
+1. Finding #3 (silent split-brain fallback) is addressed.
+   - In `LanPostgreSql` mode, coordinator load/save no longer silently downgrades to `history.json` when PostgreSQL fails.
+   - `history.json` remains bootstrap/mirror only, not runtime authority.
+2. Finding #2 (item version drift) is addressed.
+   - `OrderStorageVersionSyncService` now updates `OrderFileItem.StorageVersion` by `orderInternalId + itemId`.
+3. Finding #5 (hardcoded API bind) is addressed.
+   - `Replica.Api` now binds from `ReplicaApi:BindAddress` and `ReplicaApi:Port` with safe validation fallback.
+4. Localhost recovery was additionally hardened.
+   - If `.exe/.dll` launch candidates are absent, client now tries `dotnet run --project Replica.Api.csproj`.
+
+Validation run:
+
+- `dotnet build Replica.Api/Replica.Api.csproj -c Release` passed.
+- `OrderStorageVersionSyncServiceTests` passed.
+- `ReplicaApiLaunchLocatorTests` passed.
+- `PostgreSqlIntegration_Coordinator_UsesLanAsPrimaryAndMirrorsToFile` passed (`REPLICA_RUN_PG_INTEGRATION=1`).

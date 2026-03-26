@@ -801,6 +801,27 @@ namespace Replica
                 }
             }
 
+            foreach (var projectCandidate in ResolveReplicaApiProjectCandidates())
+            {
+                if (!File.Exists(projectCandidate))
+                    continue;
+
+                try
+                {
+                    var startInfo = BuildHiddenReplicaApiStartInfo(
+                        "dotnet",
+                        arguments: $"run --project \"{projectCandidate}\"",
+                        workingDirectory: Path.GetDirectoryName(projectCandidate) ?? AppContext.BaseDirectory);
+                    Process.Start(startInfo);
+                    message = "Запущен локальный Replica.Api (dotnet run), ждём готовность...";
+                    return true;
+                }
+                catch
+                {
+                    // попробуем следующий кандидат
+                }
+            }
+
             message = "Replica.Api не найден рядом с клиентом. Запустите API вручную.";
             return false;
         }
@@ -854,6 +875,11 @@ namespace Replica
         private static IEnumerable<string> ResolveReplicaApiDllCandidates()
         {
             return ReplicaApiLaunchLocator.ResolveDllCandidates(AppContext.BaseDirectory);
+        }
+
+        private static IEnumerable<string> ResolveReplicaApiProjectCandidates()
+        {
+            return ReplicaApiLaunchLocator.ResolveProjectCandidates(AppContext.BaseDirectory);
         }
 
         private static ProcessStartInfo BuildHiddenReplicaApiStartInfo(
