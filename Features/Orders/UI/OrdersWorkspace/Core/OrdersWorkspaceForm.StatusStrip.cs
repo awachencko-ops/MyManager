@@ -136,9 +136,7 @@ namespace Replica
 
         private void TrayIndicatorsTimer_Tick(object? sender, EventArgs e)
         {
-            RefreshArchivedStatuses();
-            if (BackfillMissingFileHashesIncrementally(maxFilesToHash: 2))
-                SaveHistory();
+            RefreshArchivedStatusesIfDue();
             RefreshUsersDirectoryIfNeeded();
             RequestLanServerProbe("timer");
             UpdateTrayConnectionIndicator();

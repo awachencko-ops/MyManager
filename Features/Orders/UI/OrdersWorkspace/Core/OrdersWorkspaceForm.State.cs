@@ -47,6 +47,8 @@ namespace Replica
         private readonly Dictionary<string, List<string>> _archivedFilePathsByHash = new(StringComparer.OrdinalIgnoreCase);
         private int _archiveHashIndexBuildVersion;
         private bool _archiveHashIndexBuildInProgress;
+        private int _archiveIndexRefreshInProgress;
+        private bool _archiveIndexInitialized;
         private readonly Dictionary<string, int> _printTileImageIndexesByExtension = new(StringComparer.OrdinalIgnoreCase);
         private readonly ConcurrentDictionary<string, int> _printTileImageIndexesByPath = new(StringComparer.OrdinalIgnoreCase);
         private string _printTilesCacheFolderPath = AppSettings.DefaultThumbnailCacheFolderPath;
@@ -82,6 +84,7 @@ namespace Replica
         private bool _fileTransferIsIndeterminate;
         private string _fileTransferStatusText = string.Empty;
         private DateTime _archiveIndexLoadedAt = DateTime.MinValue;
+        private DateTime _archiveStatusSyncLastAt = DateTime.MinValue;
         private bool _archiveSyncInProgress;
         private int _hoveredRowIndex = -1;
         private int _ctxRow = -1;
@@ -145,7 +148,8 @@ namespace Replica
         private const int TrayIndicatorsRefreshIntervalMs = 15000;
         private const int LanServerProbeMinIntervalMs = 5000;
         private const int LanServerProbeFailureThreshold = 3;
-        private static readonly TimeSpan ArchiveIndexLifetime = TimeSpan.FromSeconds(15);
+        private static readonly TimeSpan ArchiveIndexLifetime = TimeSpan.FromSeconds(60);
+        private const int ArchiveStatusSyncIntervalMs = 60000;
         private const int OrdersGridWarmupIntervalMs = 3000;
         private const int GridHoverActivateDelayMs = 500;
         private const int TileHoverActivateDelayMs = 500;

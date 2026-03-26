@@ -102,6 +102,10 @@
       - Run flow now applies prepared plans (`BuildRunPostStatusApplyUiEffectsPlan`, `BuildRunPerOrderCompletionUiEffectsPlan`, `BuildRunPostExecutionUiEffectsPlan`) instead of hardcoded side-effect branches.
       - Stop flow now applies `BuildStopPostPhaseUiEffectsPlan(stopPhase, stopUiFeedback)` for tray/buttons updates.
     - Consolidated run/stop feedback rendering in `OrdersWorkspaceForm` via dedicated render-pipeline methods (`RenderRunStartUiFeedback`, `RenderRunStartProgressUiFeedback`, `RenderRunCompletionUiFeedback`, `RenderRunStopUiFeedback`) to remove repeated `SetBottomStatus/ShowDialog/ApplyLogs` branches from workflow methods.
+    - UI freeze mitigation for tray/startup maintenance:
+      - Archive index scan (`Directory.EnumerateFiles` over `Готово`) moved off UI thread; refresh now builds name/hash indexes asynchronously and applies result back on UI.
+      - Added archive sync cadence guard (`RefreshArchivedStatusesIfDue`) and switched tray timer to run archive sync by interval instead of every tick.
+      - Removed per-tick hash backfill/save from tray timer hot path; startup archive refresh is now queued after UI handle is ready.
   - Validation:
     - `dotnet build Replica.csproj -c Release` passed.
     - `dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj -c Release --filter \"OrderStatusTransitionServiceTests\"` passed (5/5).

@@ -761,9 +761,27 @@ namespace Replica
             tbSearch.TextChanged -= TbSearch_TextChanged;
             tbSearch.TextChanged += TbSearch_TextChanged;
             LoadHistory();
-            RefreshArchivedStatuses(forceArchiveIndexRefresh: true, rebuildGridIfChanged: false);
             RebuildOrdersGrid();
             InitializeOrdersViewsWarmupCoordinator();
+            QueueInitialArchiveRefresh();
+        }
+
+        private void QueueInitialArchiveRefresh()
+        {
+            if (IsHandleCreated)
+            {
+                BeginInvoke((Action)(() => RefreshArchivedStatusesIfDue(force: true, rebuildGridIfChanged: false)));
+                return;
+            }
+
+            Shown -= OrdersWorkspaceForm_ShownInitialArchiveRefresh;
+            Shown += OrdersWorkspaceForm_ShownInitialArchiveRefresh;
+        }
+
+        private void OrdersWorkspaceForm_ShownInitialArchiveRefresh(object? sender, EventArgs e)
+        {
+            Shown -= OrdersWorkspaceForm_ShownInitialArchiveRefresh;
+            BeginInvoke((Action)(() => RefreshArchivedStatusesIfDue(force: true, rebuildGridIfChanged: false)));
         }
 
         private void EnsureSearchDebounceTimer()

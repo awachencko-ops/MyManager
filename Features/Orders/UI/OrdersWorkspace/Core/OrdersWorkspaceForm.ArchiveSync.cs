@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Replica
@@ -17,6 +18,8 @@ namespace Replica
             try
             {
                 RefreshArchiveIndexIfNeeded(forceArchiveIndexRefresh);
+                if (!_archiveIndexInitialized)
+                    return;
 
                 var changed = false;
                 foreach (var order in _orderHistory)
@@ -66,6 +69,16 @@ namespace Replica
             {
                 _archiveSyncInProgress = false;
             }
+        }
+
+        private void RefreshArchivedStatusesIfDue(bool force = false, bool rebuildGridIfChanged = true)
+        {
+            var nowUtc = DateTime.UtcNow;
+            if (!force && nowUtc - _archiveStatusSyncLastAt < TimeSpan.FromMilliseconds(ArchiveStatusSyncIntervalMs))
+                return;
+
+            _archiveStatusSyncLastAt = nowUtc;
+            RefreshArchivedStatuses(forceArchiveIndexRefresh: force, rebuildGridIfChanged: rebuildGridIfChanged);
         }
 
         private bool TryResolveArchivedPrintPath(OrderData order, out string archivedPrintPath)
@@ -318,46 +331,95 @@ namespace Replica
         {
             if (!force && DateTime.UtcNow - _archiveIndexLoadedAt < ArchiveIndexLifetime)
                 return;
-            if (!force && _archiveHashIndexBuildInProgress)
+            if (Interlocked.CompareExchange(ref _archiveIndexRefreshInProgress, 1, 0) != 0)
                 return;
 
             _archiveIndexLoadedAt = DateTime.UtcNow;
-            _archivedFileNames.Clear();
-            _archivedFilePathsByName.Clear();
-            _archivedFilePathsByHash.Clear();
-            _archiveHashIndexBuildInProgress = false;
-
             var archiveFolderPath = ResolveArchiveDoneFolderPath();
-            if (string.IsNullOrWhiteSpace(archiveFolderPath) || !Directory.Exists(archiveFolderPath))
-                return;
 
-            var archivePdfPaths = new List<string>();
-            try
+            _ = Task.Run(() =>
             {
-                foreach (var filePath in Directory.EnumerateFiles(archiveFolderPath, "*.pdf", SearchOption.AllDirectories))
-                {
-                    archivePdfPaths.Add(filePath);
-                    var fileName = Path.GetFileName(filePath);
-                    if (!string.IsNullOrWhiteSpace(fileName))
-                    {
-                        _archivedFileNames.Add(fileName);
-                        if (!_archivedFilePathsByName.TryGetValue(fileName, out var filePaths))
-                        {
-                            filePaths = new List<string>();
-                            _archivedFilePathsByName[fileName] = filePaths;
-                        }
+                var archivedFileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var archivedFilePathsByName = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+                var archivePdfPaths = new List<string>();
+                var scanFailed = false;
 
-                        filePaths.Add(filePath);
+                try
+                {
+                    if (!string.IsNullOrWhiteSpace(archiveFolderPath) && Directory.Exists(archiveFolderPath))
+                    {
+                        foreach (var filePath in Directory.EnumerateFiles(archiveFolderPath, "*.pdf", SearchOption.AllDirectories))
+                        {
+                            archivePdfPaths.Add(filePath);
+                            var fileName = Path.GetFileName(filePath);
+                            if (string.IsNullOrWhiteSpace(fileName))
+                                continue;
+
+                            archivedFileNames.Add(fileName);
+                            if (!archivedFilePathsByName.TryGetValue(fileName, out var filePaths))
+                            {
+                                filePaths = new List<string>();
+                                archivedFilePathsByName[fileName] = filePaths;
+                            }
+
+                            filePaths.Add(filePath);
+                        }
                     }
                 }
+                catch
+                {
+                    scanFailed = true;
+                }
 
-                StartArchiveHashIndexBuild(archivePdfPaths);
-            }
-            catch
-            {
-                // Ошибки архива не должны блокировать UI и смену статусов.
-                _archiveHashIndexBuildInProgress = false;
-            }
+                if (IsDisposed)
+                {
+                    Interlocked.Exchange(ref _archiveIndexRefreshInProgress, 0);
+                    return;
+                }
+
+                try
+                {
+                    BeginInvoke((Action)(() =>
+                    {
+                        try
+                        {
+                            if (IsDisposed)
+                                return;
+
+                            if (!scanFailed)
+                            {
+                                _archivedFileNames.Clear();
+                                foreach (var fileName in archivedFileNames)
+                                    _archivedFileNames.Add(fileName);
+
+                                _archivedFilePathsByName.Clear();
+                                foreach (var entry in archivedFilePathsByName)
+                                    _archivedFilePathsByName[entry.Key] = entry.Value;
+
+                                _archivedFilePathsByHash.Clear();
+                                StartArchiveHashIndexBuild(archivePdfPaths);
+                            }
+                            else
+                            {
+                                _archiveHashIndexBuildInProgress = false;
+                            }
+
+                            _archiveIndexInitialized = true;
+
+                            if (archivePdfPaths.Count == 0 || scanFailed)
+                                RefreshArchivedStatuses(forceArchiveIndexRefresh: false, rebuildGridIfChanged: true);
+                        }
+                        finally
+                        {
+                            Interlocked.Exchange(ref _archiveIndexRefreshInProgress, 0);
+                        }
+                    }));
+                }
+                catch
+                {
+                    Interlocked.Exchange(ref _archiveIndexRefreshInProgress, 0);
+                }
+            });
         }
 
         private static void AddArchiveIndex(Dictionary<string, List<string>> index, string key, string filePath)
