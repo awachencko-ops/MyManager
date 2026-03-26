@@ -372,29 +372,6 @@ namespace Replica
             ShowOrderRunFeedbackDialog(writeOutcome.Dialog);
         }
 
-        private bool TryPersistOrderStatusViaLanApi(OrderData order, string source, string reason)
-        {
-            if (order == null || !ShouldUseLanRunApi())
-                return false;
-
-            var persistOutcome = _orderApplicationService
-                .TryPersistOrderStatusViaLanApiAsync(
-                    order,
-                    _lanApiBaseUrl,
-                    ResolveLanApiActor(),
-                    NormalizeOrderUserName,
-                    source,
-                    reason,
-                    GetOrderDisplayId)
-                .GetAwaiter()
-                .GetResult();
-
-            ApplyOrderRunFeedbackLogs(persistOutcome.Logs);
-            if (persistOutcome.ShouldRefreshSnapshot && !string.IsNullOrWhiteSpace(persistOutcome.SnapshotRefreshReason))
-                TryRefreshRepositorySnapshotFromStorage(_orderHistory, persistOutcome.SnapshotRefreshReason);
-            return persistOutcome.IsPersisted;
-        }
-
         private void TrySyncLanItemReorderForOrders(IEnumerable<OrderData> orders, string reason)
         {
             if (!ShouldUseLanRunApi() || orders == null)

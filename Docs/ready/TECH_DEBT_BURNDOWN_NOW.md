@@ -79,3 +79,4 @@
 1. `OrdersWorkspaceForm.TryPersistOrderStatusViaLanApi` no longer orchestrates LAN command details directly.
 2. Status persistence LAN path moved into `IOrderApplicationService.TryPersistOrderStatusViaLanApiAsync(...)` with unified outcome model (`LanOrderStatusPersistOutcome`).
 3. UI now only applies outcome (`logs + snapshot refresh + fallback decision`) which reduces local orchestration in form code.
+4. `SetOrderStatusCore` switched to `IOrderApplicationService.ApplyStatusTransitionWithPersistenceAsync(...)`; fallback save/log policy moved out of UI into application boundary.

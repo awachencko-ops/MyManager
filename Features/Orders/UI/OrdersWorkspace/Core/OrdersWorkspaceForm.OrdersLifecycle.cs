@@ -1891,10 +1891,24 @@ namespace Replica
             bool persistHistory,
             bool rebuildGrid)
         {
-            var transition = _orderApplicationService.ApplyStatusTransition(order, status, source, reason);
-            if (!transition.Changed)
+            var applyOutcome = _orderApplicationService
+                .ApplyStatusTransitionWithPersistenceAsync(
+                    order,
+                    status,
+                    source,
+                    reason,
+                    persistHistory,
+                    useLanApi: ShouldUseLanRunApi(),
+                    _lanApiBaseUrl,
+                    ResolveLanApiActor(),
+                    NormalizeOrderUserName,
+                    GetOrderDisplayId)
+                .GetAwaiter()
+                .GetResult();
+            if (!applyOutcome.Changed || applyOutcome.Transition == null)
                 return false;
 
+            var transition = applyOutcome.Transition;
             AppendOrderStatusLog(order, transition.OldStatus, transition.NewStatus, transition.Source, transition.Reason);
             TryAppendRepositoryEvent(
                 order,
@@ -1909,20 +1923,12 @@ namespace Replica
                     status_at = transition.StatusAt
                 });
 
-            if (persistHistory)
-            {
-                var persistedViaLanApi = TryPersistOrderStatusViaLanApi(order, transition.Source, transition.Reason);
-                if (!persistedViaLanApi)
-                {
-                    if (ShouldUseLanRunApi())
-                    {
-                        Logger.Warn(
-                            $"LAN-API | status-update-fallback-local-save | order={GetOrderDisplayId(order)} | status={transition.NewStatus}");
-                    }
+            ApplyOrderRunFeedbackLogs(applyOutcome.Logs);
+            if (applyOutcome.ShouldRefreshSnapshot && !string.IsNullOrWhiteSpace(applyOutcome.SnapshotRefreshReason))
+                TryRefreshRepositorySnapshotFromStorage(_orderHistory, applyOutcome.SnapshotRefreshReason);
+            if (applyOutcome.ShouldSaveLocalHistory)
+                SaveHistory();
 
-                    SaveHistory();
-                }
-            }
             if (rebuildGrid)
             {
                 var selectedTag = dgvJobs.CurrentRow?.Tag?.ToString();

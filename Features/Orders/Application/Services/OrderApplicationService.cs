@@ -157,6 +157,19 @@ public interface IOrderApplicationService
         bool removeFilesFromDisk,
         Action<OrderData, OrderFileItem, string> onItemRemoved);
 
+    Task<OrderStatusApplyOutcome> ApplyStatusTransitionWithPersistenceAsync(
+        OrderData order,
+        string status,
+        string source,
+        string reason,
+        bool persistHistory,
+        bool useLanApi,
+        string lanApiBaseUrl,
+        string actor,
+        Func<string, string> normalizeUserName,
+        Func<OrderData, string> orderDisplayIdResolver,
+        CancellationToken cancellationToken = default);
+
     StatusTransitionResult ApplyStatusTransition(OrderData order, string status, string source, string reason);
 
     OrderItemAddPreparationResult PrepareAddItem(
@@ -633,6 +646,65 @@ public sealed class OrderApplicationService : IOrderApplicationService
         bool removeFilesFromDisk,
         Action<OrderData, OrderFileItem, string> onItemRemoved)
         => _orderItemDeleteCommandService.Execute(selectedOrderItems, removeFilesFromDisk, onItemRemoved);
+
+    public async Task<OrderStatusApplyOutcome> ApplyStatusTransitionWithPersistenceAsync(
+        OrderData order,
+        string status,
+        string source,
+        string reason,
+        bool persistHistory,
+        bool useLanApi,
+        string lanApiBaseUrl,
+        string actor,
+        Func<string, string> normalizeUserName,
+        Func<OrderData, string> orderDisplayIdResolver,
+        CancellationToken cancellationToken = default)
+    {
+        var transition = ApplyStatusTransition(order, status, source, reason);
+        if (!transition.Changed)
+            return OrderStatusApplyOutcome.NotChanged();
+
+        var shouldSaveLocalHistory = persistHistory && !useLanApi;
+        var shouldRefreshSnapshot = false;
+        var snapshotRefreshReason = string.Empty;
+        var logs = new List<OrderRunFeedbackLogEntry>();
+
+        if (persistHistory && useLanApi)
+        {
+            var persistOutcome = await TryPersistOrderStatusViaLanApiAsync(
+                order,
+                lanApiBaseUrl,
+                actor,
+                normalizeUserName,
+                source: transition.Source,
+                reason: transition.Reason,
+                orderDisplayIdResolver,
+                cancellationToken);
+
+            if (persistOutcome.Logs.Count > 0)
+                logs.AddRange(persistOutcome.Logs);
+
+            if (persistOutcome.IsPersisted)
+            {
+                shouldRefreshSnapshot = persistOutcome.ShouldRefreshSnapshot;
+                snapshotRefreshReason = persistOutcome.SnapshotRefreshReason;
+            }
+            else
+            {
+                shouldSaveLocalHistory = true;
+                logs.Add(new OrderRunFeedbackLogEntry(
+                    $"LAN-API | status-update-fallback-local-save | order={ResolveOrderDisplayId(order, orderDisplayIdResolver)} | status={transition.NewStatus}",
+                    isWarning: true));
+            }
+        }
+
+        return OrderStatusApplyOutcome.FromChanged(
+            transition,
+            shouldSaveLocalHistory,
+            shouldRefreshSnapshot,
+            snapshotRefreshReason,
+            logs);
+    }
 
     public StatusTransitionResult ApplyStatusTransition(OrderData order, string status, string source, string reason)
         => _orderStatusTransitionService.Apply(order, status, source, reason);
@@ -1130,5 +1202,54 @@ public sealed class LanOrderStatusPersistOutcome
             isPersisted: false,
             shouldRefreshSnapshot: false,
             snapshotRefreshReason: string.Empty,
+            logs: logs);
+}
+
+public sealed class OrderStatusApplyOutcome
+{
+    private OrderStatusApplyOutcome(
+        bool changed,
+        StatusTransitionResult? transition,
+        bool shouldSaveLocalHistory,
+        bool shouldRefreshSnapshot,
+        string snapshotRefreshReason,
+        IReadOnlyList<OrderRunFeedbackLogEntry>? logs)
+    {
+        Changed = changed;
+        Transition = transition;
+        ShouldSaveLocalHistory = shouldSaveLocalHistory;
+        ShouldRefreshSnapshot = shouldRefreshSnapshot;
+        SnapshotRefreshReason = snapshotRefreshReason ?? string.Empty;
+        Logs = logs ?? Array.Empty<OrderRunFeedbackLogEntry>();
+    }
+
+    public bool Changed { get; }
+    public StatusTransitionResult? Transition { get; }
+    public bool ShouldSaveLocalHistory { get; }
+    public bool ShouldRefreshSnapshot { get; }
+    public string SnapshotRefreshReason { get; }
+    public IReadOnlyList<OrderRunFeedbackLogEntry> Logs { get; }
+
+    public static OrderStatusApplyOutcome NotChanged()
+        => new(
+            changed: false,
+            transition: null,
+            shouldSaveLocalHistory: false,
+            shouldRefreshSnapshot: false,
+            snapshotRefreshReason: string.Empty,
+            logs: Array.Empty<OrderRunFeedbackLogEntry>());
+
+    public static OrderStatusApplyOutcome FromChanged(
+        StatusTransitionResult transition,
+        bool shouldSaveLocalHistory,
+        bool shouldRefreshSnapshot,
+        string snapshotRefreshReason,
+        IReadOnlyList<OrderRunFeedbackLogEntry>? logs)
+        => new(
+            changed: true,
+            transition: transition,
+            shouldSaveLocalHistory: shouldSaveLocalHistory,
+            shouldRefreshSnapshot: shouldRefreshSnapshot,
+            snapshotRefreshReason: snapshotRefreshReason,
             logs: logs);
 }

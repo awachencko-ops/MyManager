@@ -536,6 +536,68 @@ public sealed class OrderApplicationServiceTests
     }
 
     [Fact]
+    public async Task ApplyStatusTransitionWithPersistenceAsync_LocalMode_ReturnsSaveLocalHistoryPlan()
+    {
+        var service = CreateService();
+        var order = new OrderData
+        {
+            InternalId = "ord-1",
+            Id = "00526",
+            Status = WorkflowStatusNames.Waiting
+        };
+
+        var outcome = await service.ApplyStatusTransitionWithPersistenceAsync(
+            order,
+            status: WorkflowStatusNames.Processing,
+            source: OrderStatusSourceNames.Ui,
+            reason: "unit-test",
+            persistHistory: true,
+            useLanApi: false,
+            lanApiBaseUrl: string.Empty,
+            actor: "tester",
+            normalizeUserName: value => value ?? string.Empty,
+            orderDisplayIdResolver: o => o.Id ?? string.Empty);
+
+        Assert.True(outcome.Changed);
+        Assert.NotNull(outcome.Transition);
+        Assert.True(outcome.ShouldSaveLocalHistory);
+        Assert.False(outcome.ShouldRefreshSnapshot);
+        Assert.Empty(outcome.Logs);
+        Assert.Equal(WorkflowStatusNames.Processing, order.Status);
+    }
+
+    [Fact]
+    public async Task ApplyStatusTransitionWithPersistenceAsync_LanPersistFailure_ReturnsFallbackSaveAndWarning()
+    {
+        var service = CreateService(new StubLanOrderWriteApiGateway(_ => LanOrderWriteApiResult.Unavailable("down")));
+        var order = new OrderData
+        {
+            InternalId = "ord-1",
+            Id = "00526",
+            Status = WorkflowStatusNames.Waiting
+        };
+
+        var outcome = await service.ApplyStatusTransitionWithPersistenceAsync(
+            order,
+            status: WorkflowStatusNames.Processing,
+            source: OrderStatusSourceNames.Processor,
+            reason: "unit-test",
+            persistHistory: true,
+            useLanApi: true,
+            lanApiBaseUrl: "http://localhost:5000",
+            actor: "tester",
+            normalizeUserName: value => value ?? string.Empty,
+            orderDisplayIdResolver: o => o.Id ?? string.Empty);
+
+        Assert.True(outcome.Changed);
+        Assert.True(outcome.ShouldSaveLocalHistory);
+        Assert.False(outcome.ShouldRefreshSnapshot);
+        Assert.True(outcome.Logs.Count >= 2);
+        Assert.Contains(outcome.Logs, log => log.Message.Contains("status-update-failed", StringComparison.Ordinal));
+        Assert.Contains(outcome.Logs, log => log.Message.Contains("status-update-fallback-local-save", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void TryBuildRenamedPath_ReturnsSuccessForAvailableTarget()
     {
         var service = CreateService();
