@@ -95,8 +95,14 @@
     - `RunSelectedOrderAsync` now delegates these decisions to application feedback methods and only renders the returned UI feedback.
     - Added lifecycle feedback model (`OrderRunLifecycleUiFeedback`) for run/stop command logs (`command-start`, `stop-command-start`, `snapshot-refresh-failed`, `command-finish`) and switched `OrdersWorkspaceForm` to consume these logs from `IOrderApplicationService` instead of hardcoded `Logger.Info/Warn` branches.
     - Moved run/stop precondition UI feedback (`no selection`) into `OrderRunFeedbackService` (`BuildRunSelectionRequiredUiFeedback`, `BuildStopSelectionRequiredUiFeedback`), so `OrdersWorkspaceForm` only renders returned feedback.
+    - Moved run/stop status mutation decisions into typed plans (`OrderRunStartUiMutation`, `OrderRunStatusUiMutation`, `OrderRunStopLocalUiMutation`):
+      - `OrdersWorkspaceForm` no longer hardcodes `Processing/Cancelled/Error` transition reasons for run callbacks (`onCancelled/onFailed`) and local stop apply callback.
+      - Form now applies prepared status mutation plans from `IOrderApplicationService` (`BuildRunStartUiMutation`, `BuildRunCancelledUiMutation`, `BuildRunFailedUiMutation`, `BuildRunStopLocalUiMutation`).
+    - Introduced typed side-effects plan (`OrderRunUiEffectsPlan`) for post-run/post-stop UI actions (`tray/save-history/grid-refresh/action-buttons`):
+      - Run flow now applies prepared plans (`BuildRunPostStatusApplyUiEffectsPlan`, `BuildRunPerOrderCompletionUiEffectsPlan`, `BuildRunPostExecutionUiEffectsPlan`) instead of hardcoded side-effect branches.
+      - Stop flow now applies `BuildStopPostPhaseUiEffectsPlan(stopPhase, stopUiFeedback)` for tray/buttons updates.
   - Validation:
     - `dotnet build Replica.csproj -c Debug` passed.
     - `dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj -c Release --filter \"OrderStatusTransitionServiceTests\"` passed (5/5).
-    - `dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj -c Release --filter \"OrderRunFeedbackServiceTests|OrderApplicationServiceTests\"` passed (28/28).
+    - `dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj -c Release --filter \"OrderRunFeedbackServiceTests|OrderApplicationServiceTests\"` passed (35/35).
 

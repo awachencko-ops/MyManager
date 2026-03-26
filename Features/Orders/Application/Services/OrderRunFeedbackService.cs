@@ -127,6 +127,73 @@ public sealed class OrderRunLifecycleUiFeedback
     public IReadOnlyList<OrderRunFeedbackLogEntry> Logs { get; }
 }
 
+public sealed class OrderRunStatusUiMutation
+{
+    public OrderRunStatusUiMutation(
+        string status,
+        string source,
+        string reason,
+        bool persistHistory,
+        bool rebuildGrid)
+    {
+        Status = string.IsNullOrWhiteSpace(status) ? WorkflowStatusNames.Error : status.Trim();
+        Source = string.IsNullOrWhiteSpace(source) ? OrderStatusSourceNames.Ui : source.Trim();
+        Reason = string.IsNullOrWhiteSpace(reason) ? "неизвестная ошибка" : reason.Trim();
+        PersistHistory = persistHistory;
+        RebuildGrid = rebuildGrid;
+    }
+
+    public string Status { get; }
+    public string Source { get; }
+    public string Reason { get; }
+    public bool PersistHistory { get; }
+    public bool RebuildGrid { get; }
+}
+
+public sealed class OrderRunStartUiMutation
+{
+    public OrderRunStartUiMutation(string operationLogMessage, OrderRunStatusUiMutation statusMutation)
+    {
+        OperationLogMessage = string.IsNullOrWhiteSpace(operationLogMessage) ? "Запуск заказа" : operationLogMessage.Trim();
+        StatusMutation = statusMutation ?? throw new ArgumentNullException(nameof(statusMutation));
+    }
+
+    public string OperationLogMessage { get; }
+    public OrderRunStatusUiMutation StatusMutation { get; }
+}
+
+public sealed class OrderRunStopLocalUiMutation
+{
+    public OrderRunStopLocalUiMutation(string operationLogMessage, OrderRunStatusUiMutation statusMutation)
+    {
+        OperationLogMessage = string.IsNullOrWhiteSpace(operationLogMessage) ? "Остановлено пользователем" : operationLogMessage.Trim();
+        StatusMutation = statusMutation ?? throw new ArgumentNullException(nameof(statusMutation));
+    }
+
+    public string OperationLogMessage { get; }
+    public OrderRunStatusUiMutation StatusMutation { get; }
+}
+
+public sealed class OrderRunUiEffectsPlan
+{
+    public OrderRunUiEffectsPlan(
+        bool shouldUpdateTrayProgress = false,
+        bool shouldSaveHistory = false,
+        bool shouldRefreshGrid = false,
+        bool shouldUpdateActionButtons = false)
+    {
+        ShouldUpdateTrayProgress = shouldUpdateTrayProgress;
+        ShouldSaveHistory = shouldSaveHistory;
+        ShouldRefreshGrid = shouldRefreshGrid;
+        ShouldUpdateActionButtons = shouldUpdateActionButtons;
+    }
+
+    public bool ShouldUpdateTrayProgress { get; }
+    public bool ShouldSaveHistory { get; }
+    public bool ShouldRefreshGrid { get; }
+    public bool ShouldUpdateActionButtons { get; }
+}
+
 public sealed class OrderRunFeedbackService
 {
     private const int DefaultPreviewLimit = 5;
@@ -253,6 +320,25 @@ public sealed class OrderRunFeedbackService
         }
     }
 
+    public OrderRunStartUiMutation BuildRunStartUiMutation(bool isBatchRun)
+    {
+        var operationMessage = isBatchRun
+            ? "Пакетный запуск заказа из OrdersWorkspaceForm"
+            : "Запуск заказа из OrdersWorkspaceForm";
+        var statusReason = isBatchRun
+            ? "Пакетный запуск из OrdersWorkspaceForm"
+            : "Запуск из OrdersWorkspaceForm";
+
+        return new OrderRunStartUiMutation(
+            operationMessage,
+            new OrderRunStatusUiMutation(
+                status: WorkflowStatusNames.Processing,
+                source: OrderStatusSourceNames.Ui,
+                reason: statusReason,
+                persistHistory: false,
+                rebuildGrid: false));
+    }
+
     public OrderRunStartUiFeedback BuildRunSelectionRequiredUiFeedback()
     {
         return OrderRunStartUiFeedback.Abort(
@@ -298,6 +384,27 @@ public sealed class OrderRunFeedbackService
 
         return new OrderRunStartProgressUiFeedback(bottomStatus, dialog);
     }
+
+    public OrderRunUiEffectsPlan BuildRunPostStatusApplyUiEffectsPlan()
+        => new(
+            shouldUpdateTrayProgress: true,
+            shouldSaveHistory: true,
+            shouldRefreshGrid: true,
+            shouldUpdateActionButtons: false);
+
+    public OrderRunUiEffectsPlan BuildRunPerOrderCompletionUiEffectsPlan()
+        => new(
+            shouldUpdateTrayProgress: true,
+            shouldSaveHistory: false,
+            shouldRefreshGrid: false,
+            shouldUpdateActionButtons: false);
+
+    public OrderRunUiEffectsPlan BuildRunPostExecutionUiEffectsPlan()
+        => new(
+            shouldUpdateTrayProgress: false,
+            shouldSaveHistory: true,
+            shouldRefreshGrid: true,
+            shouldUpdateActionButtons: true);
 
     public OrderRunCompletionUiFeedback BuildCompletionUiFeedback(
         IReadOnlyCollection<OrderRunExecutionError>? errors,
@@ -380,6 +487,27 @@ public sealed class OrderRunFeedbackService
             ]);
     }
 
+    public OrderRunStatusUiMutation BuildRunCancelledUiMutation()
+    {
+        return new OrderRunStatusUiMutation(
+            status: WorkflowStatusNames.Cancelled,
+            source: OrderStatusSourceNames.Ui,
+            reason: "Остановлено пользователем",
+            persistHistory: false,
+            rebuildGrid: false);
+    }
+
+    public OrderRunStatusUiMutation BuildRunFailedUiMutation(string? errorMessage)
+    {
+        var safeReason = string.IsNullOrWhiteSpace(errorMessage) ? "неизвестная ошибка" : errorMessage.Trim();
+        return new OrderRunStatusUiMutation(
+            status: WorkflowStatusNames.Error,
+            source: OrderStatusSourceNames.Ui,
+            reason: safeReason,
+            persistHistory: false,
+            rebuildGrid: false);
+    }
+
     public OrderRunStopUiFeedback BuildStopUiFeedback(OrderRunStopPhaseResult stopPhase, string orderDisplayId)
     {
         if (stopPhase == null)
@@ -450,6 +578,34 @@ public sealed class OrderRunFeedbackService
             shouldUpdateActionButtons: false,
             dialog: dialog,
             logs: logs);
+    }
+
+    public OrderRunUiEffectsPlan BuildStopPostPhaseUiEffectsPlan(
+        OrderRunStopPhaseResult stopPhase,
+        OrderRunStopUiFeedback stopUiFeedback)
+    {
+        if (stopPhase == null)
+            throw new ArgumentNullException(nameof(stopPhase));
+        if (stopUiFeedback == null)
+            throw new ArgumentNullException(nameof(stopUiFeedback));
+
+        return new OrderRunUiEffectsPlan(
+            shouldUpdateTrayProgress: stopPhase.Preparation.LocalCancellationRequested,
+            shouldSaveHistory: false,
+            shouldRefreshGrid: false,
+            shouldUpdateActionButtons: stopUiFeedback.ShouldUpdateActionButtons);
+    }
+
+    public OrderRunStopLocalUiMutation BuildStopLocalUiMutation()
+    {
+        return new OrderRunStopLocalUiMutation(
+            operationLogMessage: "Остановлено пользователем",
+            statusMutation: new OrderRunStatusUiMutation(
+                status: WorkflowStatusNames.Cancelled,
+                source: OrderStatusSourceNames.Ui,
+                reason: "Остановлено пользователем",
+                persistHistory: true,
+                rebuildGrid: true));
     }
 
     public OrderRunStopUiFeedback BuildStopSelectionRequiredUiFeedback()

@@ -71,6 +71,74 @@ public sealed class OrderApplicationServiceTests
     }
 
     [Fact]
+    public void BuildRunStatusMutations_ForwardedFromService_ReturnsExpectedPlans()
+    {
+        var service = CreateService();
+
+        var start = service.BuildRunStartUiMutation(isBatchRun: false);
+        var cancelled = service.BuildRunCancelledUiMutation();
+        var failed = service.BuildRunFailedUiMutation("disk full");
+        var stopLocal = service.BuildRunStopLocalUiMutation();
+        var runPostStatus = service.BuildRunPostStatusApplyUiEffectsPlan();
+        var runPerOrderCompletion = service.BuildRunPerOrderCompletionUiEffectsPlan();
+        var runPostExecution = service.BuildRunPostExecutionUiEffectsPlan();
+        var stopPlan = new OrderRunStateService.StopPlan(
+            CanProceed: true,
+            HasLocalRunSession: true,
+            ShouldSendServerStop: true,
+            LocalCancellationTokenSource: null);
+        var stopPreparation = RunStopPreparationResult.From(
+            stopPlan,
+            stopCommandResult: LanRunStopCommandResult.NotUsed(),
+            canApplyLocalStopStatus: true,
+            localCancellationRequested: true,
+            snapshotRefreshFailed: false);
+        var stopPhase = OrderRunStopPhaseResult.LocalStatusApplied(
+            stopPreparation,
+            shouldWarnServerUnavailable: false,
+            shouldLogServerFailure: false,
+            serverReason: string.Empty);
+        var stopFeedback = new OrderRunStopUiFeedback(string.Empty, shouldUpdateActionButtons: true, dialog: null);
+        var stopPostPhase = service.BuildStopPostPhaseUiEffectsPlan(stopPhase, stopFeedback);
+
+        Assert.Equal(WorkflowStatusNames.Processing, start.StatusMutation.Status);
+        Assert.Contains("Запуск заказа", start.OperationLogMessage);
+        Assert.False(start.StatusMutation.PersistHistory);
+        Assert.False(start.StatusMutation.RebuildGrid);
+
+        Assert.Equal(WorkflowStatusNames.Cancelled, cancelled.Status);
+        Assert.Equal("Остановлено пользователем", cancelled.Reason);
+
+        Assert.Equal(WorkflowStatusNames.Error, failed.Status);
+        Assert.Equal("disk full", failed.Reason);
+
+        Assert.Equal("Остановлено пользователем", stopLocal.OperationLogMessage);
+        Assert.Equal(WorkflowStatusNames.Cancelled, stopLocal.StatusMutation.Status);
+        Assert.True(stopLocal.StatusMutation.PersistHistory);
+        Assert.True(stopLocal.StatusMutation.RebuildGrid);
+
+        Assert.True(runPostStatus.ShouldUpdateTrayProgress);
+        Assert.True(runPostStatus.ShouldSaveHistory);
+        Assert.True(runPostStatus.ShouldRefreshGrid);
+        Assert.False(runPostStatus.ShouldUpdateActionButtons);
+
+        Assert.True(runPerOrderCompletion.ShouldUpdateTrayProgress);
+        Assert.False(runPerOrderCompletion.ShouldSaveHistory);
+        Assert.False(runPerOrderCompletion.ShouldRefreshGrid);
+        Assert.False(runPerOrderCompletion.ShouldUpdateActionButtons);
+
+        Assert.False(runPostExecution.ShouldUpdateTrayProgress);
+        Assert.True(runPostExecution.ShouldSaveHistory);
+        Assert.True(runPostExecution.ShouldRefreshGrid);
+        Assert.True(runPostExecution.ShouldUpdateActionButtons);
+
+        Assert.True(stopPostPhase.ShouldUpdateTrayProgress);
+        Assert.False(stopPostPhase.ShouldSaveHistory);
+        Assert.False(stopPostPhase.ShouldRefreshGrid);
+        Assert.True(stopPostPhase.ShouldUpdateActionButtons);
+    }
+
+    [Fact]
     public void BuildRunStopUiFeedback_ForConflict_ReturnsConflictBottomStatus()
     {
         var service = CreateService();

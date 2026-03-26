@@ -97,6 +97,21 @@ public sealed class OrderRunFeedbackServiceTests
     }
 
     [Fact]
+    public void BuildRunStartUiMutation_ForBatch_ReturnsBatchOperationAndProcessingStatus()
+    {
+        var service = new OrderRunFeedbackService();
+
+        var mutation = service.BuildRunStartUiMutation(isBatchRun: true);
+
+        Assert.Contains("Пакетный запуск", mutation.OperationLogMessage);
+        Assert.Equal(WorkflowStatusNames.Processing, mutation.StatusMutation.Status);
+        Assert.Equal(OrderStatusSourceNames.Ui, mutation.StatusMutation.Source);
+        Assert.Contains("Пакетный запуск", mutation.StatusMutation.Reason);
+        Assert.False(mutation.StatusMutation.PersistHistory);
+        Assert.False(mutation.StatusMutation.RebuildGrid);
+    }
+
+    [Fact]
     public void BuildStartUiFeedback_ForServerRejected_IncludesPreviewAndWarningLog()
     {
         var service = new OrderRunFeedbackService();
@@ -151,6 +166,49 @@ public sealed class OrderRunFeedbackServiceTests
     }
 
     [Fact]
+    public void BuildRunCancelledUiMutation_ReturnsCancelledStatusWithNoPersist()
+    {
+        var service = new OrderRunFeedbackService();
+
+        var mutation = service.BuildRunCancelledUiMutation();
+
+        Assert.Equal(WorkflowStatusNames.Cancelled, mutation.Status);
+        Assert.Equal(OrderStatusSourceNames.Ui, mutation.Source);
+        Assert.Equal("Остановлено пользователем", mutation.Reason);
+        Assert.False(mutation.PersistHistory);
+        Assert.False(mutation.RebuildGrid);
+    }
+
+    [Fact]
+    public void BuildRunFailedUiMutation_EmptyMessage_UsesUnknownErrorFallback()
+    {
+        var service = new OrderRunFeedbackService();
+
+        var mutation = service.BuildRunFailedUiMutation("  ");
+
+        Assert.Equal(WorkflowStatusNames.Error, mutation.Status);
+        Assert.Equal(OrderStatusSourceNames.Ui, mutation.Source);
+        Assert.Equal("неизвестная ошибка", mutation.Reason);
+        Assert.False(mutation.PersistHistory);
+        Assert.False(mutation.RebuildGrid);
+    }
+
+    [Fact]
+    public void BuildStopLocalUiMutation_ReturnsCancelledStatusWithPersistAndRebuild()
+    {
+        var service = new OrderRunFeedbackService();
+
+        var mutation = service.BuildStopLocalUiMutation();
+
+        Assert.Equal("Остановлено пользователем", mutation.OperationLogMessage);
+        Assert.Equal(WorkflowStatusNames.Cancelled, mutation.StatusMutation.Status);
+        Assert.Equal(OrderStatusSourceNames.Ui, mutation.StatusMutation.Source);
+        Assert.Equal("Остановлено пользователем", mutation.StatusMutation.Reason);
+        Assert.True(mutation.StatusMutation.PersistHistory);
+        Assert.True(mutation.StatusMutation.RebuildGrid);
+    }
+
+    [Fact]
     public void BuildStopUiFeedback_ForLocalAppliedWithUnavailable_AddsWarningDialogAndFinishInfoLog()
     {
         var service = new OrderRunFeedbackService();
@@ -199,6 +257,64 @@ public sealed class OrderRunFeedbackServiceTests
         Assert.Contains("пропущена", feedback.BottomStatus);
         Assert.NotNull(feedback.Dialog);
         Assert.Contains("order-1: locked", feedback.Dialog!.Message);
+    }
+
+    [Fact]
+    public void BuildRunUiEffectsPlans_ReturnExpectedFlags()
+    {
+        var service = new OrderRunFeedbackService();
+
+        var postStatus = service.BuildRunPostStatusApplyUiEffectsPlan();
+        var perOrderCompletion = service.BuildRunPerOrderCompletionUiEffectsPlan();
+        var postExecution = service.BuildRunPostExecutionUiEffectsPlan();
+
+        Assert.True(postStatus.ShouldUpdateTrayProgress);
+        Assert.True(postStatus.ShouldSaveHistory);
+        Assert.True(postStatus.ShouldRefreshGrid);
+        Assert.False(postStatus.ShouldUpdateActionButtons);
+
+        Assert.True(perOrderCompletion.ShouldUpdateTrayProgress);
+        Assert.False(perOrderCompletion.ShouldSaveHistory);
+        Assert.False(perOrderCompletion.ShouldRefreshGrid);
+        Assert.False(perOrderCompletion.ShouldUpdateActionButtons);
+
+        Assert.False(postExecution.ShouldUpdateTrayProgress);
+        Assert.True(postExecution.ShouldSaveHistory);
+        Assert.True(postExecution.ShouldRefreshGrid);
+        Assert.True(postExecution.ShouldUpdateActionButtons);
+    }
+
+    [Fact]
+    public void BuildStopPostPhaseUiEffectsPlan_UsesStopPhaseAndFeedbackFlags()
+    {
+        var service = new OrderRunFeedbackService();
+        var stopPlan = new OrderRunStateService.StopPlan(
+            CanProceed: true,
+            HasLocalRunSession: true,
+            ShouldSendServerStop: true,
+            LocalCancellationTokenSource: null);
+        var stopPreparation = RunStopPreparationResult.From(
+            stopPlan,
+            stopCommandResult: LanRunStopCommandResult.NotUsed(),
+            canApplyLocalStopStatus: true,
+            localCancellationRequested: true,
+            snapshotRefreshFailed: false);
+        var stopPhase = OrderRunStopPhaseResult.LocalStatusApplied(
+            stopPreparation,
+            shouldWarnServerUnavailable: false,
+            shouldLogServerFailure: false,
+            serverReason: string.Empty);
+        var stopFeedback = new OrderRunStopUiFeedback(
+            bottomStatus: string.Empty,
+            shouldUpdateActionButtons: true,
+            dialog: null);
+
+        var effects = service.BuildStopPostPhaseUiEffectsPlan(stopPhase, stopFeedback);
+
+        Assert.True(effects.ShouldUpdateTrayProgress);
+        Assert.False(effects.ShouldSaveHistory);
+        Assert.False(effects.ShouldRefreshGrid);
+        Assert.True(effects.ShouldUpdateActionButtons);
     }
 
     [Fact]

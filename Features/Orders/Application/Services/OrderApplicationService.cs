@@ -107,12 +107,18 @@ public interface IOrderApplicationService
         IReadOnlyCollection<OrderRunExecutionError>? errors,
         Func<OrderData, string> orderDisplayIdResolver,
         int previewLimit = 5);
+    OrderRunStartUiMutation BuildRunStartUiMutation(bool isBatchRun);
+    OrderRunStatusUiMutation BuildRunCancelledUiMutation();
+    OrderRunStatusUiMutation BuildRunFailedUiMutation(string? errorMessage);
     OrderRunStartUiFeedback BuildRunSelectionRequiredUiFeedback();
     OrderRunStartUiFeedback BuildRunStartUiFeedback(OrderRunStartPhaseResult startPhase);
     OrderRunStartProgressUiFeedback BuildRunStartProgressUiFeedback(
         int runnableOrdersCount,
         OrderRunStateService.RunPlan runPlan,
         IReadOnlyCollection<string>? serverSkipped);
+    OrderRunUiEffectsPlan BuildRunPostStatusApplyUiEffectsPlan();
+    OrderRunUiEffectsPlan BuildRunPerOrderCompletionUiEffectsPlan();
+    OrderRunUiEffectsPlan BuildRunPostExecutionUiEffectsPlan();
     OrderRunCompletionUiFeedback BuildRunCompletionUiFeedback(
         IReadOnlyCollection<OrderRunExecutionError>? errors,
         int runnableOrdersCount,
@@ -121,6 +127,8 @@ public interface IOrderApplicationService
     OrderRunLifecycleUiFeedback BuildRunStopCommandStartLifecycleUiFeedback();
     OrderRunLifecycleUiFeedback BuildRunSnapshotRefreshWarningUiFeedback(string phase, string? orderDisplayId = null);
     OrderRunLifecycleUiFeedback BuildRunCommandFinishLifecycleUiFeedback(int startedCount, int errorsCount);
+    OrderRunUiEffectsPlan BuildStopPostPhaseUiEffectsPlan(OrderRunStopPhaseResult stopPhase, OrderRunStopUiFeedback stopUiFeedback);
+    OrderRunStopLocalUiMutation BuildRunStopLocalUiMutation();
     OrderRunStopUiFeedback BuildRunStopSelectionRequiredUiFeedback();
     OrderRunStopUiFeedback BuildRunStopUiFeedback(OrderRunStopPhaseResult stopPhase, string orderDisplayId);
 
@@ -441,6 +449,15 @@ public sealed class OrderApplicationService : IOrderApplicationService
         int previewLimit = 5)
         => _orderRunFeedbackService.BuildExecutionErrorsPreview(errors, orderDisplayIdResolver, previewLimit);
 
+    public OrderRunStartUiMutation BuildRunStartUiMutation(bool isBatchRun)
+        => _orderRunFeedbackService.BuildRunStartUiMutation(isBatchRun);
+
+    public OrderRunStatusUiMutation BuildRunCancelledUiMutation()
+        => _orderRunFeedbackService.BuildRunCancelledUiMutation();
+
+    public OrderRunStatusUiMutation BuildRunFailedUiMutation(string? errorMessage)
+        => _orderRunFeedbackService.BuildRunFailedUiMutation(errorMessage);
+
     public OrderRunStartUiFeedback BuildRunSelectionRequiredUiFeedback()
         => _orderRunFeedbackService.BuildRunSelectionRequiredUiFeedback();
 
@@ -452,6 +469,15 @@ public sealed class OrderApplicationService : IOrderApplicationService
         OrderRunStateService.RunPlan runPlan,
         IReadOnlyCollection<string>? serverSkipped)
         => _orderRunFeedbackService.BuildStartProgressUiFeedback(runnableOrdersCount, runPlan, serverSkipped);
+
+    public OrderRunUiEffectsPlan BuildRunPostStatusApplyUiEffectsPlan()
+        => _orderRunFeedbackService.BuildRunPostStatusApplyUiEffectsPlan();
+
+    public OrderRunUiEffectsPlan BuildRunPerOrderCompletionUiEffectsPlan()
+        => _orderRunFeedbackService.BuildRunPerOrderCompletionUiEffectsPlan();
+
+    public OrderRunUiEffectsPlan BuildRunPostExecutionUiEffectsPlan()
+        => _orderRunFeedbackService.BuildRunPostExecutionUiEffectsPlan();
 
     public OrderRunCompletionUiFeedback BuildRunCompletionUiFeedback(
         IReadOnlyCollection<OrderRunExecutionError>? errors,
@@ -470,6 +496,14 @@ public sealed class OrderApplicationService : IOrderApplicationService
 
     public OrderRunLifecycleUiFeedback BuildRunCommandFinishLifecycleUiFeedback(int startedCount, int errorsCount)
         => _orderRunFeedbackService.BuildRunCommandFinishLifecycleUiFeedback(startedCount, errorsCount);
+
+    public OrderRunUiEffectsPlan BuildStopPostPhaseUiEffectsPlan(
+        OrderRunStopPhaseResult stopPhase,
+        OrderRunStopUiFeedback stopUiFeedback)
+        => _orderRunFeedbackService.BuildStopPostPhaseUiEffectsPlan(stopPhase, stopUiFeedback);
+
+    public OrderRunStopLocalUiMutation BuildRunStopLocalUiMutation()
+        => _orderRunFeedbackService.BuildStopLocalUiMutation();
 
     public OrderRunStopUiFeedback BuildRunStopSelectionRequiredUiFeedback()
         => _orderRunFeedbackService.BuildStopSelectionRequiredUiFeedback();

@@ -924,6 +924,10 @@ namespace Replica
             var runPlan = runPreparation.RunPlan;
             var runnableOrders = runPreparation.RunnableOrders;
             var serverSkipped = runPreparation.SkippedByServer;
+            var runStartUiMutation = _orderApplicationService.BuildRunStartUiMutation(runnableOrders.Count > 1);
+            var runPostStatusEffects = _orderApplicationService.BuildRunPostStatusApplyUiEffectsPlan();
+            var runPerOrderCompletionEffects = _orderApplicationService.BuildRunPerOrderCompletionUiEffectsPlan();
+            var runPostExecutionEffects = _orderApplicationService.BuildRunPostExecutionUiEffectsPlan();
 
             if (_processor == null)
                 InitializeProcessor();
@@ -942,23 +946,12 @@ namespace Replica
                 AppendOrderOperationLog(
                     order,
                     OrderOperationNames.Run,
-                    runnableOrders.Count > 1
-                        ? "Пакетный запуск заказа из OrdersWorkspaceForm"
-                        : "Запуск заказа из OrdersWorkspaceForm");
+                    runStartUiMutation.OperationLogMessage);
 
-                SetOrderStatus(
-                    order,
-                    WorkflowStatusNames.Processing,
-                    OrderStatusSourceNames.Ui,
-                    runnableOrders.Count > 1 ? "Пакетный запуск из OrdersWorkspaceForm" : "Запуск из OrdersWorkspaceForm",
-                    persistHistory: false,
-                    rebuildGrid: false);
+                ApplyOrderRunStatusMutation(order, runStartUiMutation.StatusMutation);
             }
 
-            UpdateTrayProgressIndicator();
-            SaveHistory();
-            if (!TryRefreshGridRowsWithoutRebuild())
-                RebuildOrdersGrid();
+            ApplyOrderRunUiEffects(runPostStatusEffects);
 
             var startProgressUiFeedback = _orderApplicationService.BuildRunStartProgressUiFeedback(
                 runnableOrders.Count,
@@ -972,35 +965,11 @@ namespace Replica
                 _runTokensByOrder,
                 _runProgressByOrderInternalId,
                 runOrderAsync: (order, cancellationToken) => _processor!.RunAsync(order, cancellationToken, selectedItemIds: null),
-                onCancelled: order =>
-                {
-                    SetOrderStatus(
-                        order,
-                        WorkflowStatusNames.Cancelled,
-                        OrderStatusSourceNames.Ui,
-                        "Остановлено пользователем",
-                        persistHistory: false,
-                        rebuildGrid: false);
-                },
-                onFailed: (order, ex) =>
-                {
-                    SetOrderStatus(
-                        order,
-                        WorkflowStatusNames.Error,
-                        OrderStatusSourceNames.Ui,
-                        ex.Message,
-                        persistHistory: false,
-                        rebuildGrid: false);
-                },
-                onCompleted: _ =>
-                {
-                    UpdateTrayProgressIndicator();
-                });
+                onCancelled: order => ApplyOrderRunStatusMutation(order, _orderApplicationService.BuildRunCancelledUiMutation()),
+                onFailed: (order, ex) => ApplyOrderRunStatusMutation(order, _orderApplicationService.BuildRunFailedUiMutation(ex.Message)),
+                onCompleted: _ => ApplyOrderRunUiEffects(runPerOrderCompletionEffects));
 
-            SaveHistory();
-            if (!TryRefreshGridRowsWithoutRebuild())
-                RebuildOrdersGrid();
-            UpdateActionButtonsState();
+            ApplyOrderRunUiEffects(runPostExecutionEffects);
 
             var completionUiFeedback = _orderApplicationService.BuildRunCompletionUiFeedback(
                 runExecutionResult.Errors,
@@ -1050,22 +1019,12 @@ namespace Replica
                 tryRefreshSnapshotFromStorage: TryRefreshRepositorySnapshotFromStorage,
                 applyLocalStopStatus: localOrder =>
                 {
-                    AppendOrderOperationLog(localOrder, OrderOperationNames.Stop, "Остановлено пользователем");
-                    SetOrderStatus(
-                        localOrder,
-                        WorkflowStatusNames.Cancelled,
-                        OrderStatusSourceNames.Ui,
-                        "Остановлено пользователем",
-                        persistHistory: true,
-                        rebuildGrid: true);
+                    var localStopUiMutation = _orderApplicationService.BuildRunStopLocalUiMutation();
+                    AppendOrderOperationLog(localOrder, OrderOperationNames.Stop, localStopUiMutation.OperationLogMessage);
+                    ApplyOrderRunStatusMutation(localOrder, localStopUiMutation.StatusMutation);
                 });
 
             var stopPreparation = stopPhase.Preparation;
-
-            if (stopPreparation.LocalCancellationRequested)
-            {
-                UpdateTrayProgressIndicator();
-            }
 
             if (stopPreparation.SnapshotRefreshFailed)
             {
@@ -1077,7 +1036,41 @@ namespace Replica
             ApplyOrderRunFeedbackLogs(stopUiFeedback.Logs);
             SetBottomStatus(stopUiFeedback.BottomStatus);
             ShowOrderRunFeedbackDialog(stopUiFeedback.Dialog);
-            if (stopUiFeedback.ShouldUpdateActionButtons)
+            ApplyOrderRunUiEffects(_orderApplicationService.BuildStopPostPhaseUiEffectsPlan(stopPhase, stopUiFeedback));
+        }
+
+        private void ApplyOrderRunStatusMutation(OrderData order, OrderRunStatusUiMutation mutation)
+        {
+            if (order == null || mutation == null)
+                return;
+
+            SetOrderStatus(
+                order,
+                mutation.Status,
+                mutation.Source,
+                mutation.Reason,
+                persistHistory: mutation.PersistHistory,
+                rebuildGrid: mutation.RebuildGrid);
+        }
+
+        private void ApplyOrderRunUiEffects(OrderRunUiEffectsPlan effects)
+        {
+            if (effects == null)
+                return;
+
+            if (effects.ShouldUpdateTrayProgress)
+                UpdateTrayProgressIndicator();
+
+            if (effects.ShouldSaveHistory)
+                SaveHistory();
+
+            if (effects.ShouldRefreshGrid)
+            {
+                if (!TryRefreshGridRowsWithoutRebuild())
+                    RebuildOrdersGrid();
+            }
+
+            if (effects.ShouldUpdateActionButtons)
                 UpdateActionButtonsState();
         }
 
