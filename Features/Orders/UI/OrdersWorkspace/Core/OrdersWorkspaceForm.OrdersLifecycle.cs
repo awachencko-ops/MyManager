@@ -1548,6 +1548,30 @@ namespace Replica
             bool persistHistory,
             bool rebuildGrid)
         {
+            if (Disposing || IsDisposed)
+                return false;
+
+            if (InvokeRequired)
+            {
+                var result = false;
+                Invoke((Action)(() =>
+                {
+                    result = SetOrderStatusCore(order, status, source, reason, persistHistory, rebuildGrid);
+                }));
+                return result;
+            }
+
+            return SetOrderStatusCore(order, status, source, reason, persistHistory, rebuildGrid);
+        }
+
+        private bool SetOrderStatusCore(
+            OrderData order,
+            string status,
+            string source,
+            string reason,
+            bool persistHistory,
+            bool rebuildGrid)
+        {
             var transition = _orderApplicationService.ApplyStatusTransition(order, status, source, reason);
             if (!transition.Changed)
                 return false;

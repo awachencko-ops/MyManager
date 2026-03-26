@@ -24,11 +24,6 @@ public sealed class OrdersController : ControllerBase
     private const string StopCommandName = "stop";
     private readonly ILanOrderStore _store;
 
-    public OrdersController(ILanOrderStore store, ILogger<OrdersController> logger)
-        : this(store, logger, configuration: null)
-    {
-    }
-
     public OrdersController(ILanOrderStore store, ILogger<OrdersController> logger, IConfiguration? configuration)
     {
         _store = store;

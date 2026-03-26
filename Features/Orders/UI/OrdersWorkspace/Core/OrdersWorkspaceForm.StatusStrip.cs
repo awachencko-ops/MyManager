@@ -1507,6 +1507,11 @@ namespace Replica
 
         private void UpdateTrayProgressIndicator()
         {
+            RunOnUiThread(UpdateTrayProgressIndicatorCore);
+        }
+
+        private void UpdateTrayProgressIndicatorCore()
+        {
             if (toolProgress.IsDisposed)
                 return;
 
