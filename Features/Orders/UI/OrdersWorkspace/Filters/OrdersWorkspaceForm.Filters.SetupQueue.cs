@@ -369,6 +369,10 @@ namespace Replica
             if (_isSyncingQueueSelection || e.Node == null)
                 return;
 
+            var currentStatus = GetSelectedQueueStatusName();
+            if (string.Equals(currentStatus, e.Node.Text, StringComparison.Ordinal))
+                return;
+
             _isSyncingQueueSelection = true;
             FillQueueCombo(e.Node.Text);
             _isSyncingQueueSelection = false;
@@ -378,6 +382,10 @@ namespace Replica
         private void CbQueue_SelectedIndexChanged(object? sender, EventArgs e)
         {
             if (_isSyncingQueueSelection || cbQueue.SelectedItem is not QueueStatusItem selectedItem)
+                return;
+
+            var currentStatus = treeView1.SelectedNode?.Text;
+            if (string.Equals(currentStatus, selectedItem.StatusName, StringComparison.Ordinal))
                 return;
 
             var statusNode = FindQueueStatusNode(selectedItem.StatusName);

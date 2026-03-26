@@ -322,17 +322,21 @@ namespace Replica
 
         private int GetQueueStatusCount(string queueStatusName)
         {
+            EnsureQueueStatusCountsCache();
+
             if (string.Equals(queueStatusName, QueueStatusNames.AllJobs, StringComparison.Ordinal))
                 return GetOrdersTotalCount();
 
-            if (!QueueStatusMappings.TryGetValue(queueStatusName, out var mappedStatuses))
+            if (!QueueStatusMappings.TryGetValue(queueStatusName, out var mappedStatuses)
+                || _queueStatusCountsCache == null)
+            {
                 return 0;
+            }
 
-            var countsByFilterStatus = GetCountsByFilterStatus();
             var total = 0;
             foreach (var status in mappedStatuses)
             {
-                if (countsByFilterStatus.TryGetValue(status, out var count))
+                if (_queueStatusCountsCache.TryGetValue(status, out var count))
                     total += count;
             }
 
@@ -341,20 +345,8 @@ namespace Replica
 
         private int GetOrdersTotalCount()
         {
-            var total = 0;
-            foreach (DataGridViewRow row in dgvJobs.Rows)
-            {
-                if (row.IsNewRow)
-                    continue;
-
-                var rowTag = row.Tag?.ToString();
-                if (IsItemTag(rowTag))
-                    continue;
-
-                total++;
-            }
-
-            return total;
+            EnsureQueueStatusCountsCache();
+            return _queueTotalOrdersCountCache;
         }
 
         private bool MatchesCreatedDateFilter(string? rawCreatedDate)
@@ -459,10 +451,32 @@ namespace Replica
 
         private Dictionary<string, int> GetCountsByFilterStatus()
         {
+            EnsureQueueStatusCountsCache();
+            if (_queueStatusCountsCache != null)
+                return new Dictionary<string, int>(_queueStatusCountsCache, StringComparer.Ordinal);
+
             var counts = new Dictionary<string, int>(StringComparer.Ordinal);
             foreach (var status in FilterStatuses)
                 counts[status] = 0;
 
+            return counts;
+        }
+
+        private void InvalidateQueueStatusCountsCache()
+        {
+            _queueStatusCountsCacheValid = false;
+        }
+
+        private void EnsureQueueStatusCountsCache()
+        {
+            if (_queueStatusCountsCacheValid && _queueStatusCountsCache != null)
+                return;
+
+            var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var status in FilterStatuses)
+                counts[status] = 0;
+
+            var total = 0;
             foreach (DataGridViewRow row in dgvJobs.Rows)
             {
                 if (row.IsNewRow)
@@ -472,15 +486,17 @@ namespace Replica
                 if (IsItemTag(rowTag))
                     continue;
 
+                total++;
+
                 var statusValue = row.Cells[colStatus.Index].Value?.ToString();
                 var normalizedStatus = NormalizeStatus(statusValue);
-                if (normalizedStatus == null)
-                    continue;
-
-                counts[normalizedStatus]++;
+                if (normalizedStatus != null && counts.TryGetValue(normalizedStatus, out var count))
+                    counts[normalizedStatus] = count + 1;
             }
 
-            return counts;
+            _queueStatusCountsCache = counts;
+            _queueTotalOrdersCountCache = total;
+            _queueStatusCountsCacheValid = true;
         }
 
         private static string? NormalizeStatus(string? rawStatus)

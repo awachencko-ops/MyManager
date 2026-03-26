@@ -126,9 +126,14 @@ namespace Replica
         private string _usersDirectoryStatusText = "Пользователи: не проверены";
         private DateTime _usersDirectoryLastRefreshAt = DateTime.MinValue;
         private int _usersDirectoryRefreshInProgress;
+        private int _ordersDataBootstrapInProgress;
+        private bool _ordersDataBootstrapCompleted;
         private long _ordersGridRebuildCount;
         private double _ordersGridRebuildLastMs;
         private double _ordersGridRebuildMaxMs;
+        private Dictionary<string, int>? _queueStatusCountsCache;
+        private int _queueTotalOrdersCountCache;
+        private bool _queueStatusCountsCacheValid;
 
         private static readonly string[] QueueStatuses = QueueStatusNames.All;
 

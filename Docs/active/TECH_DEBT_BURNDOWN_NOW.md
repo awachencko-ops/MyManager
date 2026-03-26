@@ -106,8 +106,18 @@
       - Archive index scan (`Directory.EnumerateFiles` over `Готово`) moved off UI thread; refresh now builds name/hash indexes asynchronously and applies result back on UI.
       - Added archive sync cadence guard (`RefreshArchivedStatusesIfDue`) and switched tray timer to run archive sync by interval instead of every tick.
       - Removed per-tick hash backfill/save from tray timer hot path; startup archive refresh is now queued after UI handle is ready.
+    - Async orders-data bootstrap on form startup:
+      - `InitializeOrdersDataFlow` now queues background load/post-load migration (`TryLoadHistory` + `ApplyHistoryPostLoad`) and applies prepared result to UI after completion.
+      - Initial grid rebuild now runs after background load completes, improving first-paint responsiveness.
+      - Settings changes that affect data source/path (`orders root`, `history file`, storage backend, LAN connection) now trigger forced async orders reload instead of synchronous refresh path.
   - Validation:
     - `dotnet build Replica.csproj -c Release` passed.
     - `dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj -c Release --filter \"OrderStatusTransitionServiceTests\"` passed (5/5).
     - `dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj -c Release --filter \"OrderRunFeedbackServiceTests|OrderApplicationServiceTests\"` passed (35/35).
+  - Queue/treeview freeze mitigation:
+    - Introduced queue-status counter cache (`_queueStatusCountsCache`) so `treeView1` owner-draw no longer rescans all grid rows for every node repaint.
+    - Cache is invalidated on grid-change pipeline (`HandleOrdersGridChanged`) and rebuilt lazily once per refresh cycle.
+    - Derived refresh no longer rebuilds print tiles in list mode; `RefreshPrintTilesFromVisibleRows` now runs only when tiles mode is active.
+    - Added no-op guards for queue selection handlers: re-selecting already active status in `treeView1/cbQueue` no longer triggers full derived refresh.
+    - Re-validated by `dotnet build Replica.csproj -c Release` and targeted verify tests (`35/35`).
 

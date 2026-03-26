@@ -88,6 +88,7 @@ namespace Replica
 
         private void HandleOrdersGridChanged()
         {
+            InvalidateQueueStatusCountsCache();
             RequestCoalescedGridDerivedRefresh();
         }
 
@@ -157,7 +158,8 @@ namespace Replica
             RefreshStatusFilterChecklist();
             RefreshUserFilterChecklist();
             RefreshQueuePresentation();
-            RefreshPrintTilesFromVisibleRows();
+            if (_ordersViewMode == OrdersViewMode.Tiles)
+                RefreshPrintTilesFromVisibleRows();
             UpdateActionButtonsState();
             RefreshTrayIndicators();
         }

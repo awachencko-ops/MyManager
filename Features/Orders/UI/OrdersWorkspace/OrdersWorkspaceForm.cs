@@ -760,10 +760,79 @@ namespace Replica
             EnsureSearchDebounceTimer();
             tbSearch.TextChanged -= TbSearch_TextChanged;
             tbSearch.TextChanged += TbSearch_TextChanged;
-            LoadHistory();
-            RebuildOrdersGrid();
-            InitializeOrdersViewsWarmupCoordinator();
-            QueueInitialArchiveRefresh();
+            QueueOrdersDataBootstrap();
+        }
+
+        private void QueueOrdersDataBootstrap(bool force = false)
+        {
+            if (!force && _ordersDataBootstrapCompleted)
+                return;
+
+            if (Interlocked.CompareExchange(ref _ordersDataBootstrapInProgress, 1, 0) != 0)
+                return;
+
+            _ordersDataBootstrapCompleted = false;
+            SetBottomStatus("Загрузка заказов...");
+            _ = BootstrapOrdersDataFlowAsync();
+        }
+
+        private async Task BootstrapOrdersDataFlowAsync()
+        {
+            try
+            {
+                var usersSnapshot = _filterUsers.Count > 0
+                    ? _filterUsers.ToList()
+                    : new List<string> { UserIdentityResolver.DefaultDisplayName };
+                var defaultUserName = usersSnapshot[0];
+                var historyFilePath = StoragePaths.ResolveExistingFilePath(_jsonHistoryFile, "history.json");
+
+                var result = await Task.Run(() =>
+                {
+                    _orderApplicationService.ConfigureHistoryRepository(_ordersStorageBackend, _lanPostgreSqlConnectionString, historyFilePath);
+
+                    var loadedOrders = new List<OrderData>();
+                    if (_orderApplicationService.TryLoadHistory(out var repositoryOrders) && repositoryOrders.Count > 0)
+                        loadedOrders.AddRange(repositoryOrders);
+
+                    var postLoad = _orderApplicationService.ApplyHistoryPostLoad(
+                        loadedOrders,
+                        userName => NormalizeOrderUserNameForBootstrap(userName, usersSnapshot, defaultUserName),
+                        hashBackfillBudget: 32,
+                        onTopologyIssue: (order, issue) =>
+                            Logger.Warn($"TOPOLOGY | order={order?.Id} | {issue}"));
+
+                    return (loadedOrders, postLoad);
+                }).ConfigureAwait(true);
+
+                if (Disposing || IsDisposed)
+                    return;
+
+                _jsonHistoryFile = historyFilePath;
+                _orderHistory.Clear();
+                _orderHistory.AddRange(result.loadedOrders);
+
+                if (result.postLoad.Changed)
+                {
+                    foreach (var line in result.postLoad.MigrationLog)
+                        Logger.Info(line);
+                }
+
+                RebuildOrdersGrid();
+                InitializeOrdersViewsWarmupCoordinator();
+                QueueInitialArchiveRefresh();
+
+                _ordersDataBootstrapCompleted = true;
+                SetBottomStatus($"Заказов загружено: {_orderHistory.Count}");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"UI-BOOTSTRAP | orders-data-load-failed | {ex.Message}");
+                SetBottomStatus("Не удалось загрузить историю заказов");
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _ordersDataBootstrapInProgress, 0);
+            }
         }
 
         private void QueueInitialArchiveRefresh()
@@ -782,6 +851,27 @@ namespace Replica
         {
             Shown -= OrdersWorkspaceForm_ShownInitialArchiveRefresh;
             BeginInvoke((Action)(() => RefreshArchivedStatusesIfDue(force: true, rebuildGridIfChanged: false)));
+        }
+
+        private static string NormalizeOrderUserNameForBootstrap(
+            string? rawUserName,
+            IReadOnlyList<string> users,
+            string defaultUserName)
+        {
+            if (string.IsNullOrWhiteSpace(rawUserName))
+                return defaultUserName;
+
+            var normalized = rawUserName.Trim();
+            if (users == null || users.Count == 0)
+                return normalized;
+
+            foreach (var configuredUser in users)
+            {
+                if (string.Equals(configuredUser, normalized, StringComparison.OrdinalIgnoreCase))
+                    return configuredUser;
+            }
+
+            return normalized;
         }
 
         private void EnsureSearchDebounceTimer()
@@ -1047,6 +1137,12 @@ namespace Replica
             if (settingsForm.ShowDialog(this) != DialogResult.OK)
                 return;
 
+            var previousOrdersRootPath = _ordersRootPath;
+            var previousArchiveDoneSubfolder = _archiveDoneSubfolder;
+            var previousHistoryFilePath = _jsonHistoryFile;
+            var previousOrdersStorageBackend = _ordersStorageBackend;
+            var previousLanConnectionString = _lanPostgreSqlConnectionString;
+
             _ordersRootPath = settingsForm.OrdersRootPath;
             _tempRootPath = settingsForm.TempRootPath;
             _grandpaFolder = settingsForm.GrandpaPath;
@@ -1090,7 +1186,17 @@ namespace Replica
             var settingsSavedMessage = cacheRootChanged
                 ? "Настройки сохранены. Путь общего кэша превью изменен и будет полностью применен после перезапуска приложения."
                 : "Настройки сохранены";
-            RefreshArchivedStatuses(forceArchiveIndexRefresh: true, rebuildGridIfChanged: true);
+            var shouldReloadOrdersData =
+                !string.Equals(previousOrdersRootPath, _ordersRootPath, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(previousArchiveDoneSubfolder, _archiveDoneSubfolder, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(previousHistoryFilePath, _jsonHistoryFile, StringComparison.OrdinalIgnoreCase)
+                || previousOrdersStorageBackend != _ordersStorageBackend
+                || !string.Equals(previousLanConnectionString, _lanPostgreSqlConnectionString, StringComparison.Ordinal);
+
+            if (shouldReloadOrdersData)
+                QueueOrdersDataBootstrap(force: true);
+            else
+                RefreshArchivedStatusesIfDue(force: true, rebuildGridIfChanged: true);
             SetBottomStatus(settingsSavedMessage);
             MessageBox.Show(this, settingsSavedMessage, "OrdersWorkspaceForm", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
@@ -1123,6 +1229,11 @@ namespace Replica
         }
 
         private void SplitUserPanel2Paint(object? sender, PaintEventArgs e)
+        {
+
+        }
+
+        private void treeView1_AfterSelect(object sender, TreeViewEventArgs e)
         {
 
         }

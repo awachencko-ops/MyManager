@@ -41,6 +41,8 @@
             scMain = new SplitContainer();
             treeView1 = new TreeView();
             pnlUser = new Panel();
+            splitUser = new SplitContainer();
+            pictureBox5 = new PictureBox();
             pnlDocSpace = new Panel();
             tableLayoutPanel1 = new TableLayoutPanel();
             pnlTable = new Panel();
@@ -86,8 +88,6 @@
             tsbBrowse = new ToolStripButton();
             tsbConsole = new ToolStripButton();
             toolStripButton1 = new ToolStripButton();
-            splitUser = new SplitContainer();
-            pictureBox5 = new PictureBox();
             pnlSidebar.SuspendLayout();
             pnlDockLiterature.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)pictureBox4).BeginInit();
@@ -102,6 +102,10 @@
             scMain.Panel2.SuspendLayout();
             scMain.SuspendLayout();
             pnlUser.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)splitUser).BeginInit();
+            splitUser.Panel1.SuspendLayout();
+            splitUser.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)pictureBox5).BeginInit();
             tableLayoutPanel1.SuspendLayout();
             pnlTable.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)dgvJobs).BeginInit();
@@ -113,10 +117,6 @@
             pnlTray.SuspendLayout();
             statusStrip1.SuspendLayout();
             tsMainActions.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)splitUser).BeginInit();
-            splitUser.Panel1.SuspendLayout();
-            splitUser.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)pictureBox5).BeginInit();
             SuspendLayout();
             // 
             // pnlSidebar
@@ -233,6 +233,7 @@
             treeView1.Name = "treeView1";
             treeView1.Size = new Size(460, 1149);
             treeView1.TabIndex = 1;
+            treeView1.AfterSelect += treeView1_AfterSelect;
             // 
             // pnlUser
             // 
@@ -243,6 +244,34 @@
             pnlUser.Name = "pnlUser";
             pnlUser.Size = new Size(460, 75);
             pnlUser.TabIndex = 0;
+            // 
+            // splitUser
+            // 
+            splitUser.Dock = DockStyle.Fill;
+            splitUser.Location = new Point(0, 0);
+            splitUser.Name = "splitUser";
+            // 
+            // splitUser.Panel1
+            // 
+            splitUser.Panel1.AutoScroll = true;
+            splitUser.Panel1.Controls.Add(pictureBox5);
+            // 
+            // splitUser.Panel2
+            // 
+            splitUser.Panel2.Paint += SplitUserPanel2Paint;
+            splitUser.Size = new Size(460, 75);
+            splitUser.SplitterDistance = 75;
+            splitUser.TabIndex = 3;
+            // 
+            // pictureBox5
+            // 
+            pictureBox5.Dock = DockStyle.Fill;
+            pictureBox5.Image = (Image)resources.GetObject("pictureBox5.Image");
+            pictureBox5.Location = new Point(0, 0);
+            pictureBox5.Name = "pictureBox5";
+            pictureBox5.Size = new Size(75, 75);
+            pictureBox5.TabIndex = 0;
+            pictureBox5.TabStop = false;
             // 
             // pnlDocSpace
             // 
@@ -657,34 +686,6 @@
             toolStripButton1.Size = new Size(138, 29);
             toolStripButton1.Text = "Параметры";
             // 
-            // splitUser
-            // 
-            splitUser.Dock = DockStyle.Fill;
-            splitUser.Location = new Point(0, 0);
-            splitUser.Name = "splitUser";
-            // 
-            // splitUser.Panel1
-            // 
-            splitUser.Panel1.AutoScroll = true;
-            splitUser.Panel1.Controls.Add(pictureBox5);
-            // 
-            // splitUser.Panel2
-            // 
-            splitUser.Panel2.Paint += SplitUserPanel2Paint;
-            splitUser.Size = new Size(460, 75);
-            splitUser.SplitterDistance = 75;
-            splitUser.TabIndex = 3;
-            // 
-            // pictureBox5
-            // 
-            pictureBox5.Dock = DockStyle.Fill;
-            pictureBox5.Image = (Image)resources.GetObject("pictureBox5.Image");
-            pictureBox5.Location = new Point(0, 0);
-            pictureBox5.Name = "pictureBox5";
-            pictureBox5.Size = new Size(75, 75);
-            pictureBox5.TabIndex = 0;
-            pictureBox5.TabStop = false;
-            // 
             // OrdersWorkspaceForm
             // 
             AutoScaleDimensions = new SizeF(10F, 25F);
@@ -710,6 +711,10 @@
             ((System.ComponentModel.ISupportInitialize)scMain).EndInit();
             scMain.ResumeLayout(false);
             pnlUser.ResumeLayout(false);
+            splitUser.Panel1.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)splitUser).EndInit();
+            splitUser.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)pictureBox5).EndInit();
             tableLayoutPanel1.ResumeLayout(false);
             pnlTable.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)dgvJobs).EndInit();
@@ -725,10 +730,6 @@
             statusStrip1.PerformLayout();
             tsMainActions.ResumeLayout(false);
             tsMainActions.PerformLayout();
-            splitUser.Panel1.ResumeLayout(false);
-            ((System.ComponentModel.ISupportInitialize)splitUser).EndInit();
-            splitUser.ResumeLayout(false);
-            ((System.ComponentModel.ISupportInitialize)pictureBox5).EndInit();
             ResumeLayout(false);
         }
 
