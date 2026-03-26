@@ -76,6 +76,8 @@ namespace Replica
             var nextServerUsers = loadResult.ServerUsersByDisplayName.Count > 0
                 ? loadResult.ServerUsersByDisplayName
                 : BuildDefaultServerUsersMap(nextUsers);
+
+            RefreshCurrentUserProfile(forceRefresh);
             if (AreUserListsEqual(_filterUsers, nextUsers) && AreUserMappingsEqual(_serverUsersByDisplayName, nextServerUsers))
                 return;
 

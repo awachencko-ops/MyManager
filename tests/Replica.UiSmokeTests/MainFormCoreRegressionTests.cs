@@ -303,6 +303,24 @@ public sealed class MainFormCoreRegressionTests
     }
 
     [Fact]
+    public void SR12B_UserProfilePanel_ShowsCurrentUserAndRole()
+    {
+        MainFormTestHarness.RunWithIsolatedForm((form, _) =>
+        {
+            MainFormTestHarness.InvokePrivate(form, "ApplyCurrentUserProfile", "Andrew", "Администратор");
+
+            var splitUser = MainFormTestHarness.GetPrivateField<SplitContainer>(form, "splitUser");
+            var nameLabel = Assert.IsType<Label>(splitUser.Panel2.Controls.Find("lblUserProfileName", true).Single());
+            var roleLabel = Assert.IsType<Label>(splitUser.Panel2.Controls.Find("lblUserProfileRole", true).Single());
+            var picture = MainFormTestHarness.GetPrivateField<PictureBox>(form, "pictureBox5");
+
+            Assert.Equal("Andrew", nameLabel.Text);
+            Assert.Equal("Администратор", roleLabel.Text);
+            Assert.NotNull(picture.Image);
+        });
+    }
+
+    [Fact]
     public void SR13_GroupOrder_ExpandCollapse_ShowsAndHidesItemRows()
     {
         MainFormTestHarness.RunWithIsolatedForm((form, _) =>

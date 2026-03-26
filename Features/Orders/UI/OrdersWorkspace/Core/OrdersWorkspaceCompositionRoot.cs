@@ -5,12 +5,15 @@ namespace Replica;
 internal sealed class OrdersWorkspaceRuntimeServices
 {
     public OrdersWorkspaceRuntimeServices(
-        IOrderApplicationService orderApplicationService)
+        IOrderApplicationService orderApplicationService,
+        ILanApiIdentityService lanApiIdentityService)
     {
         OrderApplicationService = orderApplicationService ?? throw new ArgumentNullException(nameof(orderApplicationService));
+        LanApiIdentityService = lanApiIdentityService ?? throw new ArgumentNullException(nameof(lanApiIdentityService));
     }
 
     public IOrderApplicationService OrderApplicationService { get; }
+    public ILanApiIdentityService LanApiIdentityService { get; }
 }
 
 internal static class OrdersWorkspaceCompositionRoot
@@ -53,6 +56,7 @@ internal static class OrdersWorkspaceCompositionRoot
             lanOrderWriteCommandService: lanOrderWriteCommandService);
 
         return new OrdersWorkspaceRuntimeServices(
-            orderApplicationService: orderApplicationService);
+            orderApplicationService: orderApplicationService,
+            lanApiIdentityService: new LanApiIdentityService());
     }
 }

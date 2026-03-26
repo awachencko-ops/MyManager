@@ -30,6 +30,7 @@ namespace Replica
         private string _lanPostgreSqlConnectionString = AppSettings.DefaultLanPostgreSqlConnectionString;
         private string _lanApiBaseUrl = AppSettings.DefaultLanApiBaseUrl;
         private readonly IOrderApplicationService _orderApplicationService;
+        private readonly ILanApiIdentityService _lanApiIdentityService;
         private string _managerLogFilePath = AppSettings.DefaultManagerLogFilePath;
         private string _orderLogsFolderPath = AppSettings.DefaultOrderLogsFolderPath;
         private readonly List<OrderData> _orderHistory = [];
@@ -148,6 +149,10 @@ namespace Replica
         private Label? _serverHeaderTitleLabel;
         private Label? _serverHeaderStatusLabel;
         private string _currentUserName = string.Empty;
+        private string _currentUserRoleText = "Права не определены";
+        private Label? _userProfileNameLabel;
+        private Label? _userProfileRoleLabel;
+        private bool _currentUserProfileRefreshInProgress;
         private readonly HashSet<string> _selectedFilterStatuses = new(StringComparer.Ordinal);
         private readonly HashSet<string> _selectedFilterUsers = new(StringComparer.Ordinal);
         private string _orderNumberFilterText = string.Empty;
@@ -217,6 +222,7 @@ namespace Replica
         private Button? _receivedCalendarOkButton;
         private DateTimePicker? _receivedCalendarTargetPicker;
         private int _acknowledgedErrorCount;
+        private readonly Panel pnlServerHeader = new();
 
         private const int QueueCounterPillHeight = 22;
         private const int QueueCounterPillMinWidth = 22;

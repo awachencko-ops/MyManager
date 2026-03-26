@@ -36,9 +36,11 @@ namespace Replica
             _settingsProvider = settingsProvider ?? throw new ArgumentNullException(nameof(settingsProvider));
             var services = runtimeServices ?? throw new ArgumentNullException(nameof(runtimeServices));
             _orderApplicationService = services.OrderApplicationService;
+            _lanApiIdentityService = services.LanApiIdentityService;
             InitializeComponent();
             InitializeDockSidebar();
             InitializeStatusCellVisuals();
+            InitializeUserProfilePanel();
             LoadSettings();
             InitializeUsersDirectory();
             InitializeProcessor();
@@ -704,7 +706,10 @@ namespace Replica
             treeView1.Dock = DockStyle.Fill;
 
             var panel1Controls = scMain.Panel1.Controls;
-            if (!panel1Controls.Contains(pnlServerHeader) || !panel1Controls.Contains(treeView1))
+            if (!panel1Controls.Contains(pnlServerHeader))
+                panel1Controls.Add(pnlServerHeader);
+
+            if (!panel1Controls.Contains(treeView1))
                 return;
 
             // For WinForms docking, Fill should be earlier in z-order than Top.
@@ -1014,6 +1019,8 @@ namespace Replica
 
             Logger.LogFilePath = _managerLogFilePath;
             InitializeProcessor();
+            RefreshUsersDirectory(forceRefresh: true, refreshGrid: true);
+            RefreshCurrentUserProfile(forceRefresh: true);
             RefreshTrayIndicators();
             var settingsSavedMessage = cacheRootChanged
                 ? "Настройки сохранены. Путь общего кэша превью изменен и будет полностью применен после перезапуска приложения."
@@ -1050,7 +1057,7 @@ namespace Replica
             }
         }
 
-        private void splitServer_Panel2_Paint(object sender, PaintEventArgs e)
+        private void splitServer_Panel2_Paint(object? sender, PaintEventArgs e)
         {
 
         }
