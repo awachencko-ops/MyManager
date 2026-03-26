@@ -27,12 +27,7 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
     private const string StopCommandName = "stop";
     private const int MaxIdempotencyKeyLength = 128;
 
-    private readonly List<SharedUser> _fallbackUsers =
-    [
-        new() { Id = "u-admin", Name = "Administrator", Role = "Admin", IsActive = true },
-        new() { Id = "u-operator-1", Name = "Operator 1", Role = "Operator", IsActive = true },
-        new() { Id = "u-operator-2", Name = "Operator 2", Role = "Operator", IsActive = true }
-    ];
+    private readonly List<SharedUser> _fallbackUsers = ReplicaApiBootstrapUsers.GetDefaultUsers().ToList();
 
     public EfCoreLanOrderStore(IDbContextFactory<ReplicaDbContext> dbContextFactory)
     {

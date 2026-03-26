@@ -68,6 +68,15 @@ if (string.Equals(effectiveStoreMode, "PostgreSql", StringComparison.OrdinalIgno
     db.Database.Migrate();
 }
 
+using (var bootstrapScope = app.Services.CreateScope())
+{
+    var bootstrapStore = bootstrapScope.ServiceProvider.GetRequiredService<ILanOrderStore>();
+    var bootstrapLogger = bootstrapScope.ServiceProvider
+        .GetRequiredService<ILoggerFactory>()
+        .CreateLogger("Replica.Api.Bootstrap");
+    ReplicaApiBootstrapUsers.EnsurePresent(bootstrapStore, builder.Configuration, bootstrapLogger);
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();

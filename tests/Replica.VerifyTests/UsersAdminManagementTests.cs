@@ -46,6 +46,14 @@ public sealed class UsersAdminManagementTests
     public void UpsertUser_RejectsRemovingLastActiveAdmin()
     {
         var store = new InMemoryLanOrderStore();
+        var demoteAndrew = store.UpsertUser(new UpsertUserRequest
+        {
+            Name = "Andrew",
+            Role = ReplicaApiRoles.Operator,
+            IsActive = true
+        }, actor: "Administrator");
+
+        Assert.True(demoteAndrew.IsSuccess);
 
         var result = store.UpsertUser(new UpsertUserRequest
         {

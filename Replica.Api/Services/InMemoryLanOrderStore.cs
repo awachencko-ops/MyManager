@@ -16,12 +16,7 @@ public sealed class InMemoryLanOrderStore : ILanOrderStore
     private readonly List<SharedOrderEvent> _events = new();
     private long _eventSequence;
 
-    private readonly List<SharedUser> _users =
-    [
-        new() { Id = "u-admin", Name = "Administrator", Role = "Admin", IsActive = true },
-        new() { Id = "u-operator-1", Name = "Operator 1", Role = "Operator", IsActive = true },
-        new() { Id = "u-operator-2", Name = "Operator 2", Role = "Operator", IsActive = true }
-    ];
+    private readonly List<SharedUser> _users = ReplicaApiBootstrapUsers.GetDefaultUsers().ToList();
 
     public IReadOnlyList<SharedUser> GetUsers(bool includeInactive = false)
     {
