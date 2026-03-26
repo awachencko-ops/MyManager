@@ -497,6 +497,7 @@ namespace Replica
                 preferredOrderInternalId = ExtractOrderInternalIdFromTag(dgvJobs.CurrentRow?.Tag?.ToString());
 
             var nextTiles = new List<PrintTileTag>();
+            var ordersByInternalId = OrderGridLogic.BuildOrderIndex(_orderHistory);
             foreach (DataGridViewRow row in dgvJobs.Rows)
             {
                 if (row.IsNewRow || !row.Visible)
@@ -510,7 +511,7 @@ namespace Replica
                 if (string.IsNullOrWhiteSpace(orderInternalId))
                     continue;
 
-                var order = FindOrderByInternalId(orderInternalId);
+                var order = OrderGridLogic.FindOrderByInternalId(ordersByInternalId, orderInternalId);
                 if (order == null)
                     continue;
 

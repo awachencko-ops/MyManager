@@ -66,6 +66,31 @@ namespace Replica
             return orderHistory.FirstOrDefault(x => string.Equals(x.InternalId, internalId, StringComparison.Ordinal));
         }
 
+        public static IReadOnlyDictionary<string, OrderData> BuildOrderIndex(IEnumerable<OrderData> orderHistory)
+        {
+            var index = new Dictionary<string, OrderData>(StringComparer.Ordinal);
+            if (orderHistory == null)
+                return index;
+
+            foreach (var order in orderHistory)
+            {
+                if (order == null || string.IsNullOrWhiteSpace(order.InternalId))
+                    continue;
+
+                index[order.InternalId] = order;
+            }
+
+            return index;
+        }
+
+        public static OrderData? FindOrderByInternalId(IReadOnlyDictionary<string, OrderData> ordersByInternalId, string? internalId)
+        {
+            if (ordersByInternalId == null || string.IsNullOrWhiteSpace(internalId))
+                return null;
+
+            return ordersByInternalId.TryGetValue(internalId, out var order) ? order : null;
+        }
+
         public static void TryRestoreSelectedRowByTag(DataGridView grid, int focusColumnIndex, string selectedTag)
         {
             if (grid == null || string.IsNullOrWhiteSpace(selectedTag))

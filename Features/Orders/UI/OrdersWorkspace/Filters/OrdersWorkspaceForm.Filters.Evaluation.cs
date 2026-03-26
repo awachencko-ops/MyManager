@@ -189,6 +189,7 @@ namespace Replica
             var hasOrderNoFilter = !string.IsNullOrWhiteSpace(_orderNumberFilterText);
             var selectedQueueStatus = GetSelectedQueueStatusName();
             var orderVisibilityByInternalId = new Dictionary<string, bool>(StringComparer.Ordinal);
+            var ordersByInternalId = OrderGridLogic.BuildOrderIndex(_orderHistory);
 
             foreach (DataGridViewRow row in dgvJobs.Rows)
             {
@@ -204,7 +205,7 @@ namespace Replica
                 var queueMatches = MatchesQueueStatus(selectedQueueStatus, normalizedStatus);
                 var statusMatches = !hasSelectedStatuses || (normalizedStatus != null && _selectedFilterStatuses.Contains(normalizedStatus));
                 var orderInternalId = ExtractOrderInternalIdFromTag(rowTag);
-                var order = FindOrderByInternalId(orderInternalId);
+                var order = OrderGridLogic.FindOrderByInternalId(ordersByInternalId, orderInternalId);
                 var orderUserName = NormalizeOrderUserName(order?.UserName);
                 var userMatches = !hasSelectedUsers || _selectedFilterUsers.Contains(orderUserName);
                 var orderNoValue = row.Cells[colOrderNumber.Index].Value?.ToString();
@@ -431,6 +432,7 @@ namespace Replica
         private Dictionary<string, int> GetCountsByFilterUsers()
         {
             var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+            var ordersByInternalId = OrderGridLogic.BuildOrderIndex(_orderHistory);
             foreach (var userName in _filterUsers)
                 counts[userName] = 0;
 
@@ -444,7 +446,7 @@ namespace Replica
                     continue;
 
                 var orderInternalId = ExtractOrderInternalIdFromTag(rowTag);
-                var order = FindOrderByInternalId(orderInternalId);
+                var order = OrderGridLogic.FindOrderByInternalId(ordersByInternalId, orderInternalId);
                 var orderUserName = NormalizeOrderUserName(order?.UserName);
                 if (!counts.ContainsKey(orderUserName))
                     counts[orderUserName] = 0;
