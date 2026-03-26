@@ -178,6 +178,18 @@ namespace Replica
             if (!EnsureServerWriteAllowed("Создание заказа"))
                 return;
 
+            if (string.IsNullOrWhiteSpace(order.Id))
+            {
+                SetBottomStatus("Создание заказа не выполнено: пустой номер");
+                MessageBox.Show(
+                    this,
+                    "Номер заказа обязателен. Укажите номер и повторите создание.",
+                    "Создание заказа",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+                return;
+            }
+
             if (ShouldUseLanRunApi())
             {
                 var writeResult = _orderApplicationService
@@ -633,7 +645,8 @@ namespace Replica
                     if (order == null)
                         return;
 
-                    SetOrderStatus(order, status, OrderStatusSourceNames.Processor, reason, persistHistory: false, rebuildGrid: true);
+                    var persistStatus = ShouldUseLanRunApi();
+                    SetOrderStatus(order, status, OrderStatusSourceNames.Processor, reason, persistHistory: persistStatus, rebuildGrid: true);
                 }
 
                 if (InvokeRequired)

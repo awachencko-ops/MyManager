@@ -141,7 +141,13 @@ namespace Replica
                 return Processing;
             }
 
+            if (value.Contains("processing", StringComparison.OrdinalIgnoreCase))
+                return Processing;
+
             if (value.Contains("ожид", StringComparison.OrdinalIgnoreCase))
+                return Waiting;
+
+            if (value.Contains("waiting", StringComparison.OrdinalIgnoreCase))
                 return Waiting;
 
             if (value.Contains("групп", StringComparison.OrdinalIgnoreCase))
@@ -150,7 +156,16 @@ namespace Replica
             if (value.Contains("папк", StringComparison.OrdinalIgnoreCase))
                 return Waiting;
 
+            if (value.Contains("cancel", StringComparison.OrdinalIgnoreCase))
+                return Cancelled;
+
+            if (value.Contains("error", StringComparison.OrdinalIgnoreCase))
+                return Error;
+
             if (value.Contains("обработано", StringComparison.OrdinalIgnoreCase))
+                return Processed;
+
+            if (value.Contains("processed", StringComparison.OrdinalIgnoreCase))
                 return Processed;
 
             if (value.Contains("готово", StringComparison.OrdinalIgnoreCase)
@@ -159,6 +174,15 @@ namespace Replica
             {
                 return Completed;
             }
+
+            if (value.Contains("completed", StringComparison.OrdinalIgnoreCase)
+                || value.Contains("printed", StringComparison.OrdinalIgnoreCase))
+            {
+                return Completed;
+            }
+
+            if (value.Contains("archiv", StringComparison.OrdinalIgnoreCase))
+                return Archived;
 
             return null;
         }

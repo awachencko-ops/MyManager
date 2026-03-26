@@ -267,7 +267,7 @@ namespace Replica
             var isExpanded = isMultiOrder && _expandedOrderIds.Contains(order.InternalId);
             var normalizedStatus = NormalizeStatus(order.Status) ?? (order.Status ?? string.Empty).Trim();
             if (string.IsNullOrWhiteSpace(normalizedStatus))
-                normalizedStatus = WorkflowStatusNames.Processing;
+                normalizedStatus = WorkflowStatusNames.Waiting;
             var displayStatus = isMultiOrder
                 ? WorkflowStatusNames.Group
                 : normalizedStatus;

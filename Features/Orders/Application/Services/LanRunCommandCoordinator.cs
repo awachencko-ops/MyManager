@@ -9,6 +9,9 @@ namespace Replica;
 
 public sealed class LanRunCommandCoordinator
 {
+    private const string RunAlreadyActiveError = "run already active";
+    private const string RunIsNotActiveError = "run is not active";
+
     private readonly ILanOrderRunApiGateway _lanApiGateway;
 
     public LanRunCommandCoordinator(ILanOrderRunApiGateway lanApiGateway)
@@ -44,6 +47,16 @@ public sealed class LanRunCommandCoordinator
                 order.StorageVersion,
                 actor,
                 cancellationToken);
+
+            if (ShouldAttemptStaleRunRecovery(order, apiResult))
+            {
+                apiResult = await TryRecoverStaleRunAsync(
+                    order,
+                    lanApiBaseUrl,
+                    actor,
+                    apiResult,
+                    cancellationToken);
+            }
 
             if (apiResult.IsSuccess)
             {
@@ -97,6 +110,78 @@ public sealed class LanRunCommandCoordinator
             order.StorageVersion = apiResult.CurrentVersion;
 
         return LanRunStopCommandResult.FromApi(apiResult);
+    }
+
+    private async Task<LanOrderRunApiResult> TryRecoverStaleRunAsync(
+        OrderData order,
+        string lanApiBaseUrl,
+        string actor,
+        LanOrderRunApiResult initialConflict,
+        CancellationToken cancellationToken)
+    {
+        if (initialConflict.CurrentVersion > 0)
+            order.StorageVersion = initialConflict.CurrentVersion;
+
+        var stopResult = await _lanApiGateway.StopRunAsync(
+            lanApiBaseUrl,
+            order.InternalId,
+            order.StorageVersion,
+            actor,
+            cancellationToken);
+
+        if (stopResult.IsNotFound)
+            return stopResult;
+
+        if (stopResult.CurrentVersion > 0)
+            order.StorageVersion = stopResult.CurrentVersion;
+
+        if (stopResult.IsSuccess)
+            ApplyLanApiOrderSnapshot(order, stopResult.Order);
+
+        var shouldRetryStart = stopResult.IsSuccess
+            || stopResult.IsConflict
+            || (stopResult.IsBadRequest && ContainsToken(stopResult.Error, RunIsNotActiveError));
+
+        if (!shouldRetryStart)
+            return initialConflict;
+
+        var retryStartResult = await _lanApiGateway.StartRunAsync(
+            lanApiBaseUrl,
+            order.InternalId,
+            order.StorageVersion,
+            actor,
+            cancellationToken);
+
+        if (retryStartResult.CurrentVersion > 0)
+            order.StorageVersion = retryStartResult.CurrentVersion;
+
+        return retryStartResult;
+    }
+
+    private static bool ShouldAttemptStaleRunRecovery(OrderData order, LanOrderRunApiResult apiResult)
+    {
+        if (order == null || apiResult == null)
+            return false;
+
+        if (!apiResult.IsConflict || !ContainsToken(apiResult.Error, RunAlreadyActiveError))
+            return false;
+
+        return !IsRunStatusActive(order.Status);
+    }
+
+    private static bool IsRunStatusActive(string? status)
+    {
+        var normalized = WorkflowStatusNames.Normalize(status);
+        return string.Equals(normalized, WorkflowStatusNames.Processing, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(normalized, WorkflowStatusNames.Building, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool ContainsToken(string? value, string token)
+    {
+        if (string.IsNullOrWhiteSpace(value) || string.IsNullOrWhiteSpace(token))
+            return false;
+
+        return value.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0;
     }
 
     private static void ApplyLanApiOrderSnapshot(OrderData localOrder, SharedOrder? apiOrder)
