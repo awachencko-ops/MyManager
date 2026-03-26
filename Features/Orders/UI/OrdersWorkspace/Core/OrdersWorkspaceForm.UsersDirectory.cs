@@ -32,7 +32,22 @@ namespace Replica
                 ? _filterUsers
                 : _users;
 
-            var loadResult = UsersDirectoryService.Load(_usersSourceFilePath, _usersCacheFilePath, fallbackUsers);
+            UsersDirectoryService.LoadResult loadResult;
+            if (TryLoadUsersDirectoryFromLanApi(out var apiUsers, out var apiServerUsers, out var apiStatusText))
+            {
+                loadResult = new UsersDirectoryService.LoadResult
+                {
+                    Users = apiUsers,
+                    ServerUsersByDisplayName = apiServerUsers,
+                    LoadedFromSource = true,
+                    LoadedFromCache = false,
+                    StatusText = apiStatusText
+                };
+            }
+            else
+            {
+                loadResult = UsersDirectoryService.Load(_usersSourceFilePath, _usersCacheFilePath, fallbackUsers);
+            }
             _usersLoadedFromCache = loadResult.LoadedFromCache;
             _usersDirectoryStatusText = loadResult.StatusText;
 
@@ -62,6 +77,74 @@ namespace Replica
                 HandleOrdersGridChanged();
             else
                 RefreshUserFilterChecklist();
+        }
+
+        private bool TryLoadUsersDirectoryFromLanApi(
+            out IReadOnlyList<string> users,
+            out IReadOnlyDictionary<string, string> serverUsersByDisplayName,
+            out string statusText)
+        {
+            users = Array.Empty<string>();
+            serverUsersByDisplayName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            statusText = string.Empty;
+
+            if (_ordersStorageBackend != OrdersStorageMode.LanPostgreSql
+                || !ShouldUseLanRunApi()
+                || !TryResolveLanApiBaseUri(_lanApiBaseUrl, out var baseUri))
+            {
+                return false;
+            }
+
+            try
+            {
+                var usersUri = new Uri(baseUri, "api/users");
+                using var request = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Get, usersUri);
+                using var timeoutCts = new System.Threading.CancellationTokenSource(TimeSpan.FromMilliseconds(1200));
+                using var response = _lanStatusHttpClient
+                    .SendAsync(request, timeoutCts.Token)
+                    .GetAwaiter()
+                    .GetResult();
+
+                if (!response.IsSuccessStatusCode)
+                    return false;
+
+                var payload = response.Content
+                    .ReadAsStringAsync(timeoutCts.Token)
+                    .GetAwaiter()
+                    .GetResult();
+                var apiUsers = System.Text.Json.JsonSerializer.Deserialize<List<LanApiUserContract>>(
+                    payload,
+                    new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)
+                    {
+                        PropertyNameCaseInsensitive = true
+                    }) ?? new List<LanApiUserContract>();
+
+                var userList = new List<string>();
+                var userMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var apiUser in apiUsers)
+                {
+                    if (apiUser == null || !apiUser.IsActive || string.IsNullOrWhiteSpace(apiUser.Name))
+                        continue;
+
+                    var normalizedName = apiUser.Name.Trim();
+                    if (!userMap.ContainsKey(normalizedName))
+                        userList.Add(normalizedName);
+
+                    userMap[normalizedName] = normalizedName;
+                }
+
+                if (userList.Count == 0)
+                    return false;
+
+                users = userList;
+                serverUsersByDisplayName = userMap;
+                statusText = $"Пользователи: API ({usersUri.Host}:{usersUri.Port})";
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private string GetDefaultUserName()
@@ -179,6 +262,12 @@ namespace Replica
             }
 
             return true;
+        }
+
+        private sealed class LanApiUserContract
+        {
+            public string Name { get; set; } = string.Empty;
+            public bool IsActive { get; set; }
         }
     }
 }

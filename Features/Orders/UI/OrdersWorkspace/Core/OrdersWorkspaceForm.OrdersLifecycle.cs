@@ -857,6 +857,13 @@ namespace Replica
                 return serverUserName.Trim();
             }
 
+            var fallbackDisplayName = GetDefaultUserName();
+            if (_serverUsersByDisplayName.TryGetValue(fallbackDisplayName, out var fallbackServerUserName) &&
+                !string.IsNullOrWhiteSpace(fallbackServerUserName))
+            {
+                return fallbackServerUserName.Trim();
+            }
+
             return UserIdentityResolver.ResolveServerUserName(displayName);
         }
 

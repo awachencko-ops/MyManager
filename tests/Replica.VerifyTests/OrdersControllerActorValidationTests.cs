@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Replica.Api.Contracts;
 using Replica.Api.Controllers;
@@ -31,7 +32,7 @@ public sealed class OrdersControllerActorValidationTests
     {
         var store = new StubLanOrderStore();
         store.Users.Add(new SharedUser { Name = "operator1", IsActive = true });
-        var controller = CreateController(store, actor: "operator2");
+        var controller = CreateController(store, actor: "operator2", strictActorValidation: true);
 
         var result = controller.CreateOrder(new CreateOrderRequest { OrderNumber = "1002" });
 
@@ -44,7 +45,7 @@ public sealed class OrdersControllerActorValidationTests
     {
         var store = new StubLanOrderStore();
         store.Users.Add(new SharedUser { Name = "operator1", IsActive = false });
-        var controller = CreateController(store, actor: "operator1");
+        var controller = CreateController(store, actor: "operator1", strictActorValidation: true);
 
         var result = controller.CreateOrder(new CreateOrderRequest { OrderNumber = "1003" });
 
@@ -98,9 +99,36 @@ public sealed class OrdersControllerActorValidationTests
         Assert.Equal("Andrew", order.CreatedById);
     }
 
-    private static OrdersController CreateController(StubLanOrderStore store, string? actor = null, string? encodedActor = null)
+    [Fact]
+    public void CreateOrder_WithUnknownActorAndKnownUsers_NonStrict_Allows()
     {
-        var controller = new OrdersController(store, NullLogger<OrdersController>.Instance)
+        var store = new StubLanOrderStore();
+        store.Users.Add(new SharedUser { Name = "operator1", IsActive = true });
+        var controller = CreateController(store, actor: "operator2", strictActorValidation: false);
+
+        var result = controller.CreateOrder(new CreateOrderRequest { OrderNumber = "1007" });
+
+        var created = Assert.IsType<CreatedAtActionResult>(result.Result);
+        var order = Assert.IsType<SharedOrder>(created.Value);
+        Assert.Equal("operator2", store.LastActor);
+        Assert.Equal("operator2", order.CreatedByUser);
+        Assert.Equal("operator2", order.CreatedById);
+    }
+
+    private static OrdersController CreateController(
+        StubLanOrderStore store,
+        string? actor = null,
+        string? encodedActor = null,
+        bool strictActorValidation = false)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ReplicaApi:StrictActorValidation"] = strictActorValidation ? "true" : "false"
+            })
+            .Build();
+
+        var controller = new OrdersController(store, NullLogger<OrdersController>.Instance, configuration)
         {
             ControllerContext = new ControllerContext
             {

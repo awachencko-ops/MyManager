@@ -175,15 +175,14 @@ public sealed class LanOrderRunApiGateway : ILanOrderRunApiGateway
             return;
 
         var normalizedActor = actor.Trim();
+        request.Headers.TryAddWithoutValidation(CurrentUserHeaderCodec.HeaderName, normalizedActor);
+
         if (CurrentUserHeaderCodec.RequiresEncoding(normalizedActor))
         {
             request.Headers.TryAddWithoutValidation(
                 CurrentUserHeaderCodec.EncodedHeaderName,
                 CurrentUserHeaderCodec.Encode(normalizedActor));
-            return;
         }
-
-        request.Headers.TryAddWithoutValidation(CurrentUserHeaderCodec.HeaderName, normalizedActor);
     }
 
     private static bool TryBuildCommandUri(string apiBaseUrl, string orderInternalId, string command, out Uri? requestUri)

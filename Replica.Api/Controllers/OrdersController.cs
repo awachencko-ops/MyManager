@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using Replica.Api.Contracts;
 using Replica.Api.Infrastructure;
 using Replica.Api.Services;
@@ -25,11 +26,18 @@ public sealed class OrdersController : ControllerBase
     private const string StopCommandName = "stop";
     private readonly ILanOrderStore _store;
     private readonly ILogger<OrdersController> _logger;
+    private readonly bool _strictActorValidation;
 
     public OrdersController(ILanOrderStore store, ILogger<OrdersController> logger)
+        : this(store, logger, configuration: null)
+    {
+    }
+
+    public OrdersController(ILanOrderStore store, ILogger<OrdersController> logger, IConfiguration? configuration)
     {
         _store = store;
         _logger = logger;
+        _strictActorValidation = configuration?.GetValue<bool?>("ReplicaApi:StrictActorValidation") ?? false;
     }
 
     [HttpGet]
@@ -285,6 +293,15 @@ public sealed class OrdersController : ControllerBase
             string.Equals(user.Name.Trim(), actorCandidate, StringComparison.OrdinalIgnoreCase));
         if (matchedUser == null || !matchedUser.IsActive)
         {
+            if (!_strictActorValidation)
+            {
+                _logger.LogWarning(
+                    "Write request actor {Actor} is not present in active users list. Allowing because strict actor validation is disabled.",
+                    actorCandidate);
+                actor = actorCandidate.Trim();
+                return true;
+            }
+
             _logger.LogWarning("Write request rejected for actor {Actor}: unknown or inactive user.", actorCandidate);
             validationError = StatusCode(StatusCodes.Status403Forbidden, new { error = "actor is not allowed" });
             return false;

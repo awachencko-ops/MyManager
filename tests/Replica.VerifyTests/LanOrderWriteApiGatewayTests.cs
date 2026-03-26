@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -281,20 +281,22 @@ public sealed class LanOrderWriteApiGatewayTests
             }));
 
         var gateway = new LanOrderWriteApiGateway(new HttpClient(handler));
+        const string actorName = "\u0421\u0435\u0440\u0433\u0435\u0439";
         var result = await gateway.CreateOrderAsync(
             "http://localhost:5000/",
             new LanCreateOrderRequest
             {
                 OrderNumber = "1007",
-                UserName = "Сергей"
+                UserName = actorName
             },
-            actor: "Сергей");
+            actor: actorName);
 
         Assert.True(result.IsSuccess);
         Assert.NotNull(handler.LastRequest);
-        Assert.False(handler.LastRequest!.Headers.TryGetValues(CurrentUserHeaderCodec.HeaderName, out _));
+        Assert.True(handler.LastRequest!.Headers.TryGetValues(CurrentUserHeaderCodec.HeaderName, out var plainActors));
         Assert.True(handler.LastRequest.Headers.TryGetValues(CurrentUserHeaderCodec.EncodedHeaderName, out var encodedActors));
-        Assert.Equal("Сергей", CurrentUserHeaderCodec.TryDecode(encodedActors.Single(), out var actor) ? actor : string.Empty);
+        Assert.True(CurrentUserHeaderCodec.TryDecode(encodedActors.Single(), out var actor));
+        Assert.Equal(actor, plainActors.Single());
     }
 
     [Fact]
@@ -332,3 +334,4 @@ public sealed class LanOrderWriteApiGatewayTests
         }
     }
 }
+

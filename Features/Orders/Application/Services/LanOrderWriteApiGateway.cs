@@ -392,15 +392,14 @@ public sealed class LanOrderWriteApiGateway : ILanOrderWriteApiGateway
             return;
 
         var normalizedActor = actor.Trim();
+        request.Headers.TryAddWithoutValidation(CurrentUserHeaderCodec.HeaderName, normalizedActor);
+
         if (CurrentUserHeaderCodec.RequiresEncoding(normalizedActor))
         {
             request.Headers.TryAddWithoutValidation(
                 CurrentUserHeaderCodec.EncodedHeaderName,
                 CurrentUserHeaderCodec.Encode(normalizedActor));
-            return;
         }
-
-        request.Headers.TryAddWithoutValidation(CurrentUserHeaderCodec.HeaderName, normalizedActor);
     }
 
     private static SharedOrder? DeserializeOrder(string payload)
