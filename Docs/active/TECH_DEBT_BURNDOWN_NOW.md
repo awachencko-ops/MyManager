@@ -101,8 +101,9 @@
     - Introduced typed side-effects plan (`OrderRunUiEffectsPlan`) for post-run/post-stop UI actions (`tray/save-history/grid-refresh/action-buttons`):
       - Run flow now applies prepared plans (`BuildRunPostStatusApplyUiEffectsPlan`, `BuildRunPerOrderCompletionUiEffectsPlan`, `BuildRunPostExecutionUiEffectsPlan`) instead of hardcoded side-effect branches.
       - Stop flow now applies `BuildStopPostPhaseUiEffectsPlan(stopPhase, stopUiFeedback)` for tray/buttons updates.
+    - Consolidated run/stop feedback rendering in `OrdersWorkspaceForm` via dedicated render-pipeline methods (`RenderRunStartUiFeedback`, `RenderRunStartProgressUiFeedback`, `RenderRunCompletionUiFeedback`, `RenderRunStopUiFeedback`) to remove repeated `SetBottomStatus/ShowDialog/ApplyLogs` branches from workflow methods.
   - Validation:
-    - `dotnet build Replica.csproj -c Debug` passed.
+    - `dotnet build Replica.csproj -c Release` passed.
     - `dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj -c Release --filter \"OrderStatusTransitionServiceTests\"` passed (5/5).
     - `dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj -c Release --filter \"OrderRunFeedbackServiceTests|OrderApplicationServiceTests\"` passed (35/35).
 

@@ -887,8 +887,7 @@ namespace Replica
             if (selectedOrders.Count == 0)
             {
                 var selectionUiFeedback = _orderApplicationService.BuildRunSelectionRequiredUiFeedback();
-                SetBottomStatus(selectionUiFeedback.BottomStatus);
-                ShowOrderRunFeedbackDialog(selectionUiFeedback.Dialog);
+                RenderRunStartUiFeedback(selectionUiFeedback);
                 return;
             }
 
@@ -913,11 +912,8 @@ namespace Replica
 
             var runPreparation = startPhase.Preparation;
             var startUiFeedback = _orderApplicationService.BuildRunStartUiFeedback(startPhase);
-            ApplyOrderRunFeedbackLogs(startUiFeedback.Logs);
-            if (startUiFeedback.ShouldAbort)
+            if (!RenderRunStartUiFeedback(startUiFeedback))
             {
-                SetBottomStatus(startUiFeedback.BottomStatus);
-                ShowOrderRunFeedbackDialog(startUiFeedback.Dialog);
                 return;
             }
 
@@ -957,8 +953,7 @@ namespace Replica
                 runnableOrders.Count,
                 runPlan,
                 serverSkipped);
-            SetBottomStatus(startProgressUiFeedback.BottomStatus);
-            ShowOrderRunFeedbackDialog(startProgressUiFeedback.Dialog);
+            RenderRunStartProgressUiFeedback(startProgressUiFeedback);
 
             var runExecutionResult = await _orderApplicationService.ExecuteRunAsync(
                 runSessions,
@@ -975,9 +970,7 @@ namespace Replica
                 runExecutionResult.Errors,
                 runnableOrders.Count,
                 GetOrderDisplayId);
-            if (!string.IsNullOrWhiteSpace(completionUiFeedback.BottomStatus))
-                SetBottomStatus(completionUiFeedback.BottomStatus);
-            ShowOrderRunFeedbackDialog(completionUiFeedback.Dialog);
+            RenderRunCompletionUiFeedback(completionUiFeedback);
 
             ApplyOrderRunFeedbackLogs(
                 _orderApplicationService.BuildRunCommandFinishLifecycleUiFeedback(
@@ -994,8 +987,7 @@ namespace Replica
             if (order == null)
             {
                 var selectionUiFeedback = _orderApplicationService.BuildRunStopSelectionRequiredUiFeedback();
-                SetBottomStatus(selectionUiFeedback.BottomStatus);
-                ShowOrderRunFeedbackDialog(selectionUiFeedback.Dialog);
+                RenderRunStopUiFeedback(stopPhase: null, selectionUiFeedback);
                 return;
             }
 
@@ -1033,10 +1025,52 @@ namespace Replica
             }
 
             var stopUiFeedback = _orderApplicationService.BuildRunStopUiFeedback(stopPhase, GetOrderDisplayId(order));
-            ApplyOrderRunFeedbackLogs(stopUiFeedback.Logs);
-            SetBottomStatus(stopUiFeedback.BottomStatus);
-            ShowOrderRunFeedbackDialog(stopUiFeedback.Dialog);
-            ApplyOrderRunUiEffects(_orderApplicationService.BuildStopPostPhaseUiEffectsPlan(stopPhase, stopUiFeedback));
+            RenderRunStopUiFeedback(stopPhase, stopUiFeedback);
+        }
+
+        private bool RenderRunStartUiFeedback(OrderRunStartUiFeedback feedback)
+        {
+            if (feedback == null)
+                return true;
+
+            ApplyOrderRunFeedbackLogs(feedback.Logs);
+            if (!string.IsNullOrWhiteSpace(feedback.BottomStatus))
+                SetBottomStatus(feedback.BottomStatus);
+            ShowOrderRunFeedbackDialog(feedback.Dialog);
+            return !feedback.ShouldAbort;
+        }
+
+        private void RenderRunStartProgressUiFeedback(OrderRunStartProgressUiFeedback feedback)
+        {
+            if (feedback == null)
+                return;
+
+            if (!string.IsNullOrWhiteSpace(feedback.BottomStatus))
+                SetBottomStatus(feedback.BottomStatus);
+            ShowOrderRunFeedbackDialog(feedback.Dialog);
+        }
+
+        private void RenderRunCompletionUiFeedback(OrderRunCompletionUiFeedback feedback)
+        {
+            if (feedback == null)
+                return;
+
+            if (!string.IsNullOrWhiteSpace(feedback.BottomStatus))
+                SetBottomStatus(feedback.BottomStatus);
+            ShowOrderRunFeedbackDialog(feedback.Dialog);
+        }
+
+        private void RenderRunStopUiFeedback(OrderRunStopPhaseResult? stopPhase, OrderRunStopUiFeedback feedback)
+        {
+            if (feedback == null)
+                return;
+
+            ApplyOrderRunFeedbackLogs(feedback.Logs);
+            if (!string.IsNullOrWhiteSpace(feedback.BottomStatus))
+                SetBottomStatus(feedback.BottomStatus);
+            ShowOrderRunFeedbackDialog(feedback.Dialog);
+            if (stopPhase != null)
+                ApplyOrderRunUiEffects(_orderApplicationService.BuildStopPostPhaseUiEffectsPlan(stopPhase, feedback));
         }
 
         private void ApplyOrderRunStatusMutation(OrderData order, OrderRunStatusUiMutation mutation)
