@@ -6,7 +6,8 @@ namespace Replica.Api.Services;
 
 public interface ILanOrderStore
 {
-    IReadOnlyList<SharedUser> GetUsers();
+    IReadOnlyList<SharedUser> GetUsers(bool includeInactive = false);
+    UserOperationResult UpsertUser(UpsertUserRequest request, string actor);
     IReadOnlyList<SharedOrder> GetOrders(string createdBy);
     bool TryGetOrder(string orderId, out SharedOrder order);
     SharedOrder CreateOrder(CreateOrderRequest request, string actor);

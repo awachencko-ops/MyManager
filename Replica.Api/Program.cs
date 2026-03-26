@@ -11,6 +11,7 @@ var replicaDbConnectionString = builder.Configuration.GetConnectionString("Repli
 var configuredStoreMode = builder.Configuration["ReplicaApi:StoreMode"]?.Trim();
 var configuredBindAddress = builder.Configuration["ReplicaApi:BindAddress"]?.Trim();
 var configuredPort = builder.Configuration.GetValue<int?>("ReplicaApi:Port") ?? 5000;
+var effectiveAuthMode = ReplicaApiAuthConfiguration.ResolveMode(builder.Configuration);
 if (configuredPort <= 0 || configuredPort > 65535)
     configuredPort = 5000;
 
@@ -83,7 +84,8 @@ app.MapGet("/live", () => Results.Ok(new
 {
     status = "live",
     service = "Replica.Api",
-    mode = effectiveStoreMode
+    mode = effectiveStoreMode,
+    authMode = effectiveAuthMode
 }));
 
 app.MapGet("/ready", async (IServiceProvider services, ILanOrderStore store) =>
@@ -95,7 +97,8 @@ app.MapGet("/ready", async (IServiceProvider services, ILanOrderStore store) =>
             status = "ready",
             service = "Replica.Api",
             store = store.GetType().Name,
-            mode = effectiveStoreMode
+            mode = effectiveStoreMode,
+            authMode = effectiveAuthMode
         });
     }
 
@@ -111,7 +114,8 @@ app.MapGet("/ready", async (IServiceProvider services, ILanOrderStore store) =>
             {
                 status = "not_ready",
                 reason = "database connection failed",
-                mode = effectiveStoreMode
+                mode = effectiveStoreMode,
+                authMode = effectiveAuthMode
             }, statusCode: StatusCodes.Status503ServiceUnavailable);
         }
 
@@ -122,6 +126,7 @@ app.MapGet("/ready", async (IServiceProvider services, ILanOrderStore store) =>
             service = "Replica.Api",
             store = store.GetType().Name,
             mode = effectiveStoreMode,
+            authMode = effectiveAuthMode,
             pendingMigrations = pendingMigrations.Count
         });
     }
@@ -131,7 +136,8 @@ app.MapGet("/ready", async (IServiceProvider services, ILanOrderStore store) =>
         {
             status = "not_ready",
             reason = ex.Message,
-            mode = effectiveStoreMode
+            mode = effectiveStoreMode,
+            authMode = effectiveAuthMode
         }, statusCode: StatusCodes.Status503ServiceUnavailable);
     }
 });
@@ -173,7 +179,8 @@ app.MapGet("/health", (ILanOrderStore store) => Results.Ok(new
     status = "ok",
     service = "Replica.Api",
     store = store.GetType().Name,
-    mode = effectiveStoreMode
+    mode = effectiveStoreMode,
+    authMode = effectiveAuthMode
 }));
 
 app.Run();

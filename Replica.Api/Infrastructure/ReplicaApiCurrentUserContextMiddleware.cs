@@ -24,11 +24,11 @@ public sealed class ReplicaApiCurrentUserContextMiddleware
 
     public async Task InvokeAsync(HttpContext context, ILanOrderStore store)
     {
-        var strictActorValidation = _configuration.GetValue<bool?>("ReplicaApi:StrictActorValidation") ?? false;
+        var authMode = ReplicaApiAuthConfiguration.ResolveMode(_configuration);
         var currentUser = ReplicaApiCurrentUserContext.Resolve(
             context.Request,
             store.GetUsers(),
-            strictActorValidation,
+            strictActorValidation: ReplicaApiAuthConfiguration.IsStrict(authMode),
             _logger);
 
         ReplicaApiCurrentUserContext.Set(context, currentUser);

@@ -32,7 +32,7 @@ public sealed class PostgreSqlLanOrderStore : ILanOrderStore
         _connectionString = connectionString ?? string.Empty;
     }
 
-    public IReadOnlyList<SharedUser> GetUsers()
+    public IReadOnlyList<SharedUser> GetUsers(bool includeInactive = false)
     {
         if (string.IsNullOrWhiteSpace(_connectionString))
             return _fallbackUsers.Select(CloneUser).ToList();
@@ -43,8 +43,9 @@ public sealed class PostgreSqlLanOrderStore : ILanOrderStore
             EnsureSchema(connection);
 
             var users = new List<SharedUser>();
+            var whereClause = includeInactive ? string.Empty : " where is_active = true";
             using var cmd = new NpgsqlCommand(
-                $"select user_name, role, is_active, updated_at from {UsersTable} where is_active = true order by user_name asc;",
+                $"select user_name, role, is_active, updated_at from {UsersTable}{whereClause} order by user_name asc;",
                 connection);
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
@@ -74,6 +75,65 @@ public sealed class PostgreSqlLanOrderStore : ILanOrderStore
         {
             return _fallbackUsers.Select(CloneUser).ToList();
         }
+    }
+
+    public UserOperationResult UpsertUser(UpsertUserRequest request, string actor)
+    {
+        if (!UserManagementRules.TryNormalizeUpsertRequest(
+            request,
+            out var normalizedName,
+            out var normalizedRole,
+            out var normalizedIsActive,
+            out var error))
+        {
+            return UserOperationResult.BadRequest(error);
+        }
+
+        using var connection = OpenConnection();
+        EnsureSchema(connection);
+        using var tx = connection.BeginTransaction();
+
+        var existing = TryLoadUser(connection, tx, normalizedName);
+        var nextIsActive = normalizedIsActive ?? existing?.IsActive ?? true;
+        if (existing != null)
+        {
+            var otherActiveAdminsCount = CountOtherActiveAdmins(connection, tx, existing.Name);
+            if (UserManagementRules.WouldRemoveLastActiveAdmin(
+                existing.Role,
+                existing.IsActive,
+                normalizedRole,
+                nextIsActive,
+                otherActiveAdminsCount))
+            {
+                return UserOperationResult.BadRequest("at least one active admin is required");
+            }
+        }
+
+        using var cmd = new NpgsqlCommand(
+            $"""
+            insert into {UsersTable}(user_name, role, is_active, updated_at)
+            values (@user_name, @role, @is_active, now())
+            on conflict (user_name) do update
+            set role = @role,
+                is_active = @is_active,
+                updated_at = now();
+            """,
+            connection,
+            tx);
+        cmd.Parameters.AddWithValue("user_name", normalizedName);
+        cmd.Parameters.AddWithValue("role", normalizedRole);
+        cmd.Parameters.AddWithValue("is_active", nextIsActive);
+        cmd.ExecuteNonQuery();
+
+        tx.Commit();
+        return UserOperationResult.Success(new SharedUser
+        {
+            Id = BuildUserId(normalizedName),
+            Name = normalizedName,
+            Role = normalizedRole,
+            IsActive = nextIsActive,
+            UpdatedAt = DateTime.Now
+        });
     }
 
     public IReadOnlyList<SharedOrder> GetOrders(string createdBy)
@@ -621,6 +681,55 @@ public sealed class PostgreSqlLanOrderStore : ILanOrderStore
 
         if (cmd.ExecuteNonQuery() != 1)
             throw new InvalidOperationException($"item not found: {itemId}");
+    }
+
+    private static SharedUser? TryLoadUser(NpgsqlConnection connection, NpgsqlTransaction tx, string userName)
+    {
+        using var cmd = new NpgsqlCommand(
+            $"""
+            select user_name, role, is_active, updated_at
+            from {UsersTable}
+            where user_name = @user_name
+            limit 1;
+            """,
+            connection,
+            tx);
+        cmd.Parameters.AddWithValue("user_name", userName);
+
+        using var reader = cmd.ExecuteReader();
+        if (!reader.Read())
+            return null;
+
+        var loadedUserName = reader.IsDBNull(0) ? string.Empty : reader.GetString(0);
+        var loadedRole = reader.IsDBNull(1) ? ReplicaApiRoles.Operator : reader.GetString(1);
+        var loadedIsActive = !reader.IsDBNull(2) && reader.GetBoolean(2);
+        var loadedUpdatedAt = reader.IsDBNull(3) ? DateTime.Now : reader.GetDateTime(3);
+
+        return new SharedUser
+        {
+            Id = BuildUserId(loadedUserName),
+            Name = loadedUserName,
+            Role = ReplicaApiRoles.Normalize(loadedRole),
+            IsActive = loadedIsActive,
+            UpdatedAt = loadedUpdatedAt
+        };
+    }
+
+    private static int CountOtherActiveAdmins(NpgsqlConnection connection, NpgsqlTransaction tx, string excludedUserName)
+    {
+        using var cmd = new NpgsqlCommand(
+            $"""
+            select count(*)
+            from {UsersTable}
+            where user_name <> @excluded_user_name
+              and is_active = true
+              and role = @admin_role;
+            """,
+            connection,
+            tx);
+        cmd.Parameters.AddWithValue("excluded_user_name", excludedUserName);
+        cmd.Parameters.AddWithValue("admin_role", ReplicaApiRoles.Admin);
+        return Convert.ToInt32(cmd.ExecuteScalar() ?? 0);
     }
 
     private static void UpsertUser(NpgsqlConnection connection, NpgsqlTransaction tx, string userName, string role = ReplicaApiRoles.Operator)

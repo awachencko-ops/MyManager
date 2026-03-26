@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using Replica.Api.Contracts;
+using Replica.Api.Infrastructure;
 using Replica.Shared.Models;
 
 namespace Replica.Api.Services;
@@ -22,10 +23,69 @@ public sealed class InMemoryLanOrderStore : ILanOrderStore
         new() { Id = "u-operator-2", Name = "Operator 2", Role = "Operator", IsActive = true }
     ];
 
-    public IReadOnlyList<SharedUser> GetUsers()
+    public IReadOnlyList<SharedUser> GetUsers(bool includeInactive = false)
     {
         lock (_sync)
-            return _users.Select(CloneUser).ToList();
+        {
+            IEnumerable<SharedUser> users = _users;
+            if (!includeInactive)
+                users = users.Where(user => user.IsActive);
+
+            return users.Select(CloneUser).ToList();
+        }
+    }
+
+    public UserOperationResult UpsertUser(UpsertUserRequest request, string actor)
+    {
+        lock (_sync)
+        {
+            if (!UserManagementRules.TryNormalizeUpsertRequest(
+                request,
+                out var normalizedName,
+                out var normalizedRole,
+                out var normalizedIsActive,
+                out var error))
+            {
+                return UserOperationResult.BadRequest(error);
+            }
+
+            var existing = _users.FirstOrDefault(user =>
+                string.Equals(user.Name, normalizedName, StringComparison.OrdinalIgnoreCase));
+            var nextIsActive = normalizedIsActive ?? existing?.IsActive ?? true;
+
+            if (existing != null)
+            {
+                var otherActiveAdminsCount = _users.Count(user =>
+                    !string.Equals(user.Name, existing.Name, StringComparison.OrdinalIgnoreCase)
+                    && user.IsActive
+                    && string.Equals(ReplicaApiRoles.Normalize(user.Role), ReplicaApiRoles.Admin, StringComparison.Ordinal));
+                if (UserManagementRules.WouldRemoveLastActiveAdmin(
+                    existing.Role,
+                    existing.IsActive,
+                    normalizedRole,
+                    nextIsActive,
+                    otherActiveAdminsCount))
+                {
+                    return UserOperationResult.BadRequest("at least one active admin is required");
+                }
+
+                existing.Role = normalizedRole;
+                existing.IsActive = nextIsActive;
+                existing.UpdatedAt = DateTime.Now;
+                return UserOperationResult.Success(CloneUser(existing));
+            }
+
+            var created = new SharedUser
+            {
+                Id = "u-" + Guid.NewGuid().ToString("N")[..8],
+                Name = normalizedName,
+                Role = normalizedRole,
+                IsActive = nextIsActive,
+                UpdatedAt = DateTime.Now
+            };
+            _users.Add(created);
+            return UserOperationResult.Success(CloneUser(created));
+        }
     }
 
     public IReadOnlyList<SharedOrder> GetOrders(string createdBy)

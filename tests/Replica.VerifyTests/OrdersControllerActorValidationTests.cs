@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+п»їusing System.Collections.Generic;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Abstractions;
@@ -53,21 +53,22 @@ public sealed class OrdersControllerActorValidationTests
     [Fact]
     public void Resolve_WithEncodedActorHeader_UsesDecodedActorAndRole()
     {
+        var actorName = "\u0421\u0435\u0440\u0433\u0435\u0439";
         var httpContext = new DefaultHttpContext();
-        httpContext.Request.Headers[CurrentUserHeaderCodec.HeaderName] = CurrentUserHeaderCodec.BuildAsciiFallback("Сергей");
-        httpContext.Request.Headers[CurrentUserHeaderCodec.EncodedHeaderName] = CurrentUserHeaderCodec.Encode("Сергей");
+        httpContext.Request.Headers[CurrentUserHeaderCodec.HeaderName] = CurrentUserHeaderCodec.BuildAsciiFallback(actorName);
+        httpContext.Request.Headers[CurrentUserHeaderCodec.EncodedHeaderName] = CurrentUserHeaderCodec.Encode(actorName);
 
         var currentUser = ReplicaApiCurrentUserContext.Resolve(
             httpContext.Request,
             knownUsers:
             [
-                new SharedUser { Name = "Сергей", Role = ReplicaApiRoles.Admin, IsActive = true }
+                new SharedUser { Name = actorName, Role = ReplicaApiRoles.Admin, IsActive = true }
             ],
             strictActorValidation: true);
 
         Assert.False(currentUser.HasFailure);
         Assert.True(currentUser.IsAuthenticated);
-        Assert.Equal("Сергей", currentUser.Name);
+        Assert.Equal(actorName, currentUser.Name);
         Assert.Equal(ReplicaApiRoles.Admin, currentUser.Role);
     }
 
@@ -95,6 +96,7 @@ public sealed class OrdersControllerActorValidationTests
     [Fact]
     public void Resolve_WithLegacyBootstrapUser_AllowsActor()
     {
+        var bootstrapUser = "\u0421\u0435\u0440\u0432\u0435\u0440 \"\u0422\u0430\u0443\u0434\u0435\u043c\u0438\"";
         var httpContext = new DefaultHttpContext();
         httpContext.Request.Headers[CurrentUserHeaderCodec.HeaderName] = "Andrew";
 
@@ -102,7 +104,7 @@ public sealed class OrdersControllerActorValidationTests
             httpContext.Request,
             knownUsers:
             [
-                new SharedUser { Name = "Сервер \"Таудеми\"", Role = ReplicaApiRoles.Operator, IsActive = true }
+                new SharedUser { Name = bootstrapUser, Role = ReplicaApiRoles.Operator, IsActive = true }
             ],
             strictActorValidation: true);
 
@@ -197,7 +199,12 @@ public sealed class OrdersControllerActorValidationTests
     {
         public string LastActor { get; private set; } = string.Empty;
 
-        public IReadOnlyList<SharedUser> GetUsers() => [];
+        public IReadOnlyList<SharedUser> GetUsers(bool includeInactive = false) => [];
+
+        public UserOperationResult UpsertUser(UpsertUserRequest request, string actor)
+        {
+            throw new System.NotImplementedException();
+        }
 
         public IReadOnlyList<SharedOrder> GetOrders(string createdBy)
         {

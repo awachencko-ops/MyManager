@@ -39,33 +39,80 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
         _dbContextFactory = dbContextFactory;
     }
 
-    public IReadOnlyList<SharedUser> GetUsers()
+    public IReadOnlyList<SharedUser> GetUsers(bool includeInactive = false)
     {
         try
         {
             using var db = _dbContextFactory.CreateDbContext();
-            var users = db.Users
+            var query = db.Users
                 .AsNoTracking()
-                .Where(x => x.IsActive)
                 .OrderBy(x => x.UserName)
-                .ToList();
+                .AsQueryable();
+            if (!includeInactive)
+                query = query.Where(x => x.IsActive);
+
+            var users = query.ToList();
 
             if (users.Count == 0)
                 return _fallbackUsers.Select(CloneUser).ToList();
 
-            return users.Select(x => new SharedUser
-            {
-                Id = BuildUserId(x.UserName),
-                Name = x.UserName,
-                Role = ReplicaApiRoles.Normalize(x.Role),
-                IsActive = x.IsActive,
-                UpdatedAt = x.UpdatedAt
-            }).ToList();
+            return users.Select(MapUser).ToList();
         }
         catch
         {
             return _fallbackUsers.Select(CloneUser).ToList();
         }
+    }
+
+    public UserOperationResult UpsertUser(UpsertUserRequest request, string actor)
+    {
+        if (!UserManagementRules.TryNormalizeUpsertRequest(
+            request,
+            out var normalizedName,
+            out var normalizedRole,
+            out var normalizedIsActive,
+            out var error))
+        {
+            return UserOperationResult.BadRequest(error);
+        }
+
+        using var db = _dbContextFactory.CreateDbContext();
+        var existing = db.Users.FirstOrDefault(x => x.UserName == normalizedName);
+        var nextIsActive = normalizedIsActive ?? existing?.IsActive ?? true;
+
+        if (existing != null)
+        {
+            var otherActiveAdminsCount = db.Users.Count(x =>
+                x.UserName != existing.UserName
+                && x.IsActive
+                && x.Role == ReplicaApiRoles.Admin);
+            if (UserManagementRules.WouldRemoveLastActiveAdmin(
+                existing.Role,
+                existing.IsActive,
+                normalizedRole,
+                nextIsActive,
+                otherActiveAdminsCount))
+            {
+                return UserOperationResult.BadRequest("at least one active admin is required");
+            }
+
+            existing.Role = normalizedRole;
+            existing.IsActive = nextIsActive;
+            existing.UpdatedAt = DateTime.Now;
+            db.SaveChanges();
+            return UserOperationResult.Success(MapUser(existing));
+        }
+
+        var created = new UserRecord
+        {
+            UserName = normalizedName,
+            Role = normalizedRole,
+            IsActive = nextIsActive,
+            UpdatedAt = DateTime.Now
+        };
+        db.Users.Add(created);
+        db.SaveChanges();
+        return UserOperationResult.Success(MapUser(created));
     }
 
     public IReadOnlyList<SharedOrder> GetOrders(string createdBy)
@@ -1352,6 +1399,18 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
         var normalized = string.IsNullOrWhiteSpace(userName) ? "unknown" : userName.Trim().ToLowerInvariant();
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(normalized));
         return "u-" + Convert.ToHexString(hash.AsSpan(0, 4)).ToLowerInvariant();
+    }
+
+    private static SharedUser MapUser(UserRecord source)
+    {
+        return new SharedUser
+        {
+            Id = BuildUserId(source.UserName),
+            Name = source.UserName,
+            Role = ReplicaApiRoles.Normalize(source.Role),
+            IsActive = source.IsActive,
+            UpdatedAt = source.UpdatedAt
+        };
     }
 
     private static SharedOrder CloneOrder(SharedOrder source)
