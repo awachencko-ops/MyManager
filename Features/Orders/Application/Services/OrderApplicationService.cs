@@ -116,6 +116,9 @@ public interface IOrderApplicationService
         IReadOnlyCollection<OrderRunExecutionError>? errors,
         int runnableOrdersCount,
         Func<OrderData, string> orderDisplayIdResolver);
+    OrderRunLifecycleUiFeedback BuildRunCommandStartLifecycleUiFeedback();
+    OrderRunLifecycleUiFeedback BuildRunSnapshotRefreshWarningUiFeedback(string phase, string? orderDisplayId = null);
+    OrderRunLifecycleUiFeedback BuildRunCommandFinishLifecycleUiFeedback(int startedCount, int errorsCount);
     OrderRunStopUiFeedback BuildRunStopUiFeedback(OrderRunStopPhaseResult stopPhase, string orderDisplayId);
 
     OrderDeleteCommandResult DeleteOrders(
@@ -449,6 +452,15 @@ public sealed class OrderApplicationService : IOrderApplicationService
         int runnableOrdersCount,
         Func<OrderData, string> orderDisplayIdResolver)
         => _orderRunFeedbackService.BuildCompletionUiFeedback(errors, runnableOrdersCount, orderDisplayIdResolver);
+
+    public OrderRunLifecycleUiFeedback BuildRunCommandStartLifecycleUiFeedback()
+        => _orderRunFeedbackService.BuildRunCommandStartLifecycleUiFeedback();
+
+    public OrderRunLifecycleUiFeedback BuildRunSnapshotRefreshWarningUiFeedback(string phase, string? orderDisplayId = null)
+        => _orderRunFeedbackService.BuildRunSnapshotRefreshWarningUiFeedback(phase, orderDisplayId);
+
+    public OrderRunLifecycleUiFeedback BuildRunCommandFinishLifecycleUiFeedback(int startedCount, int errorsCount)
+        => _orderRunFeedbackService.BuildRunCommandFinishLifecycleUiFeedback(startedCount, errorsCount);
 
     public OrderRunStopUiFeedback BuildRunStopUiFeedback(OrderRunStopPhaseResult stopPhase, string orderDisplayId)
         => _orderRunFeedbackService.BuildStopUiFeedback(stopPhase, orderDisplayId);

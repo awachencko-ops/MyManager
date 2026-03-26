@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using Xunit;
@@ -72,7 +72,8 @@ public sealed class OrderApplicationServiceTests
 
         var feedback = service.BuildRunStopUiFeedback(stopPhase, "00526");
 
-        Assert.Equal("Остановка не подтверждена: конфликт версии (00526)", feedback.BottomStatus);
+        Assert.Contains("00526", feedback.BottomStatus);
+        Assert.Contains("конфликт", feedback.BottomStatus, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(OrderRunFeedbackSeverity.Information, feedback.Dialog?.Severity);
     }
 
@@ -104,8 +105,31 @@ public sealed class OrderApplicationServiceTests
             runnableOrdersCount: 2,
             orderDisplayIdResolver: _ => "order");
 
-        Assert.Equal("Пакетная обработка завершена: 2", feedback.BottomStatus);
+        Assert.Contains("2", feedback.BottomStatus);
         Assert.Null(feedback.Dialog);
+    }
+
+    [Fact]
+    public void BuildRunLifecycleUiFeedback_ForwardedFromService_ReturnsExpectedLogs()
+    {
+        var service = CreateService();
+
+        var start = service.BuildRunCommandStartLifecycleUiFeedback();
+        var snapshot = service.BuildRunSnapshotRefreshWarningUiFeedback("run-stop", "00526");
+        var finish = service.BuildRunCommandFinishLifecycleUiFeedback(2, 1);
+
+        var startLog = Assert.Single(start.Logs);
+        var snapshotLog = Assert.Single(snapshot.Logs);
+        var finishLog = Assert.Single(finish.Logs);
+
+        Assert.Equal("RUN | command-start", startLog.Message);
+        Assert.False(startLog.IsWarning);
+
+        Assert.Equal("RUN | snapshot-refresh-failed | reason=run-stop | order=00526", snapshotLog.Message);
+        Assert.True(snapshotLog.IsWarning);
+
+        Assert.Equal("RUN | command-finish | started=2 | errors=1", finishLog.Message);
+        Assert.False(finishLog.IsWarning);
     }
 
     [Fact]

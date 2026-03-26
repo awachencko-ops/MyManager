@@ -117,6 +117,16 @@ public sealed class OrderRunCompletionUiFeedback
     public OrderRunFeedbackDialog? Dialog { get; }
 }
 
+public sealed class OrderRunLifecycleUiFeedback
+{
+    public OrderRunLifecycleUiFeedback(IReadOnlyList<OrderRunFeedbackLogEntry>? logs = null)
+    {
+        Logs = logs ?? Array.Empty<OrderRunFeedbackLogEntry>();
+    }
+
+    public IReadOnlyList<OrderRunFeedbackLogEntry> Logs { get; }
+}
+
 public sealed class OrderRunFeedbackService
 {
     private const int DefaultPreviewLimit = 5;
@@ -310,6 +320,45 @@ public sealed class OrderRunFeedbackService
         }
 
         return new OrderRunCompletionUiFeedback(bottomStatus: string.Empty, dialog: null);
+    }
+
+    public OrderRunLifecycleUiFeedback BuildRunCommandStartLifecycleUiFeedback()
+    {
+        return new OrderRunLifecycleUiFeedback(
+            logs:
+            [
+                new OrderRunFeedbackLogEntry("RUN | command-start", isWarning: false)
+            ]);
+    }
+
+    public OrderRunLifecycleUiFeedback BuildRunSnapshotRefreshWarningUiFeedback(string phase, string? orderDisplayId = null)
+    {
+        var normalizedPhase = string.IsNullOrWhiteSpace(phase) ? "run" : phase.Trim();
+        var normalizedOrderDisplayId = string.IsNullOrWhiteSpace(orderDisplayId)
+            ? string.Empty
+            : orderDisplayId.Trim();
+        var message = string.IsNullOrWhiteSpace(normalizedOrderDisplayId)
+            ? $"RUN | snapshot-refresh-failed | reason={normalizedPhase} | save may conflict on next history write"
+            : $"RUN | snapshot-refresh-failed | reason={normalizedPhase} | order={normalizedOrderDisplayId}";
+
+        return new OrderRunLifecycleUiFeedback(
+            logs:
+            [
+                new OrderRunFeedbackLogEntry(message, isWarning: true)
+            ]);
+    }
+
+    public OrderRunLifecycleUiFeedback BuildRunCommandFinishLifecycleUiFeedback(int startedCount, int errorsCount)
+    {
+        var safeStartedCount = Math.Max(0, startedCount);
+        var safeErrorsCount = Math.Max(0, errorsCount);
+        return new OrderRunLifecycleUiFeedback(
+            logs:
+            [
+                new OrderRunFeedbackLogEntry(
+                    $"RUN | command-finish | started={safeStartedCount} | errors={safeErrorsCount}",
+                    isWarning: false)
+            ]);
     }
 
     public OrderRunStopUiFeedback BuildStopUiFeedback(OrderRunStopPhaseResult stopPhase, string orderDisplayId)

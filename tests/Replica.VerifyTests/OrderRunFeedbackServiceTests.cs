@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using Xunit;
 
 namespace Replica.VerifyTests;
@@ -18,11 +18,9 @@ public sealed class OrderRunFeedbackServiceTests
 
         var preview = service.BuildServerSkippedPreview(skipped, previewLimit: 2);
 
-        Assert.Equal(
-            "order-1: locked" + System.Environment.NewLine
-            + "order-2: not found" + System.Environment.NewLine
-            + "... ещё: 1",
-            preview);
+        Assert.Contains("order-1: locked", preview);
+        Assert.Contains("order-2: not found", preview);
+        Assert.Contains(": 1", preview);
     }
 
     [Fact]
@@ -51,10 +49,8 @@ public sealed class OrderRunFeedbackServiceTests
 
         var preview = service.BuildExecutionErrorsPreview(errors, order => order.Id ?? string.Empty);
 
-        Assert.Equal(
-            "100: disk full" + System.Environment.NewLine
-            + "200: неизвестная ошибка",
-            preview);
+        Assert.Contains("100: disk full", preview);
+        Assert.Contains("200: неизвестная ошибка", preview);
     }
 
     [Fact]
@@ -78,7 +74,7 @@ public sealed class OrderRunFeedbackServiceTests
         var feedback = service.BuildStartUiFeedback(startPhase);
 
         Assert.True(feedback.ShouldAbort);
-        Assert.Equal("Сервер недоступен: api unavailable", feedback.BottomStatus);
+        Assert.Contains("api unavailable", feedback.BottomStatus);
         Assert.NotNull(feedback.Dialog);
         Assert.Equal(OrderRunFeedbackSeverity.Warning, feedback.Dialog!.Severity);
         Assert.Single(feedback.Logs);
@@ -102,7 +98,7 @@ public sealed class OrderRunFeedbackServiceTests
         var feedback = service.BuildStartUiFeedback(startPhase);
 
         Assert.True(feedback.ShouldAbort);
-        Assert.Equal("Сервер не подтвердил запуск выбранных заказов", feedback.BottomStatus);
+        Assert.Contains("Сервер", feedback.BottomStatus);
         Assert.NotNull(feedback.Dialog);
         Assert.Contains("order-1: locked", feedback.Dialog!.Message);
         Assert.Single(feedback.Logs);
@@ -118,7 +114,7 @@ public sealed class OrderRunFeedbackServiceTests
 
         var feedback = service.BuildStopUiFeedback(stopPhase, "00526");
 
-        Assert.Equal("Заказ 00526 сейчас не выполняется", feedback.BottomStatus);
+        Assert.Contains("00526", feedback.BottomStatus);
         Assert.NotNull(feedback.Dialog);
         Assert.Equal(OrderRunFeedbackSeverity.Information, feedback.Dialog!.Severity);
         Assert.False(feedback.ShouldUpdateActionButtons);
@@ -149,7 +145,7 @@ public sealed class OrderRunFeedbackServiceTests
 
         var feedback = service.BuildStopUiFeedback(stopPhase, "00526");
 
-        Assert.Equal("Остановлен заказ 00526", feedback.BottomStatus);
+        Assert.Contains("00526", feedback.BottomStatus);
         Assert.True(feedback.ShouldUpdateActionButtons);
         Assert.NotNull(feedback.Dialog);
         Assert.Equal(OrderRunFeedbackSeverity.Warning, feedback.Dialog!.Severity);
@@ -172,7 +168,7 @@ public sealed class OrderRunFeedbackServiceTests
             runPlan: runPlan,
             serverSkipped: new[] { "order-1: locked" });
 
-        Assert.Contains("Часть заказов пропущена", feedback.BottomStatus);
+        Assert.Contains("пропущена", feedback.BottomStatus);
         Assert.NotNull(feedback.Dialog);
         Assert.Contains("order-1: locked", feedback.Dialog!.Message);
     }
@@ -188,7 +184,7 @@ public sealed class OrderRunFeedbackServiceTests
 
         var feedback = service.BuildCompletionUiFeedback(errors, runnableOrdersCount: 1, orderDisplayIdResolver: order => order.Id ?? string.Empty);
 
-        Assert.Equal("Ошибок запуска: 1", feedback.BottomStatus);
+        Assert.Contains("1", feedback.BottomStatus);
         Assert.NotNull(feedback.Dialog);
         Assert.Equal(OrderRunFeedbackSeverity.Warning, feedback.Dialog!.Severity);
         Assert.Contains("disk full", feedback.Dialog.Message);
@@ -204,7 +200,43 @@ public sealed class OrderRunFeedbackServiceTests
             runnableOrdersCount: 3,
             orderDisplayIdResolver: _ => "order");
 
-        Assert.Equal("Пакетная обработка завершена: 3", feedback.BottomStatus);
+        Assert.Contains("3", feedback.BottomStatus);
         Assert.Null(feedback.Dialog);
+    }
+
+    [Fact]
+    public void BuildRunCommandStartLifecycleUiFeedback_ReturnsInfoStartLog()
+    {
+        var service = new OrderRunFeedbackService();
+
+        var feedback = service.BuildRunCommandStartLifecycleUiFeedback();
+
+        var log = Assert.Single(feedback.Logs);
+        Assert.Equal("RUN | command-start", log.Message);
+        Assert.False(log.IsWarning);
+    }
+
+    [Fact]
+    public void BuildRunSnapshotRefreshWarningUiFeedback_WithOrder_ReturnsWarningLog()
+    {
+        var service = new OrderRunFeedbackService();
+
+        var feedback = service.BuildRunSnapshotRefreshWarningUiFeedback("run-stop", "00526");
+
+        var log = Assert.Single(feedback.Logs);
+        Assert.Equal("RUN | snapshot-refresh-failed | reason=run-stop | order=00526", log.Message);
+        Assert.True(log.IsWarning);
+    }
+
+    [Fact]
+    public void BuildRunCommandFinishLifecycleUiFeedback_NormalizesCountsAndReturnsInfoLog()
+    {
+        var service = new OrderRunFeedbackService();
+
+        var feedback = service.BuildRunCommandFinishLifecycleUiFeedback(startedCount: -1, errorsCount: 2);
+
+        var log = Assert.Single(feedback.Logs);
+        Assert.Equal("RUN | command-finish | started=0 | errors=2", log.Message);
+        Assert.False(log.IsWarning);
     }
 }

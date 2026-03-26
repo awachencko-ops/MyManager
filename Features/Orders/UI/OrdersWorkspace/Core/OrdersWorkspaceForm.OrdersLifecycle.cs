@@ -898,7 +898,7 @@ namespace Replica
                 ("workflow", "run-selected"),
                 ("selected_orders", selectedOrders.Count.ToString(CultureInfo.InvariantCulture)),
                 ("use_lan_api", useLanApi ? "1" : "0"));
-            Logger.Info("RUN | command-start");
+            ApplyOrderRunFeedbackLogs(_orderApplicationService.BuildRunCommandStartLifecycleUiFeedback().Logs);
 
             var startPhase = await _orderApplicationService.PrepareAndBeginRunAsync(
                 selectedOrders,
@@ -929,7 +929,8 @@ namespace Replica
 
             if (runPreparation.SnapshotRefreshFailed)
             {
-                Logger.Warn("RUN | snapshot-refresh-failed | reason=run-start | save may conflict on next history write");
+                ApplyOrderRunFeedbackLogs(
+                    _orderApplicationService.BuildRunSnapshotRefreshWarningUiFeedback("run-start").Logs);
             }
 
             var runSessions = startPhase.RunSessions;
@@ -1008,7 +1009,10 @@ namespace Replica
                 SetBottomStatus(completionUiFeedback.BottomStatus);
             ShowOrderRunFeedbackDialog(completionUiFeedback.Dialog);
 
-            Logger.Info($"RUN | command-finish | started={runnableOrders.Count} | errors={runExecutionResult.Errors.Count}");
+            ApplyOrderRunFeedbackLogs(
+                _orderApplicationService.BuildRunCommandFinishLifecycleUiFeedback(
+                    runnableOrders.Count,
+                    runExecutionResult.Errors.Count).Logs);
         }
 
         private async Task StopSelectedOrderAsync()
@@ -1063,7 +1067,8 @@ namespace Replica
 
             if (stopPreparation.SnapshotRefreshFailed)
             {
-                Logger.Warn($"RUN | snapshot-refresh-failed | reason=run-stop | order={GetOrderDisplayId(order)}");
+                ApplyOrderRunFeedbackLogs(
+                    _orderApplicationService.BuildRunSnapshotRefreshWarningUiFeedback("run-stop", GetOrderDisplayId(order)).Logs);
             }
 
             var stopUiFeedback = _orderApplicationService.BuildRunStopUiFeedback(stopPhase, GetOrderDisplayId(order));
