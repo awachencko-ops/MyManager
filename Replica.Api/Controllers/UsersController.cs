@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
+using Replica.Api.Infrastructure;
 using Replica.Api.Services;
 using Replica.Shared.Models;
 
@@ -6,6 +7,7 @@ namespace Replica.Api.Controllers;
 
 [ApiController]
 [Route("api/users")]
+[ReplicaAuthorize(ReplicaApiRoles.Operator)]
 public sealed class UsersController : ControllerBase
 {
     private readonly ILanOrderStore _store;
@@ -22,4 +24,3 @@ public sealed class UsersController : ControllerBase
         return Ok(_store.GetUsers());
     }
 }
-

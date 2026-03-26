@@ -1,17 +1,15 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Replica.Api.Contracts;
 using Replica.Api.Infrastructure;
 using Replica.Api.Services;
-using Replica.Shared;
 using Replica.Shared.Models;
-using System;
-using System.Linq;
 
 namespace Replica.Api.Controllers;
 
 [ApiController]
 [Route("api/orders")]
+[ReplicaAuthorize(ReplicaApiRoles.Operator)]
 public sealed class OrdersController : ControllerBase
 {
     private const string IdempotencyHeaderName = "Idempotency-Key";
@@ -25,8 +23,6 @@ public sealed class OrdersController : ControllerBase
     private const string RunCommandName = "run";
     private const string StopCommandName = "stop";
     private readonly ILanOrderStore _store;
-    private readonly ILogger<OrdersController> _logger;
-    private readonly bool _strictActorValidation;
 
     public OrdersController(ILanOrderStore store, ILogger<OrdersController> logger)
         : this(store, logger, configuration: null)
@@ -36,8 +32,6 @@ public sealed class OrdersController : ControllerBase
     public OrdersController(ILanOrderStore store, ILogger<OrdersController> logger, IConfiguration? configuration)
     {
         _store = store;
-        _logger = logger;
-        _strictActorValidation = configuration?.GetValue<bool?>("ReplicaApi:StrictActorValidation") ?? false;
     }
 
     [HttpGet]
@@ -67,9 +61,7 @@ public sealed class OrdersController : ControllerBase
         if (request == null || string.IsNullOrWhiteSpace(request.OrderNumber))
             return BadRequest(new { error = "order number is required" });
 
-        if (!TryResolveValidatedActor(out var actor, out var validationError))
-            return validationError!;
-
+        var actor = GetCurrentActor();
         if (string.IsNullOrWhiteSpace(request.CreatedByUser))
             request.CreatedByUser = actor;
         if (string.IsNullOrWhiteSpace(request.CreatedById))
@@ -99,9 +91,7 @@ public sealed class OrdersController : ControllerBase
         if (request == null)
             return BadRequest(new { error = "request body is required" });
 
-        if (!TryResolveValidatedActor(out var actor, out var validationError))
-            return validationError!;
-
+        var actor = GetCurrentActor();
         var idempotencyKey = ResolveIdempotencyKey();
         var result = _store is EfCoreLanOrderStore efCoreStore
             ? efCoreStore.TryDeleteOrder(id, request, actor, idempotencyKey)
@@ -121,9 +111,7 @@ public sealed class OrdersController : ControllerBase
         if (request == null)
             return BadRequest(new { error = "request body is required" });
 
-        if (!TryResolveValidatedActor(out var actor, out var validationError))
-            return validationError!;
-
+        var actor = GetCurrentActor();
         var idempotencyKey = ResolveIdempotencyKey();
         var result = _store is EfCoreLanOrderStore efCoreStore
             ? efCoreStore.TryUpdateOrder(id, request, actor, idempotencyKey)
@@ -143,9 +131,7 @@ public sealed class OrdersController : ControllerBase
         if (request == null || request.Item == null)
             return BadRequest(new { error = "item payload is required" });
 
-        if (!TryResolveValidatedActor(out var actor, out var validationError))
-            return validationError!;
-
+        var actor = GetCurrentActor();
         var idempotencyKey = ResolveIdempotencyKey();
         var result = _store is EfCoreLanOrderStore efCoreStore
             ? efCoreStore.TryAddItem(id, request, actor, idempotencyKey)
@@ -165,9 +151,7 @@ public sealed class OrdersController : ControllerBase
         if (request == null)
             return BadRequest(new { error = "request body is required" });
 
-        if (!TryResolveValidatedActor(out var actor, out var validationError))
-            return validationError!;
-
+        var actor = GetCurrentActor();
         var idempotencyKey = ResolveIdempotencyKey();
         var result = _store is EfCoreLanOrderStore efCoreStore
             ? efCoreStore.TryUpdateItem(id, itemId, request, actor, idempotencyKey)
@@ -187,9 +171,7 @@ public sealed class OrdersController : ControllerBase
         if (request == null)
             return BadRequest(new { error = "request body is required" });
 
-        if (!TryResolveValidatedActor(out var actor, out var validationError))
-            return validationError!;
-
+        var actor = GetCurrentActor();
         var idempotencyKey = ResolveIdempotencyKey();
         var result = _store is EfCoreLanOrderStore efCoreStore
             ? efCoreStore.TryDeleteItem(id, itemId, request, actor, idempotencyKey)
@@ -209,9 +191,7 @@ public sealed class OrdersController : ControllerBase
         if (request == null || request.OrderedItemIds == null)
             return BadRequest(new { error = "ordered item ids are required" });
 
-        if (!TryResolveValidatedActor(out var actor, out var validationError))
-            return validationError!;
-
+        var actor = GetCurrentActor();
         var idempotencyKey = ResolveIdempotencyKey();
         var result = _store is EfCoreLanOrderStore efCoreStore
             ? efCoreStore.TryReorderItems(id, request, actor, idempotencyKey)
@@ -228,9 +208,7 @@ public sealed class OrdersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public ActionResult<SharedOrder> StartOrderRun(string id, [FromBody] RunOrderRequest? request)
     {
-        if (!TryResolveValidatedActor(out var actor, out var validationError))
-            return validationError!;
-
+        var actor = GetCurrentActor();
         var runRequest = request ?? new RunOrderRequest();
         var idempotencyKey = ResolveIdempotencyKey();
         var result = _store is EfCoreLanOrderStore efCoreStore
@@ -248,67 +226,13 @@ public sealed class OrdersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public ActionResult<SharedOrder> StopOrderRun(string id, [FromBody] StopOrderRequest? request)
     {
-        if (!TryResolveValidatedActor(out var actor, out var validationError))
-            return validationError!;
-
+        var actor = GetCurrentActor();
         var stopRequest = request ?? new StopOrderRequest();
         var idempotencyKey = ResolveIdempotencyKey();
         var result = _store is EfCoreLanOrderStore efCoreStore
             ? efCoreStore.TryStopRun(id, stopRequest, actor, idempotencyKey)
             : _store.TryStopRun(id, stopRequest, actor);
         return BuildWriteResponse(StopCommandName, result);
-    }
-
-    private bool TryResolveValidatedActor(out string actor, out ActionResult? validationError)
-    {
-        actor = string.Empty;
-        validationError = null;
-
-        if (Request.Headers.TryGetValue(CurrentUserHeaderCodec.EncodedHeaderName, out var encodedActorHeader)
-            && CurrentUserHeaderCodec.TryDecode(encodedActorHeader.ToString(), out var decodedActor))
-            actor = decodedActor;
-        else if (Request.Headers.TryGetValue(CurrentUserHeaderCodec.HeaderName, out var actorHeader))
-            actor = actorHeader.ToString().Trim();
-
-        if (string.IsNullOrWhiteSpace(actor))
-        {
-            validationError = Unauthorized(new { error = "X-Current-User header is required" });
-            return false;
-        }
-
-        var knownUsers = _store
-            .GetUsers()
-            .Where(user => user != null && !string.IsNullOrWhiteSpace(user.Name))
-            .ToList();
-
-        if (knownUsers.Count == 0)
-            return true;
-
-        // Allow bootstrap environments to migrate away from the legacy placeholder user.
-        if (knownUsers.All(user => string.Equals(user.Name.Trim(), "Сервер \"Таудеми\"", StringComparison.OrdinalIgnoreCase)))
-            return true;
-
-        var actorCandidate = actor;
-        var matchedUser = knownUsers.FirstOrDefault(user =>
-            string.Equals(user.Name.Trim(), actorCandidate, StringComparison.OrdinalIgnoreCase));
-        if (matchedUser == null || !matchedUser.IsActive)
-        {
-            if (!_strictActorValidation)
-            {
-                _logger.LogWarning(
-                    "Write request actor {Actor} is not present in active users list. Allowing because strict actor validation is disabled.",
-                    actorCandidate);
-                actor = actorCandidate.Trim();
-                return true;
-            }
-
-            _logger.LogWarning("Write request rejected for actor {Actor}: unknown or inactive user.", actorCandidate);
-            validationError = StatusCode(StatusCodes.Status403Forbidden, new { error = "actor is not allowed" });
-            return false;
-        }
-
-        actor = matchedUser.Name.Trim();
-        return true;
     }
 
     private string ResolveIdempotencyKey()
@@ -370,5 +294,9 @@ public sealed class OrdersController : ControllerBase
         ReplicaApiObservability.RecordWriteCommand(commandName, "bad_request");
         return BadRequest(new { error = result.Error });
     }
-}
 
+    private string GetCurrentActor()
+    {
+        return ReplicaApiCurrentUserContext.Get(HttpContext).Name;
+    }
+}

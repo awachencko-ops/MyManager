@@ -46,6 +46,7 @@ public sealed class OrderEventRecord
 public sealed class UserRecord
 {
     public string UserName { get; set; } = string.Empty;
+    public string Role { get; set; } = string.Empty;
     public bool IsActive { get; set; }
     public DateTime UpdatedAt { get; set; }
 }

@@ -2,11 +2,13 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Replica.Api.Data;
+using Replica.Api.Infrastructure;
 
 namespace Replica.Api.Controllers;
 
 [ApiController]
 [Route("api/diagnostics")]
+[ReplicaAuthorize(ReplicaApiRoles.Admin)]
 public sealed class DiagnosticsController : ControllerBase
 {
     [HttpGet("operations/recent")]

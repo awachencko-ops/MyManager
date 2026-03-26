@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using Npgsql;
 using Replica.Api.Contracts;
+using Replica.Api.Infrastructure;
 using Replica.Shared.Models;
 
 namespace Replica.Api.Services;
@@ -43,14 +44,15 @@ public sealed class PostgreSqlLanOrderStore : ILanOrderStore
 
             var users = new List<SharedUser>();
             using var cmd = new NpgsqlCommand(
-                $"select user_name, is_active, updated_at from {UsersTable} where is_active = true order by user_name asc;",
+                $"select user_name, role, is_active, updated_at from {UsersTable} where is_active = true order by user_name asc;",
                 connection);
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
             {
                 var userName = reader.IsDBNull(0) ? string.Empty : reader.GetString(0);
-                var isActive = !reader.IsDBNull(1) && reader.GetBoolean(1);
-                var updatedAt = reader.IsDBNull(2) ? DateTime.Now : reader.GetDateTime(2);
+                var role = reader.IsDBNull(1) ? ReplicaApiRoles.Operator : reader.GetString(1);
+                var isActive = !reader.IsDBNull(2) && reader.GetBoolean(2);
+                var updatedAt = reader.IsDBNull(3) ? DateTime.Now : reader.GetDateTime(3);
                 if (string.IsNullOrWhiteSpace(userName))
                     continue;
 
@@ -58,7 +60,7 @@ public sealed class PostgreSqlLanOrderStore : ILanOrderStore
                 {
                     Id = BuildUserId(userName),
                     Name = userName,
-                    Role = "Operator",
+                    Role = ReplicaApiRoles.Normalize(role),
                     IsActive = isActive,
                     UpdatedAt = updatedAt
                 });
@@ -621,21 +623,27 @@ public sealed class PostgreSqlLanOrderStore : ILanOrderStore
             throw new InvalidOperationException($"item not found: {itemId}");
     }
 
-    private static void UpsertUser(NpgsqlConnection connection, NpgsqlTransaction tx, string userName)
+    private static void UpsertUser(NpgsqlConnection connection, NpgsqlTransaction tx, string userName, string role = ReplicaApiRoles.Operator)
     {
         if (string.IsNullOrWhiteSpace(userName))
             return;
 
         using var cmd = new NpgsqlCommand(
             $"""
-            insert into {UsersTable}(user_name, is_active, updated_at)
-            values (@user_name, true, now())
+            insert into {UsersTable}(user_name, role, is_active, updated_at)
+            values (@user_name, @role, true, now())
             on conflict (user_name) do update
-            set is_active = true, updated_at = now();
+            set role = case
+                    when coalesce({UsersTable}.role, '') = '' then excluded.role
+                    else {UsersTable}.role
+                end,
+                is_active = true,
+                updated_at = now();
             """,
             connection,
             tx);
         cmd.Parameters.AddWithValue("user_name", userName.Trim());
+        cmd.Parameters.AddWithValue("role", ReplicaApiRoles.Normalize(role));
         cmd.ExecuteNonQuery();
     }
 
@@ -970,9 +978,12 @@ public sealed class PostgreSqlLanOrderStore : ILanOrderStore
             create table if not exists {UsersTable}
             (
                 user_name text primary key,
+                role text not null default 'Operator',
                 is_active boolean not null default true,
                 updated_at timestamp without time zone not null default now()
             );
+            alter table if exists {UsersTable} add column if not exists role text not null default 'Operator';
+            update {UsersTable} set role = 'Operator' where role is null or btrim(role) = '';
             create index if not exists ix_orders_order_number on {OrdersTable}(order_number);
             create index if not exists ix_orders_arrival_date on {OrdersTable}(arrival_date);
             create index if not exists ix_order_items_order_internal_id on {ItemsTable}(order_internal_id);
@@ -982,3 +993,5 @@ public sealed class PostgreSqlLanOrderStore : ILanOrderStore
         cmd.ExecuteNonQuery();
     }
 }
+
+

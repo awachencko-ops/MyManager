@@ -84,6 +84,7 @@ public sealed class ReplicaDbContext : DbContext
             entity.ToTable("users");
             entity.HasKey(x => x.UserName);
             entity.Property(x => x.UserName).HasColumnName("user_name");
+            entity.Property(x => x.Role).HasColumnName("role").HasMaxLength(64).HasDefaultValue("Operator");
             entity.Property(x => x.IsActive).HasColumnName("is_active");
             entity.Property(x => x.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp without time zone");
         });

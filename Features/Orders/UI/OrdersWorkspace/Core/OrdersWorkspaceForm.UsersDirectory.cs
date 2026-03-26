@@ -1,6 +1,7 @@
-п»їusing System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using Replica.Shared;
 
 namespace Replica
 {
@@ -50,7 +51,7 @@ namespace Replica
                 else
                 {
                     var statusText = string.IsNullOrWhiteSpace(apiStatusText)
-                        ? "РџРѕР»СЊР·РѕРІР°С‚РµР»Рё: API РЅРµРґРѕСЃС‚СѓРїРµРЅ, СЃРїРёСЃРѕРє РЅРµ РѕР±РЅРѕРІР»РµРЅ"
+                        ? "Пользователи: API недоступен, список не обновлен"
                         : apiStatusText;
                     loadResult = new UsersDirectoryService.LoadResult
                     {
@@ -109,13 +110,13 @@ namespace Replica
             if (_ordersStorageBackend != OrdersStorageMode.LanPostgreSql
                 || !ShouldUseLanRunApi())
             {
-                statusText = "РџРѕР»СЊР·РѕРІР°С‚РµР»Рё: LAN API РІС‹РєР»СЋС‡РµРЅ";
+                statusText = "Пользователи: LAN API выключен";
                 return false;
             }
 
             if (!TryResolveLanApiBaseUri(_lanApiBaseUrl, out var baseUri))
             {
-                statusText = "РџРѕР»СЊР·РѕРІР°С‚РµР»Рё: API URL РЅРµ Р·Р°РґР°РЅ";
+                statusText = "Пользователи: API URL не задан";
                 return false;
             }
 
@@ -123,6 +124,7 @@ namespace Replica
             {
                 var usersUri = new Uri(baseUri, "api/users");
                 using var request = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Get, usersUri);
+                AddLanApiActorHeaders(request, ResolveLanApiActor());
                 using var timeoutCts = new System.Threading.CancellationTokenSource(TimeSpan.FromMilliseconds(1200));
                 using var response = _lanStatusHttpClient
                     .SendAsync(request, timeoutCts.Token)
@@ -131,7 +133,7 @@ namespace Replica
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    statusText = $"РџРѕР»СЊР·РѕРІР°С‚РµР»Рё: API РІРµСЂРЅСѓР» {(int)response.StatusCode}";
+                    statusText = $"Пользователи: API вернул {(int)response.StatusCode}";
                     return false;
                 }
 
@@ -162,18 +164,18 @@ namespace Replica
 
                 if (userList.Count == 0)
                 {
-                    statusText = "РџРѕР»СЊР·РѕРІР°С‚РµР»Рё: API РІРµСЂРЅСѓР» РїСѓСЃС‚РѕР№ СЃРїРёСЃРѕРє";
+                    statusText = "Пользователи: API вернул пустой список";
                     return false;
                 }
 
                 users = userList;
                 serverUsersByDisplayName = userMap;
-                statusText = $"РџРѕР»СЊР·РѕРІР°С‚РµР»Рё: API ({usersUri.Host}:{usersUri.Port})";
+                statusText = $"Пользователи: API ({usersUri.Host}:{usersUri.Port})";
                 return true;
             }
             catch
             {
-                statusText = "РџРѕР»СЊР·РѕРІР°С‚РµР»Рё: API РЅРµРґРѕСЃС‚СѓРїРµРЅ";
+                statusText = "Пользователи: API недоступен";
                 return false;
             }
         }
@@ -196,6 +198,26 @@ namespace Replica
                 return _users[0];
 
             return UserIdentityResolver.DefaultDisplayName;
+        }
+
+        private static void AddLanApiActorHeaders(System.Net.Http.HttpRequestMessage request, string actor)
+        {
+            if (request == null || string.IsNullOrWhiteSpace(actor))
+                return;
+
+            var normalizedActor = actor.Trim();
+            if (CurrentUserHeaderCodec.RequiresEncoding(normalizedActor))
+            {
+                request.Headers.TryAddWithoutValidation(
+                    CurrentUserHeaderCodec.HeaderName,
+                    CurrentUserHeaderCodec.BuildAsciiFallback(normalizedActor));
+                request.Headers.TryAddWithoutValidation(
+                    CurrentUserHeaderCodec.EncodedHeaderName,
+                    CurrentUserHeaderCodec.Encode(normalizedActor));
+                return;
+            }
+
+            request.Headers.TryAddWithoutValidation(CurrentUserHeaderCodec.HeaderName, normalizedActor);
         }
 
         private bool NormalizeOrderUsersInHistory()
@@ -302,4 +324,6 @@ namespace Replica
         }
     }
 }
+
+
 

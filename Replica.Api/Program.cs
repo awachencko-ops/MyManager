@@ -74,6 +74,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCorrelationContext();
+app.UseReplicaApiCurrentUserContext();
 app.UseStaticFiles();
 app.UseAuthorization();
 app.MapControllers();
