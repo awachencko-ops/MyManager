@@ -107,6 +107,7 @@ public interface IOrderApplicationService
         IReadOnlyCollection<OrderRunExecutionError>? errors,
         Func<OrderData, string> orderDisplayIdResolver,
         int previewLimit = 5);
+    OrderRunStartUiFeedback BuildRunSelectionRequiredUiFeedback();
     OrderRunStartUiFeedback BuildRunStartUiFeedback(OrderRunStartPhaseResult startPhase);
     OrderRunStartProgressUiFeedback BuildRunStartProgressUiFeedback(
         int runnableOrdersCount,
@@ -117,8 +118,10 @@ public interface IOrderApplicationService
         int runnableOrdersCount,
         Func<OrderData, string> orderDisplayIdResolver);
     OrderRunLifecycleUiFeedback BuildRunCommandStartLifecycleUiFeedback();
+    OrderRunLifecycleUiFeedback BuildRunStopCommandStartLifecycleUiFeedback();
     OrderRunLifecycleUiFeedback BuildRunSnapshotRefreshWarningUiFeedback(string phase, string? orderDisplayId = null);
     OrderRunLifecycleUiFeedback BuildRunCommandFinishLifecycleUiFeedback(int startedCount, int errorsCount);
+    OrderRunStopUiFeedback BuildRunStopSelectionRequiredUiFeedback();
     OrderRunStopUiFeedback BuildRunStopUiFeedback(OrderRunStopPhaseResult stopPhase, string orderDisplayId);
 
     OrderDeleteCommandResult DeleteOrders(
@@ -438,6 +441,9 @@ public sealed class OrderApplicationService : IOrderApplicationService
         int previewLimit = 5)
         => _orderRunFeedbackService.BuildExecutionErrorsPreview(errors, orderDisplayIdResolver, previewLimit);
 
+    public OrderRunStartUiFeedback BuildRunSelectionRequiredUiFeedback()
+        => _orderRunFeedbackService.BuildRunSelectionRequiredUiFeedback();
+
     public OrderRunStartUiFeedback BuildRunStartUiFeedback(OrderRunStartPhaseResult startPhase)
         => _orderRunFeedbackService.BuildStartUiFeedback(startPhase);
 
@@ -456,11 +462,17 @@ public sealed class OrderApplicationService : IOrderApplicationService
     public OrderRunLifecycleUiFeedback BuildRunCommandStartLifecycleUiFeedback()
         => _orderRunFeedbackService.BuildRunCommandStartLifecycleUiFeedback();
 
+    public OrderRunLifecycleUiFeedback BuildRunStopCommandStartLifecycleUiFeedback()
+        => _orderRunFeedbackService.BuildRunStopCommandStartLifecycleUiFeedback();
+
     public OrderRunLifecycleUiFeedback BuildRunSnapshotRefreshWarningUiFeedback(string phase, string? orderDisplayId = null)
         => _orderRunFeedbackService.BuildRunSnapshotRefreshWarningUiFeedback(phase, orderDisplayId);
 
     public OrderRunLifecycleUiFeedback BuildRunCommandFinishLifecycleUiFeedback(int startedCount, int errorsCount)
         => _orderRunFeedbackService.BuildRunCommandFinishLifecycleUiFeedback(startedCount, errorsCount);
+
+    public OrderRunStopUiFeedback BuildRunStopSelectionRequiredUiFeedback()
+        => _orderRunFeedbackService.BuildStopSelectionRequiredUiFeedback();
 
     public OrderRunStopUiFeedback BuildRunStopUiFeedback(OrderRunStopPhaseResult stopPhase, string orderDisplayId)
         => _orderRunFeedbackService.BuildStopUiFeedback(stopPhase, orderDisplayId);

@@ -93,9 +93,10 @@
     - `OrdersWorkspaceForm` now applies prepared feedback (status bar text, optional dialog, warning/info logs) instead of branching on phase internals.
     - Added post-run feedback models (`OrderRunStartProgressUiFeedback`, `OrderRunCompletionUiFeedback`) and moved start-progress/completion summaries (skipped reasons, server-skipped dialog, error summary, batch completion status) into `OrderRunFeedbackService`.
     - `RunSelectedOrderAsync` now delegates these decisions to application feedback methods and only renders the returned UI feedback.
-    - Added lifecycle feedback model (`OrderRunLifecycleUiFeedback`) for run command logs (`command-start`, `snapshot-refresh-failed`, `command-finish`) and switched `OrdersWorkspaceForm` to consume these logs from `IOrderApplicationService` instead of hardcoded `Logger.Info/Warn` branches.
+    - Added lifecycle feedback model (`OrderRunLifecycleUiFeedback`) for run/stop command logs (`command-start`, `stop-command-start`, `snapshot-refresh-failed`, `command-finish`) and switched `OrdersWorkspaceForm` to consume these logs from `IOrderApplicationService` instead of hardcoded `Logger.Info/Warn` branches.
+    - Moved run/stop precondition UI feedback (`no selection`) into `OrderRunFeedbackService` (`BuildRunSelectionRequiredUiFeedback`, `BuildStopSelectionRequiredUiFeedback`), so `OrdersWorkspaceForm` only renders returned feedback.
   - Validation:
     - `dotnet build Replica.csproj -c Debug` passed.
     - `dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj -c Release --filter \"OrderStatusTransitionServiceTests\"` passed (5/5).
-    - `dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj -c Release --filter \"OrderRunFeedbackServiceTests|OrderApplicationServiceTests\"` passed (24/24).
+    - `dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj -c Release --filter \"OrderRunFeedbackServiceTests|OrderApplicationServiceTests\"` passed (28/28).
 

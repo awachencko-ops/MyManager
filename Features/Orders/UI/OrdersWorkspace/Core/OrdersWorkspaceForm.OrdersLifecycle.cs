@@ -886,8 +886,9 @@ namespace Replica
             var selectedOrders = GetSelectedOrders();
             if (selectedOrders.Count == 0)
             {
-                SetBottomStatus("Выберите строку заказа для запуска");
-                MessageBox.Show(this, "Выберите строку заказа для запуска.", "Запуск", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                var selectionUiFeedback = _orderApplicationService.BuildRunSelectionRequiredUiFeedback();
+                SetBottomStatus(selectionUiFeedback.BottomStatus);
+                ShowOrderRunFeedbackDialog(selectionUiFeedback.Dialog);
                 return;
             }
 
@@ -1023,8 +1024,9 @@ namespace Replica
             var order = GetSelectedOrder();
             if (order == null)
             {
-                SetBottomStatus("Выберите заказ для остановки");
-                MessageBox.Show(this, "Выберите заказ для остановки.", "Остановка", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                var selectionUiFeedback = _orderApplicationService.BuildRunStopSelectionRequiredUiFeedback();
+                SetBottomStatus(selectionUiFeedback.BottomStatus);
+                ShowOrderRunFeedbackDialog(selectionUiFeedback.Dialog);
                 return;
             }
 
@@ -1036,7 +1038,7 @@ namespace Replica
                 ("order_id", GetOrderDisplayId(order)),
                 ("order_internal_id", order.InternalId),
                 ("use_lan_api", useLanApi ? "1" : "0"));
-            Logger.Info("RUN | stop-command-start");
+            ApplyOrderRunFeedbackLogs(_orderApplicationService.BuildRunStopCommandStartLifecycleUiFeedback().Logs);
 
             var stopPhase = await _orderApplicationService.ExecuteStopAsync(
                 order: order,

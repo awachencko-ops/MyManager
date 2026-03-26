@@ -54,6 +54,23 @@ public sealed class OrderApplicationServiceTests
     }
 
     [Fact]
+    public void BuildRunSelectionRequiredUiFeedback_ForwardedFromService_ReturnsAbortInfo()
+    {
+        var service = CreateService();
+
+        var runSelection = service.BuildRunSelectionRequiredUiFeedback();
+        var stopSelection = service.BuildRunStopSelectionRequiredUiFeedback();
+
+        Assert.True(runSelection.ShouldAbort);
+        Assert.Equal("Выберите строку заказа для запуска", runSelection.BottomStatus);
+        Assert.Equal(OrderRunFeedbackSeverity.Information, runSelection.Dialog?.Severity);
+
+        Assert.Equal("Выберите заказ для остановки", stopSelection.BottomStatus);
+        Assert.False(stopSelection.ShouldUpdateActionButtons);
+        Assert.Equal(OrderRunFeedbackSeverity.Information, stopSelection.Dialog?.Severity);
+    }
+
+    [Fact]
     public void BuildRunStopUiFeedback_ForConflict_ReturnsConflictBottomStatus()
     {
         var service = CreateService();
@@ -115,15 +132,20 @@ public sealed class OrderApplicationServiceTests
         var service = CreateService();
 
         var start = service.BuildRunCommandStartLifecycleUiFeedback();
+        var stopStart = service.BuildRunStopCommandStartLifecycleUiFeedback();
         var snapshot = service.BuildRunSnapshotRefreshWarningUiFeedback("run-stop", "00526");
         var finish = service.BuildRunCommandFinishLifecycleUiFeedback(2, 1);
 
         var startLog = Assert.Single(start.Logs);
+        var stopStartLog = Assert.Single(stopStart.Logs);
         var snapshotLog = Assert.Single(snapshot.Logs);
         var finishLog = Assert.Single(finish.Logs);
 
         Assert.Equal("RUN | command-start", startLog.Message);
         Assert.False(startLog.IsWarning);
+
+        Assert.Equal("RUN | stop-command-start", stopStartLog.Message);
+        Assert.False(stopStartLog.IsWarning);
 
         Assert.Equal("RUN | snapshot-refresh-failed | reason=run-stop | order=00526", snapshotLog.Message);
         Assert.True(snapshotLog.IsWarning);

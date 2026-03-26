@@ -253,6 +253,16 @@ public sealed class OrderRunFeedbackService
         }
     }
 
+    public OrderRunStartUiFeedback BuildRunSelectionRequiredUiFeedback()
+    {
+        return OrderRunStartUiFeedback.Abort(
+            bottomStatus: "Выберите строку заказа для запуска",
+            dialog: new OrderRunFeedbackDialog(
+                "Запуск",
+                "Выберите строку заказа для запуска.",
+                OrderRunFeedbackSeverity.Information));
+    }
+
     public OrderRunStartProgressUiFeedback BuildStartProgressUiFeedback(
         int runnableOrdersCount,
         OrderRunStateService.RunPlan runPlan,
@@ -328,6 +338,15 @@ public sealed class OrderRunFeedbackService
             logs:
             [
                 new OrderRunFeedbackLogEntry("RUN | command-start", isWarning: false)
+            ]);
+    }
+
+    public OrderRunLifecycleUiFeedback BuildRunStopCommandStartLifecycleUiFeedback()
+    {
+        return new OrderRunLifecycleUiFeedback(
+            logs:
+            [
+                new OrderRunFeedbackLogEntry("RUN | stop-command-start", isWarning: false)
             ]);
     }
 
@@ -431,5 +450,16 @@ public sealed class OrderRunFeedbackService
             shouldUpdateActionButtons: false,
             dialog: dialog,
             logs: logs);
+    }
+
+    public OrderRunStopUiFeedback BuildStopSelectionRequiredUiFeedback()
+    {
+        return new OrderRunStopUiFeedback(
+            bottomStatus: "Выберите заказ для остановки",
+            shouldUpdateActionButtons: false,
+            dialog: new OrderRunFeedbackDialog(
+                "Остановка",
+                "Выберите заказ для остановки.",
+                OrderRunFeedbackSeverity.Information));
     }
 }

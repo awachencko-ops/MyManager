@@ -83,6 +83,20 @@ public sealed class OrderRunFeedbackServiceTests
     }
 
     [Fact]
+    public void BuildRunSelectionRequiredUiFeedback_ReturnsAbortInfoDialog()
+    {
+        var service = new OrderRunFeedbackService();
+
+        var feedback = service.BuildRunSelectionRequiredUiFeedback();
+
+        Assert.True(feedback.ShouldAbort);
+        Assert.Equal("Выберите строку заказа для запуска", feedback.BottomStatus);
+        Assert.NotNull(feedback.Dialog);
+        Assert.Equal(OrderRunFeedbackSeverity.Information, feedback.Dialog!.Severity);
+        Assert.Equal("Запуск", feedback.Dialog.Caption);
+    }
+
+    [Fact]
     public void BuildStartUiFeedback_ForServerRejected_IncludesPreviewAndWarningLog()
     {
         var service = new OrderRunFeedbackService();
@@ -120,6 +134,20 @@ public sealed class OrderRunFeedbackServiceTests
         Assert.False(feedback.ShouldUpdateActionButtons);
         Assert.Single(feedback.Logs);
         Assert.True(feedback.Logs[0].IsWarning);
+    }
+
+    [Fact]
+    public void BuildStopSelectionRequiredUiFeedback_ReturnsInfoDialogAndNoActionUpdate()
+    {
+        var service = new OrderRunFeedbackService();
+
+        var feedback = service.BuildStopSelectionRequiredUiFeedback();
+
+        Assert.Equal("Выберите заказ для остановки", feedback.BottomStatus);
+        Assert.False(feedback.ShouldUpdateActionButtons);
+        Assert.NotNull(feedback.Dialog);
+        Assert.Equal(OrderRunFeedbackSeverity.Information, feedback.Dialog!.Severity);
+        Assert.Equal("Остановка", feedback.Dialog.Caption);
     }
 
     [Fact]
@@ -213,6 +241,18 @@ public sealed class OrderRunFeedbackServiceTests
 
         var log = Assert.Single(feedback.Logs);
         Assert.Equal("RUN | command-start", log.Message);
+        Assert.False(log.IsWarning);
+    }
+
+    [Fact]
+    public void BuildRunStopCommandStartLifecycleUiFeedback_ReturnsInfoStopStartLog()
+    {
+        var service = new OrderRunFeedbackService();
+
+        var feedback = service.BuildRunStopCommandStartLifecycleUiFeedback();
+
+        var log = Assert.Single(feedback.Logs);
+        Assert.Equal("RUN | stop-command-start", log.Message);
         Assert.False(log.IsWarning);
     }
 
