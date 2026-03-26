@@ -73,7 +73,7 @@ namespace Replica
             {
                 if (!EnsureServerWriteAllowed("Создание заказа"))
                     return;
-                CreateNewOrder();
+                await CreateNewOrderAsync();
                 return;
             }
 
@@ -127,19 +127,19 @@ namespace Replica
             }
         }
 
-        private void CreateNewOrder()
+        private async Task CreateNewOrderAsync()
         {
             if (!EnsureServerWriteAllowed("Создание заказа"))
                 return;
 
             var settings = _settingsProvider.Load();
             if (settings.UseExtendedMode)
-                CreateNewExtendedOrder();
+                await CreateNewExtendedOrderAsync();
             else
-                CreateNewSimpleOrder();
+                await CreateNewSimpleOrderAsync();
         }
 
-        private void CreateNewSimpleOrder()
+        private async Task CreateNewSimpleOrderAsync()
         {
             using var form = new SimpleOrderForm();
             if (form.ShowDialog(this) != DialogResult.OK)
@@ -158,19 +158,19 @@ namespace Replica
                 ImposingAction = "-"
             };
 
-            AddCreatedOrder(order);
+            await AddCreatedOrderAsync(order);
         }
 
-        private void CreateNewExtendedOrder()
+        private async Task CreateNewExtendedOrderAsync()
         {
             using var form = new OrderForm(_ordersRootPath);
             if (form.ShowDialog(this) != DialogResult.OK || form.ResultOrder == null)
                 return;
 
-            AddCreatedOrder(form.ResultOrder);
+            await AddCreatedOrderAsync(form.ResultOrder);
         }
 
-        private void AddCreatedOrder(OrderData order)
+        private async Task AddCreatedOrderAsync(OrderData order)
         {
             if (order == null)
                 return;
@@ -185,20 +185,19 @@ namespace Replica
                         order,
                         _lanApiBaseUrl,
                         ResolveLanApiActor(),
-                        NormalizeOrderUserName)
-                    .GetAwaiter()
-                    .GetResult();
+                        NormalizeOrderUserName);
+                var writeResultValue = await writeResult;
 
-                if (!writeResult.IsSuccess || writeResult.Order == null)
+                if (!writeResultValue.IsSuccess || writeResultValue.Order == null)
                 {
-                    ShowLanWriteError(writeResult, "Создание заказа");
+                    ShowLanWriteError(writeResultValue, "Создание заказа");
                     return;
                 }
 
-                UpsertOrderInHistory(writeResult.Order);
+                UpsertOrderInHistory(writeResultValue.Order);
                 TryRefreshRepositorySnapshotFromStorage(_orderHistory, "lan-api-create-order");
                 RebuildOrdersGrid();
-                TryRestoreSelectedRowByTag(OrderGridLogic.BuildOrderTag(writeResult.Order.InternalId));
+                TryRestoreSelectedRowByTag(OrderGridLogic.BuildOrderTag(writeResultValue.Order.InternalId));
                 return;
             }
 
@@ -209,6 +208,12 @@ namespace Replica
             SaveHistory();
             RebuildOrdersGrid();
             TryRestoreSelectedRowByTag(OrderGridLogic.BuildOrderTag(orderInternalId));
+        }
+
+        // Backward-compatible sync entry point used by legacy reflective smoke harness.
+        private void AddCreatedOrder(OrderData order)
+        {
+            AddCreatedOrderAsync(order).GetAwaiter().GetResult();
         }
 
         private void EditOrderFromGrid(int rowIndex)
