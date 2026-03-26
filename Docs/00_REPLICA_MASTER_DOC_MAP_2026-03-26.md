@@ -25,6 +25,8 @@
 | Tech debt burn | Completed | `Docs/ready/TECH_DEBT_BURNDOWN_NOW.md` |
 | Installer/packaging | Planned | `Docs/active/INSTALLER_AND_DEPENDENCIES_PACKAGING_PLAN.md` |
 
+| New Architecture roadmap (Service-First / Push-Pull / MediatR) | In progress | `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_SERVICE_FIRST_ROADMAP_2026-03-26.md` |
+
 ## 3. Структура папок
 
 ### 3.1 `Docs/active` (текущее управление работой)
@@ -50,7 +52,11 @@
 11. `OPERATIONS_SLO_RUNBOOK.md`
 12. `TECH_DEBT_BURNDOWN_NOW.md`
 
-### 3.3 `Docs/archive` (исторические/снятые с активного контура)
+### 3.3 `Docs/НОВАЯ АРХИТЕКТУРА` (новый целевой план)
+
+1. `REPLICA_SERVICE_FIRST_ROADMAP_2026-03-26.md`
+
+### 3.4 `Docs/archive` (исторические/снятые с активного контура)
 
 1. `CATALOGIZATION_MEMO.md`
 2. `UNIVERSAL_LAN_GROUPORDER_IMPLEMENTATION_BRIEF.md`
