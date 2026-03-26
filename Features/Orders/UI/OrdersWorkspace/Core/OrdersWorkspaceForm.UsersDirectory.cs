@@ -39,11 +39,19 @@ namespace Replica
             var nextUsers = loadResult.Users.Count > 0
                 ? loadResult.Users
                 : fallbackUsers;
-            if (AreUserListsEqual(_filterUsers, nextUsers))
+            var nextServerUsers = loadResult.ServerUsersByDisplayName.Count > 0
+                ? loadResult.ServerUsersByDisplayName
+                : BuildDefaultServerUsersMap(nextUsers);
+            if (AreUserListsEqual(_filterUsers, nextUsers) && AreUserMappingsEqual(_serverUsersByDisplayName, nextServerUsers))
                 return;
 
+            _users.Clear();
+            _users.AddRange(nextUsers);
             _filterUsers.Clear();
             _filterUsers.AddRange(nextUsers);
+            _serverUsersByDisplayName.Clear();
+            foreach (var entry in nextServerUsers)
+                _serverUsersByDisplayName[entry.Key] = entry.Value;
 
             var selectedUsersChanged = RemoveUnavailableSelectedUsers();
             var historyChanged = NormalizeOrderUsersInHistory();
@@ -73,7 +81,7 @@ namespace Replica
             if (_users.Count > 0)
                 return _users[0];
 
-            return "Сервер \"Таудеми\"";
+            return UserIdentityResolver.DefaultDisplayName;
         }
 
         private bool NormalizeOrderUsersInHistory()
@@ -107,6 +115,21 @@ namespace Replica
             return normalized;
         }
 
+        private static Dictionary<string, string> BuildDefaultServerUsersMap(IEnumerable<string> users)
+        {
+            var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var user in users ?? Enumerable.Empty<string>())
+            {
+                if (string.IsNullOrWhiteSpace(user))
+                    continue;
+
+                var displayName = user.Trim();
+                map[displayName] = UserIdentityResolver.ResolveServerUserName(displayName);
+            }
+
+            return map;
+        }
+
         private bool RemoveUnavailableSelectedUsers()
         {
             if (_selectedFilterUsers.Count == 0)
@@ -136,6 +159,23 @@ namespace Replica
                     continue;
 
                 return false;
+            }
+
+            return true;
+        }
+
+        private static bool AreUserMappingsEqual(IReadOnlyDictionary<string, string> left, IReadOnlyDictionary<string, string> right)
+        {
+            if (left.Count != right.Count)
+                return false;
+
+            foreach (var entry in left)
+            {
+                if (!right.TryGetValue(entry.Key, out var rightValue))
+                    return false;
+
+                if (!string.Equals(entry.Value, rightValue, StringComparison.OrdinalIgnoreCase))
+                    return false;
             }
 
             return true;

@@ -847,9 +847,17 @@ namespace Replica
 
         private string ResolveLanApiActor()
         {
-            return string.IsNullOrWhiteSpace(_currentUserName)
-                ? "replica-ui"
+            var displayName = string.IsNullOrWhiteSpace(_currentUserName)
+                ? GetDefaultUserName()
                 : _currentUserName.Trim();
+
+            if (_serverUsersByDisplayName.TryGetValue(displayName, out var serverUserName) &&
+                !string.IsNullOrWhiteSpace(serverUserName))
+            {
+                return serverUserName.Trim();
+            }
+
+            return UserIdentityResolver.ResolveServerUserName(displayName);
         }
 
         private bool TryRefreshRepositorySnapshotFromStorage(IReadOnlyCollection<OrderData> localOrders, string reason)

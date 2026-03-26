@@ -8,9 +8,17 @@ namespace Replica
 {
     internal static class UsersDirectoryService
     {
+        internal sealed class UserEntry
+        {
+            public string DisplayName { get; init; } = string.Empty;
+            public string ServerName { get; init; } = string.Empty;
+        }
+
         internal sealed class LoadResult
         {
             public IReadOnlyList<string> Users { get; init; } = Array.Empty<string>();
+            public IReadOnlyDictionary<string, string> ServerUsersByDisplayName { get; init; } =
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             public bool LoadedFromSource { get; init; }
             public bool LoadedFromCache { get; init; }
             public string StatusText { get; init; } = string.Empty;
@@ -18,7 +26,7 @@ namespace Replica
 
         public static LoadResult Load(string sourceFilePath, string cacheFilePath, IEnumerable<string> fallbackUsers)
         {
-            var fallback = NormalizeUsers(fallbackUsers);
+            var fallback = NormalizeEntries(fallbackUsers?.Select(userName => CreateUserEntry(userName, null)));
 
             if (TryReadUsersFile(sourceFilePath, out var sourceUsers, out var sourceError))
             {
@@ -27,7 +35,8 @@ namespace Replica
                     WriteCache(cacheFilePath, fallback);
                     return new LoadResult
                     {
-                        Users = fallback,
+                        Users = fallback.Select(entry => entry.DisplayName).ToList(),
+                        ServerUsersByDisplayName = ToServerUsersMap(fallback),
                         LoadedFromSource = true,
                         StatusText = $"Пользователи: источник пуст, использован fallback ({Path.GetFileName(sourceFilePath)})"
                     };
@@ -36,7 +45,8 @@ namespace Replica
                 WriteCache(cacheFilePath, sourceUsers);
                 return new LoadResult
                 {
-                    Users = sourceUsers,
+                    Users = sourceUsers.Select(entry => entry.DisplayName).ToList(),
+                    ServerUsersByDisplayName = ToServerUsersMap(sourceUsers),
                     LoadedFromSource = true,
                     StatusText = $"Пользователи: источник ({Path.GetFileName(sourceFilePath)})"
                 };
@@ -46,7 +56,8 @@ namespace Replica
             {
                 return new LoadResult
                 {
-                    Users = cacheUsers,
+                    Users = cacheUsers.Select(entry => entry.DisplayName).ToList(),
+                    ServerUsersByDisplayName = ToServerUsersMap(cacheUsers),
                     LoadedFromCache = true,
                     StatusText = $"Пользователи: кэш ({Path.GetFileName(cacheFilePath)})"
                 };
@@ -56,12 +67,13 @@ namespace Replica
             var cacheReason = string.IsNullOrWhiteSpace(cacheError) ? "кэш недоступен" : cacheError;
             return new LoadResult
             {
-                Users = fallback,
+                Users = fallback.Select(entry => entry.DisplayName).ToList(),
+                ServerUsersByDisplayName = ToServerUsersMap(fallback),
                 StatusText = $"Пользователи: fallback ({sourceReason}; {cacheReason})"
             };
         }
 
-        private static bool TryReadUsersFile(string? filePath, out List<string> users, out string? error)
+        private static bool TryReadUsersFile(string? filePath, out List<UserEntry> users, out string? error)
         {
             users = [];
             error = null;
@@ -82,7 +94,7 @@ namespace Replica
                 }
 
                 var json = File.ReadAllText(resolvedPath);
-                users = ParseUsers(json);
+                users = ParseUsersWithServerNames(json);
                 return true;
             }
             catch (Exception ex)
@@ -98,10 +110,21 @@ namespace Replica
                 return [];
 
             using var document = JsonDocument.Parse(json);
-            return NormalizeUsers(ExtractUsers(document.RootElement));
+            return NormalizeEntries(ExtractUsers(document.RootElement))
+                .Select(entry => entry.DisplayName)
+                .ToList();
         }
 
-        private static IEnumerable<string> ExtractUsers(JsonElement element)
+        private static List<UserEntry> ParseUsersWithServerNames(string json)
+        {
+            if (string.IsNullOrWhiteSpace(json))
+                return [];
+
+            using var document = JsonDocument.Parse(json);
+            return NormalizeEntries(ExtractUsers(document.RootElement));
+        }
+
+        private static IEnumerable<UserEntry> ExtractUsers(JsonElement element)
         {
             if (element.ValueKind == JsonValueKind.Array)
             {
@@ -118,7 +141,7 @@ namespace Replica
             {
                 var value = element.GetString();
                 if (!string.IsNullOrWhiteSpace(value))
-                    yield return value.Trim();
+                    yield return CreateUserEntry(value, null);
 
                 yield break;
             }
@@ -148,8 +171,13 @@ namespace Replica
                 ?? TryGetStringProperty(element, "displayName")
                 ?? TryGetStringProperty(element, "fullName")
                 ?? TryGetStringProperty(element, "title");
+            var serverName = TryGetStringProperty(element, "serverName")
+                ?? TryGetStringProperty(element, "serverUserName")
+                ?? TryGetStringProperty(element, "serverLogin")
+                ?? TryGetStringProperty(element, "login")
+                ?? TryGetStringProperty(element, "actor");
             if (!string.IsNullOrWhiteSpace(userName))
-                yield return userName.Trim();
+                yield return CreateUserEntry(userName, serverName);
         }
 
         private static string? TryGetStringProperty(JsonElement element, string propertyName)
@@ -180,25 +208,44 @@ namespace Replica
             return false;
         }
 
-        private static List<string> NormalizeUsers(IEnumerable<string> users)
+        private static List<UserEntry> NormalizeEntries(IEnumerable<UserEntry>? users)
         {
-            var normalizedUsers = new List<string>();
+            var normalizedUsers = new List<UserEntry>();
             var uniqueUsers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var user in users ?? Enumerable.Empty<string>())
+            foreach (var user in users ?? Enumerable.Empty<UserEntry>())
             {
-                if (string.IsNullOrWhiteSpace(user))
+                if (user == null || string.IsNullOrWhiteSpace(user.DisplayName))
                     continue;
 
-                var normalizedUser = user.Trim();
-                if (uniqueUsers.Add(normalizedUser))
+                var normalizedUser = CreateUserEntry(user.DisplayName, user.ServerName);
+                if (uniqueUsers.Add(normalizedUser.DisplayName))
                     normalizedUsers.Add(normalizedUser);
             }
 
             return normalizedUsers;
         }
 
-        private static void WriteCache(string cacheFilePath, IReadOnlyCollection<string> users)
+        private static UserEntry CreateUserEntry(string? displayName, string? serverName)
+        {
+            var normalizedDisplayName = UserIdentityResolver.ResolveDisplayUserName(displayName);
+            return new UserEntry
+            {
+                DisplayName = normalizedDisplayName,
+                ServerName = UserIdentityResolver.ResolveServerUserName(normalizedDisplayName, serverName)
+            };
+        }
+
+        private static IReadOnlyDictionary<string, string> ToServerUsersMap(IEnumerable<UserEntry> users)
+        {
+            var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var user in users)
+                map[user.DisplayName] = user.ServerName;
+
+            return map;
+        }
+
+        private static void WriteCache(string cacheFilePath, IReadOnlyCollection<UserEntry> users)
         {
             if (string.IsNullOrWhiteSpace(cacheFilePath))
                 return;

@@ -95,8 +95,12 @@ namespace Replica
         private string _connectionStatusToolTipContent = string.Empty;
         private OrdersViewMode _ordersViewMode = OrdersViewMode.List;
 
-        private readonly List<string> _users = ["Сервер \"Таудеми\""];
-        private readonly List<string> _filterUsers = ["Сервер \"Таудеми\""];
+        private readonly List<string> _users = [UserIdentityResolver.DefaultDisplayName];
+        private readonly List<string> _filterUsers = [UserIdentityResolver.DefaultDisplayName];
+        private readonly Dictionary<string, string> _serverUsersByDisplayName = new(StringComparer.OrdinalIgnoreCase)
+        {
+            [UserIdentityResolver.DefaultDisplayName] = UserIdentityResolver.DefaultServerName
+        };
         private string _usersSourceFilePath = AppSettings.DefaultUsersFilePath;
         private string _usersCacheFilePath = AppSettings.DefaultUsersCacheFilePath;
         private bool _usersLoadedFromCache;

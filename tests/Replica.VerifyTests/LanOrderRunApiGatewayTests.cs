@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Replica.Shared;
 using Xunit;
 
 namespace Replica.VerifyTests;
@@ -78,6 +79,32 @@ public sealed class LanOrderRunApiGatewayTests
         Assert.True(result.IsConflict);
         Assert.Equal(77, result.CurrentVersion);
         Assert.Contains("run already active", result.Error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task StartRunAsync_WithNonAsciiActor_SendsEncodedActorHeader()
+    {
+        var handler = new StubHttpMessageHandler((_, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    "{\"internalId\":\"order-ru\",\"status\":\"Processing\",\"version\":13}",
+                    Encoding.UTF8,
+                    "application/json")
+            }));
+
+        var gateway = new LanOrderRunApiGateway(new HttpClient(handler));
+        var result = await gateway.StartRunAsync(
+            "http://localhost:5000/",
+            "order-ru",
+            expectedOrderVersion: 12,
+            actor: "Сергей");
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(handler.LastRequest);
+        Assert.False(handler.LastRequest!.Headers.TryGetValues(CurrentUserHeaderCodec.HeaderName, out _));
+        Assert.True(handler.LastRequest.Headers.TryGetValues(CurrentUserHeaderCodec.EncodedHeaderName, out var encodedActors));
+        Assert.Equal("Сергей", CurrentUserHeaderCodec.TryDecode(encodedActors.Single(), out var actor) ? actor : string.Empty);
     }
 
     [Fact]

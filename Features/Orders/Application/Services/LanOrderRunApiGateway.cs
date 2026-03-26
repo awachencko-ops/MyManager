@@ -5,6 +5,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Replica.Shared;
 using Replica.Shared.Models;
 
 namespace Replica;
@@ -114,8 +115,7 @@ public sealed class LanOrderRunApiGateway : ILanOrderRunApiGateway
 
             request.Headers.TryAddWithoutValidation(CorrelationHeaderName, correlationId);
             request.Headers.TryAddWithoutValidation(IdempotencyHeaderName, idempotencyKey);
-            if (!string.IsNullOrWhiteSpace(actor))
-                request.Headers.TryAddWithoutValidation("X-Current-User", actor.Trim());
+            TryAddActorHeader(request, actor);
 
             Logger.Info($"LAN-API | command-send | target={requestUri} | idempotency_key={idempotencyKey}");
             using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
@@ -167,6 +167,23 @@ public sealed class LanOrderRunApiGateway : ILanOrderRunApiGateway
         var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(source));
         var shortHash = Convert.ToHexString(hash.AsSpan(0, 12)).ToLowerInvariant();
         return $"replica-{command}-{shortHash}";
+    }
+
+    private static void TryAddActorHeader(HttpRequestMessage request, string actor)
+    {
+        if (string.IsNullOrWhiteSpace(actor))
+            return;
+
+        var normalizedActor = actor.Trim();
+        if (CurrentUserHeaderCodec.RequiresEncoding(normalizedActor))
+        {
+            request.Headers.TryAddWithoutValidation(
+                CurrentUserHeaderCodec.EncodedHeaderName,
+                CurrentUserHeaderCodec.Encode(normalizedActor));
+            return;
+        }
+
+        request.Headers.TryAddWithoutValidation(CurrentUserHeaderCodec.HeaderName, normalizedActor);
     }
 
     private static bool TryBuildCommandUri(string apiBaseUrl, string orderInternalId, string command, out Uri? requestUri)

@@ -2,6 +2,7 @@
 using Replica.Api.Contracts;
 using Replica.Api.Infrastructure;
 using Replica.Api.Services;
+using Replica.Shared;
 using Replica.Shared.Models;
 using System;
 using System.Linq;
@@ -255,8 +256,11 @@ public sealed class OrdersController : ControllerBase
         actor = string.Empty;
         validationError = null;
 
-        if (Request.Headers.TryGetValue("X-Current-User", out var actorHeader))
+        if (Request.Headers.TryGetValue(CurrentUserHeaderCodec.HeaderName, out var actorHeader))
             actor = actorHeader.ToString().Trim();
+        else if (Request.Headers.TryGetValue(CurrentUserHeaderCodec.EncodedHeaderName, out var encodedActorHeader)
+            && CurrentUserHeaderCodec.TryDecode(encodedActorHeader.ToString(), out var decodedActor))
+            actor = decodedActor;
 
         if (string.IsNullOrWhiteSpace(actor))
         {
@@ -270,6 +274,10 @@ public sealed class OrdersController : ControllerBase
             .ToList();
 
         if (knownUsers.Count == 0)
+            return true;
+
+        // Allow bootstrap environments to migrate away from the legacy placeholder user.
+        if (knownUsers.All(user => string.Equals(user.Name.Trim(), "Сервер \"Таудеми\"", StringComparison.OrdinalIgnoreCase)))
             return true;
 
         var actorCandidate = actor;

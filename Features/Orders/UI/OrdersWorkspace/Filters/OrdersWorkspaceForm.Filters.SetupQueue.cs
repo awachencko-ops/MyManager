@@ -353,8 +353,7 @@ namespace Replica
             if (_serverHeaderTitleLabel == null)
                 return;
 
-            var userName = _users.FirstOrDefault();
-            _currentUserName = string.IsNullOrWhiteSpace(userName) ? "Сервер" : userName;
+            _currentUserName = GetDefaultUserName();
             _serverHeaderTitleLabel.Text = _currentUserName;
         }
 

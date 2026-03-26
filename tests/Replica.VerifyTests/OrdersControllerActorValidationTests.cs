@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Replica.Api.Contracts;
 using Replica.Api.Controllers;
 using Replica.Api.Services;
+using Replica.Shared;
 using Replica.Shared.Models;
 using Xunit;
 
@@ -66,7 +67,38 @@ public sealed class OrdersControllerActorValidationTests
         Assert.Equal("operator3", order.CreatedById);
     }
 
-    private static OrdersController CreateController(StubLanOrderStore store, string? actor = null)
+    [Fact]
+    public void CreateOrder_WithEncodedActorHeader_AllowsAndUsesDecodedActor()
+    {
+        var store = new StubLanOrderStore();
+        var controller = CreateController(store, encodedActor: "Сергей");
+
+        var result = controller.CreateOrder(new CreateOrderRequest { OrderNumber = "1005" });
+
+        var created = Assert.IsType<CreatedAtActionResult>(result.Result);
+        var order = Assert.IsType<SharedOrder>(created.Value);
+        Assert.Equal("Сергей", store.LastActor);
+        Assert.Equal("Сергей", order.CreatedByUser);
+        Assert.Equal("Сергей", order.CreatedById);
+    }
+
+    [Fact]
+    public void CreateOrder_WithLegacyBootstrapUser_AllowsNewActor()
+    {
+        var store = new StubLanOrderStore();
+        store.Users.Add(new SharedUser { Name = "Сервер \"Таудеми\"", IsActive = true });
+        var controller = CreateController(store, actor: "Andrew");
+
+        var result = controller.CreateOrder(new CreateOrderRequest { OrderNumber = "1006" });
+
+        var created = Assert.IsType<CreatedAtActionResult>(result.Result);
+        var order = Assert.IsType<SharedOrder>(created.Value);
+        Assert.Equal("Andrew", store.LastActor);
+        Assert.Equal("Andrew", order.CreatedByUser);
+        Assert.Equal("Andrew", order.CreatedById);
+    }
+
+    private static OrdersController CreateController(StubLanOrderStore store, string? actor = null, string? encodedActor = null)
     {
         var controller = new OrdersController(store, NullLogger<OrdersController>.Instance)
         {
@@ -77,7 +109,9 @@ public sealed class OrdersControllerActorValidationTests
         };
 
         if (!string.IsNullOrWhiteSpace(actor))
-            controller.ControllerContext.HttpContext.Request.Headers["X-Current-User"] = actor;
+            controller.ControllerContext.HttpContext.Request.Headers[CurrentUserHeaderCodec.HeaderName] = actor;
+        if (!string.IsNullOrWhiteSpace(encodedActor))
+            controller.ControllerContext.HttpContext.Request.Headers[CurrentUserHeaderCodec.EncodedHeaderName] = CurrentUserHeaderCodec.Encode(encodedActor);
 
         return controller;
     }

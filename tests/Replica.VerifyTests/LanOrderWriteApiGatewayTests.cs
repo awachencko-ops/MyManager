@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Replica.Shared;
 using Xunit;
 
 namespace Replica.VerifyTests;
@@ -265,6 +266,35 @@ public sealed class LanOrderWriteApiGatewayTests
         Assert.Equal("/api/orders/order-6/items/i-6a", handler.LastRequest.RequestUri!.AbsolutePath);
         Assert.Contains("\"expectedOrderVersion\":18", requestBody, StringComparison.Ordinal);
         Assert.Contains("\"expectedItemVersion\":4", requestBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CreateOrderAsync_WithNonAsciiActor_SendsEncodedActorHeader()
+    {
+        var handler = new StubHttpMessageHandler((_, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.Created)
+            {
+                Content = new StringContent(
+                    "{\"internalId\":\"order-7\",\"orderNumber\":\"1007\",\"status\":\"Waiting\",\"version\":1}",
+                    Encoding.UTF8,
+                    "application/json")
+            }));
+
+        var gateway = new LanOrderWriteApiGateway(new HttpClient(handler));
+        var result = await gateway.CreateOrderAsync(
+            "http://localhost:5000/",
+            new LanCreateOrderRequest
+            {
+                OrderNumber = "1007",
+                UserName = "Сергей"
+            },
+            actor: "Сергей");
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(handler.LastRequest);
+        Assert.False(handler.LastRequest!.Headers.TryGetValues(CurrentUserHeaderCodec.HeaderName, out _));
+        Assert.True(handler.LastRequest.Headers.TryGetValues(CurrentUserHeaderCodec.EncodedHeaderName, out var encodedActors));
+        Assert.Equal("Сергей", CurrentUserHeaderCodec.TryDecode(encodedActors.Single(), out var actor) ? actor : string.Empty);
     }
 
     [Fact]

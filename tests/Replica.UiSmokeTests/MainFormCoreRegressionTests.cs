@@ -213,6 +213,45 @@ public sealed class MainFormCoreRegressionTests
     }
 
     [Fact]
+    public void SR10_UsersDirectory_LoadsDisplayAndServerNames()
+    {
+        var tempRootPath = Path.Combine(Path.GetTempPath(), "Replica_UsersDirectory_SR10", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempRootPath);
+
+        try
+        {
+            var sourcePath = Path.Combine(tempRootPath, "users.json");
+            var cachePath = Path.Combine(tempRootPath, "users.cache.json");
+            File.WriteAllText(
+                sourcePath,
+                """
+                [
+                  { "displayName": "Андрей", "serverName": "Andrew" },
+                  { "displayName": "Оператор 2", "serverName": "operator-2" }
+                ]
+                """);
+
+            var loadResult = InvokeUsersDirectoryLoad(sourcePath, cachePath, new[] { "Fallback User" });
+
+            Assert.Equal(new[] { "Андрей", "Оператор 2" }, GetUsers(loadResult));
+            var serverUsers = GetServerUsers(loadResult);
+            Assert.Equal("Andrew", serverUsers["Андрей"]);
+            Assert.Equal("operator-2", serverUsers["Оператор 2"]);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(tempRootPath, recursive: true);
+            }
+            catch
+            {
+                // Ignore cleanup races.
+            }
+        }
+    }
+
+    [Fact]
     public void SR12_UsersDirectory_UsesCache_WhenSourceUnavailable()
     {
         var tempRootPath = Path.Combine(Path.GetTempPath(), "Replica_UsersDirectory_SR12", Guid.NewGuid().ToString("N"));
@@ -245,6 +284,22 @@ public sealed class MainFormCoreRegressionTests
                 // Ignore cleanup races.
             }
         }
+    }
+
+    [Fact]
+    public void SR12A_ResolveLanApiActor_UsesMappedServerUserName()
+    {
+        MainFormTestHarness.RunWithIsolatedForm((form, _) =>
+        {
+            MainFormTestHarness.SetPrivateField(form, "_currentUserName", "Андрей");
+            var serverUsers = MainFormTestHarness.GetPrivateField<Dictionary<string, string>>(form, "_serverUsersByDisplayName");
+            serverUsers.Clear();
+            serverUsers["Андрей"] = "Andrew";
+
+            var actor = (string?)MainFormTestHarness.InvokePrivate(form, "ResolveLanApiActor");
+
+            Assert.Equal("Andrew", actor);
+        });
     }
 
     [Fact]
@@ -993,6 +1048,30 @@ public sealed class MainFormCoreRegressionTests
             return Array.Empty<string>();
 
         return users.ToArray();
+    }
+
+    private static Dictionary<string, string> GetServerUsers(object loadResult)
+    {
+        var usersValue = GetProperty(loadResult, "ServerUsersByDisplayName");
+        if (usersValue is not IEnumerable serverUsers)
+            return [];
+
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in serverUsers)
+        {
+            var itemType = item?.GetType();
+            if (itemType == null)
+                continue;
+
+            var keyProperty = itemType.GetProperty("Key", BindingFlags.Public | BindingFlags.Instance);
+            var valueProperty = itemType.GetProperty("Value", BindingFlags.Public | BindingFlags.Instance);
+            var key = keyProperty?.GetValue(item) as string;
+            var value = valueProperty?.GetValue(item) as string;
+            if (!string.IsNullOrWhiteSpace(key) && value != null)
+                result[key] = value;
+        }
+
+        return result;
     }
 
     private static object? GetProperty(object target, string propertyName)
