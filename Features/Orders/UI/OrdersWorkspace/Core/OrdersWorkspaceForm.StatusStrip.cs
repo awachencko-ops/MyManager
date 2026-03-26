@@ -270,12 +270,12 @@ namespace Replica
             }
             else if (dependencyHealthLevel == DependencyHealthLevel.Unavailable)
             {
-                shortStatusText = "hotfolder недоступен";
+                shortStatusText = "сервисы недоступны";
                 statusColor = Color.Firebrick;
             }
             else if (dependencyHealthLevel == DependencyHealthLevel.Degraded)
             {
-                shortStatusText = "подключен (деградация)";
+                shortStatusText = "подключен, деградация";
                 statusColor = Color.DarkOrange;
             }
             else
@@ -345,13 +345,13 @@ namespace Replica
                 {
                     DependencyHealthLevel.Unavailable => "недоступно",
                     DependencyHealthLevel.Degraded => "деградация",
-                    _ => "ok"
+                    _ => "доступно"
                 };
 
                 parts.Add($"{dependency.Key}: {levelText}");
             }
 
-            return "Hotfolder health: " + string.Join(", ", parts);
+            return "Сервисы: " + string.Join(", ", parts);
         }
 
         private void UpdateLanApiConnectionIndicator(DependencyHealthLevel dependencyHealthLevel)
@@ -371,7 +371,7 @@ namespace Replica
                 shortStatusText = _lanApiRecoveryInProgress
                     ? "переподключение..."
                     : (!snapshot.ApiReachable
-                        ? (snapshot.CompletedAtUtc == DateTime.MinValue ? "проверка..." : "нет ответа API")
+                        ? (snapshot.CompletedAtUtc == DateTime.MinValue ? "проверка..." : "нет связи")
                         : "не подключен");
                 statusColor = Color.Firebrick;
             }
@@ -382,7 +382,7 @@ namespace Replica
             {
                 shortStatusText = snapshot.CompletedAtUtc == DateTime.MinValue
                     ? "проверка..."
-                    : "нестабильно, перепроверяем";
+                    : "связь нестабильна";
                 statusColor = Color.DarkOrange;
             }
             else if (LanApiConnectionStatusEvaluator.IsDegraded(
@@ -393,13 +393,13 @@ namespace Replica
                          dependencyHealthLevel))
             {
                 shortStatusText = snapshot.IsReady
-                    ? "подключен (деградация)"
-                    : "API доступен, ждём ready";
+                    ? "подключен, деградация"
+                    : "подключен, ожидание ready";
                 statusColor = Color.DarkOrange;
             }
             else if (!string.IsNullOrWhiteSpace(snapshot.ProcessAlert))
             {
-                shortStatusText = "подключен (ошибки API)";
+                shortStatusText = "подключен, ошибка API";
                 statusColor = Color.DarkOrange;
             }
             else
@@ -487,7 +487,7 @@ namespace Replica
             if (snapshot.RequestedAtUtc > DateTime.MinValue)
                 lines.Add($"Последний запрос: {FormatLanProbeStamp(snapshot.RequestedAtUtc)}");
             if (snapshot.CompletedAtUtc > DateTime.MinValue)
-                lines.Add($"Последний ответ: {FormatLanProbeStamp(snapshot.CompletedAtUtc)}");
+                lines.Add($"Последняя проверка: {FormatLanProbeStamp(snapshot.CompletedAtUtc)}");
             if (snapshot.SuccessfulAtUtc > DateTime.MinValue)
                 lines.Add($"Последний успешный ответ: {FormatLanProbeStamp(snapshot.SuccessfulAtUtc)}");
 
@@ -496,20 +496,20 @@ namespace Replica
                 && snapshot.WriteSuccessRatio >= 0)
             {
                 lines.Add(
-                    $"SLO: avail={snapshot.AvailabilityRatio:0.000}, p95={snapshot.LatencyP95Ms:0.#} ms, write={snapshot.WriteSuccessRatio:0.000}");
+                    $"SLO: доступность={snapshot.AvailabilityRatio:0.000}, p95={snapshot.LatencyP95Ms:0.#} ms, write={snapshot.WriteSuccessRatio:0.000}");
             }
 
             lines.Add($"Проверок за сессию: {requestCount}");
             if (snapshot.ConsecutiveFailureCount > 0)
-                lines.Add($"Неудачных проверок подряд: {snapshot.ConsecutiveFailureCount}");
+                lines.Add($"Сбоев подряд: {snapshot.ConsecutiveFailureCount}");
 
             if (probeInProgress)
                 lines.Add("Проверка выполняется...");
             if (!string.IsNullOrWhiteSpace(snapshot.Error))
-                lines.Add($"Ошибка: {snapshot.Error}");
+                lines.Add($"Ошибка: {TruncateTooltipText(snapshot.Error)}");
             if (snapshot.HttpRequests5xx >= 0 || snapshot.WriteBadRequest >= 0)
             {
-                lines.Add($"Ошибки API: HTTP 5xx={Math.Max(0, snapshot.HttpRequests5xx)}, write bad_request={Math.Max(0, snapshot.WriteBadRequest)}");
+                lines.Add($"Ошибки API: 5xx={Math.Max(0, snapshot.HttpRequests5xx)}, bad_request={Math.Max(0, snapshot.WriteBadRequest)}");
             }
             if (snapshot.LastServerEventAtUtc > DateTime.MinValue)
             {
@@ -519,15 +519,27 @@ namespace Replica
                 lines.Add($"Последняя серверная операция: {snapshot.LastServerEventType} (order={eventOrderText}, {FormatLanProbeStamp(snapshot.LastServerEventAtUtc)})");
             }
             if (!string.IsNullOrWhiteSpace(snapshot.ProcessAlert))
-                lines.Add($"Сбой на сервере: {snapshot.ProcessAlert}");
+                lines.Add($"Сбой на сервере: {TruncateTooltipText(snapshot.ProcessAlert)}");
             if (dependencyHealthLevel != DependencyHealthLevel.Healthy)
-                lines.Add($"Hotfolder: {BuildDependencyHealthSummary()}");
+                lines.Add(BuildDependencyHealthSummary());
             if (_lanConnectionRecoveryActionEnabled)
-                lines.Add("Действие: нажмите на статус '↻ Сервер...' для переподключения.");
+                lines.Add("Нажмите на красный статус для переподключения.");
             if (!string.IsNullOrWhiteSpace(_usersDirectoryStatusText))
                 lines.Add(_usersDirectoryStatusText);
 
             return string.Join(Environment.NewLine, lines.Where(line => !string.IsNullOrWhiteSpace(line)));
+        }
+
+        private static string TruncateTooltipText(string text, int maxLength = 260)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return string.Empty;
+
+            var normalized = text.Trim();
+            if (normalized.Length <= maxLength)
+                return normalized;
+
+            return normalized.Substring(0, maxLength - 3) + "...";
         }
 
         private void RequestLanServerProbe(string reason, bool force = false)

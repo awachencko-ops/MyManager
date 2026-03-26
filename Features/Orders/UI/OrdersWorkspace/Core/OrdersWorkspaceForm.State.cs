@@ -111,7 +111,7 @@ namespace Replica
         private string _usersSourceFilePath = AppSettings.DefaultUsersFilePath;
         private string _usersCacheFilePath = AppSettings.DefaultUsersCacheFilePath;
         private bool _usersLoadedFromCache;
-        private string _usersDirectoryStatusText = "Пользователи: fallback";
+        private string _usersDirectoryStatusText = "Пользователи: не проверены";
         private DateTime _usersDirectoryLastRefreshAt = DateTime.MinValue;
 
         private static readonly string[] QueueStatuses = QueueStatusNames.All;

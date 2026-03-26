@@ -293,10 +293,10 @@ public sealed class LanOrderWriteApiGatewayTests
 
         Assert.True(result.IsSuccess);
         Assert.NotNull(handler.LastRequest);
-        Assert.True(handler.LastRequest!.Headers.TryGetValues(CurrentUserHeaderCodec.HeaderName, out var plainActors));
+        Assert.False(handler.LastRequest!.Headers.TryGetValues(CurrentUserHeaderCodec.HeaderName, out _));
         Assert.True(handler.LastRequest.Headers.TryGetValues(CurrentUserHeaderCodec.EncodedHeaderName, out var encodedActors));
         Assert.True(CurrentUserHeaderCodec.TryDecode(encodedActors.Single(), out var actor));
-        Assert.Equal(actor, plainActors.Single());
+        Assert.Equal(actorName, actor);
     }
 
     [Fact]

@@ -371,12 +371,12 @@ namespace Replica
             {
                 if (dependencyHealthLevel == DependencyHealthLevel.Unavailable)
                 {
-                    statusText = "hotfolder недоступен";
+                    statusText = "сервисы недоступны";
                     statusColor = Color.Firebrick;
                 }
                 else if (dependencyHealthLevel == DependencyHealthLevel.Degraded)
                 {
-                    statusText = "подключен (деградация)";
+                    statusText = "подключен, деградация";
                     statusColor = Color.DarkOrange;
                 }
                 else

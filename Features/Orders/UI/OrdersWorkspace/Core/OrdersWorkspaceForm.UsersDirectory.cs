@@ -33,16 +33,34 @@ namespace Replica
                 : _users;
 
             UsersDirectoryService.LoadResult loadResult;
-            if (TryLoadUsersDirectoryFromLanApi(out var apiUsers, out var apiServerUsers, out var apiStatusText))
+            var lanBackendEnabled = _ordersStorageBackend == OrdersStorageMode.LanPostgreSql;
+            if (lanBackendEnabled)
             {
-                loadResult = new UsersDirectoryService.LoadResult
+                if (TryLoadUsersDirectoryFromLanApi(out var apiUsers, out var apiServerUsers, out var apiStatusText))
                 {
-                    Users = apiUsers,
-                    ServerUsersByDisplayName = apiServerUsers,
-                    LoadedFromSource = true,
-                    LoadedFromCache = false,
-                    StatusText = apiStatusText
-                };
+                    loadResult = new UsersDirectoryService.LoadResult
+                    {
+                        Users = apiUsers,
+                        ServerUsersByDisplayName = apiServerUsers,
+                        LoadedFromSource = true,
+                        LoadedFromCache = false,
+                        StatusText = apiStatusText
+                    };
+                }
+                else
+                {
+                    var statusText = string.IsNullOrWhiteSpace(apiStatusText)
+                        ? "Пользователи: API недоступен, список не обновлен"
+                        : apiStatusText;
+                    loadResult = new UsersDirectoryService.LoadResult
+                    {
+                        Users = fallbackUsers.ToList(),
+                        ServerUsersByDisplayName = BuildDefaultServerUsersMap(fallbackUsers),
+                        LoadedFromSource = false,
+                        LoadedFromCache = false,
+                        StatusText = statusText
+                    };
+                }
             }
             else
             {
@@ -89,9 +107,15 @@ namespace Replica
             statusText = string.Empty;
 
             if (_ordersStorageBackend != OrdersStorageMode.LanPostgreSql
-                || !ShouldUseLanRunApi()
-                || !TryResolveLanApiBaseUri(_lanApiBaseUrl, out var baseUri))
+                || !ShouldUseLanRunApi())
             {
+                statusText = "Пользователи: LAN API выключен";
+                return false;
+            }
+
+            if (!TryResolveLanApiBaseUri(_lanApiBaseUrl, out var baseUri))
+            {
+                statusText = "Пользователи: API URL не задан";
                 return false;
             }
 
@@ -106,7 +130,10 @@ namespace Replica
                     .GetResult();
 
                 if (!response.IsSuccessStatusCode)
+                {
+                    statusText = $"Пользователи: API вернул {(int)response.StatusCode}";
                     return false;
+                }
 
                 var payload = response.Content
                     .ReadAsStringAsync(timeoutCts.Token)
@@ -134,7 +161,10 @@ namespace Replica
                 }
 
                 if (userList.Count == 0)
+                {
+                    statusText = "Пользователи: API вернул пустой список";
                     return false;
+                }
 
                 users = userList;
                 serverUsersByDisplayName = userMap;
@@ -143,6 +173,7 @@ namespace Replica
             }
             catch
             {
+                statusText = "Пользователи: API недоступен";
                 return false;
             }
         }
