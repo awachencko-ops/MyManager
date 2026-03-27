@@ -347,3 +347,12 @@ Replica.Client/
    - added local LAN probe stub server in tests to validate real probe path behavior,
    - confirmed probe snapshot stays healthy while push diagnostics metrics remain optional (`-1` values),
    - verify/ui-smoke checks passed after auth-fallback coverage update (`41/41`, `35/35`).
+31. `2026-03-27`: Stage 3 push tuning UI increment:
+   - expanded `SettingsDialogForm` with operator-facing LAN Push tuning controls (intervals, thresholds, cooldown/hint/reset windows),
+   - added dialog-level guard `reset-window >= hint-window`,
+   - wired `OrdersWorkspaceForm.ShowSettingsDialog()` to persist/apply LAN Push tuning values at runtime,
+   - verify/ui-smoke checks passed after settings UI integration (`41/41`, `35/35`).
+32. `2026-03-27`: Stage 4 handoff checklist increment:
+   - added dedicated Stage 4 execution checklist document (`REPLICA_STAGE4_DUAL_WRITE_CHECKLIST_2026-03-27.md`),
+   - formalized dual-write policy, reconciliation acceptance criteria, daily ops checklist, go/no-go gate and rollback protocol,
+   - master doc map updated with Stage 4 handoff entry.

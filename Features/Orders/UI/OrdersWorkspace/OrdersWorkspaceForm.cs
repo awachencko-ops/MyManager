@@ -952,6 +952,13 @@ namespace Replica
                 _ordersStorageBackend,
                 _lanPostgreSqlConnectionString,
                 _lanApiBaseUrl,
+                currentSettings.LanPushMinRefreshIntervalMs,
+                currentSettings.LanPushPressureAlertMinEvents,
+                currentSettings.LanPushCoalescedRateAlertThreshold,
+                currentSettings.LanPushThrottledRateAlertThreshold,
+                currentSettings.LanPushPressureAlertCooldownSeconds,
+                currentSettings.LanPushPressureHintActiveWindowSeconds,
+                currentSettings.LanPushPressureStateResetWindowSeconds,
                 currentSettings.MaxParallelism,
                 useExtendedMode: currentSettings.UseExtendedMode);
 
@@ -980,6 +987,13 @@ namespace Replica
             _ordersStorageBackend = settingsForm.OrdersStorageBackend;
             _lanPostgreSqlConnectionString = settingsForm.LanPostgreSqlConnectionString;
             _lanApiBaseUrl = settingsForm.LanApiBaseUrl;
+            LanPushMinRefreshIntervalMs = settingsForm.LanPushMinRefreshIntervalMs;
+            LanPushPressureAlertMinEvents = settingsForm.LanPushPressureAlertMinEvents;
+            LanPushCoalescedRateAlertThreshold = settingsForm.LanPushCoalescedRateAlertThreshold;
+            LanPushThrottledRateAlertThreshold = settingsForm.LanPushThrottledRateAlertThreshold;
+            LanPushPressureAlertCooldown = TimeSpan.FromSeconds(settingsForm.LanPushPressureAlertCooldownSeconds);
+            LanPushPressureHintActiveWindow = TimeSpan.FromSeconds(settingsForm.LanPushPressureHintActiveWindowSeconds);
+            LanPushPressureStateResetWindow = TimeSpan.FromSeconds(settingsForm.LanPushPressureStateResetWindowSeconds);
 
             var settings = _settingsProvider.Load();
             settings.OrdersRootPath = _ordersRootPath;
@@ -996,6 +1010,13 @@ namespace Replica
             settings.OrdersStorageBackend = _ordersStorageBackend;
             settings.LanPostgreSqlConnectionString = _lanPostgreSqlConnectionString;
             settings.LanApiBaseUrl = _lanApiBaseUrl;
+            settings.LanPushMinRefreshIntervalMs = settingsForm.LanPushMinRefreshIntervalMs;
+            settings.LanPushPressureAlertMinEvents = settingsForm.LanPushPressureAlertMinEvents;
+            settings.LanPushCoalescedRateAlertThreshold = settingsForm.LanPushCoalescedRateAlertThreshold;
+            settings.LanPushThrottledRateAlertThreshold = settingsForm.LanPushThrottledRateAlertThreshold;
+            settings.LanPushPressureAlertCooldownSeconds = settingsForm.LanPushPressureAlertCooldownSeconds;
+            settings.LanPushPressureHintActiveWindowSeconds = settingsForm.LanPushPressureHintActiveWindowSeconds;
+            settings.LanPushPressureStateResetWindowSeconds = settingsForm.LanPushPressureStateResetWindowSeconds;
             _settingsProvider.Save(settings);
             _orderApplicationService.ConfigureHistoryRepository(_ordersStorageBackend, _lanPostgreSqlConnectionString, _jsonHistoryFile);
 

@@ -271,7 +271,27 @@ Stage 3 kickoff: real-time push notifications from API after successful mutating
 1. Verify targeted pack (`SignalRPushIntegrationTests` + `LanOrderPushClientTests` + `MediatRPushNotificationsBehaviorTests` + `LanPushPressureAlertEvaluatorTests` + `ReplicaApiObservabilityTests` + `DiagnosticsControllerTests`): passed (41/41).
 2. UiSmoke targeted pack (`MainFormCoreRegressionTests` + `MainFormSmokeTests`): passed (35/35).
 
+## Increment Addendum (2026-03-27, push tuning controls in settings UI)
+
+### Implemented
+
+1. Extended `SettingsDialogForm` with LAN Push tuning controls:
+   - `min refresh (ms)`,
+   - `min events alert`,
+   - `coalesced/throttled` thresholds (`0..1`),
+   - `alert cooldown / hint window / reset window` (seconds).
+2. Added dialog-level validation guard:
+   - `reset window >= hint window`.
+3. Integrated settings flow in `OrdersWorkspaceForm.ShowSettingsDialog()`:
+   - values are persisted to `AppSettings`,
+   - values are applied to runtime push-pressure fields without restart.
+
+### Validation (addendum)
+
+1. Verify targeted pack (`SignalRPushIntegrationTests` + `LanOrderPushClientTests` + `MediatRPushNotificationsBehaviorTests` + `LanPushPressureAlertEvaluatorTests` + `ReplicaApiObservabilityTests` + `DiagnosticsControllerTests`): passed (41/41).
+2. UiSmoke targeted pack (`MainFormCoreRegressionTests` + `MainFormSmokeTests`): passed (35/35).
+
 ## Next Stage 3 steps
 
-1. Optionally expose new push tuning knobs in settings UI (if operators need runtime adjustment without editing `settings.json`).
-2. Prepare Stage 4 migration checklist handoff (dual-write guardrails + reconciliation acceptance criteria).
+1. Start Stage 4 implementation using `REPLICA_STAGE4_DUAL_WRITE_CHECKLIST_2026-03-27.md` as execution gate.
+2. Add optional UX polish for settings tab (group headers/tooltips for LAN Push knobs to simplify operator onboarding).

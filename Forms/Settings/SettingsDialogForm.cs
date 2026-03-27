@@ -21,6 +21,13 @@ namespace Replica
         private readonly ComboBox _cmbOrdersStorageBackend = new ComboBox();
         private readonly TextBox _txtLanPostgreSqlConnectionString = new TextBox();
         private readonly TextBox _txtLanApiBaseUrl = new TextBox();
+        private readonly NumericUpDown _numLanPushMinRefreshIntervalMs = new NumericUpDown();
+        private readonly NumericUpDown _numLanPushPressureAlertMinEvents = new NumericUpDown();
+        private readonly NumericUpDown _numLanPushCoalescedRateAlertThreshold = new NumericUpDown();
+        private readonly NumericUpDown _numLanPushThrottledRateAlertThreshold = new NumericUpDown();
+        private readonly NumericUpDown _numLanPushPressureAlertCooldownSeconds = new NumericUpDown();
+        private readonly NumericUpDown _numLanPushPressureHintActiveWindowSeconds = new NumericUpDown();
+        private readonly NumericUpDown _numLanPushPressureStateResetWindowSeconds = new NumericUpDown();
         private readonly NumericUpDown _numMaxParallelism = new NumericUpDown();
         private readonly CheckBox _chkUseExtendedMode = new CheckBox();
 
@@ -40,6 +47,13 @@ namespace Replica
             => (_cmbOrdersStorageBackend.SelectedItem as OrdersStorageBackendOption)?.Mode ?? OrdersStorageMode.FileSystem;
         public string LanPostgreSqlConnectionString => _txtLanPostgreSqlConnectionString.Text.Trim();
         public string LanApiBaseUrl => _txtLanApiBaseUrl.Text.Trim();
+        public int LanPushMinRefreshIntervalMs => (int)_numLanPushMinRefreshIntervalMs.Value;
+        public int LanPushPressureAlertMinEvents => (int)_numLanPushPressureAlertMinEvents.Value;
+        public double LanPushCoalescedRateAlertThreshold => (double)_numLanPushCoalescedRateAlertThreshold.Value;
+        public double LanPushThrottledRateAlertThreshold => (double)_numLanPushThrottledRateAlertThreshold.Value;
+        public int LanPushPressureAlertCooldownSeconds => (int)_numLanPushPressureAlertCooldownSeconds.Value;
+        public int LanPushPressureHintActiveWindowSeconds => (int)_numLanPushPressureHintActiveWindowSeconds.Value;
+        public int LanPushPressureStateResetWindowSeconds => (int)_numLanPushPressureStateResetWindowSeconds.Value;
         public int MaxParallelism => (int)_numMaxParallelism.Value;
         public bool UseExtendedMode => _chkUseExtendedMode.Checked;
 
@@ -56,6 +70,13 @@ namespace Replica
             OrdersStorageMode ordersStorageBackend,
             string lanPostgreSqlConnectionString,
             string lanApiBaseUrl,
+            int lanPushMinRefreshIntervalMs,
+            int lanPushPressureAlertMinEvents,
+            double lanPushCoalescedRateAlertThreshold,
+            double lanPushThrottledRateAlertThreshold,
+            int lanPushPressureAlertCooldownSeconds,
+            int lanPushPressureHintActiveWindowSeconds,
+            int lanPushPressureStateResetWindowSeconds,
             int maxParallelism,
             bool useExtendedMode = false)
         {
@@ -98,6 +119,13 @@ namespace Replica
                 ordersStorageBackend,
                 lanPostgreSqlConnectionString,
                 lanApiBaseUrl,
+                lanPushMinRefreshIntervalMs,
+                lanPushPressureAlertMinEvents,
+                lanPushCoalescedRateAlertThreshold,
+                lanPushThrottledRateAlertThreshold,
+                lanPushPressureAlertCooldownSeconds,
+                lanPushPressureHintActiveWindowSeconds,
+                lanPushPressureStateResetWindowSeconds,
                 maxParallelism,
                 useExtendedMode));
             _tabs.TabPages.Add(CreateEmbeddedManagerTab("Диспетчер PitStop", _pitStopForm));
@@ -142,6 +170,18 @@ namespace Replica
                     return;
                 }
 
+                if (LanPushPressureStateResetWindowSeconds < LanPushPressureHintActiveWindowSeconds)
+                {
+                    MessageBox.Show(
+                        this,
+                        "Окно сброса push-состояния должно быть не меньше окна подсказки.",
+                        "Проверка",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                    _tabs.SelectedIndex = 0;
+                    return;
+                }
+
                 DialogResult = DialogResult.OK;
                 Close();
             };
@@ -174,24 +214,32 @@ namespace Replica
             OrdersStorageMode ordersStorageBackend,
             string lanPostgreSqlConnectionString,
             string lanApiBaseUrl,
+            int lanPushMinRefreshIntervalMs,
+            int lanPushPressureAlertMinEvents,
+            double lanPushCoalescedRateAlertThreshold,
+            double lanPushThrottledRateAlertThreshold,
+            int lanPushPressureAlertCooldownSeconds,
+            int lanPushPressureHintActiveWindowSeconds,
+            int lanPushPressureStateResetWindowSeconds,
             int maxParallelism,
             bool useExtendedMode)
         {
             var page = new TabPage("Основное");
+            page.AutoScroll = true;
 
             var panel = new TableLayoutPanel
             {
                 Dock = DockStyle.Top,
                 AutoSize = true,
                 ColumnCount = 3,
-                RowCount = 14,
+                RowCount = 21,
                 Padding = new Padding(18, 18, 18, 0)
             };
 
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 270));
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140));
-            for (int i = 0; i < 14; i++)
+            for (int i = 0; i < panel.RowCount; i++)
                 panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
 
             AddRow(panel, 0, "Папка хранения заказов", _txtOrdersRoot, ordersRootPath, true);
@@ -206,9 +254,16 @@ namespace Replica
             AddStorageBackendRow(panel, 9, "Хранилище заказов", _cmbOrdersStorageBackend, ordersStorageBackend);
             AddRowTextOnly(panel, 10, "LAN PostgreSQL connection string", _txtLanPostgreSqlConnectionString, lanPostgreSqlConnectionString, optional: true);
             AddRowTextOnly(panel, 11, "LAN API base URL", _txtLanApiBaseUrl, lanApiBaseUrl, optional: true);
+            AddNumericRow(panel, 12, "LAN Push: min refresh (ms)", _numLanPushMinRefreshIntervalMs, lanPushMinRefreshIntervalMs, 0, 10000, "Интервал анти-шторм обновления snapshot.");
+            AddNumericRow(panel, 13, "LAN Push: min events alert", _numLanPushPressureAlertMinEvents, lanPushPressureAlertMinEvents, 1, 100000, "Минимум событий для pressure-предупреждения.");
+            AddFractionRow(panel, 14, "LAN Push: coalesced threshold", _numLanPushCoalescedRateAlertThreshold, lanPushCoalescedRateAlertThreshold, 0m, 1m, 2, "Порог доли coalesced-событий (0..1).");
+            AddFractionRow(panel, 15, "LAN Push: throttled threshold", _numLanPushThrottledRateAlertThreshold, lanPushThrottledRateAlertThreshold, 0m, 1m, 2, "Порог доли throttled-обновлений (0..1).");
+            AddNumericRow(panel, 16, "LAN Push: alert cooldown (sec)", _numLanPushPressureAlertCooldownSeconds, lanPushPressureAlertCooldownSeconds, 1, 3600, "Минимальный интервал между предупреждениями.");
+            AddNumericRow(panel, 17, "LAN Push: hint window (sec)", _numLanPushPressureHintActiveWindowSeconds, lanPushPressureHintActiveWindowSeconds, 5, 86400, "Окно показа подсказки о высоком потоке.");
+            AddNumericRow(panel, 18, "LAN Push: reset window (sec)", _numLanPushPressureStateResetWindowSeconds, lanPushPressureStateResetWindowSeconds, 30, 172800, "Окно авто-сброса pressure-состояния.");
 
-            AddNumericRow(panel, 12, "Параллельных файлов (мульти-заказ)", _numMaxParallelism, maxParallelism);
-            AddCheckboxRow(panel, 13, "Форма заказа", _chkUseExtendedMode, useExtendedMode, "Вкл. — расширенная форма; выкл. — простая.");
+            AddNumericRow(panel, 19, "Параллельных файлов (мульти-заказ)", _numMaxParallelism, maxParallelism);
+            AddCheckboxRow(panel, 20, "Форма заказа", _chkUseExtendedMode, useExtendedMode, "Вкл. — расширенная форма; выкл. — простая.");
 
             var hint = new Label
             {
@@ -216,7 +271,7 @@ namespace Replica
                 AutoSize = true,
                 Padding = new Padding(22, 8, 22, 8),
                 ForeColor = Color.DimGray,
-                Text = "Если \"Папка шрифтов PDF\" пустая, используется системная Windows Fonts. Папка логов по умолчанию: ./order-logs рядом с приложением. Для режима LAN PostgreSQL обязательны строка подключения и LAN API base URL. Путь шрифтов и общий кэш превью полностью применяются после перезапуска приложения."
+                Text = "Если \"Папка шрифтов PDF\" пустая, используется системная Windows Fonts. Папка логов по умолчанию: ./order-logs рядом с приложением. Для режима LAN PostgreSQL обязательны строка подключения и LAN API base URL. Блок LAN Push позволяет тонко настроить anti-storm/pressure пороги и окна. Путь шрифтов и общий кэш превью полностью применяются после перезапуска приложения."
             };
 
             page.Controls.Add(hint);
@@ -296,7 +351,15 @@ namespace Replica
             panel.Controls.Add(lblHint, 2, row);
         }
 
-        private void AddNumericRow(TableLayoutPanel panel, int row, string labelText, NumericUpDown box, int value)
+        private void AddNumericRow(
+            TableLayoutPanel panel,
+            int row,
+            string labelText,
+            NumericUpDown box,
+            int value,
+            int minimum = 0,
+            int maximum = 128,
+            string hintText = "0 — без ограничений (все файлы сразу)")
         {
             var label = new Label
             {
@@ -308,13 +371,70 @@ namespace Replica
 
             box.Dock = DockStyle.Fill;
             box.Margin = new Padding(0, 6, 8, 6);
-            box.Minimum = 0;
-            box.Maximum = 128;
+            box.DecimalPlaces = 0;
+            box.Increment = 1;
+            box.Minimum = minimum;
+            box.Maximum = maximum;
             box.Value = Math.Max(box.Minimum, Math.Min(box.Maximum, value));
 
             var lblHint = new Label
             {
-                Text = "0 — без ограничений (все файлы сразу)",
+                Text = hintText,
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleLeft,
+                ForeColor = Color.DimGray,
+                AutoSize = false
+            };
+
+            panel.Controls.Add(label, 0, row);
+            panel.Controls.Add(box, 1, row);
+            panel.Controls.Add(lblHint, 2, row);
+        }
+
+        private void AddFractionRow(
+            TableLayoutPanel panel,
+            int row,
+            string labelText,
+            NumericUpDown box,
+            double value,
+            decimal minimum,
+            decimal maximum,
+            int decimalPlaces,
+            string hintText)
+        {
+            var label = new Label
+            {
+                Text = $"{labelText} *",
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleLeft,
+                AutoSize = false
+            };
+
+            box.Dock = DockStyle.Fill;
+            box.Margin = new Padding(0, 6, 8, 6);
+            box.DecimalPlaces = decimalPlaces;
+            box.Increment = decimalPlaces switch
+            {
+                <= 0 => 1m,
+                1 => 0.1m,
+                2 => 0.01m,
+                _ => 0.001m
+            };
+            box.Minimum = minimum;
+            box.Maximum = maximum;
+
+            var decimalValue = decimal.TryParse(value.ToString(System.Globalization.CultureInfo.InvariantCulture), out var parsed)
+                ? parsed
+                : minimum;
+            if (decimalValue < minimum)
+                decimalValue = minimum;
+            if (decimalValue > maximum)
+                decimalValue = maximum;
+            box.Value = decimalValue;
+
+            var lblHint = new Label
+            {
+                Text = hintText,
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleLeft,
                 ForeColor = Color.DimGray,
