@@ -215,3 +215,12 @@ Replica.Client/
 4. Stage 4 (Dual-write migration) — обязательный перед полным cutover.
 5. Stage 5-6 (repackaging + decommission) — после стабилизации production-потока.
 
+## Execution Log
+
+1. `2026-03-27`: старт фактического исполнения roadmap.
+2. Stage 1 backend increment зафиксирован в `REPLICA_STAGE1_SECURITY_PROGRESS_2026-03-27.md`:
+   - token lifecycle (`login/refresh/revoke`),
+   - bearer/api-key validation в current-user middleware,
+   - auth sessions/audit persistence + migration,
+   - unit coverage на token validation и bearer role-resolution.
+

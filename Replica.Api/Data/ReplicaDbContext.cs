@@ -17,6 +17,8 @@ public sealed class ReplicaDbContext : DbContext
     public DbSet<OrderRunLockRecord> OrderRunLocks => Set<OrderRunLockRecord>();
     public DbSet<OrderRunIdempotencyRecord> OrderRunIdempotency => Set<OrderRunIdempotencyRecord>();
     public DbSet<OrderWriteIdempotencyRecord> OrderWriteIdempotency => Set<OrderWriteIdempotencyRecord>();
+    public DbSet<AuthSessionRecord> AuthSessions => Set<AuthSessionRecord>();
+    public DbSet<AuthAuditEventRecord> AuthAuditEvents => Set<AuthAuditEventRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -149,6 +151,47 @@ public sealed class ReplicaDbContext : DbContext
 
             entity.HasIndex(x => x.CreatedAt).HasDatabaseName("ix_order_write_idempotency_created_at");
             entity.HasIndex(x => x.OrderInternalId).HasDatabaseName("ix_order_write_idempotency_order_internal_id");
+        });
+
+        modelBuilder.Entity<AuthSessionRecord>(entity =>
+        {
+            entity.ToTable("auth_sessions");
+            entity.HasKey(x => x.SessionId);
+            entity.Property(x => x.SessionId).HasColumnName("session_id").HasMaxLength(64);
+            entity.Property(x => x.UserName).HasColumnName("user_name").HasMaxLength(256).HasDefaultValue(string.Empty);
+            entity.Property(x => x.Role).HasColumnName("role").HasMaxLength(64).HasDefaultValue("Operator");
+            entity.Property(x => x.AccessTokenHash).HasColumnName("access_token_hash").HasMaxLength(128);
+            entity.Property(x => x.CreatedAtUtc).HasColumnName("created_at_utc").HasColumnType("timestamp without time zone");
+            entity.Property(x => x.ExpiresAtUtc).HasColumnName("expires_at_utc").HasColumnType("timestamp without time zone");
+            entity.Property(x => x.LastSeenAtUtc).HasColumnName("last_seen_at_utc").HasColumnType("timestamp without time zone");
+            entity.Property(x => x.RevokedAtUtc).HasColumnName("revoked_at_utc").HasColumnType("timestamp without time zone");
+            entity.Property(x => x.IssuedBy).HasColumnName("issued_by").HasMaxLength(256).HasDefaultValue(string.Empty);
+            entity.Property(x => x.RevokedBy).HasColumnName("revoked_by").HasMaxLength(256).HasDefaultValue(string.Empty);
+
+            entity.HasIndex(x => x.UserName).HasDatabaseName("ix_auth_sessions_user_name");
+            entity.HasIndex(x => x.ExpiresAtUtc).HasDatabaseName("ix_auth_sessions_expires_at_utc");
+            entity.HasIndex(x => x.RevokedAtUtc).HasDatabaseName("ix_auth_sessions_revoked_at_utc");
+        });
+
+        modelBuilder.Entity<AuthAuditEventRecord>(entity =>
+        {
+            entity.ToTable("auth_audit_events");
+            entity.HasKey(x => x.EventId);
+            entity.Property(x => x.EventId).HasColumnName("event_id").ValueGeneratedOnAdd();
+            entity.Property(x => x.EventType).HasColumnName("event_type").HasMaxLength(32);
+            entity.Property(x => x.UserName).HasColumnName("user_name").HasMaxLength(256).HasDefaultValue(string.Empty);
+            entity.Property(x => x.Role).HasColumnName("role").HasMaxLength(64).HasDefaultValue(string.Empty);
+            entity.Property(x => x.SessionId).HasColumnName("session_id").HasMaxLength(64).HasDefaultValue(string.Empty);
+            entity.Property(x => x.Outcome).HasColumnName("outcome").HasMaxLength(32).HasDefaultValue(string.Empty);
+            entity.Property(x => x.Reason).HasColumnName("reason").HasDefaultValue(string.Empty);
+            entity.Property(x => x.IpAddress).HasColumnName("ip_address").HasMaxLength(128).HasDefaultValue(string.Empty);
+            entity.Property(x => x.UserAgent).HasColumnName("user_agent").HasDefaultValue(string.Empty);
+            entity.Property(x => x.MetadataJson).HasColumnName("metadata_json").HasColumnType("jsonb").HasDefaultValue("{}");
+            entity.Property(x => x.CreatedAtUtc).HasColumnName("created_at_utc").HasColumnType("timestamp without time zone");
+
+            entity.HasIndex(x => x.CreatedAtUtc).HasDatabaseName("ix_auth_audit_events_created_at_utc");
+            entity.HasIndex(x => x.EventType).HasDatabaseName("ix_auth_audit_events_event_type");
+            entity.HasIndex(x => x.UserName).HasDatabaseName("ix_auth_audit_events_user_name");
         });
     }
 }

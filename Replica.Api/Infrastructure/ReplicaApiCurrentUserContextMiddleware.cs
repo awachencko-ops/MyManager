@@ -22,13 +22,14 @@ public sealed class ReplicaApiCurrentUserContextMiddleware
         _configuration = configuration;
     }
 
-    public async Task InvokeAsync(HttpContext context, ILanOrderStore store)
+    public async Task InvokeAsync(HttpContext context, ILanOrderStore store, IReplicaApiTokenService tokenService)
     {
         var authMode = ReplicaApiAuthConfiguration.ResolveMode(_configuration);
         var currentUser = ReplicaApiCurrentUserContext.Resolve(
             context.Request,
             store.GetUsers(),
             strictActorValidation: ReplicaApiAuthConfiguration.IsStrict(authMode),
+            tokenService,
             _logger);
 
         ReplicaApiCurrentUserContext.Set(context, currentUser);

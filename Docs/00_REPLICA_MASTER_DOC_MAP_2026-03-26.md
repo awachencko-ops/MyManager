@@ -22,6 +22,7 @@
 ### 3.1 `Docs/НОВАЯ АРХИТЕКТУРА` (текущий целевой контур)
 
 1. `REPLICA_SERVICE_FIRST_ROADMAP_2026-03-26.md`
+2. `REPLICA_STAGE1_SECURITY_PROGRESS_2026-03-27.md`
 
 ### 3.2 `Docs/archive/2026-03-26_pre_new_architecture` (архив согласованного переноса)
 

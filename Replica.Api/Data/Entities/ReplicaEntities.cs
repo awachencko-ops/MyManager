@@ -97,3 +97,32 @@ public sealed class OrderWriteIdempotencyRecord
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }
+
+public sealed class AuthSessionRecord
+{
+    public string SessionId { get; set; } = string.Empty;
+    public string UserName { get; set; } = string.Empty;
+    public string Role { get; set; } = string.Empty;
+    public string AccessTokenHash { get; set; } = string.Empty;
+    public DateTime CreatedAtUtc { get; set; }
+    public DateTime ExpiresAtUtc { get; set; }
+    public DateTime LastSeenAtUtc { get; set; }
+    public DateTime? RevokedAtUtc { get; set; }
+    public string IssuedBy { get; set; } = string.Empty;
+    public string RevokedBy { get; set; } = string.Empty;
+}
+
+public sealed class AuthAuditEventRecord
+{
+    public long EventId { get; set; }
+    public string EventType { get; set; } = string.Empty;
+    public string UserName { get; set; } = string.Empty;
+    public string Role { get; set; } = string.Empty;
+    public string SessionId { get; set; } = string.Empty;
+    public string Outcome { get; set; } = string.Empty;
+    public string Reason { get; set; } = string.Empty;
+    public string IpAddress { get; set; } = string.Empty;
+    public string UserAgent { get; set; } = string.Empty;
+    public string MetadataJson { get; set; } = "{}";
+    public DateTime CreatedAtUtc { get; set; }
+}

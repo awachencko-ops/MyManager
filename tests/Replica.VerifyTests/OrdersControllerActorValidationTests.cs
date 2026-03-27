@@ -26,7 +26,8 @@ public sealed class OrdersControllerActorValidationTests
         var currentUser = ReplicaApiCurrentUserContext.Resolve(
             httpContext.Request,
             knownUsers: [],
-            strictActorValidation: true);
+            strictActorValidation: true,
+            tokenService: null);
 
         Assert.True(currentUser.HasFailure);
         Assert.Equal(StatusCodes.Status401Unauthorized, currentUser.FailureStatusCode);
@@ -44,7 +45,8 @@ public sealed class OrdersControllerActorValidationTests
             [
                 new SharedUser { Name = "operator1", Role = ReplicaApiRoles.Operator, IsActive = true }
             ],
-            strictActorValidation: true);
+            strictActorValidation: true,
+            tokenService: null);
 
         Assert.True(currentUser.HasFailure);
         Assert.Equal(StatusCodes.Status403Forbidden, currentUser.FailureStatusCode);
@@ -64,7 +66,8 @@ public sealed class OrdersControllerActorValidationTests
             [
                 new SharedUser { Name = actorName, Role = ReplicaApiRoles.Admin, IsActive = true }
             ],
-            strictActorValidation: true);
+            strictActorValidation: true,
+            tokenService: null);
 
         Assert.False(currentUser.HasFailure);
         Assert.True(currentUser.IsAuthenticated);
@@ -84,7 +87,8 @@ public sealed class OrdersControllerActorValidationTests
             [
                 new SharedUser { Name = "operator1", Role = ReplicaApiRoles.Operator, IsActive = true }
             ],
-            strictActorValidation: false);
+            strictActorValidation: false,
+            tokenService: null);
 
         Assert.False(currentUser.HasFailure);
         Assert.True(currentUser.IsAuthenticated);
@@ -106,11 +110,63 @@ public sealed class OrdersControllerActorValidationTests
             [
                 new SharedUser { Name = bootstrapUser, Role = ReplicaApiRoles.Operator, IsActive = true }
             ],
-            strictActorValidation: true);
+            strictActorValidation: true,
+            tokenService: null);
 
         Assert.False(currentUser.HasFailure);
         Assert.True(currentUser.IsAuthenticated);
         Assert.Equal("Andrew", currentUser.Name);
+    }
+
+    [Fact]
+    public void Resolve_WithBearerToken_UsesTokenIdentity()
+    {
+        var httpContext = new DefaultHttpContext();
+        httpContext.Request.Headers["Authorization"] = "Bearer rpl1.session1.secret1";
+
+        var tokenService = new StubTokenService(token =>
+        {
+            return string.Equals(token, "rpl1.session1.secret1", StringComparison.Ordinal)
+                ? ReplicaApiTokenValidationResult.Success("Administrator", ReplicaApiRoles.Admin, "session1")
+                : ReplicaApiTokenValidationResult.Invalid("invalid token");
+        });
+
+        var currentUser = ReplicaApiCurrentUserContext.Resolve(
+            httpContext.Request,
+            knownUsers:
+            [
+                new SharedUser { Name = "Administrator", Role = ReplicaApiRoles.Admin, IsActive = true }
+            ],
+            strictActorValidation: true,
+            tokenService: tokenService);
+
+        Assert.False(currentUser.HasFailure);
+        Assert.True(currentUser.IsAuthenticated);
+        Assert.Equal("Administrator", currentUser.Name);
+        Assert.Equal(ReplicaApiRoles.Admin, currentUser.Role);
+        Assert.Equal("Bearer", currentUser.AuthScheme);
+        Assert.Equal("session1", currentUser.SessionId);
+    }
+
+    [Fact]
+    public void Resolve_WithInvalidBearerToken_ReturnsUnauthorized()
+    {
+        var httpContext = new DefaultHttpContext();
+        httpContext.Request.Headers["Authorization"] = "Bearer rpl1.invalid.secret";
+
+        var tokenService = new StubTokenService(_ => ReplicaApiTokenValidationResult.Invalid("invalid token"));
+
+        var currentUser = ReplicaApiCurrentUserContext.Resolve(
+            httpContext.Request,
+            knownUsers:
+            [
+                new SharedUser { Name = "operator1", Role = ReplicaApiRoles.Operator, IsActive = true }
+            ],
+            strictActorValidation: true,
+            tokenService: tokenService);
+
+        Assert.True(currentUser.HasFailure);
+        Assert.Equal(StatusCodes.Status401Unauthorized, currentUser.FailureStatusCode);
     }
 
     [Fact]
@@ -269,6 +325,36 @@ public sealed class OrdersControllerActorValidationTests
         public StoreOperationResult TryStopRun(string orderId, StopOrderRequest request, string actor)
         {
             throw new System.NotImplementedException();
+        }
+    }
+
+    private sealed class StubTokenService : IReplicaApiTokenService
+    {
+        private readonly Func<string, ReplicaApiTokenValidationResult> _validate;
+
+        public StubTokenService(Func<string, ReplicaApiTokenValidationResult> validate)
+        {
+            _validate = validate;
+        }
+
+        public ReplicaApiTokenIssueResult IssueToken(string userName, string role, string issuedBy, string ipAddress, string userAgent)
+        {
+            return ReplicaApiTokenIssueResult.Failed("not implemented");
+        }
+
+        public ReplicaApiTokenValidationResult ValidateToken(string rawToken)
+        {
+            return _validate(rawToken);
+        }
+
+        public ReplicaApiTokenIssueResult RefreshToken(string sessionId, string requestedBy, string ipAddress, string userAgent)
+        {
+            return ReplicaApiTokenIssueResult.Failed("not implemented");
+        }
+
+        public ReplicaApiTokenRevokeResult RevokeToken(string sessionId, string requestedBy, string ipAddress, string userAgent)
+        {
+            return ReplicaApiTokenRevokeResult.Failed("not implemented");
         }
     }
 }

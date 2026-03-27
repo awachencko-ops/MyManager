@@ -16,6 +16,8 @@ public sealed class ReplicaApiCurrentUser
     public string Role { get; init; } = string.Empty;
     public bool IsAuthenticated { get; init; }
     public bool IsValidated { get; init; }
+    public string AuthScheme { get; init; } = string.Empty;
+    public string SessionId { get; init; } = string.Empty;
     public int FailureStatusCode { get; init; }
     public string FailureMessage { get; init; } = string.Empty;
 
@@ -56,8 +58,67 @@ public static class ReplicaApiCurrentUserContext
         HttpRequest request,
         IReadOnlyList<SharedUser>? knownUsers,
         bool strictActorValidation,
+        IReplicaApiTokenService? tokenService,
         ILogger? logger = null)
     {
+        var candidates = (knownUsers ?? Array.Empty<SharedUser>())
+            .Where(user => user != null && !string.IsNullOrWhiteSpace(user.Name))
+            .ToList();
+
+        if (TryResolveAccessToken(request, out var rawToken))
+        {
+            if (tokenService == null)
+            {
+                return new ReplicaApiCurrentUser
+                {
+                    FailureStatusCode = StatusCodes.Status401Unauthorized,
+                    FailureMessage = "token authentication is not configured"
+                };
+            }
+
+            var tokenValidation = tokenService.ValidateToken(rawToken);
+            if (!tokenValidation.IsSuccess)
+            {
+                return new ReplicaApiCurrentUser
+                {
+                    FailureStatusCode = StatusCodes.Status401Unauthorized,
+                    FailureMessage = tokenValidation.Error
+                };
+            }
+
+            if (candidates.Count == 0
+                || candidates.All(user => string.Equals(user.Name.Trim(), LegacyBootstrapUserName, StringComparison.OrdinalIgnoreCase)))
+            {
+                return CreateAuthenticated(
+                    tokenValidation.UserName.Trim(),
+                    ReplicaApiRoles.Normalize(tokenValidation.Role),
+                    isValidated: false,
+                    authScheme: "Bearer",
+                    sessionId: tokenValidation.SessionId);
+            }
+
+            var matchedTokenUser = candidates.FirstOrDefault(user =>
+                user.IsActive
+                && string.Equals(user.Name.Trim(), tokenValidation.UserName.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (matchedTokenUser == null)
+            {
+                logger?.LogWarning("Request rejected for token session {SessionId}: user {Actor} is unknown or inactive.", tokenValidation.SessionId, tokenValidation.UserName);
+                return new ReplicaApiCurrentUser
+                {
+                    Name = tokenValidation.UserName.Trim(),
+                    FailureStatusCode = StatusCodes.Status403Forbidden,
+                    FailureMessage = "actor is not allowed"
+                };
+            }
+
+            return CreateAuthenticated(
+                matchedTokenUser.Name.Trim(),
+                ReplicaApiRoles.Normalize(matchedTokenUser.Role),
+                isValidated: true,
+                authScheme: "Bearer",
+                sessionId: tokenValidation.SessionId);
+        }
+
         if (!TryResolveActor(request, out var actor))
         {
             return new ReplicaApiCurrentUser
@@ -68,15 +129,11 @@ public static class ReplicaApiCurrentUserContext
         }
 
         var normalizedActor = actor.Trim();
-        var candidates = (knownUsers ?? Array.Empty<SharedUser>())
-            .Where(user => user != null && !string.IsNullOrWhiteSpace(user.Name))
-            .ToList();
-
         if (candidates.Count == 0)
-            return CreateAuthenticated(normalizedActor, ReplicaApiRoles.Operator, isValidated: false);
+            return CreateAuthenticated(normalizedActor, ReplicaApiRoles.Operator, isValidated: false, authScheme: "Header", sessionId: string.Empty);
 
         if (candidates.All(user => string.Equals(user.Name.Trim(), LegacyBootstrapUserName, StringComparison.OrdinalIgnoreCase)))
-            return CreateAuthenticated(normalizedActor, ReplicaApiRoles.Operator, isValidated: false);
+            return CreateAuthenticated(normalizedActor, ReplicaApiRoles.Operator, isValidated: false, authScheme: "Header", sessionId: string.Empty);
 
         var matchedUser = candidates.FirstOrDefault(user =>
             string.Equals(user.Name.Trim(), normalizedActor, StringComparison.OrdinalIgnoreCase));
@@ -85,7 +142,9 @@ public static class ReplicaApiCurrentUserContext
             return CreateAuthenticated(
                 matchedUser.Name.Trim(),
                 ReplicaApiRoles.Normalize(matchedUser.Role),
-                isValidated: true);
+                isValidated: true,
+                authScheme: "Header",
+                sessionId: string.Empty);
         }
 
         if (!strictActorValidation)
@@ -93,7 +152,7 @@ public static class ReplicaApiCurrentUserContext
             logger?.LogWarning(
                 "Request actor {Actor} is not present in active users list. Allowing because strict actor validation is disabled.",
                 normalizedActor);
-            return CreateAuthenticated(normalizedActor, ReplicaApiRoles.Operator, isValidated: false);
+            return CreateAuthenticated(normalizedActor, ReplicaApiRoles.Operator, isValidated: false, authScheme: "Header", sessionId: string.Empty);
         }
 
         logger?.LogWarning("Request rejected for actor {Actor}: unknown or inactive user.", normalizedActor);
@@ -120,15 +179,41 @@ public static class ReplicaApiCurrentUserContext
             : ReplicaApiCurrentUser.Anonymous;
     }
 
-    private static ReplicaApiCurrentUser CreateAuthenticated(string actor, string role, bool isValidated)
+    private static ReplicaApiCurrentUser CreateAuthenticated(string actor, string role, bool isValidated, string authScheme, string sessionId)
     {
         return new ReplicaApiCurrentUser
         {
             Name = actor,
             Role = ReplicaApiRoles.Normalize(role),
             IsAuthenticated = true,
-            IsValidated = isValidated
+            IsValidated = isValidated,
+            AuthScheme = authScheme ?? string.Empty,
+            SessionId = sessionId ?? string.Empty
         };
+    }
+
+    private static bool TryResolveAccessToken(HttpRequest request, out string rawToken)
+    {
+        rawToken = string.Empty;
+
+        if (request.Headers.TryGetValue("Authorization", out var authorizationHeader))
+        {
+            var authorizationValue = authorizationHeader.ToString().Trim();
+            if (authorizationValue.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            {
+                rawToken = authorizationValue["Bearer ".Length..].Trim();
+                if (!string.IsNullOrWhiteSpace(rawToken))
+                    return true;
+            }
+        }
+
+        if (request.Headers.TryGetValue("X-Api-Key", out var apiKeyHeader))
+        {
+            rawToken = apiKeyHeader.ToString().Trim();
+            return !string.IsNullOrWhiteSpace(rawToken);
+        }
+
+        return false;
     }
 
     private static bool TryResolveActor(HttpRequest request, out string actor)
