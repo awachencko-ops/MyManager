@@ -39,10 +39,10 @@ namespace Replica
             splitUser.Panel2.Paint -= SplitUserPanel2Paint;
             splitUser.Panel2.Controls.Clear();
 
-            pictureBox5.Dock = DockStyle.None;
-            pictureBox5.Size = new Size(42, 42);
-            pictureBox5.SizeMode = PictureBoxSizeMode.Zoom;
-            pictureBox5.BackColor = Color.Transparent;
+            pictureUser.Dock = DockStyle.None;
+            pictureUser.Size = new Size(42, 42);
+            pictureUser.SizeMode = PictureBoxSizeMode.Zoom;
+            pictureUser.BackColor = Color.Transparent;
             ReplaceUserProfileIcon();
 
             splitUser.Panel1.Resize -= SplitUserPanel1_Resize;
@@ -351,17 +351,17 @@ namespace Replica
 
         private void CenterUserProfileIcon()
         {
-            var x = Math.Max(0, (splitUser.Panel1.ClientSize.Width - pictureBox5.Width) / 2);
-            var y = Math.Max(0, (splitUser.Panel1.ClientSize.Height - pictureBox5.Height) / 2);
-            pictureBox5.Location = new Point(x, y);
+            var x = Math.Max(0, (splitUser.Panel1.ClientSize.Width - pictureUser.Width) / 2);
+            var y = Math.Max(0, (splitUser.Panel1.ClientSize.Height - pictureUser.Height) / 2);
+            pictureUser.Location = new Point(x, y);
         }
 
         private void ReplaceUserProfileIcon()
         {
-            var previousImage = pictureBox5.Image;
-            pictureBox5.Image = CreateUserProfileIcon(42);
+            var previousImage = pictureUser.Image;
+            pictureUser.Image = CreateUserProfileIcon(42);
 
-            if (previousImage != null && !ReferenceEquals(previousImage, pictureBox5.Image))
+            if (previousImage != null && !ReferenceEquals(previousImage, pictureUser.Image))
                 previousImage.Dispose();
         }
 
