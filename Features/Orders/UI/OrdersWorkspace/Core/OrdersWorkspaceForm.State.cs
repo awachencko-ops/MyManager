@@ -136,6 +136,8 @@ namespace Replica
         private bool _queueStatusCountsCacheValid;
         private int _visibleOrdersCountCache;
         private bool _visibleOrdersCountCacheValid;
+        private readonly Dictionary<string, (bool Exists, long CheckedAtUtcTicks)> _uiFileExistsCache = new(StringComparer.OrdinalIgnoreCase);
+        private readonly object _uiFileExistsCacheSync = new();
 
         private static readonly string[] QueueStatuses = QueueStatusNames.All;
 
@@ -164,6 +166,7 @@ namespace Replica
         private const int SearchDebounceIntervalMs = 180;
         private const int GridRefreshCoalesceIntervalMs = 70;
         private const int GridDerivedRefreshCoalesceIntervalMs = 90;
+        private const int UiFileExistsCacheTtlMs = 1200;
         private const double OrdersGridRebuildWarnThresholdMs = 140d;
         private const long DiskWarningThresholdBytes = 10L * 1024 * 1024 * 1024;
         private const long DiskCriticalThresholdBytes = 5L * 1024 * 1024 * 1024;

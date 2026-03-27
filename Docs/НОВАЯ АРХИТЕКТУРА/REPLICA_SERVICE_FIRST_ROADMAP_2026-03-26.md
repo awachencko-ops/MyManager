@@ -260,3 +260,12 @@ Replica.Client/
 9. `2026-03-27`: Stage 2 idempotency pipeline increment:
    - dedicated mediator idempotency behavior (`key length <= 128` guard),
    - verify coverage for pipeline idempotency failure path.
+10. `2026-03-27`: Stage 2 transaction behavior increment:
+   - mediator-level write transaction boundary (`ReplicaApiCommandTransactionBehavior`),
+   - verify coverage for serialized concurrent write command execution.
+11. `2026-03-27`: Stage 2 transaction gate configurability increment:
+   - added config flag `ReplicaApi:CommandPipeline:EnableSerializedWriteGate` (default enabled),
+   - verify coverage for enabled/disabled transaction gate modes.
+12. `2026-03-27`: Stage 2 read-side mediator increment:
+   - `GET` endpoints for orders/users moved to mediator query handlers with fallback path,
+   - verify coverage added for query handlers.

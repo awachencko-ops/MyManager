@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Replica.Api.Application.Users.Commands;
+using Replica.Api.Application.Users.Queries;
 using Replica.Api.Contracts;
 using Replica.Api.Infrastructure;
 using Replica.Api.Services;
@@ -31,7 +32,10 @@ public sealed class UsersController : ControllerBase
     [ProducesResponseType(typeof(IReadOnlyList<SharedUser>), StatusCodes.Status200OK)]
     public ActionResult<IReadOnlyList<SharedUser>> GetUsers()
     {
-        return Ok(_store.GetUsers());
+        var users = ExecuteQuery(
+            new GetUsersQuery(IncludeInactive: false),
+            () => _store.GetUsers());
+        return Ok(users);
     }
 
     [HttpGet("admin/all")]
@@ -41,7 +45,10 @@ public sealed class UsersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public ActionResult<IReadOnlyList<SharedUser>> GetAllUsers()
     {
-        return Ok(_store.GetUsers(includeInactive: true));
+        var users = ExecuteQuery(
+            new GetUsersQuery(IncludeInactive: true),
+            () => _store.GetUsers(includeInactive: true));
+        return Ok(users);
     }
 
     [HttpPost("admin/upsert")]
@@ -71,6 +78,17 @@ public sealed class UsersController : ControllerBase
 
         var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
         return _mediator.Send(command, cancellationToken).GetAwaiter().GetResult();
+    }
+
+    private TResponse ExecuteQuery<TResponse>(
+        IRequest<TResponse> query,
+        Func<TResponse> fallback)
+    {
+        if (_mediator == null)
+            return fallback();
+
+        var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
+        return _mediator.Send(query, cancellationToken).GetAwaiter().GetResult();
     }
 
     private string GetCurrentActor()

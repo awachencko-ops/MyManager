@@ -98,3 +98,58 @@ Targeted verify run result: passed (62/62).
 
 1. Transaction behavior at mediator level (needs careful alignment with existing store transactions).
 2. Optional read-side MediatR query path migration.
+
+## Increment Addendum (2026-03-27, transaction behavior)
+
+### Implemented
+
+1. Added dedicated mediator transaction behavior:
+   - `ReplicaApiCommandTransactionBehavior<,>`.
+2. Behavior applies only to write commands (`IReplicaApiWriteCommand`) and creates a serialized write transaction boundary via async gate.
+3. Design note: ambient `TransactionScope` intentionally not used because current EF/Npgsql stores already manage explicit DB transactions internally.
+4. Registered transaction behavior in pipeline between idempotency and telemetry.
+5. Added verify coverage:
+   - `PipelineTransaction_WhenConcurrentWriteCommands_ExecutesSerially`.
+
+### Validation (addendum)
+
+Targeted verify run result: passed (63/63).
+
+### Remaining Stage 2 backlog
+
+1. Decide whether to keep serialized boundary as default or introduce feature-flagged parallel write strategy for specific deployments.
+2. Optional read-side MediatR query migration.
+
+## Increment Addendum (2026-03-27, transaction gate configurability)
+
+### Implemented
+
+1. Added pipeline options:
+   - `ReplicaApiCommandPipelineOptions.EnableSerializedWriteGate` (default `true`).
+2. Wired options from config:
+   - `ReplicaApi:CommandPipeline:EnableSerializedWriteGate`.
+3. Updated transaction behavior to respect the flag.
+4. Added verify coverage for both modes:
+   - gate enabled => serialized write execution,
+   - gate disabled => concurrent write overlap is allowed.
+
+### Validation (addendum)
+
+Targeted verify run result: passed (64/64).
+
+## Increment Addendum (2026-03-27, read-side mediator queries)
+
+### Implemented
+
+1. Added read query handlers:
+   - Orders: `GetOrdersQuery`, `GetOrderByIdQuery`
+   - Users: `GetUsersQuery`
+2. Migrated read endpoints to mediator dispatch with safe fallback (when mediator is unavailable):
+   - `OrdersController.GetOrders/GetOrderById`
+   - `UsersController.GetUsers/GetAllUsers`
+3. Added verify coverage:
+   - `MediatRReadQueryHandlersTests`.
+
+### Validation (addendum)
+
+Targeted verify run result: passed (67/67).

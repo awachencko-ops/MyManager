@@ -281,6 +281,7 @@ namespace Replica
             if (NormalizeOrderTopologyInHistory(logIssues: false))
                 SaveHistory();
 
+            ClearUiFileExistsCache();
             _isRebuildingGrid = true;
             dgvJobs.SuspendLayout();
 
@@ -347,6 +348,7 @@ namespace Replica
             if (_isRebuildingGrid || dgvJobs.Rows.Count == 0)
                 return false;
 
+            ClearUiFileExistsCache();
             selectedTag ??= dgvJobs.CurrentRow?.Tag?.ToString();
             var ordersByInternalId = OrderGridLogic.BuildOrderIndex(_orderHistory);
             var updatedRows = 0;

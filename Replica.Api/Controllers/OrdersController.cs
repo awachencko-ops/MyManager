@@ -2,6 +2,7 @@ using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Replica.Api.Application.Orders.Commands;
+using Replica.Api.Application.Orders.Queries;
 using Replica.Api.Contracts;
 using Replica.Api.Infrastructure;
 using Replica.Api.Services;
@@ -42,7 +43,10 @@ public sealed class OrdersController : ControllerBase
     [ProducesResponseType(typeof(IReadOnlyList<SharedOrder>), StatusCodes.Status200OK)]
     public ActionResult<IReadOnlyList<SharedOrder>> GetOrders([FromQuery] string createdBy = "")
     {
-        return Ok(_store.GetOrders(createdBy));
+        var orders = ExecuteQuery(
+            new GetOrdersQuery(createdBy),
+            () => _store.GetOrders(createdBy));
+        return Ok(orders);
     }
 
     [HttpGet("{id}")]
@@ -50,7 +54,15 @@ public sealed class OrdersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public ActionResult<SharedOrder> GetOrderById(string id)
     {
-        return _store.TryGetOrder(id, out var order)
+        var order = ExecuteQuery(
+            new GetOrderByIdQuery(id),
+            () =>
+            {
+                return _store.TryGetOrder(id, out var loaded)
+                    ? loaded
+                    : null;
+            });
+        return order != null
             ? Ok(order)
             : NotFound(new { error = "order not found" });
     }
@@ -266,6 +278,17 @@ public sealed class OrdersController : ControllerBase
 
         var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
         return _mediator.Send(command, cancellationToken).GetAwaiter().GetResult();
+    }
+
+    private TResponse ExecuteQuery<TResponse>(
+        IRequest<TResponse> query,
+        Func<TResponse> fallback)
+    {
+        if (_mediator == null)
+            return fallback();
+
+        var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
+        return _mediator.Send(query, cancellationToken).GetAwaiter().GetResult();
     }
 
     private string ResolveIdempotencyKey()

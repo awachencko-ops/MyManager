@@ -118,6 +118,7 @@ namespace Replica
                     continue;
 
                 var hasExpectedHash = TryGetExpectedFileHash(candidate, out var expectedHash);
+                var hashIndexReady = !_archiveHashIndexBuildInProgress && _archivedFilePathsByHash.Count > 0;
                 if (hasExpectedHash
                     && _archivedFilePathsByHash.TryGetValue(expectedHash, out var hashPaths))
                 {
@@ -159,12 +160,16 @@ namespace Replica
                     if (candidateLength != currentLength)
                         continue;
 
-                    if (hasExpectedHash && !ArchiveFileMatchesHash(candidatePath, expectedHash))
+                    // Avoid synchronous SHA checks on the UI thread.
+                    // If hash index is already built, we trust index-only matching above.
+                    if (hasExpectedHash && hashIndexReady)
                         continue;
 
                     archivedPrintPath = candidatePath;
                     matchedLength = currentLength;
-                    matchedBy = hasExpectedHash ? "имя, размер и hash" : "имя и размер";
+                    matchedBy = hasExpectedHash
+                        ? (_archiveHashIndexBuildInProgress ? "имя и размер (hash-индекс строится)" : "имя и размер")
+                        : "имя и размер";
                     return true;
                 }
 
@@ -178,7 +183,9 @@ namespace Replica
                         ? $"в папке Готово есть имя {fileName}, но файлы недоступны"
                         : _archiveHashIndexBuildInProgress
                             ? $"в папке Готово есть имя {fileName}, но hash пока не совпал (ожидалось {expectedHash}; индекс hash ещё строится)"
-                            : $"в папке Готово есть имя {fileName}, но hash не совпал (ожидалось {expectedHash})"
+                            : hashIndexReady
+                                ? $"в папке Готово есть имя {fileName}, но hash-индекс не подтвердил совпадение (ожидалось {expectedHash})"
+                                : $"в папке Готово есть имя {fileName}, но hash-индекс ещё не готов"
                     : foundSizes.Count == 0
                         ? $"в папке Готово есть имя {fileName}, но файлы недоступны"
                         : $"в папке Готово есть имя {fileName}, но размер не совпал (ожидалось {currentLength} байт, найдено: {string.Join(", ", foundSizes)})";
@@ -299,13 +306,7 @@ namespace Replica
         private static bool TryGetExpectedFileHash((string Path, long? ExpectedLength, string Hash) candidate, out string hash)
         {
             hash = candidate.Hash ?? string.Empty;
-            if (!string.IsNullOrWhiteSpace(hash))
-                return true;
-
-            if (!HasExistingFile(candidate.Path))
-                return false;
-
-            return FileHashService.TryComputeSha256(candidate.Path, out hash, out _);
+            return !string.IsNullOrWhiteSpace(hash);
         }
 
         private string ResolveStatusWithoutArchive(OrderData order)
@@ -477,12 +478,6 @@ namespace Replica
                     // Форма может быть уже закрыта — безопасно игнорируем.
                 }
             });
-        }
-
-        private static bool ArchiveFileMatchesHash(string archivePath, string expectedHash)
-        {
-            return FileHashService.TryComputeSha256(archivePath, out var actualHash, out _)
-                && string.Equals(actualHash, expectedHash, StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool TryGetFileLength(string path, out long length)

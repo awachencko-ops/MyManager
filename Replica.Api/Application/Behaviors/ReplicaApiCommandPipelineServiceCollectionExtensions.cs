@@ -9,8 +9,10 @@ public static class ReplicaApiCommandPipelineServiceCollectionExtensions
 {
     public static IServiceCollection AddReplicaApiCommandPipeline(this IServiceCollection services)
     {
+        services.AddOptions<ReplicaApiCommandPipelineOptions>();
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ReplicaApiCommandValidationBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ReplicaApiCommandIdempotencyBehavior<,>));
+        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ReplicaApiCommandTransactionBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ReplicaApiCommandTelemetryBehavior<,>));
 
         RegisterValidatorsFromAssembly(services, typeof(ReplicaApiCommandPipelineServiceCollectionExtensions).Assembly);

@@ -62,6 +62,8 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddSingleton<IReplicaApiTokenService, ReplicaApiTokenService>();
 builder.Services.AddMediatR(typeof(Program));
 builder.Services.AddReplicaApiCommandPipeline();
+builder.Services.Configure<ReplicaApiCommandPipelineOptions>(
+    builder.Configuration.GetSection("ReplicaApi:CommandPipeline"));
 
 var app = builder.Build();
 

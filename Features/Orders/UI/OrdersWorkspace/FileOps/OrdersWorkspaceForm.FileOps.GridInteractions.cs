@@ -353,8 +353,8 @@ namespace Replica
                 && !string.Equals(textValue, "...", StringComparison.Ordinal);
             var foreColor = hasAttachmentText ? OrdersLinkTextColor : Color.Black;
             if (hasAttachmentText
-                && TryResolveGridFileCell(e.RowIndex, e.ColumnIndex, requireExistingFile: false, out var fileCell)
-                && !HasExistingFile(fileCell.Path))
+                && TryResolveGridFilePathForFormatting(rowTag, order, e.ColumnIndex, out var filePath)
+                && !HasExistingFileCachedForUi(filePath))
             {
                 foreColor = Color.Firebrick;
             }
@@ -370,6 +370,95 @@ namespace Replica
                 : (isGroupItemRow ? GroupOrderItemRowSelectedBackColor : OrdersRowSelectedBackColor);
             e.CellStyle.ForeColor = foreColor;
             e.CellStyle.SelectionForeColor = foreColor;
+        }
+
+        private bool TryResolveGridFilePathForFormatting(string? rowTag, OrderData? order, int columnIndex, out string filePath)
+        {
+            filePath = string.Empty;
+            if (order == null || string.IsNullOrWhiteSpace(rowTag))
+                return false;
+
+            var stage = GetStageByColumnIndex(columnIndex);
+            if (stage == OrderStages.None)
+                return false;
+
+            if (IsGroupOrderContainerRow(rowTag, order) && IsGroupContainerFileStageLocked(order, stage))
+                return false;
+
+            if (IsItemTag(rowTag))
+            {
+                var itemId = ExtractItemIdFromTag(rowTag);
+                if (string.IsNullOrWhiteSpace(itemId))
+                    return false;
+
+                var item = order.Items?.FirstOrDefault(x => x != null && string.Equals(x.ItemId, itemId, StringComparison.Ordinal));
+                if (item == null)
+                    return false;
+
+                filePath = GetItemStagePath(item, stage);
+                return !string.IsNullOrWhiteSpace(filePath);
+            }
+
+            if (!IsOrderTag(rowTag) || OrderTopologyService.IsMultiOrder(order))
+                return false;
+
+            filePath = GetOrderStagePath(order, stage);
+            if (!string.IsNullOrWhiteSpace(filePath))
+                return true;
+
+            var primaryItem = GetPrimaryItem(order);
+            if (primaryItem == null)
+                return false;
+
+            filePath = GetItemStagePath(primaryItem, stage);
+            return !string.IsNullOrWhiteSpace(filePath);
+        }
+
+        private bool HasExistingFileCachedForUi(string? path)
+        {
+            var normalizedPath = CleanPath(path);
+            if (string.IsNullOrWhiteSpace(normalizedPath))
+                return false;
+
+            var nowTicks = DateTime.UtcNow.Ticks;
+            var ttlTicks = TimeSpan.FromMilliseconds(UiFileExistsCacheTtlMs).Ticks;
+
+            lock (_uiFileExistsCacheSync)
+            {
+                if (_uiFileExistsCache.TryGetValue(normalizedPath, out var cached)
+                    && nowTicks - cached.CheckedAtUtcTicks <= ttlTicks)
+                {
+                    return cached.Exists;
+                }
+            }
+
+            bool exists;
+            try
+            {
+                exists = File.Exists(normalizedPath);
+            }
+            catch
+            {
+                exists = false;
+            }
+
+            lock (_uiFileExistsCacheSync)
+            {
+                if (_uiFileExistsCache.Count > 4096)
+                    _uiFileExistsCache.Clear();
+
+                _uiFileExistsCache[normalizedPath] = (exists, nowTicks);
+            }
+
+            return exists;
+        }
+
+        private void ClearUiFileExistsCache()
+        {
+            lock (_uiFileExistsCacheSync)
+            {
+                _uiFileExistsCache.Clear();
+            }
         }
 
         private void DgvJobs_CellMouseEnter(object? sender, DataGridViewCellEventArgs e)
