@@ -57,9 +57,11 @@ public sealed class SignalRReplicaOrderPushPublisher : IReplicaOrderPushPublishe
                     occurredAtUtc = DateTime.UtcNow
                 },
                 cancellationToken);
+            ReplicaApiObservability.RecordPushPublished(ReplicaOrderHubEvents.OrderUpdated);
         }
         catch (Exception ex)
         {
+            ReplicaApiObservability.RecordPushPublishFailure(ReplicaOrderHubEvents.OrderUpdated);
             _logger.LogWarning(ex, "failed to publish SignalR event {EventName} for order {OrderId}", ReplicaOrderHubEvents.OrderUpdated, normalizedOrderId);
         }
     }
@@ -80,9 +82,11 @@ public sealed class SignalRReplicaOrderPushPublisher : IReplicaOrderPushPublishe
                     occurredAtUtc = DateTime.UtcNow
                 },
                 cancellationToken);
+            ReplicaApiObservability.RecordPushPublished(ReplicaOrderHubEvents.OrderDeleted);
         }
         catch (Exception ex)
         {
+            ReplicaApiObservability.RecordPushPublishFailure(ReplicaOrderHubEvents.OrderDeleted);
             _logger.LogWarning(ex, "failed to publish SignalR event {EventName} for order {OrderId}", ReplicaOrderHubEvents.OrderDeleted, normalizedOrderId);
         }
     }
@@ -103,9 +107,11 @@ public sealed class SignalRReplicaOrderPushPublisher : IReplicaOrderPushPublishe
                     occurredAtUtc = DateTime.UtcNow
                 },
                 cancellationToken);
+            ReplicaApiObservability.RecordPushPublished(ReplicaOrderHubEvents.ForceRefresh);
         }
         catch (Exception ex)
         {
+            ReplicaApiObservability.RecordPushPublishFailure(ReplicaOrderHubEvents.ForceRefresh);
             _logger.LogWarning(ex, "failed to publish SignalR event {EventName}", ReplicaOrderHubEvents.ForceRefresh);
         }
     }

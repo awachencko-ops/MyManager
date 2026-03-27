@@ -39,6 +39,25 @@ public sealed class DiagnosticsController : ControllerBase
 
         return Ok(operations);
     }
+
+    [HttpGet("push")]
+    [ProducesResponseType(typeof(PushDiagnosticsDto), StatusCodes.Status200OK)]
+    public ActionResult<PushDiagnosticsDto> GetPushDiagnostics()
+    {
+        var snapshot = ReplicaApiObservability.GetSnapshot();
+        return Ok(new PushDiagnosticsDto
+        {
+            PublishedTotal = snapshot.PushPublishedTotal,
+            PublishFailuresTotal = snapshot.PushPublishFailuresTotal,
+            PublishSuccessRatio = snapshot.PushPublishSuccessRatio,
+            OrderUpdatedPublished = snapshot.PushOrderUpdatedPublished,
+            OrderDeletedPublished = snapshot.PushOrderDeletedPublished,
+            ForceRefreshPublished = snapshot.PushForceRefreshPublished,
+            OrderUpdatedFailures = snapshot.PushOrderUpdatedFailures,
+            OrderDeletedFailures = snapshot.PushOrderDeletedFailures,
+            ForceRefreshFailures = snapshot.PushForceRefreshFailures
+        });
+    }
 }
 
 public sealed class ServerOperationDto
@@ -50,4 +69,17 @@ public sealed class ServerOperationDto
     public string EventSource { get; set; } = string.Empty;
     public DateTime CreatedAtUtc { get; set; }
     public string PayloadJson { get; set; } = "{}";
+}
+
+public sealed class PushDiagnosticsDto
+{
+    public long PublishedTotal { get; set; }
+    public long PublishFailuresTotal { get; set; }
+    public double PublishSuccessRatio { get; set; }
+    public long OrderUpdatedPublished { get; set; }
+    public long OrderDeletedPublished { get; set; }
+    public long ForceRefreshPublished { get; set; }
+    public long OrderUpdatedFailures { get; set; }
+    public long OrderDeletedFailures { get; set; }
+    public long ForceRefreshFailures { get; set; }
 }

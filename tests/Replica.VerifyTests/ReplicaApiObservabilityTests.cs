@@ -67,6 +67,28 @@ public sealed class ReplicaApiObservabilityTests
         Assert.True(afterCommand.HttpCount >= beforeCommand.HttpCount + 1);
     }
 
+    [Fact]
+    public void RecordPushPublishAndFailure_UpdatesPushCounters()
+    {
+        var before = ReplicaApiObservability.GetSnapshot();
+
+        ReplicaApiObservability.RecordPushPublished("OrderUpdated");
+        ReplicaApiObservability.RecordPushPublished("OrderDeleted");
+        ReplicaApiObservability.RecordPushPublished("ForceRefresh");
+        ReplicaApiObservability.RecordPushPublishFailure("OrderUpdated");
+        ReplicaApiObservability.RecordPushPublishFailure("ForceRefresh");
+
+        var after = ReplicaApiObservability.GetSnapshot();
+
+        Assert.True(after.PushPublishedTotal >= before.PushPublishedTotal + 3);
+        Assert.True(after.PushPublishFailuresTotal >= before.PushPublishFailuresTotal + 2);
+        Assert.True(after.PushOrderUpdatedPublished >= before.PushOrderUpdatedPublished + 1);
+        Assert.True(after.PushOrderDeletedPublished >= before.PushOrderDeletedPublished + 1);
+        Assert.True(after.PushForceRefreshPublished >= before.PushForceRefreshPublished + 1);
+        Assert.True(after.PushOrderUpdatedFailures >= before.PushOrderUpdatedFailures + 1);
+        Assert.True(after.PushForceRefreshFailures >= before.PushForceRefreshFailures + 1);
+    }
+
     private static ReplicaApiCommandMetricsSnapshot GetCommandSnapshot(ReplicaApiObservabilitySnapshot snapshot, string command)
     {
         return snapshot.Commands.TryGetValue(command, out var value)

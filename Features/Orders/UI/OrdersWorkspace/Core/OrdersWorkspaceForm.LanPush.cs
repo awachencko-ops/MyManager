@@ -352,9 +352,18 @@ namespace Replica
             var coalescedEventsCount = Interlocked.Read(ref _lanPushCoalescedEventsCount);
             var throttleDelayCount = Interlocked.Read(ref _lanPushThrottleDelayCount);
             var reconnectCount = Interlocked.CompareExchange(ref _lanPushReconnectCount, 0, 0);
-            var pressureAlertCount = Interlocked.Read(ref _lanPushPressureAlertCount);
+            var nowUtc = DateTime.UtcNow;
             lock (_lanPushMetricsSync)
             {
+                if (LanPushPressureAlertEvaluator.ShouldResetState(
+                        nowUtc,
+                        _lanPushLastPressureAlertAtUtc,
+                        LanPushPressureStateResetWindow))
+                {
+                    Interlocked.Exchange(ref _lanPushPressureAlertCount, 0);
+                    _lanPushLastPressureAlertAtUtc = DateTime.MinValue;
+                }
+
                 snapshot = new LanPushDiagnosticsSnapshot
                 {
                     IsConnected = _lanPushConnected,
@@ -366,7 +375,7 @@ namespace Replica
                     LastForceRefreshReason = _lanPushLastForceRefreshReason,
                     LastPressureAlertAtUtc = _lanPushLastPressureAlertAtUtc,
                     PressureHintActive = LanPushPressureAlertEvaluator.IsHintActive(
-                        DateTime.UtcNow,
+                        nowUtc,
                         _lanPushLastPressureAlertAtUtc,
                         LanPushPressureHintActiveWindow),
                     ReasonCountersSummary = BuildLanPushReasonCountersSummary(_lanPushReasonCounters),
@@ -376,7 +385,7 @@ namespace Replica
                     CoalescedEventsCount = coalescedEventsCount,
                     ThrottleDelayCount = throttleDelayCount,
                     ReconnectCount = reconnectCount,
-                    PressureAlertCount = pressureAlertCount
+                    PressureAlertCount = Interlocked.Read(ref _lanPushPressureAlertCount)
                 };
             }
 
@@ -480,6 +489,40 @@ namespace Replica
 
             Logger.Warn(
                 $"LAN-PUSH | pressure-alert | trigger={trigger} | events={eventsReceived} | refresh={refreshApplied} | coalesced={coalesced} ({decision.CoalescedRate:P0}) | throttled={throttled} ({decision.ThrottledRate:P0}) | reasons={reasonCounters}");
+        }
+
+        private bool IsLanPushPressureAckAvailable()
+        {
+            lock (_lanPushMetricsSync)
+            {
+                var pressureAlertCount = Interlocked.Read(ref _lanPushPressureAlertCount);
+                if (pressureAlertCount <= 0)
+                    return false;
+
+                return LanPushPressureAlertEvaluator.IsHintActive(
+                    DateTime.UtcNow,
+                    _lanPushLastPressureAlertAtUtc,
+                    LanPushPressureHintActiveWindow);
+            }
+        }
+
+        private bool TryAcknowledgeLanPushPressureAlerts()
+        {
+            DateTime acknowledgedAtUtc;
+            lock (_lanPushMetricsSync)
+            {
+                var pressureAlertCount = Interlocked.Read(ref _lanPushPressureAlertCount);
+                var hasPressureState = pressureAlertCount > 0 || _lanPushLastPressureAlertAtUtc > DateTime.MinValue;
+                if (!hasPressureState)
+                    return false;
+
+                Interlocked.Exchange(ref _lanPushPressureAlertCount, 0);
+                _lanPushLastPressureAlertAtUtc = DateTime.MinValue;
+                acknowledgedAtUtc = DateTime.UtcNow;
+            }
+
+            Logger.Info($"LAN-PUSH | pressure-alert-acknowledged | at={acknowledgedAtUtc:O}");
+            return true;
         }
 
         private sealed class LanPushDiagnosticsSnapshot

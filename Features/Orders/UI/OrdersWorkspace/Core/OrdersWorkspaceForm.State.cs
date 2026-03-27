@@ -103,6 +103,7 @@ namespace Replica
         private LanServerProbeSnapshot _lanServerProbeSnapshot = LanServerProbeSnapshot.CreateInitial();
         private bool _lanApiRecoveryInProgress;
         private bool _lanConnectionRecoveryActionEnabled;
+        private bool _lanPushPressureAckActionEnabled;
         private readonly object _lanPushRefreshSync = new();
         private readonly object _lanPushMetricsSync = new();
         private int _lanPushRefreshInProgress;
@@ -183,13 +184,14 @@ namespace Replica
         private const int TrayIndicatorsRefreshIntervalMs = 15000;
         private const int LanServerProbeMinIntervalMs = 5000;
         private const int LanServerProbeFailureThreshold = 3;
-        private const int LanPushMinRefreshIntervalMs = 500;
+        private int LanPushMinRefreshIntervalMs = AppSettings.DefaultLanPushMinRefreshIntervalMs;
         private const int LanPushReasonCountersMaxItems = 4;
-        private const int LanPushPressureAlertMinEvents = 30;
-        private const double LanPushCoalescedRateAlertThreshold = 0.55;
-        private const double LanPushThrottledRateAlertThreshold = 0.40;
-        private static readonly TimeSpan LanPushPressureAlertCooldown = TimeSpan.FromMinutes(1);
-        private static readonly TimeSpan LanPushPressureHintActiveWindow = TimeSpan.FromMinutes(5);
+        private int LanPushPressureAlertMinEvents = AppSettings.DefaultLanPushPressureAlertMinEvents;
+        private double LanPushCoalescedRateAlertThreshold = AppSettings.DefaultLanPushCoalescedRateAlertThreshold;
+        private double LanPushThrottledRateAlertThreshold = AppSettings.DefaultLanPushThrottledRateAlertThreshold;
+        private TimeSpan LanPushPressureAlertCooldown = TimeSpan.FromSeconds(AppSettings.DefaultLanPushPressureAlertCooldownSeconds);
+        private TimeSpan LanPushPressureHintActiveWindow = TimeSpan.FromSeconds(AppSettings.DefaultLanPushPressureHintActiveWindowSeconds);
+        private TimeSpan LanPushPressureStateResetWindow = TimeSpan.FromSeconds(AppSettings.DefaultLanPushPressureStateResetWindowSeconds);
         private static readonly TimeSpan ArchiveIndexLifetime = TimeSpan.FromSeconds(60);
         private const int ArchiveStatusSyncIntervalMs = 60000;
         private const int OrdersGridWarmupIntervalMs = 3000;
@@ -440,6 +442,9 @@ namespace Replica
             public DateTime LastServerEventAtUtc { get; init; }
             public string LastServerEventType { get; init; } = string.Empty;
             public string LastServerEventOrderId { get; init; } = string.Empty;
+            public long PushPublishedTotal { get; init; } = -1;
+            public long PushPublishFailuresTotal { get; init; } = -1;
+            public double PushPublishSuccessRatio { get; init; } = -1;
             public string ProcessAlert { get; init; } = string.Empty;
             public DateTime ProcessAlertAtUtc { get; init; }
         }

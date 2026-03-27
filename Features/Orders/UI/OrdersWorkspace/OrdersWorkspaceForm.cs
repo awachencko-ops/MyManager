@@ -448,6 +448,13 @@ namespace Replica
             _ordersStorageBackend = settings.OrdersStorageBackend;
             _lanPostgreSqlConnectionString = settings.LanPostgreSqlConnectionString;
             _lanApiBaseUrl = settings.LanApiBaseUrl;
+            LanPushMinRefreshIntervalMs = settings.LanPushMinRefreshIntervalMs;
+            LanPushPressureAlertMinEvents = settings.LanPushPressureAlertMinEvents;
+            LanPushCoalescedRateAlertThreshold = settings.LanPushCoalescedRateAlertThreshold;
+            LanPushThrottledRateAlertThreshold = settings.LanPushThrottledRateAlertThreshold;
+            LanPushPressureAlertCooldown = TimeSpan.FromSeconds(settings.LanPushPressureAlertCooldownSeconds);
+            LanPushPressureHintActiveWindow = TimeSpan.FromSeconds(settings.LanPushPressureHintActiveWindowSeconds);
+            LanPushPressureStateResetWindow = TimeSpan.FromSeconds(settings.LanPushPressureStateResetWindowSeconds);
             _orderApplicationService.ConfigureHistoryRepository(_ordersStorageBackend, _lanPostgreSqlConnectionString, _jsonHistoryFile);
             _managerLogFilePath = settings.ManagerLogFilePath;
             _orderLogsFolderPath = settings.OrderLogsFolderPath;

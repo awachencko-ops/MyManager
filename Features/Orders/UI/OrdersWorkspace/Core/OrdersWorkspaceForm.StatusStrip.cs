@@ -12,6 +12,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using Replica.Shared;
 using Svg;
 
 namespace Replica
@@ -105,9 +106,19 @@ namespace Replica
         private async void ToolConnection_Click(object? sender, EventArgs e)
         {
             if (!ShouldUseLanRunApi()
-                || _lanApiRecoveryInProgress
-                || !_lanConnectionRecoveryActionEnabled)
+                || _lanApiRecoveryInProgress)
                 return;
+
+            if (!_lanConnectionRecoveryActionEnabled)
+            {
+                if (TryAcknowledgeLanPushPressureAlerts())
+                {
+                    SetBottomStatus("Push-предупреждение подтверждено.");
+                    UpdateTrayConnectionIndicator();
+                }
+
+                return;
+            }
 
             _lanApiRecoveryInProgress = true;
             UpdateTrayConnectionIndicator();
@@ -303,6 +314,7 @@ namespace Replica
 
             var isConnected = CanAccessPath(_ordersRootPath);
             _lanConnectionRecoveryActionEnabled = false;
+            _lanPushPressureAckActionEnabled = false;
             string shortStatusText;
             Color statusColor;
             if (!isConnected)
@@ -405,6 +417,8 @@ namespace Replica
                 snapshot.ConsecutiveFailureCount,
                 LanServerProbeFailureThreshold);
             _lanConnectionRecoveryActionEnabled = disconnected && !_lanApiRecoveryInProgress;
+            _lanPushPressureAckActionEnabled = !_lanConnectionRecoveryActionEnabled
+                                               && IsLanPushPressureAckAvailable();
 
             string shortStatusText;
             Color statusColor;
@@ -454,8 +468,9 @@ namespace Replica
                 ? $"↻ Сервер: {shortStatusText}"
                 : $"● Сервер: {shortStatusText}";
             toolConnection.ForeColor = statusColor;
-            toolConnection.IsLink = _lanConnectionRecoveryActionEnabled;
-            toolConnection.LinkBehavior = _lanConnectionRecoveryActionEnabled
+            var hasConnectionAction = _lanConnectionRecoveryActionEnabled || _lanPushPressureAckActionEnabled;
+            toolConnection.IsLink = hasConnectionAction;
+            toolConnection.LinkBehavior = hasConnectionAction
                 ? LinkBehavior.HoverUnderline
                 : LinkBehavior.NeverUnderline;
             toolConnection.LinkColor = statusColor;
@@ -544,6 +559,13 @@ namespace Replica
             {
                 lines.Add($"Ошибки API: 5xx={Math.Max(0, snapshot.HttpRequests5xx)}, bad_request={Math.Max(0, snapshot.WriteBadRequest)}");
             }
+            if (snapshot.PushPublishedTotal >= 0 || snapshot.PushPublishFailuresTotal >= 0)
+            {
+                var successRatioText = snapshot.PushPublishSuccessRatio >= 0
+                    ? $"{snapshot.PushPublishSuccessRatio:P0}"
+                    : "n/a";
+                lines.Add($"Push API publish/fail: {Math.Max(0, snapshot.PushPublishedTotal)}/{Math.Max(0, snapshot.PushPublishFailuresTotal)} ({successRatioText})");
+            }
             if (snapshot.LastServerEventAtUtc > DateTime.MinValue)
             {
                 var eventOrderText = string.IsNullOrWhiteSpace(snapshot.LastServerEventOrderId)
@@ -559,6 +581,8 @@ namespace Replica
                 lines.Add(BuildDependencyHealthSummary());
             if (_lanConnectionRecoveryActionEnabled)
                 lines.Add("Нажмите на красный статус для переподключения.");
+            else if (_lanPushPressureAckActionEnabled)
+                lines.Add("Нажмите статус сервера, чтобы подтвердить push-предупреждение.");
             if (!string.IsNullOrWhiteSpace(_usersDirectoryStatusText))
                 lines.Add(_usersDirectoryStatusText);
 
@@ -648,13 +672,15 @@ namespace Replica
                 var sloProbeTask = ProbeEndpointStatusAsync(baseUri, "slo", cancellationToken);
                 var metricsProbeTask = ProbeEndpointStatusAsync(baseUri, "metrics", cancellationToken, optionalEndpoint: true);
                 var diagnosticsProbeTask = ProbeEndpointStatusAsync(baseUri, "api/diagnostics/operations/recent?limit=1", cancellationToken, optionalEndpoint: true);
-                await Task.WhenAll(liveProbeTask, readyProbeTask, sloProbeTask, metricsProbeTask, diagnosticsProbeTask);
+                var pushDiagnosticsProbeTask = ProbeEndpointStatusAsync(baseUri, "api/diagnostics/push", cancellationToken, optionalEndpoint: true);
+                await Task.WhenAll(liveProbeTask, readyProbeTask, sloProbeTask, metricsProbeTask, diagnosticsProbeTask, pushDiagnosticsProbeTask);
 
                 var liveProbe = await liveProbeTask;
                 var readyProbe = await readyProbeTask;
                 var sloProbe = await sloProbeTask;
                 var metricsProbe = await metricsProbeTask;
                 var diagnosticsProbe = await diagnosticsProbeTask;
+                var pushDiagnosticsProbe = await pushDiagnosticsProbeTask;
                 completedAtUtc = DateTime.UtcNow;
 
                 var apiReachable = liveProbe.IsReachable || readyProbe.IsReachable || sloProbe.IsReachable;
@@ -703,9 +729,19 @@ namespace Replica
                         out lastServerEventOrderId);
                 }
 
+                var pushPublishedTotal = -1L;
+                var pushPublishFailuresTotal = -1L;
+                var pushPublishSuccessRatio = -1d;
+                if (!string.IsNullOrWhiteSpace(pushDiagnosticsProbe.Payload))
+                {
+                    TryGetLongMetric(pushDiagnosticsProbe.Payload, "PublishedTotal", out pushPublishedTotal);
+                    TryGetLongMetric(pushDiagnosticsProbe.Payload, "PublishFailuresTotal", out pushPublishFailuresTotal);
+                    TryGetDoubleMetric(pushDiagnosticsProbe.Payload, "PublishSuccessRatio", out pushPublishSuccessRatio);
+                }
+
                 var mergedError = string.Join(
                     " | ",
-                    new[] { liveProbe.Error, readyProbe.Error, sloProbe.Error, metricsProbe.Error, diagnosticsProbe.Error }
+                    new[] { liveProbe.Error, readyProbe.Error, sloProbe.Error, metricsProbe.Error, diagnosticsProbe.Error, pushDiagnosticsProbe.Error }
                         .Where(error => !string.IsNullOrWhiteSpace(error)));
 
                 nextSnapshot = new LanServerProbeSnapshot
@@ -730,7 +766,10 @@ namespace Replica
                     WriteBadRequest = writeBadRequest,
                     LastServerEventAtUtc = lastServerEventAtUtc,
                     LastServerEventType = lastServerEventType,
-                    LastServerEventOrderId = lastServerEventOrderId
+                    LastServerEventOrderId = lastServerEventOrderId,
+                    PushPublishedTotal = pushPublishedTotal,
+                    PushPublishFailuresTotal = pushPublishFailuresTotal,
+                    PushPublishSuccessRatio = pushPublishSuccessRatio
                 };
             }
             catch (OperationCanceledException)
@@ -829,6 +868,9 @@ namespace Replica
                         LastServerEventAtUtc = nextSnapshot.LastServerEventAtUtc,
                         LastServerEventType = nextSnapshot.LastServerEventType,
                         LastServerEventOrderId = nextSnapshot.LastServerEventOrderId,
+                        PushPublishedTotal = nextSnapshot.PushPublishedTotal,
+                        PushPublishFailuresTotal = nextSnapshot.PushPublishFailuresTotal,
+                        PushPublishSuccessRatio = nextSnapshot.PushPublishSuccessRatio,
                         ProcessAlert = processAlert,
                         ProcessAlertAtUtc = processAlertAtUtc
                     };
@@ -859,6 +901,9 @@ namespace Replica
                         LastServerEventAtUtc = nextSnapshot.LastServerEventAtUtc,
                         LastServerEventType = nextSnapshot.LastServerEventType,
                         LastServerEventOrderId = nextSnapshot.LastServerEventOrderId,
+                        PushPublishedTotal = nextSnapshot.PushPublishedTotal,
+                        PushPublishFailuresTotal = nextSnapshot.PushPublishFailuresTotal,
+                        PushPublishSuccessRatio = nextSnapshot.PushPublishSuccessRatio,
                         ProcessAlert = processAlert,
                         ProcessAlertAtUtc = processAlertAtUtc
                     };
@@ -1043,6 +1088,23 @@ namespace Replica
             {
                 var endpointUri = new Uri(baseUri, endpointPath);
                 using var request = new HttpRequestMessage(HttpMethod.Get, endpointUri);
+                var actor = ResolveLanApiActor();
+                if (!string.IsNullOrWhiteSpace(actor))
+                {
+                    if (CurrentUserHeaderCodec.RequiresEncoding(actor))
+                    {
+                        request.Headers.TryAddWithoutValidation(
+                            CurrentUserHeaderCodec.HeaderName,
+                            CurrentUserHeaderCodec.BuildAsciiFallback(actor));
+                        request.Headers.TryAddWithoutValidation(
+                            CurrentUserHeaderCodec.EncodedHeaderName,
+                            CurrentUserHeaderCodec.Encode(actor));
+                    }
+                    else
+                    {
+                        request.Headers.TryAddWithoutValidation(CurrentUserHeaderCodec.HeaderName, actor);
+                    }
+                }
                 using var response = await _lanStatusHttpClient.SendAsync(request, cancellationToken);
                 var payload = await response.Content.ReadAsStringAsync(cancellationToken);
                 var fallbackStatus = response.IsSuccessStatusCode
@@ -1197,6 +1259,32 @@ namespace Replica
                     return false;
 
                 if (valueElement.ValueKind == JsonValueKind.Number && valueElement.TryGetInt64(out value))
+                    return true;
+            }
+            catch
+            {
+                // ignore malformed payload
+            }
+
+            return false;
+        }
+
+        private static bool TryGetDoubleMetric(string payload, string metricName, out double value)
+        {
+            value = -1;
+            if (string.IsNullOrWhiteSpace(payload))
+                return false;
+
+            try
+            {
+                using var document = JsonDocument.Parse(payload);
+                if (document.RootElement.ValueKind != JsonValueKind.Object)
+                    return false;
+
+                if (!TryGetPropertyIgnoreCase(document.RootElement, metricName, out var valueElement))
+                    return false;
+
+                if (valueElement.ValueKind == JsonValueKind.Number && valueElement.TryGetDouble(out value))
                     return true;
             }
             catch

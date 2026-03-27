@@ -1,8 +1,12 @@
 using System.Collections;
 using System.Drawing;
 using System.IO;
+using System.Net;
+using System.Net.Sockets;
 using System.Reflection;
+using System.Text;
 using System.Text.Json;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using Replica;
 
@@ -351,6 +355,133 @@ public sealed class MainFormCoreRegressionTests
             Assert.Equal(LanOrderPushEventNames.ForceRefresh, lastEventType);
             Assert.Equal("reconnect-resync", lastReason);
             Assert.True(eventsReceived > 0);
+        });
+    }
+
+    [Fact]
+    public void SR12D_ToolConnectionClick_AcknowledgesPushPressureAlertState()
+    {
+        MainFormTestHarness.RunWithIsolatedForm((form, _) =>
+        {
+            MainFormTestHarness.SetPrivateField(form, "_ordersStorageBackend", OrdersStorageMode.LanPostgreSql);
+            MainFormTestHarness.SetPrivateField(form, "_lanApiBaseUrl", "http://127.0.0.1:65535/");
+            MainFormTestHarness.SetPrivateField(form, "_lanPushPressureAlertCount", 3L);
+            MainFormTestHarness.SetPrivateField(form, "_lanPushLastPressureAlertAtUtc", DateTime.UtcNow);
+            MainFormTestHarness.SetPrivateField(form, "_lanConnectionRecoveryActionEnabled", false);
+
+            using var probeCts = new CancellationTokenSource();
+            probeCts.Cancel();
+            MainFormTestHarness.SetPrivateField(form, "_lanServerProbeCts", probeCts);
+
+            var ackAvailableBefore = (bool)(MainFormTestHarness.InvokePrivate(form, "IsLanPushPressureAckAvailable") ?? false);
+            Assert.True(ackAvailableBefore);
+
+            MainFormTestHarness.InvokePrivate(form, "ToolConnection_Click", null, EventArgs.Empty);
+
+            var alertCount = MainFormTestHarness.GetPrivateField<long>(form, "_lanPushPressureAlertCount");
+            var lastAlertAtUtc = MainFormTestHarness.GetPrivateField<DateTime>(form, "_lanPushLastPressureAlertAtUtc");
+            var ackAvailableAfter = (bool)(MainFormTestHarness.InvokePrivate(form, "IsLanPushPressureAckAvailable") ?? true);
+
+            Assert.Equal(0L, alertCount);
+            Assert.Equal(DateTime.MinValue, lastAlertAtUtc);
+            Assert.False(ackAvailableAfter);
+        });
+    }
+
+    [Fact]
+    public void SR12E_LoadSettings_AppliesLanPushMonitoringSettings()
+    {
+        MainFormTestHarness.RunWithIsolatedForm(
+            (form, _) =>
+            {
+                var minRefreshIntervalMs = MainFormTestHarness.GetPrivateField<int>(form, "LanPushMinRefreshIntervalMs");
+                var alertMinEvents = MainFormTestHarness.GetPrivateField<int>(form, "LanPushPressureAlertMinEvents");
+                var coalescedThreshold = MainFormTestHarness.GetPrivateField<double>(form, "LanPushCoalescedRateAlertThreshold");
+                var throttledThreshold = MainFormTestHarness.GetPrivateField<double>(form, "LanPushThrottledRateAlertThreshold");
+                var alertCooldown = MainFormTestHarness.GetPrivateField<TimeSpan>(form, "LanPushPressureAlertCooldown");
+                var hintWindow = MainFormTestHarness.GetPrivateField<TimeSpan>(form, "LanPushPressureHintActiveWindow");
+                var resetWindow = MainFormTestHarness.GetPrivateField<TimeSpan>(form, "LanPushPressureStateResetWindow");
+
+                Assert.Equal(1200, minRefreshIntervalMs);
+                Assert.Equal(45, alertMinEvents);
+                Assert.Equal(0.72d, coalescedThreshold, 3);
+                Assert.Equal(0.33d, throttledThreshold, 3);
+                Assert.Equal(TimeSpan.FromSeconds(150), alertCooldown);
+                Assert.Equal(TimeSpan.FromSeconds(420), hintWindow);
+                Assert.Equal(TimeSpan.FromSeconds(2400), resetWindow);
+            },
+            settings =>
+            {
+                settings.LanPushMinRefreshIntervalMs = 1200;
+                settings.LanPushPressureAlertMinEvents = 45;
+                settings.LanPushCoalescedRateAlertThreshold = 0.72;
+                settings.LanPushThrottledRateAlertThreshold = 0.33;
+                settings.LanPushPressureAlertCooldownSeconds = 150;
+                settings.LanPushPressureHintActiveWindowSeconds = 420;
+                settings.LanPushPressureStateResetWindowSeconds = 2400;
+            });
+    }
+
+    [Fact]
+    public void SR12F_LoadSettings_NormalizesInvalidLanPushMonitoringSettings()
+    {
+        MainFormTestHarness.RunWithIsolatedForm(
+            (form, _) =>
+            {
+                var minRefreshIntervalMs = MainFormTestHarness.GetPrivateField<int>(form, "LanPushMinRefreshIntervalMs");
+                var alertMinEvents = MainFormTestHarness.GetPrivateField<int>(form, "LanPushPressureAlertMinEvents");
+                var coalescedThreshold = MainFormTestHarness.GetPrivateField<double>(form, "LanPushCoalescedRateAlertThreshold");
+                var throttledThreshold = MainFormTestHarness.GetPrivateField<double>(form, "LanPushThrottledRateAlertThreshold");
+                var alertCooldown = MainFormTestHarness.GetPrivateField<TimeSpan>(form, "LanPushPressureAlertCooldown");
+                var hintWindow = MainFormTestHarness.GetPrivateField<TimeSpan>(form, "LanPushPressureHintActiveWindow");
+                var resetWindow = MainFormTestHarness.GetPrivateField<TimeSpan>(form, "LanPushPressureStateResetWindow");
+
+                Assert.Equal(AppSettings.DefaultLanPushMinRefreshIntervalMs, minRefreshIntervalMs);
+                Assert.Equal(AppSettings.DefaultLanPushPressureAlertMinEvents, alertMinEvents);
+                Assert.Equal(AppSettings.DefaultLanPushCoalescedRateAlertThreshold, coalescedThreshold, 3);
+                Assert.Equal(AppSettings.DefaultLanPushThrottledRateAlertThreshold, throttledThreshold, 3);
+                Assert.Equal(TimeSpan.FromSeconds(AppSettings.DefaultLanPushPressureAlertCooldownSeconds), alertCooldown);
+                Assert.Equal(TimeSpan.FromSeconds(AppSettings.DefaultLanPushPressureHintActiveWindowSeconds), hintWindow);
+                Assert.Equal(TimeSpan.FromSeconds(AppSettings.DefaultLanPushPressureHintActiveWindowSeconds), resetWindow);
+            },
+            settings =>
+            {
+                settings.LanPushMinRefreshIntervalMs = -10;
+                settings.LanPushPressureAlertMinEvents = 0;
+                settings.LanPushCoalescedRateAlertThreshold = 1.2;
+                settings.LanPushThrottledRateAlertThreshold = -0.1;
+                settings.LanPushPressureAlertCooldownSeconds = 0;
+                settings.LanPushPressureHintActiveWindowSeconds = 1;
+                settings.LanPushPressureStateResetWindowSeconds = 120;
+            });
+    }
+
+    [Theory]
+    [InlineData(401)]
+    [InlineData(403)]
+    [InlineData(404)]
+    public void SR12G_ProbeLanServer_PushDiagnosticsOptionalFallback_DoesNotBreakSnapshot(int pushDiagnosticsStatusCode)
+    {
+        MainFormTestHarness.RunWithIsolatedForm((form, _) =>
+        {
+            using var probeServer = new LanProbeStubServer((HttpStatusCode)pushDiagnosticsStatusCode);
+            MainFormTestHarness.SetPrivateField(form, "_ordersStorageBackend", OrdersStorageMode.LanPostgreSql);
+            MainFormTestHarness.SetPrivateField(form, "_lanApiBaseUrl", probeServer.BaseUrl);
+
+            var probeTask = (Task?)MainFormTestHarness.InvokePrivate(
+                form,
+                "ProbeLanServerAsync",
+                "contract-test",
+                CancellationToken.None);
+            WaitForTask(probeTask, timeoutMs: 10000);
+
+            var snapshot = MainFormTestHarness.GetPrivateField<object>(form, "_lanServerProbeSnapshot");
+            Assert.True(ReadSnapshotProperty<bool>(snapshot, "ApiReachable"));
+            Assert.True(ReadSnapshotProperty<bool>(snapshot, "IsReady"));
+            Assert.Equal(-1L, ReadSnapshotProperty<long>(snapshot, "PushPublishedTotal"));
+            Assert.Equal(-1L, ReadSnapshotProperty<long>(snapshot, "PushPublishFailuresTotal"));
+            Assert.Equal(-1d, ReadSnapshotProperty<double>(snapshot, "PushPublishSuccessRatio"));
+            Assert.True(string.IsNullOrWhiteSpace(ReadSnapshotProperty<string>(snapshot, "Error")));
         });
     }
 
@@ -978,6 +1109,153 @@ public sealed class MainFormCoreRegressionTests
             MainFormTestHarness.InvokePrivate(form, "UpdateActionButtonsState");
             Assert.True(newOrderButton.Enabled);
         });
+    }
+
+    private static T ReadSnapshotProperty<T>(object snapshot, string propertyName)
+    {
+        var property = snapshot.GetType().GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+            ?? throw new MissingMemberException(snapshot.GetType().FullName, propertyName);
+        var value = property.GetValue(snapshot);
+        if (value is T typed)
+            return typed;
+
+        throw new InvalidOperationException($"Snapshot property '{propertyName}' is not {typeof(T).Name}.");
+    }
+
+    private sealed class LanProbeStubServer : IDisposable
+    {
+        private readonly TcpListener _listener;
+        private readonly CancellationTokenSource _cts = new();
+        private readonly Task _acceptLoopTask;
+        private readonly HttpStatusCode _pushDiagnosticsStatusCode;
+
+        public LanProbeStubServer(HttpStatusCode pushDiagnosticsStatusCode)
+        {
+            _pushDiagnosticsStatusCode = pushDiagnosticsStatusCode;
+            _listener = new TcpListener(IPAddress.Loopback, 0);
+            _listener.Start();
+
+            var endPoint = (IPEndPoint)_listener.LocalEndpoint;
+            BaseUrl = $"http://127.0.0.1:{endPoint.Port}/";
+            _acceptLoopTask = Task.Run(() => AcceptLoopAsync(_cts.Token));
+        }
+
+        public string BaseUrl { get; }
+
+        public void Dispose()
+        {
+            _cts.Cancel();
+            _listener.Stop();
+            try
+            {
+                _acceptLoopTask.GetAwaiter().GetResult();
+            }
+            catch
+            {
+                // Ignore cleanup races for local test server.
+            }
+            _cts.Dispose();
+        }
+
+        private async Task AcceptLoopAsync(CancellationToken cancellationToken)
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                TcpClient client;
+                try
+                {
+                    client = await _listener.AcceptTcpClientAsync(cancellationToken);
+                }
+                catch
+                {
+                    break;
+                }
+
+                _ = Task.Run(() => HandleClientAsync(client, cancellationToken), cancellationToken);
+            }
+        }
+
+        private async Task HandleClientAsync(TcpClient client, CancellationToken cancellationToken)
+        {
+            try
+            {
+                using (client)
+                using (var stream = client.GetStream())
+                using (var reader = new StreamReader(stream, Encoding.ASCII, detectEncodingFromByteOrderMarks: false, leaveOpen: true))
+                {
+                    var requestLine = await reader.ReadLineAsync();
+                    if (string.IsNullOrWhiteSpace(requestLine))
+                        return;
+
+                    while (true)
+                    {
+                        var headerLine = await reader.ReadLineAsync();
+                        if (headerLine == null || headerLine.Length == 0)
+                            break;
+                    }
+
+                    var path = ExtractRequestPath(requestLine);
+                    var response = BuildResponse(path);
+                    var payloadBytes = Encoding.UTF8.GetBytes(response.Payload);
+                    var header = $"HTTP/1.1 {(int)response.StatusCode} {GetReasonPhrase(response.StatusCode)}\r\n" +
+                                 "Content-Type: application/json\r\n" +
+                                 $"Content-Length: {payloadBytes.Length}\r\n" +
+                                 "Connection: close\r\n\r\n";
+                    var headerBytes = Encoding.ASCII.GetBytes(header);
+
+                    await stream.WriteAsync(headerBytes, cancellationToken);
+                    await stream.WriteAsync(payloadBytes, cancellationToken);
+                    await stream.FlushAsync(cancellationToken);
+                }
+            }
+            catch
+            {
+                // Ignore per-request failures; tests assert final snapshot behavior.
+            }
+        }
+
+        private static string ExtractRequestPath(string requestLine)
+        {
+            var parts = requestLine.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length < 2)
+                return "/";
+
+            var rawPath = parts[1];
+            var withoutQuery = rawPath.Split('?', 2)[0];
+            return withoutQuery.StartsWith("/", StringComparison.Ordinal)
+                ? withoutQuery
+                : "/" + withoutQuery;
+        }
+
+        private (HttpStatusCode StatusCode, string Payload) BuildResponse(string path)
+        {
+            if (string.Equals(path, "/live", StringComparison.OrdinalIgnoreCase))
+                return (HttpStatusCode.OK, "{\"status\":\"ok\",\"now\":\"2026-03-27T00:00:00Z\"}");
+            if (string.Equals(path, "/ready", StringComparison.OrdinalIgnoreCase))
+                return (HttpStatusCode.OK, "{\"status\":\"ready\"}");
+            if (string.Equals(path, "/slo", StringComparison.OrdinalIgnoreCase))
+                return (HttpStatusCode.OK, "{\"status\":\"ok\"}");
+            if (string.Equals(path, "/metrics", StringComparison.OrdinalIgnoreCase))
+                return (HttpStatusCode.OK, "{\"status\":\"ok\",\"HttpRequests5xx\":0,\"WriteBadRequest\":0}");
+            if (string.Equals(path, "/api/diagnostics/operations/recent", StringComparison.OrdinalIgnoreCase))
+                return (HttpStatusCode.OK, "{\"status\":\"ok\",\"operations\":[]}");
+            if (string.Equals(path, "/api/diagnostics/push", StringComparison.OrdinalIgnoreCase))
+                return (_pushDiagnosticsStatusCode, "{\"status\":\"error\"}");
+
+            return (HttpStatusCode.NotFound, "{\"status\":\"not_found\"}");
+        }
+
+        private static string GetReasonPhrase(HttpStatusCode statusCode)
+        {
+            return statusCode switch
+            {
+                HttpStatusCode.OK => "OK",
+                HttpStatusCode.Unauthorized => "Unauthorized",
+                HttpStatusCode.Forbidden => "Forbidden",
+                HttpStatusCode.NotFound => "Not Found",
+                _ => statusCode.ToString()
+            };
+        }
     }
 
     private static OrderData CreateOrder(string id, string status, string userName, DateTime createdAt, DateTime receivedAt)

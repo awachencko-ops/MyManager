@@ -77,6 +77,23 @@ internal static class LanPushPressureAlertEvaluator
         return (normalizedNowUtc - normalizedLastAlertAtUtc) <= normalizedWindow;
     }
 
+    public static bool ShouldResetState(DateTime nowUtc, DateTime lastAlertAtUtc, TimeSpan resetWindow)
+    {
+        if (lastAlertAtUtc <= DateTime.MinValue)
+            return false;
+
+        var normalizedWindow = resetWindow < TimeSpan.Zero ? TimeSpan.Zero : resetWindow;
+        if (normalizedWindow <= TimeSpan.Zero)
+            return true;
+
+        var normalizedNowUtc = nowUtc.Kind == DateTimeKind.Utc ? nowUtc : nowUtc.ToUniversalTime();
+        var normalizedLastAlertAtUtc = lastAlertAtUtc.Kind == DateTimeKind.Utc
+            ? lastAlertAtUtc
+            : lastAlertAtUtc.ToUniversalTime();
+
+        return (normalizedNowUtc - normalizedLastAlertAtUtc) > normalizedWindow;
+    }
+
     private static double NormalizeRateThreshold(double threshold)
     {
         if (double.IsNaN(threshold) || double.IsInfinity(threshold))

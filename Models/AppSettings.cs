@@ -44,6 +44,13 @@ namespace Replica
         public static string DefaultImposingHotfoldersRootPath => Path.Combine(DefaultBaseFolderPath, "WARNING NOT DELETE", "HotImposing");
         public const string DefaultLanPostgreSqlConnectionString = "User ID=postgres;Password=1234;Host=localhost;Port=5432;Database=replica_db;";
         public const string DefaultLanApiBaseUrl = "http://localhost:5000/";
+        public const int DefaultLanPushMinRefreshIntervalMs = 500;
+        public const int DefaultLanPushPressureAlertMinEvents = 30;
+        public const double DefaultLanPushCoalescedRateAlertThreshold = 0.55;
+        public const double DefaultLanPushThrottledRateAlertThreshold = 0.40;
+        public const int DefaultLanPushPressureAlertCooldownSeconds = 60;
+        public const int DefaultLanPushPressureHintActiveWindowSeconds = 300;
+        public const int DefaultLanPushPressureStateResetWindowSeconds = 1800;
         public static string DefaultThumbnailCacheFolderPath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Replica",
@@ -80,6 +87,13 @@ namespace Replica
         public OrdersStorageMode OrdersStorageBackend { get; set; } = OrdersStorageMode.FileSystem;
         public string LanPostgreSqlConnectionString { get; set; } = DefaultLanPostgreSqlConnectionString;
         public string LanApiBaseUrl { get; set; } = DefaultLanApiBaseUrl;
+        public int LanPushMinRefreshIntervalMs { get; set; } = DefaultLanPushMinRefreshIntervalMs;
+        public int LanPushPressureAlertMinEvents { get; set; } = DefaultLanPushPressureAlertMinEvents;
+        public double LanPushCoalescedRateAlertThreshold { get; set; } = DefaultLanPushCoalescedRateAlertThreshold;
+        public double LanPushThrottledRateAlertThreshold { get; set; } = DefaultLanPushThrottledRateAlertThreshold;
+        public int LanPushPressureAlertCooldownSeconds { get; set; } = DefaultLanPushPressureAlertCooldownSeconds;
+        public int LanPushPressureHintActiveWindowSeconds { get; set; } = DefaultLanPushPressureHintActiveWindowSeconds;
+        public int LanPushPressureStateResetWindowSeconds { get; set; } = DefaultLanPushPressureStateResetWindowSeconds;
 
         public static string FileName => StoragePaths.ResolveFilePath("settings.json", "settings.json");
 
@@ -141,6 +155,85 @@ namespace Replica
             if (!string.Equals(LanApiBaseUrl, normalizedLanApiBaseUrl, StringComparison.Ordinal))
             {
                 LanApiBaseUrl = normalizedLanApiBaseUrl;
+                changed = true;
+            }
+
+            var normalizedLanPushMinRefreshIntervalMs = NormalizeIntRange(
+                LanPushMinRefreshIntervalMs,
+                minValue: 0,
+                maxValue: 10000,
+                fallbackValue: DefaultLanPushMinRefreshIntervalMs);
+            if (LanPushMinRefreshIntervalMs != normalizedLanPushMinRefreshIntervalMs)
+            {
+                LanPushMinRefreshIntervalMs = normalizedLanPushMinRefreshIntervalMs;
+                changed = true;
+            }
+
+            var normalizedLanPushPressureAlertMinEvents = NormalizeIntRange(
+                LanPushPressureAlertMinEvents,
+                minValue: 1,
+                maxValue: 100000,
+                fallbackValue: DefaultLanPushPressureAlertMinEvents);
+            if (LanPushPressureAlertMinEvents != normalizedLanPushPressureAlertMinEvents)
+            {
+                LanPushPressureAlertMinEvents = normalizedLanPushPressureAlertMinEvents;
+                changed = true;
+            }
+
+            var normalizedLanPushCoalescedRateAlertThreshold = NormalizeDoubleRange(
+                LanPushCoalescedRateAlertThreshold,
+                minValue: 0d,
+                maxValue: 1d,
+                fallbackValue: DefaultLanPushCoalescedRateAlertThreshold);
+            if (!LanPushCoalescedRateAlertThreshold.Equals(normalizedLanPushCoalescedRateAlertThreshold))
+            {
+                LanPushCoalescedRateAlertThreshold = normalizedLanPushCoalescedRateAlertThreshold;
+                changed = true;
+            }
+
+            var normalizedLanPushThrottledRateAlertThreshold = NormalizeDoubleRange(
+                LanPushThrottledRateAlertThreshold,
+                minValue: 0d,
+                maxValue: 1d,
+                fallbackValue: DefaultLanPushThrottledRateAlertThreshold);
+            if (!LanPushThrottledRateAlertThreshold.Equals(normalizedLanPushThrottledRateAlertThreshold))
+            {
+                LanPushThrottledRateAlertThreshold = normalizedLanPushThrottledRateAlertThreshold;
+                changed = true;
+            }
+
+            var normalizedLanPushPressureAlertCooldownSeconds = NormalizeIntRange(
+                LanPushPressureAlertCooldownSeconds,
+                minValue: 1,
+                maxValue: 3600,
+                fallbackValue: DefaultLanPushPressureAlertCooldownSeconds);
+            if (LanPushPressureAlertCooldownSeconds != normalizedLanPushPressureAlertCooldownSeconds)
+            {
+                LanPushPressureAlertCooldownSeconds = normalizedLanPushPressureAlertCooldownSeconds;
+                changed = true;
+            }
+
+            var normalizedLanPushPressureHintActiveWindowSeconds = NormalizeIntRange(
+                LanPushPressureHintActiveWindowSeconds,
+                minValue: 5,
+                maxValue: 86400,
+                fallbackValue: DefaultLanPushPressureHintActiveWindowSeconds);
+            if (LanPushPressureHintActiveWindowSeconds != normalizedLanPushPressureHintActiveWindowSeconds)
+            {
+                LanPushPressureHintActiveWindowSeconds = normalizedLanPushPressureHintActiveWindowSeconds;
+                changed = true;
+            }
+
+            var normalizedLanPushPressureStateResetWindowSeconds = NormalizeIntRange(
+                LanPushPressureStateResetWindowSeconds,
+                minValue: 30,
+                maxValue: 172800,
+                fallbackValue: DefaultLanPushPressureStateResetWindowSeconds);
+            if (normalizedLanPushPressureStateResetWindowSeconds < LanPushPressureHintActiveWindowSeconds)
+                normalizedLanPushPressureStateResetWindowSeconds = LanPushPressureHintActiveWindowSeconds;
+            if (LanPushPressureStateResetWindowSeconds != normalizedLanPushPressureStateResetWindowSeconds)
+            {
+                LanPushPressureStateResetWindowSeconds = normalizedLanPushPressureStateResetWindowSeconds;
                 changed = true;
             }
 
@@ -285,6 +378,24 @@ namespace Replica
                 NormalizeForComparison(leftPath),
                 NormalizeForComparison(rightPath),
                 StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static int NormalizeIntRange(int value, int minValue, int maxValue, int fallbackValue)
+        {
+            if (value < minValue || value > maxValue)
+                return fallbackValue;
+
+            return value;
+        }
+
+        private static double NormalizeDoubleRange(double value, double minValue, double maxValue, double fallbackValue)
+        {
+            if (double.IsNaN(value) || double.IsInfinity(value))
+                return fallbackValue;
+            if (value < minValue || value > maxValue)
+                return fallbackValue;
+
+            return value;
         }
 
         private static string NormalizeForComparison(string? path)

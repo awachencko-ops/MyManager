@@ -317,3 +317,33 @@ Replica.Client/
    - added form-level smoke coverage for `Reconnected -> ForceRefresh(reconnect-resync)` bridge behavior,
    - assertion includes pending event reason and diagnostics counters update in runtime form state,
    - verify/ui-smoke checks passed after reconnect-resync smoke coverage update.
+24. `2026-03-27`: Stage 3 server push diagnostics increment:
+   - added API push observability counters (publish/failure totals + per-event split + success ratio),
+   - added `GET /api/diagnostics/push` for centralized monitoring of push channel,
+   - verify/ui-smoke checks passed after server push diagnostics update.
+25. `2026-03-27`: Stage 3 pressure-state decay increment:
+   - added long-session decay/reset policy for client pressure-alert state,
+   - extended evaluator coverage with explicit reset-window boundary tests,
+   - verify/ui-smoke checks passed after pressure-state decay update.
+26. `2026-03-27`: Stage 3 reconnect-churn stability increment:
+   - added repeated reconnect-cycle integration coverage (`stop/start` loops on SignalR client),
+   - verified push event delivery remains stable after each reconnect cycle,
+   - verify/ui-smoke checks passed after reconnect-churn scenario.
+27. `2026-03-27`: Stage 3 client diagnostics surfacing increment:
+   - LAN probe extended with `api/diagnostics/push` pull and actor headers for authorized diagnostics access,
+   - server push counters are now surfaced in LAN tooltip (`publish/fail`, success ratio),
+   - verify/ui-smoke checks passed after client diagnostics surfacing update.
+28. `2026-03-27`: Stage 3 operator-ack increment:
+   - added connection-indicator click action for manual acknowledgement of active push-pressure warnings,
+   - acknowledgement clears pressure counters/state and records explicit runtime log marker,
+   - ui-smoke coverage added for click-to-ack flow (`SR12D`).
+29. `2026-03-27`: Stage 3 push tuning-from-config increment:
+   - moved client push-pressure thresholds/windows to `AppSettings` (deployment-tunable without code edits),
+   - added normalization guardrails for invalid config values with safe defaults,
+   - ui-smoke coverage added for settings load + invalid-values normalization (`SR12E`, `SR12F`),
+   - verify/ui-smoke checks passed after settings-driven tuning update (`41/41`, `32/32`).
+30. `2026-03-27`: Stage 3 diagnostics auth-fallback contract increment:
+   - added UiSmoke contract coverage for optional push diagnostics endpoint fallback (`SR12G`, statuses `401/403/404`),
+   - added local LAN probe stub server in tests to validate real probe path behavior,
+   - confirmed probe snapshot stays healthy while push diagnostics metrics remain optional (`-1` values),
+   - verify/ui-smoke checks passed after auth-fallback coverage update (`41/41`, `35/35`).

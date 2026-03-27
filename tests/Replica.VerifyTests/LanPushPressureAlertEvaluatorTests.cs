@@ -152,4 +152,39 @@ public sealed class LanPushPressureAlertEvaluatorTests
 
         Assert.False(isActive);
     }
+
+    [Fact]
+    public void ShouldResetState_WhenLastAlertMissing_ReturnsFalse()
+    {
+        var shouldReset = LanPushPressureAlertEvaluator.ShouldResetState(
+            nowUtc: new DateTime(2026, 3, 27, 12, 0, 0, DateTimeKind.Utc),
+            lastAlertAtUtc: DateTime.MinValue,
+            resetWindow: TimeSpan.FromMinutes(30));
+
+        Assert.False(shouldReset);
+    }
+
+    [Fact]
+    public void ShouldResetState_WhenElapsedExceedsWindow_ReturnsTrue()
+    {
+        var nowUtc = new DateTime(2026, 3, 27, 12, 0, 0, DateTimeKind.Utc);
+        var shouldReset = LanPushPressureAlertEvaluator.ShouldResetState(
+            nowUtc: nowUtc,
+            lastAlertAtUtc: nowUtc.AddMinutes(-31),
+            resetWindow: TimeSpan.FromMinutes(30));
+
+        Assert.True(shouldReset);
+    }
+
+    [Fact]
+    public void ShouldResetState_WhenElapsedEqualsWindow_ReturnsFalse()
+    {
+        var nowUtc = new DateTime(2026, 3, 27, 12, 0, 0, DateTimeKind.Utc);
+        var shouldReset = LanPushPressureAlertEvaluator.ShouldResetState(
+            nowUtc: nowUtc,
+            lastAlertAtUtc: nowUtc.AddMinutes(-30),
+            resetWindow: TimeSpan.FromMinutes(30));
+
+        Assert.False(shouldReset);
+    }
 }

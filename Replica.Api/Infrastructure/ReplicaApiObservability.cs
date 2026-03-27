@@ -35,6 +35,15 @@ public static class ReplicaApiObservability
     private static long _idempotencyMissesTotal;
     private static long _idempotencyMismatchesTotal;
 
+    private static long _pushPublishedTotal;
+    private static long _pushPublishFailuresTotal;
+    private static long _pushOrderUpdatedPublished;
+    private static long _pushOrderDeletedPublished;
+    private static long _pushForceRefreshPublished;
+    private static long _pushOrderUpdatedFailures;
+    private static long _pushOrderDeletedFailures;
+    private static long _pushForceRefreshFailures;
+
     public static void RecordHttpRequest(string method, string path, int statusCode, double elapsedMs)
     {
         Interlocked.Increment(ref _httpRequestsTotal);
@@ -121,6 +130,40 @@ public static class ReplicaApiObservability
         }
     }
 
+    public static void RecordPushPublished(string eventName)
+    {
+        Interlocked.Increment(ref _pushPublishedTotal);
+        switch (NormalizePushEventName(eventName))
+        {
+            case "orderupdated":
+                Interlocked.Increment(ref _pushOrderUpdatedPublished);
+                return;
+            case "orderdeleted":
+                Interlocked.Increment(ref _pushOrderDeletedPublished);
+                return;
+            case "forcerefresh":
+                Interlocked.Increment(ref _pushForceRefreshPublished);
+                return;
+        }
+    }
+
+    public static void RecordPushPublishFailure(string eventName)
+    {
+        Interlocked.Increment(ref _pushPublishFailuresTotal);
+        switch (NormalizePushEventName(eventName))
+        {
+            case "orderupdated":
+                Interlocked.Increment(ref _pushOrderUpdatedFailures);
+                return;
+            case "orderdeleted":
+                Interlocked.Increment(ref _pushOrderDeletedFailures);
+                return;
+            case "forcerefresh":
+                Interlocked.Increment(ref _pushForceRefreshFailures);
+                return;
+        }
+    }
+
     public static ReplicaApiObservabilitySnapshot GetSnapshot()
     {
         var httpTotal = Interlocked.Read(ref _httpRequestsTotal);
@@ -137,6 +180,15 @@ public static class ReplicaApiObservability
         var idempotencyHits = Interlocked.Read(ref _idempotencyHitsTotal);
         var idempotencyMisses = Interlocked.Read(ref _idempotencyMissesTotal);
         var idempotencyMismatches = Interlocked.Read(ref _idempotencyMismatchesTotal);
+
+        var pushPublishedTotal = Interlocked.Read(ref _pushPublishedTotal);
+        var pushPublishFailuresTotal = Interlocked.Read(ref _pushPublishFailuresTotal);
+        var pushOrderUpdatedPublished = Interlocked.Read(ref _pushOrderUpdatedPublished);
+        var pushOrderDeletedPublished = Interlocked.Read(ref _pushOrderDeletedPublished);
+        var pushForceRefreshPublished = Interlocked.Read(ref _pushForceRefreshPublished);
+        var pushOrderUpdatedFailures = Interlocked.Read(ref _pushOrderUpdatedFailures);
+        var pushOrderDeletedFailures = Interlocked.Read(ref _pushOrderDeletedFailures);
+        var pushForceRefreshFailures = Interlocked.Read(ref _pushForceRefreshFailures);
 
         var latencyBuckets = new Dictionary<string, long>(StringComparer.Ordinal);
         for (var i = 0; i < LatencyBuckets.Length; i++)
@@ -193,6 +245,15 @@ public static class ReplicaApiObservability
             IdempotencyMisses = idempotencyMisses,
             IdempotencyMismatches = idempotencyMismatches,
             IdempotencyHitRatio = BuildRatio(idempotencyHits, idempotencyHits + idempotencyMisses),
+            PushPublishedTotal = pushPublishedTotal,
+            PushPublishFailuresTotal = pushPublishFailuresTotal,
+            PushOrderUpdatedPublished = pushOrderUpdatedPublished,
+            PushOrderDeletedPublished = pushOrderDeletedPublished,
+            PushForceRefreshPublished = pushForceRefreshPublished,
+            PushOrderUpdatedFailures = pushOrderUpdatedFailures,
+            PushOrderDeletedFailures = pushOrderDeletedFailures,
+            PushForceRefreshFailures = pushForceRefreshFailures,
+            PushPublishSuccessRatio = BuildRatio(pushPublishedTotal, pushPublishedTotal + pushPublishFailuresTotal),
             Commands = commandMetrics
         };
     }
@@ -337,6 +398,13 @@ public static class ReplicaApiObservability
             : resultKind.Trim().ToLowerInvariant();
     }
 
+    private static string NormalizePushEventName(string eventName)
+    {
+        return string.IsNullOrWhiteSpace(eventName)
+            ? string.Empty
+            : eventName.Trim().ToLowerInvariant();
+    }
+
     private sealed class CommandCounters
     {
         public long HttpCount;
@@ -376,6 +444,16 @@ public sealed class ReplicaApiObservabilitySnapshot
     public long IdempotencyMisses { get; set; }
     public long IdempotencyMismatches { get; set; }
     public double IdempotencyHitRatio { get; set; }
+
+    public long PushPublishedTotal { get; set; }
+    public long PushPublishFailuresTotal { get; set; }
+    public long PushOrderUpdatedPublished { get; set; }
+    public long PushOrderDeletedPublished { get; set; }
+    public long PushForceRefreshPublished { get; set; }
+    public long PushOrderUpdatedFailures { get; set; }
+    public long PushOrderDeletedFailures { get; set; }
+    public long PushForceRefreshFailures { get; set; }
+    public double PushPublishSuccessRatio { get; set; }
 
     public Dictionary<string, ReplicaApiCommandMetricsSnapshot> Commands { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }

@@ -15,6 +15,7 @@ using Replica.Api.Hubs;
 using Replica.Api.Infrastructure;
 using Replica.Api.Services;
 using Xunit;
+using System.Collections.Concurrent;
 
 namespace Replica.VerifyTests;
 
@@ -143,6 +144,53 @@ public sealed class SignalRPushIntegrationTests
         var pushedEvent = await postReconnectEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.Equal(ReplicaOrderHubEvents.OrderUpdated, pushedEvent.EventType);
         Assert.Equal(createdAfterReconnect.Order!.InternalId, pushedEvent.OrderId);
+    }
+
+    [Fact]
+    public async Task ReconnectCycles_WhenRepeated_StopStart_ContinuesReceivingPushEvents()
+    {
+        await using var harness = await SignalRPushHarness.StartAsync();
+
+        var receivedOrderIds = new ConcurrentQueue<string>();
+        harness.ClientB.On<object>(ReplicaOrderHubEvents.OrderUpdated, payload =>
+        {
+            var parsed = LanOrderPushEventParser.Parse(ReplicaOrderHubEvents.OrderUpdated, payload, DateTime.UtcNow);
+            if (!string.IsNullOrWhiteSpace(parsed.OrderId))
+                receivedOrderIds.Enqueue(parsed.OrderId);
+        });
+
+        for (var cycle = 1; cycle <= 3; cycle++)
+        {
+            await harness.ClientB.StopAsync();
+            await harness.ClientB.StartAsync();
+
+            var created = await harness.Mediator.Send(new CreateOrderCommand(
+                new CreateOrderRequest { OrderNumber = $"SIG-INTEG-RECONNECT-{cycle:000}" },
+                Actor: "Administrator",
+                IdempotencyKey: string.Empty));
+
+            Assert.True(created.IsSuccess);
+            Assert.NotNull(created.Order);
+
+            var received = await WaitForConditionAsync(
+                () => receivedOrderIds.Any(orderId => string.Equals(orderId, created.Order!.InternalId, StringComparison.Ordinal)),
+                TimeSpan.FromSeconds(5));
+            Assert.True(received);
+        }
+    }
+
+    private static async Task<bool> WaitForConditionAsync(Func<bool> condition, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow <= deadline)
+        {
+            if (condition())
+                return true;
+
+            await Task.Delay(50);
+        }
+
+        return condition();
     }
 
     private sealed class SignalRPushHarness : IAsyncDisposable

@@ -58,8 +58,8 @@ Stage 3 kickoff: real-time push notifications from API after successful mutating
 
 ## Validation
 
-1. Verify targeted pack (`SignalRPushIntegrationTests` + `LanOrderPushClientTests` + `MediatRPushNotificationsBehaviorTests` + `LanPushPressureAlertEvaluatorTests`): passed (26/26).
-2. UiSmoke targeted pack (`MainFormCoreRegressionTests` + `MainFormSmokeTests`): passed (28/28).
+1. Verify targeted pack (`SignalRPushIntegrationTests` + `LanOrderPushClientTests` + `MediatRPushNotificationsBehaviorTests` + `LanPushPressureAlertEvaluatorTests` + `ReplicaApiObservabilityTests` + `DiagnosticsControllerTests`): passed (41/41).
+2. UiSmoke targeted pack (`MainFormCoreRegressionTests` + `MainFormSmokeTests`): passed (29/29).
 
 ## Increment Addendum (2026-03-27, push reason counters + pressure alerts)
 
@@ -148,8 +148,130 @@ Stage 3 kickoff: real-time push notifications from API after successful mutating
 1. UiSmoke targeted pack (`MainFormCoreRegressionTests` + `MainFormSmokeTests`): passed (29/29).
 2. Verify targeted pack (`SignalRPushIntegrationTests` + `LanOrderPushClientTests` + `MediatRPushNotificationsBehaviorTests` + `LanPushPressureAlertEvaluatorTests`): passed (26/26).
 
+## Increment Addendum (2026-03-27, server push diagnostics endpoint)
+
+### Implemented
+
+1. Extended API observability with push-channel counters:
+   - published/failure totals,
+   - per-event counters (`OrderUpdated`, `OrderDeleted`, `ForceRefresh`),
+   - push publish success ratio.
+2. `SignalRReplicaOrderPushPublisher` now records observability for successful publish and failure paths.
+3. Added protected diagnostics endpoint:
+   - `GET /api/diagnostics/push` -> returns push counters snapshot for centralized monitoring.
+4. Added verify coverage:
+   - `ReplicaApiObservabilityTests` for push counters,
+   - `DiagnosticsControllerTests` for `GetPushDiagnostics`.
+
+### Validation (addendum)
+
+1. Verify targeted pack (`SignalRPushIntegrationTests` + `LanOrderPushClientTests` + `MediatRPushNotificationsBehaviorTests` + `LanPushPressureAlertEvaluatorTests` + `ReplicaApiObservabilityTests` + `DiagnosticsControllerTests`): passed (40/40).
+2. UiSmoke targeted pack (`MainFormCoreRegressionTests` + `MainFormSmokeTests`): passed (29/29).
+
+## Increment Addendum (2026-03-27, pressure alert-state decay/reset)
+
+### Implemented
+
+1. Added lightweight decay/reset policy for long-lived client sessions:
+   - pressure-alert state auto-resets after prolonged inactivity window.
+2. Extended `LanPushPressureAlertEvaluator` with reset decision rule (`ShouldResetState`).
+3. Wired reset policy into LAN push diagnostics snapshot generation.
+4. Extended verify coverage for reset boundaries:
+   - no-alert baseline,
+   - reset when elapsed window exceeded,
+   - no reset on exact boundary.
+
+### Validation (addendum)
+
+1. Verify targeted pack (`SignalRPushIntegrationTests` + `LanOrderPushClientTests` + `MediatRPushNotificationsBehaviorTests` + `LanPushPressureAlertEvaluatorTests` + `ReplicaApiObservabilityTests` + `DiagnosticsControllerTests`): passed (41/41).
+2. UiSmoke targeted pack (`MainFormCoreRegressionTests` + `MainFormSmokeTests`): passed (29/29).
+
+## Increment Addendum (2026-03-27, reconnect-churn integration scenario)
+
+### Implemented
+
+1. Added integration scenario `ReconnectCycles_WhenRepeated_StopStart_ContinuesReceivingPushEvents`:
+   - runs repeated client `stop/start` reconnect cycles,
+   - verifies push delivery remains intact after each reconnect cycle.
+
+### Validation (addendum)
+
+1. Verify targeted pack (`SignalRPushIntegrationTests` + `LanOrderPushClientTests` + `MediatRPushNotificationsBehaviorTests` + `LanPushPressureAlertEvaluatorTests` + `ReplicaApiObservabilityTests` + `DiagnosticsControllerTests`): passed (41/41).
+2. UiSmoke targeted pack (`MainFormCoreRegressionTests` + `MainFormSmokeTests`): passed (29/29).
+
+## Increment Addendum (2026-03-27, client surfacing of API push diagnostics)
+
+### Implemented
+
+1. Extended LAN probe flow to call `api/diagnostics/push` as optional endpoint.
+2. Probe requests now include actor headers (`X-Current-User` / encoded variant) to allow diagnostics access for authorized actors.
+3. Extended probe snapshot with API push counters:
+   - `PublishedTotal`,
+   - `PublishFailuresTotal`,
+   - `PublishSuccessRatio`.
+4. LAN tooltip now shows server push diagnostics line:
+   - `Push API publish/fail: published/failures (success%)`.
+
+### Validation (addendum)
+
+1. Verify targeted pack (`SignalRPushIntegrationTests` + `LanOrderPushClientTests` + `MediatRPushNotificationsBehaviorTests` + `LanPushPressureAlertEvaluatorTests` + `ReplicaApiObservabilityTests` + `DiagnosticsControllerTests`): passed (41/41).
+2. UiSmoke targeted pack (`MainFormCoreRegressionTests` + `MainFormSmokeTests`): passed (29/29).
+
+## Increment Addendum (2026-03-27, operator acknowledgement action)
+
+### Implemented
+
+1. Added manual acknowledgement action for active push-pressure warnings on connection-indicator click.
+2. Acknowledgement now clears pressure-alert counters/state (`count` + `last-alert-at`) and logs explicit marker (`pressure-alert-acknowledged`).
+3. Added UiSmoke regression test `SR12D_ToolConnectionClick_AcknowledgesPushPressureAlertState`.
+
+### Validation (addendum)
+
+1. UiSmoke targeted tests (`SR12D`): passed (1/1).
+2. Stage 3 targeted packs remained green after increment.
+
+## Increment Addendum (2026-03-27, settings-driven push-pressure tuning)
+
+### Implemented
+
+1. Moved push-pressure tuning knobs into `AppSettings`:
+   - refresh throttle interval,
+   - min events gate,
+   - coalesced/throttled rate thresholds,
+   - cooldown/hint/reset windows.
+2. Added normalization guardrails in settings load path:
+   - invalid values fallback to safe defaults,
+   - reset window is enforced to be `>=` hint window.
+3. `OrdersWorkspaceForm.LoadSettings()` now applies tuned values from settings into runtime Stage 3 push logic.
+4. Added UiSmoke regression tests:
+   - `SR12E_LoadSettings_AppliesLanPushMonitoringSettings`,
+   - `SR12F_LoadSettings_NormalizesInvalidLanPushMonitoringSettings`.
+
+### Validation (addendum)
+
+1. Verify targeted pack (`SignalRPushIntegrationTests` + `LanOrderPushClientTests` + `MediatRPushNotificationsBehaviorTests` + `LanPushPressureAlertEvaluatorTests` + `ReplicaApiObservabilityTests` + `DiagnosticsControllerTests`): passed (41/41).
+2. UiSmoke targeted pack (`MainFormCoreRegressionTests` + `MainFormSmokeTests`): passed (32/32).
+
+## Increment Addendum (2026-03-27, diagnostics auth-fallback contract coverage)
+
+### Implemented
+
+1. Added UiSmoke contract regression `SR12G_ProbeLanServer_PushDiagnosticsOptionalFallback_DoesNotBreakSnapshot`.
+2. Test covers optional endpoint fallback statuses for `api/diagnostics/push`:
+   - `401 Unauthorized`,
+   - `403 Forbidden`,
+   - `404 Not Found` (`optional-unavailable` path).
+3. Added local probe stub server in UiSmoke tests to emulate full LAN probe endpoint set (`live/ready/slo/metrics/diagnostics` + push diagnostics status variants).
+4. Assertions confirm that for optional push diagnostics failures:
+   - base probe remains healthy (`ApiReachable=true`, `IsReady=true`),
+   - push diagnostics counters stay unresolved (`-1`) and do not poison probe error state.
+
+### Validation (addendum)
+
+1. Verify targeted pack (`SignalRPushIntegrationTests` + `LanOrderPushClientTests` + `MediatRPushNotificationsBehaviorTests` + `LanPushPressureAlertEvaluatorTests` + `ReplicaApiObservabilityTests` + `DiagnosticsControllerTests`): passed (41/41).
+2. UiSmoke targeted pack (`MainFormCoreRegressionTests` + `MainFormSmokeTests`): passed (35/35).
+
 ## Next Stage 3 steps
 
-1. Consider exposing pressure-alert counters in diagnostics endpoint for centralized monitoring.
-2. Add lightweight alert-state reset strategy for long-lived sessions (operator acknowledgement or decay policy).
-3. Add integration scenario with repeated reconnect cycles to verify bounded probe/pull behavior under churn.
+1. Optionally expose new push tuning knobs in settings UI (if operators need runtime adjustment without editing `settings.json`).
+2. Prepare Stage 4 migration checklist handoff (dual-write guardrails + reconciliation acceptance criteria).

@@ -10,6 +10,22 @@ internal static class MainFormTestHarness
 
     public static void RunWithIsolatedForm(Action<MainForm, string> action, int timeoutSeconds = 90)
     {
+        RunWithIsolatedFormCore(action, configureSettings: null, timeoutSeconds);
+    }
+
+    public static void RunWithIsolatedForm(
+        Action<MainForm, string> action,
+        Action<AppSettings> configureSettings,
+        int timeoutSeconds = 90)
+    {
+        RunWithIsolatedFormCore(action, configureSettings, timeoutSeconds);
+    }
+
+    private static void RunWithIsolatedFormCore(
+        Action<MainForm, string> action,
+        Action<AppSettings>? configureSettings,
+        int timeoutSeconds)
+    {
         RunInSta(() =>
         {
             lock (SettingsLock)
@@ -26,7 +42,7 @@ internal static class MainFormTestHarness
                     if (hadSettingsFile)
                         File.Copy(settingsPath, settingsBackupPath, overwrite: true);
 
-                    ConfigureIsolatedSettings(tempRootPath);
+                    ConfigureIsolatedSettings(tempRootPath, configureSettings);
 
                     using var form = new MainForm();
                     _ = form.Handle;
@@ -143,7 +159,7 @@ internal static class MainFormTestHarness
         return null;
     }
 
-    private static void ConfigureIsolatedSettings(string tempRootPath)
+    private static void ConfigureIsolatedSettings(string tempRootPath, Action<AppSettings>? configureSettings)
     {
         var ordersRootPath = Path.Combine(tempRootPath, "Orders");
         var grandpaPath = Path.Combine(tempRootPath, "Grandpa");
@@ -193,6 +209,7 @@ internal static class MainFormTestHarness
             ImposingHotfoldersRootPath = imposingRootPath,
             SharedThumbnailCachePath = Path.Combine(tempRootPath, "Preview")
         };
+        configureSettings?.Invoke(settings);
         settings.Save();
     }
 
