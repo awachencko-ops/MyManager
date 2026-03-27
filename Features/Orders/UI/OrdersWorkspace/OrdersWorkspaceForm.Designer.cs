@@ -40,6 +40,10 @@
             pictureBox2 = new PictureBox();
             scMain = new SplitContainer();
             treeView1 = new TreeView();
+            pnlUser = new Panel();
+            pnlPictureUser = new Panel();
+            pictureUser = new PictureBox();
+            pnlInfoUser = new Panel();
             pnlDocSpace = new Panel();
             tableLayoutPanel1 = new TableLayoutPanel();
             pnlTable = new Panel();
@@ -85,10 +89,6 @@
             tsbBrowse = new ToolStripButton();
             tsbConsole = new ToolStripButton();
             toolStripButton1 = new ToolStripButton();
-            pnlPictureUser = new Panel();
-            pnlInfoUser = new Panel();
-            pnlUser = new Panel();
-            pictureUser = new PictureBox();
             pnlSidebar.SuspendLayout();
             pnlDockLiterature.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)pictureBox4).BeginInit();
@@ -102,6 +102,9 @@
             scMain.Panel1.SuspendLayout();
             scMain.Panel2.SuspendLayout();
             scMain.SuspendLayout();
+            pnlUser.SuspendLayout();
+            pnlPictureUser.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)pictureUser).BeginInit();
             tableLayoutPanel1.SuspendLayout();
             pnlTable.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)dgvJobs).BeginInit();
@@ -113,9 +116,6 @@
             pnlTray.SuspendLayout();
             statusStrip1.SuspendLayout();
             tsMainActions.SuspendLayout();
-            pnlPictureUser.SuspendLayout();
-            pnlUser.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)pictureUser).BeginInit();
             SuspendLayout();
             // 
             // pnlSidebar
@@ -233,6 +233,43 @@
             treeView1.Size = new Size(460, 1134);
             treeView1.TabIndex = 1;
             treeView1.AfterSelect += treeView1_AfterSelect;
+            // 
+            // pnlUser
+            // 
+            pnlUser.Controls.Add(pnlPictureUser);
+            pnlUser.Controls.Add(pnlInfoUser);
+            pnlUser.Dock = DockStyle.Bottom;
+            pnlUser.Location = new Point(0, 1134);
+            pnlUser.Name = "pnlUser";
+            pnlUser.Size = new Size(460, 90);
+            pnlUser.TabIndex = 0;
+            // 
+            // pnlPictureUser
+            // 
+            pnlPictureUser.Controls.Add(pictureUser);
+            pnlPictureUser.Dock = DockStyle.Left;
+            pnlPictureUser.Location = new Point(0, 0);
+            pnlPictureUser.Name = "pnlPictureUser";
+            pnlPictureUser.Size = new Size(90, 90);
+            pnlPictureUser.TabIndex = 2;
+            // 
+            // pictureUser
+            // 
+            pictureUser.Dock = DockStyle.Fill;
+            pictureUser.Location = new Point(0, 0);
+            pictureUser.Name = "pictureUser";
+            pictureUser.Size = new Size(90, 90);
+            pictureUser.SizeMode = PictureBoxSizeMode.StretchImage;
+            pictureUser.TabIndex = 0;
+            pictureUser.TabStop = false;
+            // 
+            // pnlInfoUser
+            // 
+            pnlInfoUser.Dock = DockStyle.Right;
+            pnlInfoUser.Location = new Point(90, 0);
+            pnlInfoUser.Name = "pnlInfoUser";
+            pnlInfoUser.Size = new Size(370, 90);
+            pnlInfoUser.TabIndex = 0;
             // 
             // pnlDocSpace
             // 
@@ -647,43 +684,6 @@
             toolStripButton1.Size = new Size(138, 29);
             toolStripButton1.Text = "Параметры";
             // 
-            // pnlPictureUser
-            // 
-            pnlPictureUser.Controls.Add(pictureUser);
-            pnlPictureUser.Dock = DockStyle.Left;
-            pnlPictureUser.Location = new Point(0, 0);
-            pnlPictureUser.Name = "pnlPictureUser";
-            pnlPictureUser.Size = new Size(90, 90);
-            pnlPictureUser.TabIndex = 2;
-            // 
-            // pnlInfoUser
-            // 
-            pnlInfoUser.Dock = DockStyle.Right;
-            pnlInfoUser.Location = new Point(90, 0);
-            pnlInfoUser.Name = "pnlInfoUser";
-            pnlInfoUser.Size = new Size(370, 90);
-            pnlInfoUser.TabIndex = 0;
-            // 
-            // pnlUser
-            // 
-            pnlUser.Controls.Add(pnlPictureUser);
-            pnlUser.Controls.Add(pnlInfoUser);
-            pnlUser.Dock = DockStyle.Bottom;
-            pnlUser.Location = new Point(0, 1134);
-            pnlUser.Name = "pnlUser";
-            pnlUser.Size = new Size(460, 90);
-            pnlUser.TabIndex = 0;
-            // 
-            // pictureUser
-            // 
-            pictureUser.Dock = DockStyle.Fill;
-            pictureUser.Location = new Point(0, 0);
-            pictureUser.Name = "pictureUser";
-            pictureUser.Size = new Size(90, 90);
-            pictureUser.SizeMode = PictureBoxSizeMode.StretchImage;
-            pictureUser.TabIndex = 0;
-            pictureUser.TabStop = false;
-            // 
             // OrdersWorkspaceForm
             // 
             AutoScaleDimensions = new SizeF(10F, 25F);
@@ -708,6 +708,9 @@
             scMain.Panel2.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)scMain).EndInit();
             scMain.ResumeLayout(false);
+            pnlUser.ResumeLayout(false);
+            pnlPictureUser.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)pictureUser).EndInit();
             tableLayoutPanel1.ResumeLayout(false);
             pnlTable.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)dgvJobs).EndInit();
@@ -723,9 +726,6 @@
             statusStrip1.PerformLayout();
             tsMainActions.ResumeLayout(false);
             tsMainActions.PerformLayout();
-            pnlPictureUser.ResumeLayout(false);
-            pnlUser.ResumeLayout(false);
-            ((System.ComponentModel.ISupportInitialize)pictureUser).EndInit();
             ResumeLayout(false);
         }
 
@@ -786,11 +786,11 @@
         private ToolStripButton toolStripButton1;
         private Panel pnlTable;
         private Panel pnlScrollBar;
-        private Panel pnlDocSpace;
         private Panel pnlUser;
         private Panel pnlPictureUser;
         private Panel pnlInfoUser;
         private PictureBox pictureUser;
+        private Panel pnlDocSpace;
     }
 }
 

@@ -10,10 +10,11 @@ namespace Replica
 {
     public partial class OrdersWorkspaceForm
     {
-        private static readonly Color UserProfilePanelBackColor = Color.FromArgb(244, 245, 247);
+        private static readonly Color UserProfilePanelBackColor = Color.White;
         private static readonly Color UserProfileCardBackColor = Color.White;
-        private static readonly Color UserProfileNameColor = Color.FromArgb(35, 35, 35);
-        private static readonly Color UserProfileRoleColor = Color.FromArgb(120, 120, 120);
+        private static readonly Color UserProfileNameColor = Color.FromArgb(32, 32, 32);
+        private static readonly Color UserProfileRoleColor = Color.FromArgb(112, 112, 112);
+        private static readonly Color UserProfileVersionColor = Color.DimGray;
         private static readonly Color UserProfileAuthStateColor = Color.FromArgb(96, 96, 96);
         private static readonly Color UserProfileAuthHealthyColor = Color.FromArgb(46, 125, 50);
         private static readonly Color UserProfileSessionActionColor = Color.FromArgb(33, 98, 165);
@@ -21,11 +22,12 @@ namespace Replica
         private void InitializeUserProfilePanel()
         {
             pnlUser.BackColor = UserProfilePanelBackColor;
-            pnlUser.Padding = new Padding(12, 8, 12, 8);
+            pnlUser.Padding = new Padding(10, 8, 10, 8);
             pnlPictureUser.BackColor = UserProfileCardBackColor;
             pnlInfoUser.BackColor = UserProfileCardBackColor;
-            pnlPictureUser.Padding = new Padding(14, 14, 10, 14);
-            pnlInfoUser.Padding = new Padding(2, 10, 14, 10);
+            pnlPictureUser.Padding = new Padding(8);
+            pnlInfoUser.Padding = new Padding(6, 8, 8, 8);
+            pnlPictureUser.Width = 76;
             pnlInfoUser.Controls.Clear();
 
             pictureUser.Dock = DockStyle.Fill;
@@ -38,8 +40,8 @@ namespace Replica
                 Name = "lblUserProfileName",
                 Dock = DockStyle.Fill,
                 AutoEllipsis = true,
-                TextAlign = ContentAlignment.BottomLeft,
-                Font = new Font("Segoe UI Semibold", 13f, FontStyle.Regular, GraphicsUnit.Pixel),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Font = new Font("Segoe UI", 10f, FontStyle.Bold, GraphicsUnit.Point),
                 ForeColor = UserProfileNameColor,
                 BackColor = Color.Transparent,
                 Margin = Padding.Empty,
@@ -51,40 +53,29 @@ namespace Replica
                 Name = "lblUserProfileRole",
                 Dock = DockStyle.Fill,
                 AutoEllipsis = true,
-                TextAlign = ContentAlignment.TopLeft,
-                Font = new Font("Segoe UI", 11f, FontStyle.Regular, GraphicsUnit.Pixel),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Font = new Font("Segoe UI", 8f, FontStyle.Regular, GraphicsUnit.Point),
                 ForeColor = UserProfileRoleColor,
                 BackColor = Color.Transparent,
                 Margin = Padding.Empty,
                 Text = _currentUserRoleText
             };
 
-            _userProfileAuthStateLabel = new Label
+            _userProfileVersionLabel = new Label
             {
-                Name = "lblUserProfileAuthState",
+                Name = "lblUserProfileVersion",
                 Dock = DockStyle.Fill,
                 AutoEllipsis = true,
                 TextAlign = ContentAlignment.MiddleLeft,
-                Font = new Font("Segoe UI", 10f, FontStyle.Regular, GraphicsUnit.Pixel),
-                ForeColor = UserProfileAuthStateColor,
+                Font = new Font("Segoe UI", 8f, FontStyle.Regular, GraphicsUnit.Point),
+                ForeColor = UserProfileVersionColor,
                 BackColor = Color.Transparent,
                 Margin = Padding.Empty,
-                Text = _currentUserAuthStateText
+                Text = BuildVersionText()
             };
 
-            _userProfileSessionActionLabel = new LinkLabel
-            {
-                Name = "lnkUserProfileSessionAction",
-                Dock = DockStyle.Left,
-                AutoSize = true,
-                LinkBehavior = LinkBehavior.HoverUnderline,
-                ActiveLinkColor = UserProfileSessionActionColor,
-                LinkColor = UserProfileSessionActionColor,
-                VisitedLinkColor = UserProfileSessionActionColor,
-                Text = "Войти"
-            };
-            _userProfileSessionActionLabel.LinkClicked -= UserProfileSessionActionLabel_LinkClicked;
-            _userProfileSessionActionLabel.LinkClicked += UserProfileSessionActionLabel_LinkClicked;
+            _userProfileAuthStateLabel = null;
+            _userProfileSessionActionLabel = null;
 
             var textLayout = new TableLayoutPanel
             {
@@ -92,22 +83,28 @@ namespace Replica
                 Dock = DockStyle.Fill,
                 BackColor = UserProfileCardBackColor,
                 ColumnCount = 1,
-                RowCount = 4,
+                RowCount = 3,
                 Margin = Padding.Empty,
                 Padding = Padding.Empty
             };
             textLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-            textLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 40f));
-            textLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 28f));
-            textLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 22f));
-            textLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 10f));
+            textLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 42f));
+            textLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 29f));
+            textLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 29f));
             textLayout.Controls.Add(_userProfileNameLabel, 0, 0);
             textLayout.Controls.Add(_userProfileRoleLabel, 0, 1);
-            textLayout.Controls.Add(_userProfileAuthStateLabel, 0, 2);
-            textLayout.Controls.Add(_userProfileSessionActionLabel, 0, 3);
+            textLayout.Controls.Add(_userProfileVersionLabel, 0, 2);
 
             pnlInfoUser.Controls.Add(textLayout);
             ApplyCurrentUserProfile(GetDefaultUserName(), _currentUserRoleText, _currentUserAuthStateText, usesBearerSession: false);
+        }
+
+        private static string BuildVersionText()
+        {
+            var version = string.IsNullOrWhiteSpace(Application.ProductVersion)
+                ? "n/a"
+                : Application.ProductVersion;
+            return $"\u0412\u0435\u0440\u0441\u0438\u044F {version}";
         }
 
         private void RefreshCurrentUserProfile(bool forceRefresh)
@@ -186,6 +183,9 @@ namespace Replica
 
             if (_userProfileRoleLabel != null)
                 _userProfileRoleLabel.Text = _currentUserRoleText;
+
+            if (_userProfileVersionLabel != null)
+                _userProfileVersionLabel.Text = BuildVersionText();
 
             if (_userProfileAuthStateLabel != null)
             {
