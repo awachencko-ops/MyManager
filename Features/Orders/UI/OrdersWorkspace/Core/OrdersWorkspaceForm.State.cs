@@ -178,7 +178,6 @@ namespace Replica
         private string _currentUserAuthStateText = "Сессия не установлена";
         private Label? _userProfileNameLabel;
         private Label? _userProfileRoleLabel;
-        private Label? _userProfileVersionLabel;
         private Label? _userProfileAuthStateLabel;
         private LinkLabel? _userProfileSessionActionLabel;
         private bool _currentUserProfileRefreshInProgress;

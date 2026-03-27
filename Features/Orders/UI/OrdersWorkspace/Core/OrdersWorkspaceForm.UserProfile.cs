@@ -11,113 +11,54 @@ namespace Replica
 {
     public partial class OrdersWorkspaceForm
     {
+        private const int UserProfileIconTargetSize = 60;
         private static readonly Color UserProfilePanelBackColor = QueuePanelBackColor;
-        private static readonly Color UserProfileDividerColor = QueuePanelDividerColor;
         private static readonly Color UserProfileNameColor = QueueTextColor;
         private static readonly Color UserProfileRoleColor = Color.FromArgb(90, 96, 116);
-        private static readonly Color UserProfileVersionColor = Color.FromArgb(128, 132, 144);
         private static readonly Color UserProfileAuthStateColor = Color.FromArgb(96, 96, 96);
         private static readonly Color UserProfileAuthHealthyColor = Color.FromArgb(46, 125, 50);
-        private static readonly Color UserProfileSessionActionColor = Color.FromArgb(33, 98, 165);
 
         private void InitializeUserProfilePanel()
         {
             pnlUser.SuspendLayout();
-            pnlPictureUser.SuspendLayout();
             pnlInfoUser.SuspendLayout();
 
             pnlUser.BackColor = UserProfilePanelBackColor;
-            pnlUser.Padding = new Padding(16, 12, 16, 12);
-            pnlUser.Height = 96;
-            pnlUser.MinimumSize = new Size(0, 96);
-            pnlUser.Paint -= PnlUser_Paint;
-            pnlUser.Paint += PnlUser_Paint;
-            pnlUser.Controls.Clear();
+            pnlUser.Padding = Padding.Empty;
+            pnlUser.Height = 90;
+            pnlUser.MinimumSize = new Size(0, 90);
 
-            pnlPictureUser.BackColor = Color.Transparent;
             pnlInfoUser.BackColor = Color.Transparent;
-            pnlPictureUser.Dock = DockStyle.Left;
-            pnlPictureUser.Width = 72;
-            pnlPictureUser.Padding = new Padding(0, 2, 12, 2);
             pnlInfoUser.Dock = DockStyle.Fill;
-            pnlInfoUser.Padding = new Padding(0, 8, 0, 6);
-            pnlPictureUser.Margin = Padding.Empty;
+            pnlInfoUser.Padding = Padding.Empty;
             pnlInfoUser.Margin = Padding.Empty;
-            pnlPictureUser.Controls.Clear();
-            pnlInfoUser.Controls.Clear();
-            pnlPictureUser.Resize -= PnlPictureUser_Resize;
-            pnlPictureUser.Resize += PnlPictureUser_Resize;
-
-            pictureUser.Dock = DockStyle.Fill;
-            pictureUser.SizeMode = PictureBoxSizeMode.Zoom;
             pictureUser.BackColor = Color.Transparent;
-            ReplaceUserProfileIcon();
-            pnlPictureUser.Controls.Add(pictureUser);
+            pictureUser.SizeMode = PictureBoxSizeMode.Zoom;
+            pictureUser.Resize -= PnlPictureUser_Resize;
+            pictureUser.Resize += PnlPictureUser_Resize;
 
-            _userProfileNameLabel = new Label
-            {
-                Name = "lblUserProfileName",
-                Dock = DockStyle.Fill,
-                AutoEllipsis = true,
-                TextAlign = ContentAlignment.MiddleLeft,
-                Font = new Font("Segoe UI", 10.5f, FontStyle.Bold, GraphicsUnit.Point),
-                ForeColor = UserProfileNameColor,
-                BackColor = Color.Transparent,
-                Margin = Padding.Empty,
-                Text = GetDefaultUserName()
-            };
-
-            _userProfileRoleLabel = new Label
-            {
-                Name = "lblUserProfileRole",
-                Dock = DockStyle.Fill,
-                AutoEllipsis = true,
-                TextAlign = ContentAlignment.MiddleLeft,
-                Font = new Font("Segoe UI", 8.5f, FontStyle.Regular, GraphicsUnit.Point),
-                ForeColor = UserProfileRoleColor,
-                BackColor = Color.Transparent,
-                Margin = Padding.Empty,
-                Text = _currentUserRoleText
-            };
-
-            _userProfileVersionLabel = new Label
-            {
-                Name = "lblUserProfileVersion",
-                Dock = DockStyle.Fill,
-                AutoEllipsis = true,
-                TextAlign = ContentAlignment.MiddleLeft,
-                Font = new Font("Segoe UI", 8f, FontStyle.Regular, GraphicsUnit.Point),
-                ForeColor = UserProfileVersionColor,
-                BackColor = Color.Transparent,
-                Margin = Padding.Empty,
-                Text = BuildCompactVersionText()
-            };
-
+            _userProfileNameLabel = userNameLabel;
+            _userProfileRoleLabel = statusUserLabel;
             _userProfileAuthStateLabel = null;
             _userProfileSessionActionLabel = null;
 
-            var textLayout = new TableLayoutPanel
-            {
-                Name = "tblUserProfileText",
-                Dock = DockStyle.Fill,
-                BackColor = Color.Transparent,
-                ColumnCount = 1,
-                RowCount = 4,
-                Margin = Padding.Empty,
-                Padding = Padding.Empty
-            };
-            textLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-            textLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28f));
-            textLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 20f));
-            textLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 18f));
-            textLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
-            textLayout.Controls.Add(_userProfileNameLabel, 0, 0);
-            textLayout.Controls.Add(_userProfileRoleLabel, 0, 1);
-            textLayout.Controls.Add(_userProfileVersionLabel, 0, 2);
+            userNameLabel.AutoSize = true;
+            userNameLabel.Dock = DockStyle.None;
+            userNameLabel.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold, GraphicsUnit.Point);
+            userNameLabel.ForeColor = UserProfileNameColor;
+            userNameLabel.BackColor = Color.Transparent;
+            userNameLabel.Margin = Padding.Empty;
+            userNameLabel.Text = GetDefaultUserName();
 
-            pnlInfoUser.Controls.Add(textLayout);
-            pnlUser.Controls.Add(pnlInfoUser);
-            pnlUser.Controls.Add(pnlPictureUser);
+            statusUserLabel.AutoSize = true;
+            statusUserLabel.Dock = DockStyle.None;
+            statusUserLabel.Font = new Font("Segoe UI", 8f, FontStyle.Regular, GraphicsUnit.Point);
+            statusUserLabel.ForeColor = UserProfileRoleColor;
+            statusUserLabel.BackColor = Color.Transparent;
+            statusUserLabel.Margin = Padding.Empty;
+            statusUserLabel.Text = _currentUserRoleText;
+
+            ReplaceUserProfileIcon();
 
             ApplyCurrentUserProfile(
                 GetDefaultUserName(),
@@ -126,14 +67,7 @@ namespace Replica
                 usesBearerSession: false);
 
             pnlInfoUser.ResumeLayout(performLayout: true);
-            pnlPictureUser.ResumeLayout(performLayout: true);
             pnlUser.ResumeLayout(performLayout: true);
-        }
-
-        private void PnlUser_Paint(object? sender, PaintEventArgs e)
-        {
-            using var pen = new Pen(UserProfileDividerColor, 1f);
-            e.Graphics.DrawLine(pen, 0, 0, pnlUser.ClientSize.Width, 0);
         }
 
         private void PnlPictureUser_Resize(object? sender, EventArgs e)
@@ -142,27 +76,6 @@ namespace Replica
                 return;
 
             ReplaceUserProfileIcon();
-        }
-
-        private static string BuildVersionText()
-        {
-            var version = string.IsNullOrWhiteSpace(Application.ProductVersion)
-                ? "n/a"
-                : Application.ProductVersion;
-            return $"\u0412\u0435\u0440\u0441\u0438\u044F {version}";
-        }
-
-        private static string BuildCompactVersionText()
-        {
-            var version = string.IsNullOrWhiteSpace(Application.ProductVersion)
-                ? "n/a"
-                : Application.ProductVersion.Trim();
-
-            var buildSeparatorIndex = version.IndexOf('+');
-            if (buildSeparatorIndex >= 0)
-                version = version[..buildSeparatorIndex];
-
-            return $"v{version}";
         }
 
         private void RefreshCurrentUserProfile(bool forceRefresh)
@@ -241,9 +154,6 @@ namespace Replica
 
             if (_userProfileRoleLabel != null)
                 _userProfileRoleLabel.Text = _currentUserRoleText;
-
-            if (_userProfileVersionLabel != null)
-                _userProfileVersionLabel.Text = BuildCompactVersionText();
 
             if (_userProfileAuthStateLabel != null)
             {
@@ -398,16 +308,16 @@ namespace Replica
 
         private int GetUserProfileIconSize()
         {
-            var width = pnlPictureUser.ClientSize.Width > 0
-                ? pnlPictureUser.ClientSize.Width
-                : pnlPictureUser.Width;
-            var height = pnlPictureUser.ClientSize.Height > 0
-                ? pnlPictureUser.ClientSize.Height
-                : pnlUser.Height;
+            var width = pictureUser.ClientSize.Width > 0
+                ? pictureUser.ClientSize.Width
+                : pictureUser.Width;
+            var height = pictureUser.ClientSize.Height > 0
+                ? pictureUser.ClientSize.Height
+                : pictureUser.Height;
 
-            var availableWidth = Math.Max(32, width - pnlPictureUser.Padding.Horizontal);
-            var availableHeight = Math.Max(32, height - pnlPictureUser.Padding.Vertical);
-            return Math.Max(40, Math.Min(availableWidth, availableHeight));
+            var availableWidth = Math.Max(32, width);
+            var availableHeight = Math.Max(32, height);
+            return Math.Max(40, Math.Min(UserProfileIconTargetSize, Math.Min(availableWidth, availableHeight)));
         }
 
         private void UpdateUserProfileToolTip()
@@ -416,13 +326,10 @@ namespace Replica
                 Environment.NewLine,
                 [
                     _currentUserName,
-                    _currentUserRoleText,
-                    BuildVersionText(),
-                    _currentUserAuthStateText
+                    _currentUserRoleText
                 ]);
 
             _dockToolTip.SetToolTip(pnlUser, toolTipText);
-            _dockToolTip.SetToolTip(pnlPictureUser, toolTipText);
             _dockToolTip.SetToolTip(pnlInfoUser, toolTipText);
             _dockToolTip.SetToolTip(pictureUser, toolTipText);
 
@@ -431,9 +338,6 @@ namespace Replica
 
             if (_userProfileRoleLabel != null)
                 _dockToolTip.SetToolTip(_userProfileRoleLabel, toolTipText);
-
-            if (_userProfileVersionLabel != null)
-                _dockToolTip.SetToolTip(_userProfileVersionLabel, toolTipText);
         }
 
         private static Image CreateUserProfileIcon(int iconSize)
@@ -506,7 +410,7 @@ namespace Replica
 
         private static string[] ResolveUserProfileIconCandidates(string extension)
         {
-            var fileName = $"account_circle_24dp_1F1F1F_FILL1_wght400_GRAD0_opsz24.{extension}";
+            var fileName = $"account_circle_60dp_1F1F1F_FILL1_wght400_GRAD0_opsz48.{extension}";
             return
             [
                 Path.Combine(AppContext.BaseDirectory, "Icons", "account circle", fileName),

@@ -41,10 +41,10 @@
             scMain = new SplitContainer();
             treeView1 = new TreeView();
             pnlUser = new Panel();
-            pnlPictureUser = new Panel();
-            pictureUser = new PictureBox();
             pnlInfoUser = new Panel();
-            pnlDocSpace = new Panel();
+            pictureUser = new PictureBox();
+            statusUserLabel = new Label();
+            userNameLabel = new Label();
             tableLayoutPanel1 = new TableLayoutPanel();
             pnlTable = new Panel();
             dgvJobs = new DataGridView();
@@ -103,7 +103,7 @@
             scMain.Panel2.SuspendLayout();
             scMain.SuspendLayout();
             pnlUser.SuspendLayout();
-            pnlPictureUser.SuspendLayout();
+            pnlInfoUser.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)pictureUser).BeginInit();
             tableLayoutPanel1.SuspendLayout();
             pnlTable.SuspendLayout();
@@ -213,7 +213,6 @@
             // 
             scMain.Panel1.Controls.Add(treeView1);
             scMain.Panel1.Controls.Add(pnlUser);
-            scMain.Panel1.Controls.Add(pnlDocSpace);
             // 
             // scMain.Panel2
             // 
@@ -226,59 +225,64 @@
             // treeView1
             // 
             treeView1.BackColor = Color.WhiteSmoke;
+            treeView1.BorderStyle = BorderStyle.None;
             treeView1.Dock = DockStyle.Fill;
             treeView1.HideSelection = false;
             treeView1.Location = new Point(0, 0);
             treeView1.Name = "treeView1";
-            treeView1.Size = new Size(460, 1134);
+            treeView1.Size = new Size(460, 1154);
             treeView1.TabIndex = 1;
             treeView1.AfterSelect += treeView1_AfterSelect;
             // 
             // pnlUser
             // 
-            pnlUser.Controls.Add(pnlPictureUser);
             pnlUser.Controls.Add(pnlInfoUser);
             pnlUser.Dock = DockStyle.Bottom;
-            pnlUser.Location = new Point(0, 1134);
+            pnlUser.Location = new Point(0, 1154);
             pnlUser.Name = "pnlUser";
             pnlUser.Size = new Size(460, 90);
             pnlUser.TabIndex = 0;
             // 
-            // pnlPictureUser
+            // pnlInfoUser
             // 
-            pnlPictureUser.Controls.Add(pictureUser);
-            pnlPictureUser.Dock = DockStyle.Left;
-            pnlPictureUser.Location = new Point(0, 0);
-            pnlPictureUser.Name = "pnlPictureUser";
-            pnlPictureUser.Size = new Size(90, 90);
-            pnlPictureUser.TabIndex = 2;
+            pnlInfoUser.Controls.Add(pictureUser);
+            pnlInfoUser.Controls.Add(statusUserLabel);
+            pnlInfoUser.Controls.Add(userNameLabel);
+            pnlInfoUser.Dock = DockStyle.Fill;
+            pnlInfoUser.Location = new Point(0, 0);
+            pnlInfoUser.Name = "pnlInfoUser";
+            pnlInfoUser.Size = new Size(460, 90);
+            pnlInfoUser.TabIndex = 0;
             // 
             // pictureUser
             // 
-            pictureUser.Dock = DockStyle.Fill;
-            pictureUser.Location = new Point(0, 0);
+            pictureUser.Anchor = AnchorStyles.Left;
+            pictureUser.Location = new Point(15, 17);
             pictureUser.Name = "pictureUser";
-            pictureUser.Size = new Size(90, 90);
+            pictureUser.Size = new Size(55, 55);
             pictureUser.SizeMode = PictureBoxSizeMode.StretchImage;
             pictureUser.TabIndex = 0;
             pictureUser.TabStop = false;
             // 
-            // pnlInfoUser
+            // statusUserLabel
             // 
-            pnlInfoUser.Dock = DockStyle.Right;
-            pnlInfoUser.Location = new Point(90, 0);
-            pnlInfoUser.Name = "pnlInfoUser";
-            pnlInfoUser.Size = new Size(370, 90);
-            pnlInfoUser.TabIndex = 0;
+            statusUserLabel.AutoSize = true;
+            statusUserLabel.Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point, 204);
+            statusUserLabel.Location = new Point(80, 44);
+            statusUserLabel.Name = "statusUserLabel";
+            statusUserLabel.Size = new Size(94, 25);
+            statusUserLabel.TabIndex = 1;
+            statusUserLabel.Text = "statusUser";
             // 
-            // pnlDocSpace
+            // userNameLabel
             // 
-            pnlDocSpace.BackColor = Color.WhiteSmoke;
-            pnlDocSpace.Dock = DockStyle.Bottom;
-            pnlDocSpace.Location = new Point(0, 1224);
-            pnlDocSpace.Name = "pnlDocSpace";
-            pnlDocSpace.Size = new Size(460, 20);
-            pnlDocSpace.TabIndex = 1;
+            userNameLabel.AutoSize = true;
+            userNameLabel.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold, GraphicsUnit.Point, 204);
+            userNameLabel.Location = new Point(80, 18);
+            userNameLabel.Name = "userNameLabel";
+            userNameLabel.Size = new Size(97, 25);
+            userNameLabel.TabIndex = 0;
+            userNameLabel.Text = "userName";
             // 
             // tableLayoutPanel1
             // 
@@ -709,7 +713,8 @@
             ((System.ComponentModel.ISupportInitialize)scMain).EndInit();
             scMain.ResumeLayout(false);
             pnlUser.ResumeLayout(false);
-            pnlPictureUser.ResumeLayout(false);
+            pnlInfoUser.ResumeLayout(false);
+            pnlInfoUser.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)pictureUser).EndInit();
             tableLayoutPanel1.ResumeLayout(false);
             pnlTable.ResumeLayout(false);
@@ -787,10 +792,10 @@
         private Panel pnlTable;
         private Panel pnlScrollBar;
         private Panel pnlUser;
-        private Panel pnlPictureUser;
         private Panel pnlInfoUser;
         private PictureBox pictureUser;
-        private Panel pnlDocSpace;
+        private Label statusUserLabel;
+        private Label userNameLabel;
     }
 }
 
