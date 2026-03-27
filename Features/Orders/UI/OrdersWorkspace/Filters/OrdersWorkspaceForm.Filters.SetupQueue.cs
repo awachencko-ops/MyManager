@@ -318,7 +318,7 @@ namespace Replica
                 }
                 else if (dependencyHealthLevel == DependencyHealthLevel.Degraded)
                 {
-                    statusText = "подключен, деградация";
+                    statusText = "есть связь, но есть проблемы";
                     statusColor = Color.DarkOrange;
                 }
                 else

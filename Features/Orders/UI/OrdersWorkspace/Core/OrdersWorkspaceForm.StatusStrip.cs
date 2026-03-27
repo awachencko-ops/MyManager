@@ -317,7 +317,7 @@ namespace Replica
             }
             else if (dependencyHealthLevel == DependencyHealthLevel.Degraded)
             {
-                shortStatusText = "подключен, деградация";
+                shortStatusText = "есть связь, но есть проблемы";
                 statusColor = Color.DarkOrange;
             }
             else
@@ -386,7 +386,7 @@ namespace Replica
                 var levelText = dependency.Value switch
                 {
                     DependencyHealthLevel.Unavailable => "недоступно",
-                    DependencyHealthLevel.Degraded => "деградация",
+                    DependencyHealthLevel.Degraded => "есть проблемы",
                     _ => "доступно"
                 };
 
@@ -413,8 +413,8 @@ namespace Replica
                 shortStatusText = _lanApiRecoveryInProgress
                     ? "переподключение..."
                     : (!snapshot.ApiReachable
-                        ? (snapshot.CompletedAtUtc == DateTime.MinValue ? "проверка..." : "нет связи")
-                        : "не подключен");
+                        ? (snapshot.CompletedAtUtc == DateTime.MinValue ? "проверяем связь..." : "нет связи")
+                        : "нет связи");
                 statusColor = Color.Firebrick;
             }
             else if (LanApiConnectionStatusEvaluator.IsTransientFailure(
@@ -423,7 +423,7 @@ namespace Replica
                          LanServerProbeFailureThreshold))
             {
                 shortStatusText = snapshot.CompletedAtUtc == DateTime.MinValue
-                    ? "проверка..."
+                    ? "проверяем связь..."
                     : "связь нестабильна";
                 statusColor = Color.DarkOrange;
             }
@@ -435,13 +435,13 @@ namespace Replica
                          dependencyHealthLevel))
             {
                 shortStatusText = snapshot.IsReady
-                    ? "подключен, деградация"
-                    : "подключен, ожидание ready";
+                    ? "есть связь, но есть проблемы"
+                    : "сервер запускается";
                 statusColor = Color.DarkOrange;
             }
             else if (!string.IsNullOrWhiteSpace(snapshot.ProcessAlert))
             {
-                shortStatusText = "подключен, ошибка API";
+                shortStatusText = "есть связь, но сервер с ошибками";
                 statusColor = Color.DarkOrange;
             }
             else
@@ -522,7 +522,7 @@ namespace Replica
             var operatorStatus = GetLanOperatorStatusText(snapshot, dependencyHealthLevel, probeInProgress);
             var lines = new List<string>
             {
-                "Режим: LAN PostgreSQL",
+                "Режим: работа через сервер",
                 $"API: {NormalizeLanApiUrlForUi(_lanApiBaseUrl)}",
                 $"Статус: {operatorStatus}"
             };
@@ -539,7 +539,7 @@ namespace Replica
             if (probeInProgress)
                 lines.Add("Проверка выполняется...");
             if (!string.IsNullOrWhiteSpace(snapshot.Error))
-                lines.Add($"Причина: {TruncateTooltipText(snapshot.Error)}");
+                lines.Add($"Подробно: {TruncateTooltipText(snapshot.Error)}");
             if (snapshot.HttpRequests5xx >= 0 || snapshot.WriteBadRequest >= 0)
             {
                 lines.Add($"Ошибки API: 5xx={Math.Max(0, snapshot.HttpRequests5xx)}, bad_request={Math.Max(0, snapshot.WriteBadRequest)}");
@@ -574,19 +574,19 @@ namespace Replica
                 return "переподключение...";
 
             if (probeInProgress && snapshot.CompletedAtUtc <= DateTime.MinValue)
-                return "проверка...";
+                return "проверяем связь...";
 
             if (!snapshot.ApiReachable)
                 return "нет связи с API";
 
             if (!snapshot.IsReady)
-                return "подключен, ожидание ready";
+                return "сервер запускается";
 
             if (!string.IsNullOrWhiteSpace(snapshot.ProcessAlert))
-                return "подключен, ошибка API";
+                return "есть связь, но сервер с ошибками";
 
             if (snapshot.IsDegraded || !snapshot.SloHealthy || dependencyHealthLevel != DependencyHealthLevel.Healthy)
-                return "подключен, деградация";
+                return "есть связь, но есть проблемы";
 
             return "подключен";
         }
