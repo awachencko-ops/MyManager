@@ -58,7 +58,7 @@ Stage 3 kickoff: real-time push notifications from API after successful mutating
 
 ## Validation
 
-1. Verify targeted pack (`SignalRPushIntegrationTests` + `LanOrderPushClientTests` + `MediatRPushNotificationsBehaviorTests`): passed (17/17).
+1. Verify targeted pack (`SignalRPushIntegrationTests` + `LanOrderPushClientTests` + `MediatRPushNotificationsBehaviorTests` + `LanPushPressureAlertEvaluatorTests`): passed (26/26).
 2. UiSmoke targeted pack (`MainFormCoreRegressionTests` + `MainFormSmokeTests`): passed (28/28).
 
 ## Increment Addendum (2026-03-27, push reason counters + pressure alerts)
@@ -95,8 +95,61 @@ Stage 3 kickoff: real-time push notifications from API after successful mutating
 1. Verify targeted pack (`SignalRPushIntegrationTests` + `LanOrderPushClientTests` + `MediatRPushNotificationsBehaviorTests`): passed (17/17).
 2. UiSmoke targeted pack (`MainFormCoreRegressionTests` + `MainFormSmokeTests`): passed (28/28).
 
+## Increment Addendum (2026-03-27, pressure-alert evaluator coverage)
+
+### Implemented
+
+1. Extracted pressure-alert decision rule to `LanPushPressureAlertEvaluator` (pure helper):
+   - normalized threshold/cooldown inputs,
+   - deterministic decision output (`ShouldAlert`, `CoalescedRate`, `ThrottledRate`).
+2. `OrdersWorkspaceForm` pressure logging path now delegates decision logic to evaluator.
+3. Added verify test pack `LanPushPressureAlertEvaluatorTests`:
+   - below min-events gate,
+   - coalesced threshold hit,
+   - throttled threshold hit,
+   - below-threshold no-alert path,
+   - cooldown suppression path,
+   - cooldown boundary re-enable path.
+
+### Validation (addendum)
+
+1. Verify targeted pack (`SignalRPushIntegrationTests` + `LanOrderPushClientTests` + `MediatRPushNotificationsBehaviorTests` + `LanPushPressureAlertEvaluatorTests`): passed (26/26).
+2. UiSmoke targeted pack (`MainFormCoreRegressionTests` + `MainFormSmokeTests`): passed (28/28).
+
+## Increment Addendum (2026-03-27, operator-facing pressure hint)
+
+### Implemented
+
+1. Added operator-facing hint in LAN push diagnostics tooltip:
+   - shows active pressure-alert counters and last alert timestamp,
+   - shows human-readable hint while pressure-alert activity is recent.
+2. Extended `LanPushPressureAlertEvaluator` with `IsHintActive` rule (window-based activity check).
+3. Added verify coverage for hint activity window:
+   - no-alert baseline,
+   - within-window active,
+   - outside-window inactive.
+
+### Validation (addendum)
+
+1. Verify targeted pack (`SignalRPushIntegrationTests` + `LanOrderPushClientTests` + `MediatRPushNotificationsBehaviorTests` + `LanPushPressureAlertEvaluatorTests`): passed (26/26).
+2. UiSmoke targeted pack (`MainFormCoreRegressionTests` + `MainFormSmokeTests`): passed (28/28).
+
+## Increment Addendum (2026-03-27, UI reconnect-resync smoke coverage)
+
+### Implemented
+
+1. Added UiSmoke regression test `SR12C_ReconnectState_QueuesReconnectResyncForceRefresh`:
+   - simulates `Reconnected` connection-state event on `OrdersWorkspaceForm`,
+   - verifies bridge enqueues `ForceRefresh` with reason `reconnect-resync`,
+   - verifies reconnect event updates push-event diagnostics state.
+
+### Validation (addendum)
+
+1. UiSmoke targeted pack (`MainFormCoreRegressionTests` + `MainFormSmokeTests`): passed (29/29).
+2. Verify targeted pack (`SignalRPushIntegrationTests` + `LanOrderPushClientTests` + `MediatRPushNotificationsBehaviorTests` + `LanPushPressureAlertEvaluatorTests`): passed (26/26).
+
 ## Next Stage 3 steps
 
-1. Add verify coverage focused on pressure-alert thresholds/cooldown logic (to prevent regressions in storm guardrails).
-2. Evaluate lightweight operator-facing hint in status tooltip when pressure alerts are active for prolonged periods.
-3. Add end-to-end smoke around UI bridge reconnect flow (`reconnect-resync`) to lock behavior at form/runtime boundary.
+1. Consider exposing pressure-alert counters in diagnostics endpoint for centralized monitoring.
+2. Add lightweight alert-state reset strategy for long-lived sessions (operator acknowledgement or decay policy).
+3. Add integration scenario with repeated reconnect cycles to verify bounded probe/pull behavior under churn.

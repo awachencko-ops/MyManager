@@ -125,6 +125,7 @@ namespace Replica
         private long _lanPushCoalescedEventsCount;
         private long _lanPushThrottleDelayCount;
         private int _lanPushReconnectCount;
+        private long _lanPushPressureAlertCount;
         private readonly Dictionary<string, long> _lanPushReasonCounters = new(StringComparer.OrdinalIgnoreCase);
         private DateTime _lanPushLastPressureAlertAtUtc = DateTime.MinValue;
         private bool _connectionStatusToolTipVisible;
@@ -188,6 +189,7 @@ namespace Replica
         private const double LanPushCoalescedRateAlertThreshold = 0.55;
         private const double LanPushThrottledRateAlertThreshold = 0.40;
         private static readonly TimeSpan LanPushPressureAlertCooldown = TimeSpan.FromMinutes(1);
+        private static readonly TimeSpan LanPushPressureHintActiveWindow = TimeSpan.FromMinutes(5);
         private static readonly TimeSpan ArchiveIndexLifetime = TimeSpan.FromSeconds(60);
         private const int ArchiveStatusSyncIntervalMs = 60000;
         private const int OrdersGridWarmupIntervalMs = 3000;

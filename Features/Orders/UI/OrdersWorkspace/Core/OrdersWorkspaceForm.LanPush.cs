@@ -352,6 +352,7 @@ namespace Replica
             var coalescedEventsCount = Interlocked.Read(ref _lanPushCoalescedEventsCount);
             var throttleDelayCount = Interlocked.Read(ref _lanPushThrottleDelayCount);
             var reconnectCount = Interlocked.CompareExchange(ref _lanPushReconnectCount, 0, 0);
+            var pressureAlertCount = Interlocked.Read(ref _lanPushPressureAlertCount);
             lock (_lanPushMetricsSync)
             {
                 snapshot = new LanPushDiagnosticsSnapshot
@@ -363,13 +364,19 @@ namespace Replica
                     LastRefreshAtUtc = _lanPushLastRefreshAtUtc,
                     LastEventType = _lanPushLastEventType,
                     LastForceRefreshReason = _lanPushLastForceRefreshReason,
+                    LastPressureAlertAtUtc = _lanPushLastPressureAlertAtUtc,
+                    PressureHintActive = LanPushPressureAlertEvaluator.IsHintActive(
+                        DateTime.UtcNow,
+                        _lanPushLastPressureAlertAtUtc,
+                        LanPushPressureHintActiveWindow),
                     ReasonCountersSummary = BuildLanPushReasonCountersSummary(_lanPushReasonCounters),
                     LastEventLagMs = _lanPushLastEventLagMs,
                     EventsReceivedCount = eventsReceivedCount,
                     RefreshAppliedCount = refreshAppliedCount,
                     CoalescedEventsCount = coalescedEventsCount,
                     ThrottleDelayCount = throttleDelayCount,
-                    ReconnectCount = reconnectCount
+                    ReconnectCount = reconnectCount,
+                    PressureAlertCount = pressureAlertCount
                 };
             }
 
@@ -395,6 +402,10 @@ namespace Replica
                 lines.Add($"Push lag (last): {snapshot.LastEventLagMs:F0} ms");
             if (snapshot.ReconnectCount > 0)
                 lines.Add($"Push reconnects: {snapshot.ReconnectCount}");
+            if (snapshot.PressureAlertCount > 0)
+                lines.Add($"Push pressure alerts: {snapshot.PressureAlertCount}");
+            if (snapshot.LastPressureAlertAtUtc > DateTime.MinValue)
+                lines.Add($"Push last pressure alert: {FormatLanProbeStamp(snapshot.LastPressureAlertAtUtc)}");
             if (snapshot.CoalescedEventsCount > 0 || snapshot.ThrottleDelayCount > 0)
             {
                 var coalescedRate = snapshot.EventsReceivedCount > 0
@@ -413,6 +424,8 @@ namespace Replica
                 lines.Add($"Push last force-refresh reason: {snapshot.LastForceRefreshReason}");
             if (!string.IsNullOrWhiteSpace(snapshot.ReasonCountersSummary))
                 lines.Add($"Push reason counters: {snapshot.ReasonCountersSummary}");
+            if (snapshot.PressureHintActive)
+                lines.Add("Push hint: высокий поток событий, обновления могут приходить с небольшой задержкой.");
 
             return lines;
         }
@@ -436,39 +449,37 @@ namespace Replica
         private void TryEmitLanPushPressureAlert(string trigger)
         {
             var eventsReceived = Interlocked.Read(ref _lanPushEventsReceivedCount);
-            if (eventsReceived < LanPushPressureAlertMinEvents)
-                return;
-
             var refreshApplied = Interlocked.Read(ref _lanPushRefreshAppliedCount);
             var coalesced = Interlocked.Read(ref _lanPushCoalescedEventsCount);
             var throttled = Interlocked.Read(ref _lanPushThrottleDelayCount);
-
-            var coalescedRate = eventsReceived > 0 ? (double)coalesced / eventsReceived : 0d;
-            var throttleBase = refreshApplied > 0 ? refreshApplied : eventsReceived;
-            var throttledRate = throttleBase > 0 ? (double)throttled / throttleBase : 0d;
-
-            if (coalescedRate < LanPushCoalescedRateAlertThreshold
-                && throttledRate < LanPushThrottledRateAlertThreshold)
-            {
-                return;
-            }
+            var nowUtc = DateTime.UtcNow;
 
             string reasonCounters;
+            LanPushPressureAlertDecision decision;
             lock (_lanPushMetricsSync)
             {
-                var nowUtc = DateTime.UtcNow;
-                if (_lanPushLastPressureAlertAtUtc > DateTime.MinValue
-                    && (nowUtc - _lanPushLastPressureAlertAtUtc) < LanPushPressureAlertCooldown)
-                {
+                decision = LanPushPressureAlertEvaluator.Evaluate(
+                    eventsReceived,
+                    refreshApplied,
+                    coalesced,
+                    throttled,
+                    LanPushPressureAlertMinEvents,
+                    LanPushCoalescedRateAlertThreshold,
+                    LanPushThrottledRateAlertThreshold,
+                    nowUtc,
+                    _lanPushLastPressureAlertAtUtc,
+                    LanPushPressureAlertCooldown);
+
+                if (!decision.ShouldAlert)
                     return;
-                }
 
                 _lanPushLastPressureAlertAtUtc = nowUtc;
+                Interlocked.Increment(ref _lanPushPressureAlertCount);
                 reasonCounters = BuildLanPushReasonCountersSummary(_lanPushReasonCounters);
             }
 
             Logger.Warn(
-                $"LAN-PUSH | pressure-alert | trigger={trigger} | events={eventsReceived} | refresh={refreshApplied} | coalesced={coalesced} ({coalescedRate:P0}) | throttled={throttled} ({throttledRate:P0}) | reasons={reasonCounters}");
+                $"LAN-PUSH | pressure-alert | trigger={trigger} | events={eventsReceived} | refresh={refreshApplied} | coalesced={coalesced} ({decision.CoalescedRate:P0}) | throttled={throttled} ({decision.ThrottledRate:P0}) | reasons={reasonCounters}");
         }
 
         private sealed class LanPushDiagnosticsSnapshot
@@ -480,6 +491,8 @@ namespace Replica
             public DateTime LastRefreshAtUtc { get; init; }
             public string LastEventType { get; init; } = string.Empty;
             public string LastForceRefreshReason { get; init; } = string.Empty;
+            public DateTime LastPressureAlertAtUtc { get; init; }
+            public bool PressureHintActive { get; init; }
             public string ReasonCountersSummary { get; init; } = string.Empty;
             public double LastEventLagMs { get; init; } = -1;
             public long EventsReceivedCount { get; init; }
@@ -487,6 +500,7 @@ namespace Replica
             public long CoalescedEventsCount { get; init; }
             public long ThrottleDelayCount { get; init; }
             public int ReconnectCount { get; init; }
+            public long PressureAlertCount { get; init; }
         }
 
         private void MergeStorageSnapshotIntoLocalHistory(IReadOnlyCollection<OrderData> storageOrders)

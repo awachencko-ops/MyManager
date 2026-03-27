@@ -321,6 +321,40 @@ public sealed class MainFormCoreRegressionTests
     }
 
     [Fact]
+    public void SR12C_ReconnectState_QueuesReconnectResyncForceRefresh()
+    {
+        MainFormTestHarness.RunWithIsolatedForm((form, _) =>
+        {
+            MainFormTestHarness.SetPrivateField(form, "_ordersStorageBackend", OrdersStorageMode.LanPostgreSql);
+            MainFormTestHarness.SetPrivateField(form, "_lanApiBaseUrl", "http://127.0.0.1:65535/");
+
+            using var probeCts = new CancellationTokenSource();
+            probeCts.Cancel();
+            MainFormTestHarness.SetPrivateField(form, "_lanServerProbeCts", probeCts);
+
+            MainFormTestHarness.InvokePrivate(
+                form,
+                "LanOrderPushClient_ConnectionStateChanged",
+                null,
+                new LanOrderPushConnectionStateChangedEventArgs(
+                    LanOrderPushConnectionStates.Reconnected,
+                    "reconnected-test",
+                    null));
+
+            var pendingEvent = MainFormTestHarness.GetPrivateField<LanOrderPushEvent>(form, "_lanPushPendingEvent");
+            var lastEventType = MainFormTestHarness.GetPrivateField<string>(form, "_lanPushLastEventType");
+            var lastReason = MainFormTestHarness.GetPrivateField<string>(form, "_lanPushLastForceRefreshReason");
+            var eventsReceived = MainFormTestHarness.GetPrivateField<long>(form, "_lanPushEventsReceivedCount");
+
+            Assert.Equal(LanOrderPushEventNames.ForceRefresh, pendingEvent.EventType);
+            Assert.Equal("reconnect-resync", pendingEvent.Reason);
+            Assert.Equal(LanOrderPushEventNames.ForceRefresh, lastEventType);
+            Assert.Equal("reconnect-resync", lastReason);
+            Assert.True(eventsReceived > 0);
+        });
+    }
+
+    [Fact]
     public void SR13_GroupOrder_ExpandCollapse_ShowsAndHidesItemRows()
     {
         MainFormTestHarness.RunWithIsolatedForm((form, _) =>

@@ -305,3 +305,15 @@ Replica.Client/
    - added forced-disconnect scenario for SignalR client with offline mutation,
    - after reconnect, compensating pull confirms state recovery and subsequent push delivery resumes,
    - verify/ui-smoke checks passed after reconnect-chaos integration coverage update.
+21. `2026-03-27`: Stage 3 pressure-alert verification increment:
+   - extracted pressure-alert decision logic to dedicated evaluator (`LanPushPressureAlertEvaluator`),
+   - added verify coverage for thresholds and cooldown boundaries (including suppression and re-enable cases),
+   - verify/ui-smoke checks passed after pressure-alert coverage update.
+22. `2026-03-27`: Stage 3 operator hint increment:
+   - added tooltip-level operator hint when pressure-alert activity is recent,
+   - surfaced pressure-alert counters + last-alert timestamp in LAN push diagnostics,
+   - verify/ui-smoke checks passed after operator-hint update.
+23. `2026-03-27`: Stage 3 UI reconnect-resync smoke increment:
+   - added form-level smoke coverage for `Reconnected -> ForceRefresh(reconnect-resync)` bridge behavior,
+   - assertion includes pending event reason and diagnostics counters update in runtime form state,
+   - verify/ui-smoke checks passed after reconnect-resync smoke coverage update.
