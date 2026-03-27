@@ -288,3 +288,7 @@ Replica.Client/
    - added SignalR TestServer integration tests with two clients (`A/B`) and real hub broadcast path,
    - covered scenarios: `CreateOrder -> OrderUpdated` and `DeleteOrder -> OrderDeleted` observed by client `B`,
    - verify/ui-smoke checks passed after integration coverage extension.
+17. `2026-03-27`: Stage 3 force-refresh integration increment:
+   - added two-client SignalR integration coverage for `UpsertUser -> ForceRefresh(users-changed)`,
+   - assertion matrix extended for force-refresh payload shape (`reason`, empty `orderId`),
+   - verify/ui-smoke checks passed after force-refresh coverage extension.

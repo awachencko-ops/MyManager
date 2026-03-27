@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Replica.Api.Application.Behaviors;
 using Replica.Api.Application.Orders.Commands;
+using Replica.Api.Application.Users.Commands;
 using Replica.Api.Contracts;
 using Replica.Api.Hubs;
 using Replica.Api.Infrastructure;
@@ -72,6 +73,34 @@ public sealed class SignalRPushIntegrationTests
         var pushedEvent = await eventReceivedByClientB.Task.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.Equal(created.Order.InternalId, pushedEvent.OrderId);
         Assert.Equal(ReplicaOrderHubEvents.OrderDeleted, pushedEvent.EventType);
+    }
+
+    [Fact]
+    public async Task UpsertUser_WhenCommandSucceeds_BroadcastsForceRefreshUsersChangedToOtherClient()
+    {
+        await using var harness = await SignalRPushHarness.StartAsync();
+
+        var eventReceivedByClientB = new TaskCompletionSource<LanOrderPushEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
+        harness.ClientB.On<object>(ReplicaOrderHubEvents.ForceRefresh, payload =>
+        {
+            var parsed = LanOrderPushEventParser.Parse(ReplicaOrderHubEvents.ForceRefresh, payload, DateTime.UtcNow);
+            eventReceivedByClientB.TrySetResult(parsed);
+        });
+
+        var commandResult = await harness.Mediator.Send(new UpsertUserCommand(
+            new UpsertUserRequest
+            {
+                Name = $"push-user-{Guid.NewGuid():N}",
+                Role = ReplicaApiRoles.Operator,
+                IsActive = true
+            },
+            Actor: "Administrator"));
+
+        Assert.True(commandResult.IsSuccess);
+        var pushedEvent = await eventReceivedByClientB.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(ReplicaOrderHubEvents.ForceRefresh, pushedEvent.EventType);
+        Assert.Equal("users-changed", pushedEvent.Reason);
+        Assert.Equal(string.Empty, pushedEvent.OrderId);
     }
 
     private sealed class SignalRPushHarness : IAsyncDisposable
