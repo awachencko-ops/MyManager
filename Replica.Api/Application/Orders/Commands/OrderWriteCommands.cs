@@ -1,4 +1,5 @@
 ﻿using MediatR;
+using Replica.Api.Application.Abstractions;
 using Replica.Api.Contracts;
 using Replica.Api.Services;
 
@@ -7,7 +8,10 @@ namespace Replica.Api.Application.Orders.Commands;
 public sealed record CreateOrderCommand(
     CreateOrderRequest Request,
     string Actor,
-    string IdempotencyKey) : IRequest<StoreOperationResult>;
+    string IdempotencyKey) : IRequest<StoreOperationResult>, IReplicaApiIdempotentWriteCommand
+{
+    public string CommandName => "create-order";
+}
 
 public sealed class CreateOrderCommandHandler : IRequestHandler<CreateOrderCommand, StoreOperationResult>
 {
@@ -32,7 +36,10 @@ public sealed record DeleteOrderCommand(
     string OrderId,
     DeleteOrderRequest Request,
     string Actor,
-    string IdempotencyKey) : IRequest<StoreOperationResult>;
+    string IdempotencyKey) : IRequest<StoreOperationResult>, IReplicaApiIdempotentWriteCommand
+{
+    public string CommandName => "delete-order";
+}
 
 public sealed class DeleteOrderCommandHandler : IRequestHandler<DeleteOrderCommand, StoreOperationResult>
 {
@@ -56,7 +63,10 @@ public sealed record UpdateOrderCommand(
     string OrderId,
     UpdateOrderRequest Request,
     string Actor,
-    string IdempotencyKey) : IRequest<StoreOperationResult>;
+    string IdempotencyKey) : IRequest<StoreOperationResult>, IReplicaApiIdempotentWriteCommand
+{
+    public string CommandName => "update-order";
+}
 
 public sealed class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderCommand, StoreOperationResult>
 {
@@ -80,7 +90,10 @@ public sealed record AddOrderItemCommand(
     string OrderId,
     AddOrderItemRequest Request,
     string Actor,
-    string IdempotencyKey) : IRequest<StoreOperationResult>;
+    string IdempotencyKey) : IRequest<StoreOperationResult>, IReplicaApiIdempotentWriteCommand
+{
+    public string CommandName => "add-item";
+}
 
 public sealed class AddOrderItemCommandHandler : IRequestHandler<AddOrderItemCommand, StoreOperationResult>
 {
@@ -105,7 +118,10 @@ public sealed record UpdateOrderItemCommand(
     string ItemId,
     UpdateOrderItemRequest Request,
     string Actor,
-    string IdempotencyKey) : IRequest<StoreOperationResult>;
+    string IdempotencyKey) : IRequest<StoreOperationResult>, IReplicaApiIdempotentWriteCommand
+{
+    public string CommandName => "update-item";
+}
 
 public sealed class UpdateOrderItemCommandHandler : IRequestHandler<UpdateOrderItemCommand, StoreOperationResult>
 {
@@ -130,7 +146,10 @@ public sealed record DeleteOrderItemCommand(
     string ItemId,
     DeleteOrderItemRequest Request,
     string Actor,
-    string IdempotencyKey) : IRequest<StoreOperationResult>;
+    string IdempotencyKey) : IRequest<StoreOperationResult>, IReplicaApiIdempotentWriteCommand
+{
+    public string CommandName => "delete-item";
+}
 
 public sealed class DeleteOrderItemCommandHandler : IRequestHandler<DeleteOrderItemCommand, StoreOperationResult>
 {
@@ -154,7 +173,10 @@ public sealed record ReorderOrderItemsCommand(
     string OrderId,
     ReorderOrderItemsRequest Request,
     string Actor,
-    string IdempotencyKey) : IRequest<StoreOperationResult>;
+    string IdempotencyKey) : IRequest<StoreOperationResult>, IReplicaApiIdempotentWriteCommand
+{
+    public string CommandName => "reorder-items";
+}
 
 public sealed class ReorderOrderItemsCommandHandler : IRequestHandler<ReorderOrderItemsCommand, StoreOperationResult>
 {
@@ -178,7 +200,10 @@ public sealed record StartOrderRunCommand(
     string OrderId,
     RunOrderRequest Request,
     string Actor,
-    string IdempotencyKey) : IRequest<StoreOperationResult>;
+    string IdempotencyKey) : IRequest<StoreOperationResult>, IReplicaApiIdempotentWriteCommand
+{
+    public string CommandName => "run";
+}
 
 public sealed class StartOrderRunCommandHandler : IRequestHandler<StartOrderRunCommand, StoreOperationResult>
 {
@@ -202,7 +227,10 @@ public sealed record StopOrderRunCommand(
     string OrderId,
     StopOrderRequest Request,
     string Actor,
-    string IdempotencyKey) : IRequest<StoreOperationResult>;
+    string IdempotencyKey) : IRequest<StoreOperationResult>, IReplicaApiIdempotentWriteCommand
+{
+    public string CommandName => "stop";
+}
 
 public sealed class StopOrderRunCommandHandler : IRequestHandler<StopOrderRunCommand, StoreOperationResult>
 {

@@ -729,13 +729,99 @@ namespace Replica
             if (string.IsNullOrWhiteSpace(orderInternalId))
                 return;
 
-            if (_expandedOrderIds.Contains(orderInternalId))
+            var order = FindOrderByInternalId(orderInternalId);
+            if (order == null || !OrderTopologyService.IsMultiOrder(order))
+                return;
+
+            var isExpanded = _expandedOrderIds.Contains(orderInternalId);
+            if (isExpanded)
                 _expandedOrderIds.Remove(orderInternalId);
             else
                 _expandedOrderIds.Add(orderInternalId);
 
+            if (TryToggleOrderExpandedRowsInPlace(order, expand: !isExpanded))
+            {
+                TryRestoreSelectedRowByTag(OrderGridLogic.BuildOrderTag(orderInternalId));
+                HandleOrdersGridChanged();
+                return;
+            }
+
             RebuildOrdersGrid();
             TryRestoreSelectedRowByTag(OrderGridLogic.BuildOrderTag(orderInternalId));
+        }
+
+        private bool TryToggleOrderExpandedRowsInPlace(OrderData order, bool expand)
+        {
+            if (order == null || string.IsNullOrWhiteSpace(order.InternalId))
+                return false;
+
+            if (_isRebuildingGrid || dgvJobs.Rows.Count == 0)
+                return false;
+
+            if (!TryFindOrderRowIndexInGrid(order.InternalId, out var orderRowIndex))
+                return false;
+
+            var previousRebuildState = _isRebuildingGrid;
+            _isRebuildingGrid = true;
+            dgvJobs.SuspendLayout();
+            try
+            {
+                var orderRow = dgvJobs.Rows[orderRowIndex];
+                ApplyOrderRowValues(orderRow, order);
+                RemoveOrderItemRowsFromGrid(orderRowIndex, order.InternalId);
+                if (expand)
+                    AddOrderItemRowsToGrid(order, orderRowIndex);
+            }
+            finally
+            {
+                dgvJobs.ResumeLayout();
+                _isRebuildingGrid = previousRebuildState;
+            }
+
+            return true;
+        }
+
+        private bool TryFindOrderRowIndexInGrid(string orderInternalId, out int orderRowIndex)
+        {
+            orderRowIndex = -1;
+            if (string.IsNullOrWhiteSpace(orderInternalId))
+                return false;
+
+            var orderTag = OrderGridLogic.BuildOrderTag(orderInternalId);
+            for (var index = 0; index < dgvJobs.Rows.Count; index++)
+            {
+                var row = dgvJobs.Rows[index];
+                if (row.IsNewRow)
+                    continue;
+
+                if (!string.Equals(row.Tag?.ToString(), orderTag, StringComparison.Ordinal))
+                    continue;
+
+                orderRowIndex = index;
+                return true;
+            }
+
+            return false;
+        }
+
+        private void RemoveOrderItemRowsFromGrid(int orderRowIndex, string orderInternalId)
+        {
+            if (orderRowIndex < 0 || orderRowIndex >= dgvJobs.Rows.Count - 1)
+                return;
+
+            var rowIndex = orderRowIndex + 1;
+            while (rowIndex < dgvJobs.Rows.Count)
+            {
+                var rowTag = dgvJobs.Rows[rowIndex].Tag?.ToString();
+                if (!IsItemTag(rowTag))
+                    break;
+
+                var itemOrderInternalId = ExtractOrderInternalIdFromTag(rowTag);
+                if (!string.Equals(itemOrderInternalId, orderInternalId, StringComparison.Ordinal))
+                    break;
+
+                dgvJobs.Rows.RemoveAt(rowIndex);
+            }
         }
 
         private string ResolveSingleOrderDisplayPath(OrderData order, int stage)

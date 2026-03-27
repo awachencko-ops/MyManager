@@ -252,3 +252,11 @@ Replica.Client/
    - MediatR wired in `Replica.Api`,
    - mutating `Orders` + `Users.Upsert` endpoints routed through request handlers,
    - progress tracked in `REPLICA_STAGE2_COMMAND_BUS_PROGRESS_2026-03-27.md`.
+8. `2026-03-27`: Stage 2 pipeline increment:
+   - command contracts (`IReplicaApiWriteCommand`, validator abstraction),
+   - MediatR pipeline behaviors for command validation + telemetry,
+   - runtime registration via `AddReplicaApiCommandPipeline()`,
+   - verify coverage extended with `MediatRCommandPipelineBehaviorsTests`.
+9. `2026-03-27`: Stage 2 idempotency pipeline increment:
+   - dedicated mediator idempotency behavior (`key length <= 128` guard),
+   - verify coverage for pipeline idempotency failure path.

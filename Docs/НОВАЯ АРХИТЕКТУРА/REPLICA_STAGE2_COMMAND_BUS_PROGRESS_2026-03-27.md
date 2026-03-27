@@ -46,3 +46,55 @@ Result: passed (58/58).
    - audit/telemetry behavior.
 2. Move remaining write-path side effects from controllers/stores into handlers where practical.
 3. Expand conflict/replay tests to explicitly cover mediator pipeline execution order.
+
+## Increment Addendum (2026-03-27, pipeline behaviors)
+
+### Implemented
+
+1. Added command contracts:
+   - `IReplicaApiWriteCommand`
+   - `IReplicaApiIdempotentWriteCommand`
+   - `IReplicaApiCommandValidator<TCommand>`
+2. Added MediatR pipeline behaviors:
+   - `ReplicaApiCommandValidationBehavior<,>`
+   - `ReplicaApiCommandTelemetryBehavior<,>`
+3. Added validation pack for all migrated write commands (`Orders` + `Users.Upsert`).
+4. Added service registration extension:
+   - `AddReplicaApiCommandPipeline()`
+   - auto-registration of command validators from assembly.
+5. Enabled pipeline in runtime composition (`Program.cs`).
+6. Prevented duplicate write-metrics for mediator path by keeping controller-level recording only for fallback path (when mediator is unavailable).
+
+### Validation (addendum)
+
+Targeted verify run additionally includes:
+
+- `MediatRCommandPipelineBehaviorsTests`
+
+Result: passed (61/61).
+
+### Remaining Stage 2 backlog
+
+1. Idempotency behavior as dedicated mediator pipeline layer (currently idempotency remains at store/controller boundary).
+2. Transaction behavior at mediator level (evaluate alignment with existing store-scoped transactions).
+3. Optional: migrate read-side query path to MediatR for symmetrical command/query dispatch.
+
+## Increment Addendum (2026-03-27, idempotency behavior)
+
+### Implemented
+
+1. Added dedicated idempotency MediatR behavior:
+   - `ReplicaApiCommandIdempotencyBehavior<,>`
+   - fail-fast guard for oversized key (`>128`).
+2. Registered idempotency behavior in command pipeline between validation and telemetry.
+3. Added verify coverage:
+   - `PipelineIdempotency_WhenKeyIsTooLong_ReturnsBadRequest`.
+
+### Validation (addendum)
+
+Targeted verify run result: passed (62/62).
+
+### Remaining Stage 2 backlog
+
+1. Transaction behavior at mediator level (needs careful alignment with existing store transactions).
+2. Optional read-side MediatR query path migration.

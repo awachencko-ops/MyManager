@@ -284,23 +284,27 @@ public sealed class OrdersController : ControllerBase
     {
         if (result.IsSuccess && result.Order != null)
         {
-            ReplicaApiObservability.RecordWriteCommand(CreateOrderCommandName, "success");
+            if (_mediator == null)
+                ReplicaApiObservability.RecordWriteCommand(CreateOrderCommandName, "success");
             return CreatedAtAction(nameof(GetOrderById), new { id = result.Order.InternalId }, result.Order);
         }
 
         if (result.IsConflict)
         {
-            ReplicaApiObservability.RecordWriteCommand(CreateOrderCommandName, "conflict");
+            if (_mediator == null)
+                ReplicaApiObservability.RecordWriteCommand(CreateOrderCommandName, "conflict");
             return Conflict(new { error = result.Error, currentVersion = result.CurrentVersion });
         }
 
         if (result.IsNotFound)
         {
-            ReplicaApiObservability.RecordWriteCommand(CreateOrderCommandName, "not_found");
+            if (_mediator == null)
+                ReplicaApiObservability.RecordWriteCommand(CreateOrderCommandName, "not_found");
             return NotFound(new { error = result.Error });
         }
 
-        ReplicaApiObservability.RecordWriteCommand(CreateOrderCommandName, "bad_request");
+        if (_mediator == null)
+            ReplicaApiObservability.RecordWriteCommand(CreateOrderCommandName, "bad_request");
         return BadRequest(new { error = result.Error });
     }
 
@@ -308,23 +312,27 @@ public sealed class OrdersController : ControllerBase
     {
         if (result.IsSuccess)
         {
-            ReplicaApiObservability.RecordWriteCommand(commandName, "success");
+            if (_mediator == null)
+                ReplicaApiObservability.RecordWriteCommand(commandName, "success");
             return Ok(result.Order);
         }
 
         if (result.IsNotFound)
         {
-            ReplicaApiObservability.RecordWriteCommand(commandName, "not_found");
+            if (_mediator == null)
+                ReplicaApiObservability.RecordWriteCommand(commandName, "not_found");
             return NotFound(new { error = result.Error });
         }
 
         if (result.IsConflict)
         {
-            ReplicaApiObservability.RecordWriteCommand(commandName, "conflict");
+            if (_mediator == null)
+                ReplicaApiObservability.RecordWriteCommand(commandName, "conflict");
             return Conflict(new { error = result.Error, currentVersion = result.CurrentVersion });
         }
 
-        ReplicaApiObservability.RecordWriteCommand(commandName, "bad_request");
+        if (_mediator == null)
+            ReplicaApiObservability.RecordWriteCommand(commandName, "bad_request");
         return BadRequest(new { error = result.Error });
     }
 
