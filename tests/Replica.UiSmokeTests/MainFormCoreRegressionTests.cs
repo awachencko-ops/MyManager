@@ -307,12 +307,12 @@ public sealed class MainFormCoreRegressionTests
     {
         MainFormTestHarness.RunWithIsolatedForm((form, _) =>
         {
-            MainFormTestHarness.InvokePrivate(form, "ApplyCurrentUserProfile", "Andrew", "Администратор");
+            MainFormTestHarness.InvokePrivate(form, "ApplyCurrentUserProfile", "Andrew", "Администратор", "Сессия: Bearer", true);
 
-            var splitUser = MainFormTestHarness.GetPrivateField<SplitContainer>(form, "splitUser");
-            var nameLabel = Assert.IsType<Label>(splitUser.Panel2.Controls.Find("lblUserProfileName", true).Single());
-            var roleLabel = Assert.IsType<Label>(splitUser.Panel2.Controls.Find("lblUserProfileRole", true).Single());
-            var picture = MainFormTestHarness.GetPrivateField<PictureBox>(form, "pictureBox5");
+            var infoPanel = MainFormTestHarness.GetPrivateField<Panel>(form, "pnlInfoUser");
+            var nameLabel = Assert.IsType<Label>(infoPanel.Controls.Find("lblUserProfileName", true).Single());
+            var roleLabel = Assert.IsType<Label>(infoPanel.Controls.Find("lblUserProfileRole", true).Single());
+            var picture = MainFormTestHarness.GetPrivateField<PictureBox>(form, "pictureUser");
 
             Assert.Equal("Andrew", nameLabel.Text);
             Assert.Equal("Администратор", roleLabel.Text);

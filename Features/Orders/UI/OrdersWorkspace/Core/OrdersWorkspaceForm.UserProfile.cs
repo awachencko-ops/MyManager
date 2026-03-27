@@ -22,32 +22,16 @@ namespace Replica
         {
             pnlUser.BackColor = UserProfilePanelBackColor;
             pnlUser.Padding = new Padding(12, 8, 12, 8);
+            pnlPictureUser.BackColor = UserProfileCardBackColor;
+            pnlInfoUser.BackColor = UserProfileCardBackColor;
+            pnlPictureUser.Padding = new Padding(14, 14, 10, 14);
+            pnlInfoUser.Padding = new Padding(2, 10, 14, 10);
+            pnlInfoUser.Controls.Clear();
 
-            splitUser.BackColor = UserProfileCardBackColor;
-            splitUser.IsSplitterFixed = true;
-            splitUser.FixedPanel = FixedPanel.Panel1;
-            splitUser.SplitterWidth = 1;
-            splitUser.Panel1MinSize = 68;
-            splitUser.SplitterDistance = 68;
-            splitUser.TabStop = false;
-
-            splitUser.Panel1.BackColor = UserProfileCardBackColor;
-            splitUser.Panel2.BackColor = UserProfileCardBackColor;
-            splitUser.Panel1.Padding = new Padding(12, 8, 6, 8);
-            splitUser.Panel2.Padding = new Padding(0, 10, 14, 10);
-
-            splitUser.Panel2.Paint -= SplitUserPanel2Paint;
-            splitUser.Panel2.Controls.Clear();
-
-            pictureUser.Dock = DockStyle.None;
-            pictureUser.Size = new Size(42, 42);
+            pictureUser.Dock = DockStyle.Fill;
             pictureUser.SizeMode = PictureBoxSizeMode.Zoom;
             pictureUser.BackColor = Color.Transparent;
             ReplaceUserProfileIcon();
-
-            splitUser.Panel1.Resize -= SplitUserPanel1_Resize;
-            splitUser.Panel1.Resize += SplitUserPanel1_Resize;
-            CenterUserProfileIcon();
 
             _userProfileNameLabel = new Label
             {
@@ -122,7 +106,7 @@ namespace Replica
             textLayout.Controls.Add(_userProfileAuthStateLabel, 0, 2);
             textLayout.Controls.Add(_userProfileSessionActionLabel, 0, 3);
 
-            splitUser.Panel2.Controls.Add(textLayout);
+            pnlInfoUser.Controls.Add(textLayout);
             ApplyCurrentUserProfile(GetDefaultUserName(), _currentUserRoleText, _currentUserAuthStateText, usesBearerSession: false);
         }
 
@@ -342,18 +326,6 @@ namespace Replica
             _userProfileSessionActionLabel.Visible = isLanMode;
             _userProfileSessionActionLabel.Enabled = isLanMode && !_currentUserSessionActionInProgress;
             _userProfileSessionActionLabel.Text = _currentUserUsesBearerSession ? "Выйти" : "Войти";
-        }
-
-        private void SplitUserPanel1_Resize(object? sender, EventArgs e)
-        {
-            CenterUserProfileIcon();
-        }
-
-        private void CenterUserProfileIcon()
-        {
-            var x = Math.Max(0, (splitUser.Panel1.ClientSize.Width - pictureUser.Width) / 2);
-            var y = Math.Max(0, (splitUser.Panel1.ClientSize.Height - pictureUser.Height) / 2);
-            pictureUser.Location = new Point(x, y);
         }
 
         private void ReplaceUserProfileIcon()
