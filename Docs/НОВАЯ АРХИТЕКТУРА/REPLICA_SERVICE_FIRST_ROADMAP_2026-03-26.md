@@ -284,3 +284,7 @@ Replica.Client/
    - integrated push bridge into `OrdersWorkspaceForm` startup/shutdown lifecycle,
    - added coalesced push-triggered snapshot refresh (`OrderUpdated/OrderDeleted/ForceRefresh`) with reconnect resync,
    - verify/ui-smoke checks passed for client bridge increment.
+16. `2026-03-27`: Stage 3 integration-test increment:
+   - added SignalR TestServer integration tests with two clients (`A/B`) and real hub broadcast path,
+   - covered scenarios: `CreateOrder -> OrderUpdated` and `DeleteOrder -> OrderDeleted` observed by client `B`,
+   - verify/ui-smoke checks passed after integration coverage extension.

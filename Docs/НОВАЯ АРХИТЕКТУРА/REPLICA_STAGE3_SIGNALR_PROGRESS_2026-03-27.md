@@ -44,14 +44,18 @@ Stage 3 kickoff: real-time push notifications from API after successful mutating
 10. Added verify tests:
    - payload parsing cases for push events,
    - reconnect backoff policy checks.
+11. Added SignalR integration tests (two clients):
+   - TestServer host with real `ReplicaOrderHub`,
+   - two connected hub clients (`A`, `B`) in one test run,
+   - mediator command path (`CreateOrder` / `DeleteOrder`) verified to broadcast to client `B`.
 
 ## Validation
 
-1. Verify targeted pack (`LanOrderPushClientTests` + `MediatRPushNotificationsBehaviorTests`): passed (13/13).
+1. Verify targeted pack (`SignalRPushIntegrationTests` + `LanOrderPushClientTests` + `MediatRPushNotificationsBehaviorTests`): passed (15/15).
 2. UiSmoke targeted pack (`MainFormCoreRegressionTests` + `MainFormSmokeTests`): passed (28/28).
 
 ## Next Stage 3 steps
 
-1. Add integration test with two clients (A mutates, B sees update via push).
-2. Add optional client metrics (push lag / reconnect counters) to diagnostics surface.
-3. Add resilience guardrails for push storm scenarios (adaptive throttle + bounded queue telemetry).
+1. Add optional client metrics (push lag / reconnect counters) to diagnostics surface.
+2. Add resilience guardrails for push storm scenarios (adaptive throttle + bounded queue telemetry).
+3. Expand integration coverage to `ForceRefresh(users-changed)` scenario.
