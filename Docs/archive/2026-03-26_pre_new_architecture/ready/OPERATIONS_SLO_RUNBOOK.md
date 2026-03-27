@@ -68,7 +68,7 @@
 2. Определить класс проблемы:
    - доступность БД (`/ready=not_ready`)
    - ошибки write-path (`WriteSuccessRatio`, `WriteConflict`, `WriteBadRequest`)
-   - деградация производительности (`HttpLatencyP95Ms`)
+   - просадка производительности (`HttpLatencyP95Ms`)
 3. Проверить PostgreSQL в DBeaver:
    - `select now(), current_database();`
    - `select count(*) from orders;`

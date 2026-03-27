@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Replica.Api.Application.Behaviors;
 using Replica.Api.Application.Orders.Commands;
+using Replica.Api.Application.Orders.Queries;
 using Replica.Api.Application.Users.Commands;
 using Replica.Api.Contracts;
 using Replica.Api.Hubs;
@@ -101,6 +102,47 @@ public sealed class SignalRPushIntegrationTests
         Assert.Equal(ReplicaOrderHubEvents.ForceRefresh, pushedEvent.EventType);
         Assert.Equal("users-changed", pushedEvent.Reason);
         Assert.Equal(string.Empty, pushedEvent.OrderId);
+    }
+
+    [Fact]
+    public async Task ClientReconnect_WhenMissedPushDuringDisconnect_AllowsPullResyncAndReceivesSubsequentPush()
+    {
+        await using var harness = await SignalRPushHarness.StartAsync();
+
+        var postReconnectEvent = new TaskCompletionSource<LanOrderPushEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
+        harness.ClientB.On<object>(ReplicaOrderHubEvents.OrderUpdated, payload =>
+        {
+            var parsed = LanOrderPushEventParser.Parse(ReplicaOrderHubEvents.OrderUpdated, payload, DateTime.UtcNow);
+            postReconnectEvent.TrySetResult(parsed);
+        });
+
+        await harness.ClientB.StopAsync();
+
+        var createdWhileDisconnected = await harness.Mediator.Send(new CreateOrderCommand(
+            new CreateOrderRequest { OrderNumber = "SIG-INTEG-RECOVERY-1001" },
+            Actor: "Administrator",
+            IdempotencyKey: string.Empty));
+
+        Assert.True(createdWhileDisconnected.IsSuccess);
+        Assert.NotNull(createdWhileDisconnected.Order);
+
+        await harness.ClientB.StartAsync();
+
+        var pulledOrderAfterReconnect = await harness.Mediator.Send(new GetOrderByIdQuery(createdWhileDisconnected.Order!.InternalId));
+        Assert.NotNull(pulledOrderAfterReconnect);
+        Assert.Equal(createdWhileDisconnected.Order.InternalId, pulledOrderAfterReconnect!.InternalId);
+
+        var createdAfterReconnect = await harness.Mediator.Send(new CreateOrderCommand(
+            new CreateOrderRequest { OrderNumber = "SIG-INTEG-RECOVERY-1002" },
+            Actor: "Administrator",
+            IdempotencyKey: string.Empty));
+
+        Assert.True(createdAfterReconnect.IsSuccess);
+        Assert.NotNull(createdAfterReconnect.Order);
+
+        var pushedEvent = await postReconnectEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(ReplicaOrderHubEvents.OrderUpdated, pushedEvent.EventType);
+        Assert.Equal(createdAfterReconnect.Order!.InternalId, pushedEvent.OrderId);
     }
 
     private sealed class SignalRPushHarness : IAsyncDisposable

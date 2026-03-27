@@ -58,11 +58,45 @@ Stage 3 kickoff: real-time push notifications from API after successful mutating
 
 ## Validation
 
-1. Verify targeted pack (`SignalRPushIntegrationTests` + `LanOrderPushClientTests` + `MediatRPushNotificationsBehaviorTests`): passed (16/16).
+1. Verify targeted pack (`SignalRPushIntegrationTests` + `LanOrderPushClientTests` + `MediatRPushNotificationsBehaviorTests`): passed (17/17).
+2. UiSmoke targeted pack (`MainFormCoreRegressionTests` + `MainFormSmokeTests`): passed (28/28).
+
+## Increment Addendum (2026-03-27, push reason counters + pressure alerts)
+
+### Implemented
+
+1. Extended push diagnostics with per-reason counters for `ForceRefresh` reasons:
+   - tracks reason frequency (`users-changed`, `reconnect-resync`, etc.),
+   - shows top reasons in LAN tooltip (`Push reason counters`).
+2. Extended coalesced/throttled diagnostics line with rate view:
+   - displays absolute counters and rates (`coalesced/throttled` with percentages).
+3. Added bounded pressure alerts for push storms in runtime logs:
+   - alert triggers when coalescing/throttling rates exceed configured thresholds,
+   - alert is cooldown-limited to avoid log flooding,
+   - alert payload includes current counters/rates and top force-refresh reasons.
+
+### Validation (addendum)
+
+1. Verify targeted pack (`SignalRPushIntegrationTests` + `LanOrderPushClientTests` + `MediatRPushNotificationsBehaviorTests`): passed (17/17).
+2. UiSmoke targeted pack (`MainFormCoreRegressionTests` + `MainFormSmokeTests`): passed (28/28).
+
+## Increment Addendum (2026-03-27, reconnect-chaos integration scenario)
+
+### Implemented
+
+1. Added integration scenario `ClientReconnect_WhenMissedPushDuringDisconnect_AllowsPullResyncAndReceivesSubsequentPush`:
+   - client `B` is forcibly disconnected from SignalR hub,
+   - command mutation is executed while `B` is offline,
+   - after reconnect, compensating pull (`GetOrderById`) confirms server-authoritative state is recoverable,
+   - subsequent mutation confirms push stream is restored for `B`.
+
+### Validation (addendum)
+
+1. Verify targeted pack (`SignalRPushIntegrationTests` + `LanOrderPushClientTests` + `MediatRPushNotificationsBehaviorTests`): passed (17/17).
 2. UiSmoke targeted pack (`MainFormCoreRegressionTests` + `MainFormSmokeTests`): passed (28/28).
 
 ## Next Stage 3 steps
 
-1. Add reconnect-chaos integration scenario (forced disconnect + eventual resync assertion).
-2. Expand push diagnostics with per-reason counters (`users-changed`, reconnect-resync, etc.) for quicker triage.
-3. Add bounded alerting thresholds in diagnostics log when throttling/coalescing rates spike.
+1. Add verify coverage focused on pressure-alert thresholds/cooldown logic (to prevent regressions in storm guardrails).
+2. Evaluate lightweight operator-facing hint in status tooltip when pressure alerts are active for prolonged periods.
+3. Add end-to-end smoke around UI bridge reconnect flow (`reconnect-resync`) to lock behavior at form/runtime boundary.

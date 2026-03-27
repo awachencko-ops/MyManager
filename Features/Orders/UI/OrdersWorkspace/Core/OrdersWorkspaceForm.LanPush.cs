@@ -118,6 +118,7 @@ namespace Replica
                 var coalescedEventsCount = Interlocked.Increment(ref _lanPushCoalescedEventsCount);
                 if (coalescedEventsCount % 50 == 0)
                     Logger.Info($"LAN-PUSH | coalesced-events={coalescedEventsCount}");
+                TryEmitLanPushPressureAlert("coalesced");
             }
 
             if (Interlocked.CompareExchange(ref _lanPushRefreshInProgress, 1, 0) != 0)
@@ -147,6 +148,7 @@ namespace Replica
                         var throttleDelayCount = Interlocked.Increment(ref _lanPushThrottleDelayCount);
                         if (throttleDelayCount % 50 == 0)
                             Logger.Info($"LAN-PUSH | throttle-delays={throttleDelayCount}");
+                        TryEmitLanPushPressureAlert("throttled");
                         await Task.Delay(throttleDelay);
                     }
 
@@ -307,7 +309,13 @@ namespace Replica
                     : pushEvent.EventType.Trim();
                 _lanPushLastEventLagMs = lagMs;
                 if (!string.IsNullOrWhiteSpace(pushEvent.Reason))
+                {
                     _lanPushLastForceRefreshReason = pushEvent.Reason.Trim();
+                    if (_lanPushReasonCounters.TryGetValue(_lanPushLastForceRefreshReason, out var reasonCount))
+                        _lanPushReasonCounters[_lanPushLastForceRefreshReason] = reasonCount + 1;
+                    else
+                        _lanPushReasonCounters[_lanPushLastForceRefreshReason] = 1;
+                }
             }
         }
 
@@ -339,6 +347,11 @@ namespace Replica
         private IReadOnlyList<string> BuildLanPushDiagnosticsLines()
         {
             LanPushDiagnosticsSnapshot snapshot;
+            var eventsReceivedCount = Interlocked.Read(ref _lanPushEventsReceivedCount);
+            var refreshAppliedCount = Interlocked.Read(ref _lanPushRefreshAppliedCount);
+            var coalescedEventsCount = Interlocked.Read(ref _lanPushCoalescedEventsCount);
+            var throttleDelayCount = Interlocked.Read(ref _lanPushThrottleDelayCount);
+            var reconnectCount = Interlocked.CompareExchange(ref _lanPushReconnectCount, 0, 0);
             lock (_lanPushMetricsSync)
             {
                 snapshot = new LanPushDiagnosticsSnapshot
@@ -350,12 +363,13 @@ namespace Replica
                     LastRefreshAtUtc = _lanPushLastRefreshAtUtc,
                     LastEventType = _lanPushLastEventType,
                     LastForceRefreshReason = _lanPushLastForceRefreshReason,
+                    ReasonCountersSummary = BuildLanPushReasonCountersSummary(_lanPushReasonCounters),
                     LastEventLagMs = _lanPushLastEventLagMs,
-                    EventsReceivedCount = Interlocked.Read(ref _lanPushEventsReceivedCount),
-                    RefreshAppliedCount = Interlocked.Read(ref _lanPushRefreshAppliedCount),
-                    CoalescedEventsCount = Interlocked.Read(ref _lanPushCoalescedEventsCount),
-                    ThrottleDelayCount = Interlocked.Read(ref _lanPushThrottleDelayCount),
-                    ReconnectCount = Interlocked.CompareExchange(ref _lanPushReconnectCount, 0, 0)
+                    EventsReceivedCount = eventsReceivedCount,
+                    RefreshAppliedCount = refreshAppliedCount,
+                    CoalescedEventsCount = coalescedEventsCount,
+                    ThrottleDelayCount = throttleDelayCount,
+                    ReconnectCount = reconnectCount
                 };
             }
 
@@ -382,11 +396,79 @@ namespace Replica
             if (snapshot.ReconnectCount > 0)
                 lines.Add($"Push reconnects: {snapshot.ReconnectCount}");
             if (snapshot.CoalescedEventsCount > 0 || snapshot.ThrottleDelayCount > 0)
-                lines.Add($"Push coalesced/throttled: {snapshot.CoalescedEventsCount}/{snapshot.ThrottleDelayCount}");
+            {
+                var coalescedRate = snapshot.EventsReceivedCount > 0
+                    ? (double)snapshot.CoalescedEventsCount / snapshot.EventsReceivedCount
+                    : 0d;
+                var throttleBase = snapshot.RefreshAppliedCount > 0
+                    ? snapshot.RefreshAppliedCount
+                    : snapshot.EventsReceivedCount;
+                var throttledRate = throttleBase > 0
+                    ? (double)snapshot.ThrottleDelayCount / throttleBase
+                    : 0d;
+                lines.Add(
+                    $"Push coalesced/throttled: {snapshot.CoalescedEventsCount}/{snapshot.ThrottleDelayCount} ({coalescedRate:P0}/{throttledRate:P0})");
+            }
             if (!string.IsNullOrWhiteSpace(snapshot.LastForceRefreshReason))
                 lines.Add($"Push last force-refresh reason: {snapshot.LastForceRefreshReason}");
+            if (!string.IsNullOrWhiteSpace(snapshot.ReasonCountersSummary))
+                lines.Add($"Push reason counters: {snapshot.ReasonCountersSummary}");
 
             return lines;
+        }
+
+        private string BuildLanPushReasonCountersSummary(IDictionary<string, long> counters)
+        {
+            if (counters == null || counters.Count == 0)
+                return string.Empty;
+
+            var parts = counters
+                .Where(x => !string.IsNullOrWhiteSpace(x.Key) && x.Value > 0)
+                .OrderByDescending(x => x.Value)
+                .ThenBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
+                .Take(LanPushReasonCountersMaxItems)
+                .Select(x => $"{x.Key}={x.Value}")
+                .ToList();
+
+            return parts.Count == 0 ? string.Empty : string.Join(", ", parts);
+        }
+
+        private void TryEmitLanPushPressureAlert(string trigger)
+        {
+            var eventsReceived = Interlocked.Read(ref _lanPushEventsReceivedCount);
+            if (eventsReceived < LanPushPressureAlertMinEvents)
+                return;
+
+            var refreshApplied = Interlocked.Read(ref _lanPushRefreshAppliedCount);
+            var coalesced = Interlocked.Read(ref _lanPushCoalescedEventsCount);
+            var throttled = Interlocked.Read(ref _lanPushThrottleDelayCount);
+
+            var coalescedRate = eventsReceived > 0 ? (double)coalesced / eventsReceived : 0d;
+            var throttleBase = refreshApplied > 0 ? refreshApplied : eventsReceived;
+            var throttledRate = throttleBase > 0 ? (double)throttled / throttleBase : 0d;
+
+            if (coalescedRate < LanPushCoalescedRateAlertThreshold
+                && throttledRate < LanPushThrottledRateAlertThreshold)
+            {
+                return;
+            }
+
+            string reasonCounters;
+            lock (_lanPushMetricsSync)
+            {
+                var nowUtc = DateTime.UtcNow;
+                if (_lanPushLastPressureAlertAtUtc > DateTime.MinValue
+                    && (nowUtc - _lanPushLastPressureAlertAtUtc) < LanPushPressureAlertCooldown)
+                {
+                    return;
+                }
+
+                _lanPushLastPressureAlertAtUtc = nowUtc;
+                reasonCounters = BuildLanPushReasonCountersSummary(_lanPushReasonCounters);
+            }
+
+            Logger.Warn(
+                $"LAN-PUSH | pressure-alert | trigger={trigger} | events={eventsReceived} | refresh={refreshApplied} | coalesced={coalesced} ({coalescedRate:P0}) | throttled={throttled} ({throttledRate:P0}) | reasons={reasonCounters}");
         }
 
         private sealed class LanPushDiagnosticsSnapshot
@@ -398,6 +480,7 @@ namespace Replica
             public DateTime LastRefreshAtUtc { get; init; }
             public string LastEventType { get; init; } = string.Empty;
             public string LastForceRefreshReason { get; init; } = string.Empty;
+            public string ReasonCountersSummary { get; init; } = string.Empty;
             public double LastEventLagMs { get; init; } = -1;
             public long EventsReceivedCount { get; init; }
             public long RefreshAppliedCount { get; init; }

@@ -105,7 +105,7 @@
 ### Как тестируем
 - Unit: application/domain без зависимостей на UI/EF.
 - Architecture tests: запрет ссылок Presentation -> Infrastructure напрямую.
-- Regression: существующие verify/ui-smoke без деградации UX.
+- Regression: существующие verify/ui-smoke без ухудшения UX.
 
 ---
 
@@ -296,3 +296,12 @@ Replica.Client/
    - added push-channel diagnostics in LAN connection tooltip (`state`, `events/refresh`, `lag`, `reconnects`, `coalesced/throttled`),
    - added bounded push refresh throttling to reduce storage snapshot pressure during push storms,
    - verify/ui-smoke checks passed after client observability/resilience update.
+19. `2026-03-27`: Stage 3 push diagnostics hardening increment:
+   - added per-reason counters for force-refresh causes (`users-changed`, `reconnect-resync`, etc.) in LAN tooltip,
+   - added bounded pressure alerts in runtime logs when coalescing/throttling rates exceed thresholds,
+   - extended tooltip diagnostics with coalesced/throttled rates and top reason counters,
+   - verify/ui-smoke checks passed after diagnostics hardening update.
+20. `2026-03-27`: Stage 3 reconnect-chaos integration increment:
+   - added forced-disconnect scenario for SignalR client with offline mutation,
+   - after reconnect, compensating pull confirms state recovery and subsequent push delivery resumes,
+   - verify/ui-smoke checks passed after reconnect-chaos integration coverage update.

@@ -191,7 +191,7 @@
 - Добавлен circuit-breaker (`DependencyCircuitBreaker`) и dependency health-state для PitStop/Imposing/Storage с UI-индикацией degraded/unavailable.
 - Добавлен bulkhead/load shedding (`DependencyBulkheadPolicy`) и readiness-контур на старте workflow (проверка storage/hotfolder-директорий по активным сценариям до запуска обработки).
 - Добавлен stage-timeout budget policy (`WorkflowTimeoutBudgetPolicy`) для PitStop/Imposing/report шагов и telemetry-контур `TIMEOUT-BUDGET`.
-- В нескольких местах ошибки suppress-ятся (`catch { }`), что скрывает деградации.
+- В нескольких местах ошибки suppress-ятся (`catch { }`), что скрывает ухудшения состояния.
 - Архитектура single-process: падение/фриз UI-компонента критично для всего потока выполнения.
 
 ### Вывод
@@ -262,7 +262,7 @@
 
 1. Итерация 1 (2026-03-20): закрыт риск silent `catch { }` в критическом runtime-пути.
    - Что сделано: заменены silent catches на контролируемый fallback с логированием в `OrderProcessor`, `OrderForm`, `ConfigService`.
-   - Эффект: снижен риск «немых» деградаций при file/workflow и config-операциях.
+   - Эффект: снижен риск «немых» проблем при file/workflow и config-операциях.
 2. Итерация 2 (2026-03-20): закрыт следующий срез `MainForm` God Object (delete-workflow).
    - Что сделано: удаление заказов и item-ов вынесено в `OrderDeletionWorkflowService` (disk cleanup + fallback + reindex + batch failure aggregation), `MainForm` переключён на сервис, добавлены unit-тесты.
    - Эффект: снижена связность `MainForm` и риск регрессий в delete-сценариях за счёт выделенного use-case слоя и автотестов.
@@ -276,7 +276,7 @@
    - Что сделано: добавлен `DependencyCircuitBreaker`; операции в `OrderProcessor` обёрнуты dependency-guard (`circuit-open`, `retry-after`), введены сигналы `OnDependencyHealthChanged`, `MainForm` показывает degraded/unavailable состояние в tray и server-header.
    - Эффект: снижена вероятность каскадных ошибок при недоступности внешних hotfolder-зависимостей, улучшена оперативная диагностика через UI-индикаторы.
 6. Итерация 6 (2026-03-20): закрыт срез bulkhead/load shedding + dependency readiness policy.
-   - Что сделано: добавлен `DependencyBulkheadPolicy` и подключён в dependency boundary `OrderProcessor`; при перегрузе включается load shedding (`bulkhead-reject`) с деградацией health-state. Добавлены readiness-проверки storage/hotfolder-контуров по активным сценариям перед стартом workflow.
+   - Что сделано: добавлен `DependencyBulkheadPolicy` и подключён в dependency boundary `OrderProcessor`; при перегрузе включается load shedding (`bulkhead-reject`) с ухудшением health-state. Добавлены readiness-проверки storage/hotfolder-контуров по активным сценариям перед стартом workflow.
    - Эффект: снижен риск каскадного перегруза и «слепых» запусков при недоступных dependency; запуск блокируется до восстановления критичных директорий.
 7. Итерация 7 (2026-03-20): закрыт срез timeout budget per stage в `OrderProcessor`.
    - Что сделано: добавлен `WorkflowTimeoutBudgetPolicy`, ожидания `WaitForFile*` и PitStop report переведены с общего timeout на stage budgets (PitStop/Imposing/report), добавлен `TIMEOUT-BUDGET` telemetry и unit-тесты policy.
@@ -431,6 +431,5 @@
 ## Заключение
 
 Текущий Replica (будущий Replica) хорош как локальный/переходный инструмент, но для enterprise-scale и критичных данных требуется архитектурный pivot: **от UI-центричного file-driven монолита к транзакционному API+worker контуру с наблюдаемостью и строгими границами доверия**.
-
 
 
