@@ -51,6 +51,10 @@ Stage 3 kickoff: real-time push notifications from API after successful mutating
 12. Extended integration coverage for `ForceRefresh`:
    - scenario `UpsertUser -> ForceRefresh(users-changed)` verified on client `B`,
    - event parser assertions include `reason` and empty `orderId` for force-refresh payload.
+13. Added client push diagnostics + storm guardrails:
+   - LAN tooltip now includes push channel diagnostics (`state`, `events/refresh`, `lag`, `reconnects`, `coalesced/throttled`),
+   - push refresh loop now applies bounded throttling (`LanPushMinRefreshIntervalMs`) to reduce snapshot-pull pressure during event bursts,
+   - coalesced/throttled counters and periodic telemetry logs added for long push storms.
 
 ## Validation
 
@@ -59,6 +63,6 @@ Stage 3 kickoff: real-time push notifications from API after successful mutating
 
 ## Next Stage 3 steps
 
-1. Add optional client metrics (push lag / reconnect counters) to diagnostics surface.
-2. Add resilience guardrails for push storm scenarios (adaptive throttle + bounded queue telemetry).
-3. Add reconnect-chaos integration scenario (forced disconnect + eventual resync assertion).
+1. Add reconnect-chaos integration scenario (forced disconnect + eventual resync assertion).
+2. Expand push diagnostics with per-reason counters (`users-changed`, reconnect-resync, etc.) for quicker triage.
+3. Add bounded alerting thresholds in diagnostics log when throttling/coalescing rates spike.

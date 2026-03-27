@@ -553,6 +553,8 @@ namespace Replica
             }
             if (!string.IsNullOrWhiteSpace(snapshot.ProcessAlert))
                 lines.Add($"Сбой на сервере: {TruncateTooltipText(snapshot.ProcessAlert)}");
+            foreach (var pushLine in BuildLanPushDiagnosticsLines())
+                lines.Add(pushLine);
             if (dependencyHealthLevel != DependencyHealthLevel.Healthy)
                 lines.Add(BuildDependencyHealthSummary());
             if (_lanConnectionRecoveryActionEnabled)

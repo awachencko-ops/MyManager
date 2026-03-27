@@ -104,6 +104,7 @@ namespace Replica
         private bool _lanApiRecoveryInProgress;
         private bool _lanConnectionRecoveryActionEnabled;
         private readonly object _lanPushRefreshSync = new();
+        private readonly object _lanPushMetricsSync = new();
         private int _lanPushRefreshInProgress;
         private int _lanPushRefreshPending;
         private LanOrderPushEvent _lanPushPendingEvent = new(
@@ -111,6 +112,19 @@ namespace Replica
             string.Empty,
             "startup",
             DateTime.UtcNow);
+        private bool _lanPushConnected;
+        private string _lanPushConnectionState = LanOrderPushConnectionStates.Stopped;
+        private DateTime _lanPushConnectionStateAtUtc = DateTime.MinValue;
+        private DateTime _lanPushLastEventAtUtc = DateTime.MinValue;
+        private DateTime _lanPushLastRefreshAtUtc = DateTime.MinValue;
+        private string _lanPushLastEventType = string.Empty;
+        private string _lanPushLastForceRefreshReason = string.Empty;
+        private double _lanPushLastEventLagMs = -1;
+        private long _lanPushEventsReceivedCount;
+        private long _lanPushRefreshAppliedCount;
+        private long _lanPushCoalescedEventsCount;
+        private long _lanPushThrottleDelayCount;
+        private int _lanPushReconnectCount;
         private bool _connectionStatusToolTipVisible;
         private bool _pendingConnectionIndicatorRefresh;
         private string _connectionStatusToolTipContent = string.Empty;
@@ -166,6 +180,7 @@ namespace Replica
         private const int TrayIndicatorsRefreshIntervalMs = 15000;
         private const int LanServerProbeMinIntervalMs = 5000;
         private const int LanServerProbeFailureThreshold = 3;
+        private const int LanPushMinRefreshIntervalMs = 500;
         private static readonly TimeSpan ArchiveIndexLifetime = TimeSpan.FromSeconds(60);
         private const int ArchiveStatusSyncIntervalMs = 60000;
         private const int OrdersGridWarmupIntervalMs = 3000;

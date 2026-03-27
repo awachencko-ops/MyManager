@@ -292,3 +292,7 @@ Replica.Client/
    - added two-client SignalR integration coverage for `UpsertUser -> ForceRefresh(users-changed)`,
    - assertion matrix extended for force-refresh payload shape (`reason`, empty `orderId`),
    - verify/ui-smoke checks passed after force-refresh coverage extension.
+18. `2026-03-27`: Stage 3 client observability/resilience increment:
+   - added push-channel diagnostics in LAN connection tooltip (`state`, `events/refresh`, `lag`, `reconnects`, `coalesced/throttled`),
+   - added bounded push refresh throttling to reduce storage snapshot pressure during push storms,
+   - verify/ui-smoke checks passed after client observability/resilience update.
