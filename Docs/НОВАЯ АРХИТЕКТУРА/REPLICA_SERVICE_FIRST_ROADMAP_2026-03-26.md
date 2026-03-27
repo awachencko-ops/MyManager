@@ -367,3 +367,11 @@ Replica.Client/
    - added integration tests for real file-shadow path (`CreateOrder` -> `history.shadow.json`) with enabled/disabled migration flag modes,
    - validated command pipeline + file writer wiring end-to-end for Stage 4 execution baseline,
    - stage-4 focused verify pack passed (`9/9` for migration + behavior + integration tests).
+35. `2026-03-27`: Stage 4 reconciliation starter increment:
+   - added reconciliation diff builder with machine-readable buckets (`missing_in_pg`, `missing_in_json`, `version_mismatch`, `payload_mismatch`),
+   - added snapshot I/O helpers for report generation from file snapshots (`array` and `Orders/orders` envelope shapes),
+   - added CLI tool `tools/Replica.Reconciliation.Cli` for terminal execution and JSON artifact output.
+36. `2026-03-27`: full verify stability restore increment:
+   - fixed run-state plan regression for orders without number in run-start flow,
+   - recovered previously failing tests `OrderRunCommandServiceTests` and `OrderRunWorkflowOrchestrationServiceTests`,
+   - full verify pack passed (`346/346`), ui-smoke targeted pack passed (`35/35`).

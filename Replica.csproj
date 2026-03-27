@@ -26,6 +26,7 @@
     <Compile Remove="tests\**\*.cs" />
     <Compile Remove="Replica.Api\**\*.cs" />
     <Compile Remove="Replica.Shared\**\*.cs" />
+    <Compile Remove="tools\**\*.cs" />
     <Compile Remove=".codex_build_out\**\*.cs" />
   </ItemGroup>
 

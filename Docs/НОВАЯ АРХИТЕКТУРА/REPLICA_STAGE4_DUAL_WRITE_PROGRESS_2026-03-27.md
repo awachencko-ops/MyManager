@@ -27,6 +27,10 @@ Status: In progress
 6. Добавлено integration coverage для Stage 4:
    - проверка `CreateOrder` с `DualWriteEnabled=true` создаёт и наполняет `history.shadow.json`,
    - проверка `DualWriteEnabled=false` не создаёт shadow-файл.
+7. Добавлен reconciliation starter artifact (`json vs pg`) с машинно-читаемым diff output:
+   - `ReplicaApiReconciliationReportBuilder` (bucket-логика `missing_in_pg`, `missing_in_json`, `version_mismatch`, `payload_mismatch`),
+   - file I/O helper `ReplicaApiReconciliationReportIo` (чтение snapshot + запись отчёта),
+   - CLI-инструмент `tools/Replica.Reconciliation.Cli` для запуска из терминала.
 
 ## Test Evidence
 
@@ -36,16 +40,16 @@ Status: In progress
    Result: passed (`41/41`).
 3. `dotnet test tests/Replica.UiSmokeTests/Replica.UiSmokeTests.csproj --filter "MainFormCoreRegressionTests|MainFormSmokeTests"`  
    Result: passed (`35/35`).
+4. `dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj`  
+   Result: passed (`346/346`).
+5. `dotnet run --project tools/Replica.Reconciliation.Cli -- --pg <pg_snapshot.json> --json <json_snapshot.json> --out <reconciliation-report.json>`  
+   Result: validated (zero-diff report generated, exit code `0`).
 
 ## Open Notes
 
-1. Полный `Replica.VerifyTests` в текущей ветке имеет 2 падения вне Stage 4 scope:
-   - `OrderRunCommandServiceTests.PrepareAndBeginAsync_WhenNoRunnableOrders_ReturnsNoRunnable`,
-   - `OrderRunWorkflowOrchestrationServiceTests.PrepareStartAsync_WhenNoRunnableOrders_DoesNotCallLanGateway`.
-2. Эти падения не относятся к dual-write изменениям и требуют отдельного разбора в run-workflow контуре.
+1. Ранее падавшие run-workflow тесты восстановлены; полный `Verify` снова зелёный (`346/346`).
 
 ## Next Increment (planned)
 
-1. Добавить stage-4 integration coverage для end-to-end dual-write path (primary success + shadow mirror verification).
-2. Подготовить reconciliation starter artifact (`json vs pg`) с машинно-читаемым diff output.
-3. Завести ежедневный execution journal для dual-write окна и прогонять Go/No-Go критерии.
+1. Завести ежедневный execution journal для dual-write окна и прогонять Go/No-Go критерии.
+2. Подключить CLI reconciliation в nightly/ops pipeline с сохранением артефакта отчёта.

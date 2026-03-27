@@ -15,12 +15,10 @@ public sealed class OrderRunStateService
         var safeSelected = selectedOrders ?? Array.Empty<OrderData>();
         var safeRunning = runningTokens ?? new Dictionary<string, CancellationTokenSource>(StringComparer.Ordinal);
 
-        // In LAN API mode we run by InternalId, so legacy rows without order number must remain runnable.
-        var ordersWithoutNumber = useLocalRunState
-            ? safeSelected
-                .Where(order => order != null && string.IsNullOrWhiteSpace(order.Id))
-                .ToList()
-            : new List<OrderData>();
+        // Order number remains a mandatory precondition for run-start in both local and LAN paths.
+        var ordersWithoutNumber = safeSelected
+            .Where(order => order != null && string.IsNullOrWhiteSpace(order.Id))
+            .ToList();
 
         var alreadyRunningOrders = useLocalRunState
             ? safeSelected
