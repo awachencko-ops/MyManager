@@ -1,5 +1,5 @@
-# Stage 5 Strict Auth Cutover Checklist
-
+﻿<!-- DOC_ENCODING_REQUIREMENT_UTF8 -->
+> Требование кодировки: все файлы документации (`*.md`) в этом репозитории хранятся только в `UTF-8 with BOM`, окончания строк — `LF`.
 Date: 2026-03-26
 
 ## Change applied

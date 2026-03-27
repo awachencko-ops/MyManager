@@ -1,3 +1,5 @@
+﻿<!-- DOC_ENCODING_REQUIREMENT_UTF8 -->
+> Требование кодировки: все файлы документации (`*.md`) в этом репозитории хранятся только в `UTF-8 with BOM`, окончания строк — `LF`.
 # Replica Stage 1 Progress (Security Foundation)
 
 Дата: 2026-03-27  

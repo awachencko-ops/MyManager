@@ -1,5 +1,5 @@
-﻿# Этап 3: LAN client-server brief (Step 1 + Step 2)
-
+﻿<!-- DOC_ENCODING_REQUIREMENT_UTF8 -->
+> Требование кодировки: все файлы документации (`*.md`) в этом репозитории хранятся только в `UTF-8 with BOM`, окончания строк — `LF`.
 Дата актуализации: 2026-03-20
 Статус: Completed (`Step 1` и `Step 2` закрыты)
 

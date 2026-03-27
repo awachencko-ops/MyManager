@@ -1,5 +1,5 @@
-# Connection And Sync Audit
-
+﻿<!-- DOC_ENCODING_REQUIREMENT_UTF8 -->
+> Требование кодировки: все файлы документации (`*.md`) в этом репозитории хранятся только в `UTF-8 with BOM`, окончания строк — `LF`.
 Date: 2026-03-23
 
 ## Scope

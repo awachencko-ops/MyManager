@@ -1,7 +1,5 @@
-# Mediator + Performance Deep Brief (Replica)
-Дата: 2026-03-26
-Статус: `Proposal (ready to execute)`
-
+﻿<!-- DOC_ENCODING_REQUIREMENT_UTF8 -->
+> Требование кодировки: все файлы документации (`*.md`) в этом репозитории хранятся только в `UTF-8 with BOM`, окончания строк — `LF`.
 ## 1. Цель
 Снять текущие лаги в `OrdersWorkspace` и убрать архитектурную связность UI <-> orchestration так, чтобы:
 - форма не блокировалась при сетевых и файловых операциях;

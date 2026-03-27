@@ -1,7 +1,9 @@
 using System.Reflection;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Replica.Api.Application.Abstractions;
+using Replica.Api.Infrastructure;
 
 namespace Replica.Api.Application.Behaviors;
 
@@ -10,9 +12,11 @@ public static class ReplicaApiCommandPipelineServiceCollectionExtensions
     public static IServiceCollection AddReplicaApiCommandPipeline(this IServiceCollection services)
     {
         services.AddOptions<ReplicaApiCommandPipelineOptions>();
+        services.TryAddSingleton<IReplicaOrderPushPublisher, NoOpReplicaOrderPushPublisher>();
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ReplicaApiCommandValidationBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ReplicaApiCommandIdempotencyBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ReplicaApiCommandTransactionBehavior<,>));
+        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ReplicaApiPushNotificationBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ReplicaApiCommandTelemetryBehavior<,>));
 
         RegisterValidatorsFromAssembly(services, typeof(ReplicaApiCommandPipelineServiceCollectionExtensions).Assembly);

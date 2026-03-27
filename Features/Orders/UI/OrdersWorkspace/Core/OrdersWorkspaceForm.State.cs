@@ -31,6 +31,7 @@ namespace Replica
         private string _lanApiBaseUrl = AppSettings.DefaultLanApiBaseUrl;
         private readonly IOrderApplicationService _orderApplicationService;
         private readonly ILanApiIdentityService _lanApiIdentityService;
+        private readonly ILanOrderPushClient _lanOrderPushClient;
         private string _managerLogFilePath = AppSettings.DefaultManagerLogFilePath;
         private string _orderLogsFolderPath = AppSettings.DefaultOrderLogsFolderPath;
         private readonly List<OrderData> _orderHistory = [];
@@ -102,6 +103,14 @@ namespace Replica
         private LanServerProbeSnapshot _lanServerProbeSnapshot = LanServerProbeSnapshot.CreateInitial();
         private bool _lanApiRecoveryInProgress;
         private bool _lanConnectionRecoveryActionEnabled;
+        private readonly object _lanPushRefreshSync = new();
+        private int _lanPushRefreshInProgress;
+        private int _lanPushRefreshPending;
+        private LanOrderPushEvent _lanPushPendingEvent = new(
+            LanOrderPushEventNames.ForceRefresh,
+            string.Empty,
+            "startup",
+            DateTime.UtcNow);
         private bool _connectionStatusToolTipVisible;
         private bool _pendingConnectionIndicatorRefresh;
         private string _connectionStatusToolTipContent = string.Empty;

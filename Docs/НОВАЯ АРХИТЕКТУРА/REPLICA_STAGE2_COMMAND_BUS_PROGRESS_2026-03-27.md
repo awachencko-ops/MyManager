@@ -1,4 +1,6 @@
-﻿# Replica Stage 2 Progress (MediatR Command Bus)
+﻿<!-- DOC_ENCODING_REQUIREMENT_UTF8 -->
+> Требование кодировки: все файлы документации (`*.md`) в этом репозитории хранятся только в `UTF-8 with BOM`, окончания строк — `LF`.
+# Replica Stage 2 Progress (MediatR Command Bus)
 
 Date: 2026-03-27  
 Status: In progress
@@ -166,4 +168,31 @@ Targeted verify run result: passed (67/67).
 ### Validation (addendum)
 
 - Verify target pack: passed (67/67).
+- UiSmoke target pack: passed (2/2).
+
+## Increment Addendum (2026-03-27, Stage 3 SignalR push kickoff)
+
+### Implemented
+
+1. Added SignalR hub:
+   - `ReplicaOrderHub` (`/hubs/orders`).
+2. Added push publisher abstraction:
+   - `IReplicaOrderPushPublisher`.
+3. Added publisher implementations:
+   - `SignalRReplicaOrderPushPublisher` (runtime),
+   - `NoOpReplicaOrderPushPublisher` (default fallback in DI).
+4. Added MediatR push behavior:
+   - `ReplicaApiPushNotificationBehavior<,>`.
+5. Push events emitted after successful commands:
+   - `OrderUpdated`,
+   - `OrderDeleted`,
+   - `ForceRefresh` (for successful `UpsertUser`).
+6. Runtime wiring:
+   - `AddSignalR()`,
+   - `MapHub<ReplicaOrderHub>("/hubs/orders")`,
+   - SignalR publisher registration.
+
+### Validation (addendum)
+
+- Verify target pack: passed (70/70).
 - UiSmoke target pack: passed (2/2).

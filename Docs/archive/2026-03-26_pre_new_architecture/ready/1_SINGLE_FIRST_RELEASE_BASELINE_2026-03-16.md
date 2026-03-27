@@ -1,5 +1,5 @@
-﻿# Replica: Release Baseline (Single-First)
-
+﻿<!-- DOC_ENCODING_REQUIREMENT_UTF8 -->
+> Требование кодировки: все файлы документации (`*.md`) в этом репозитории хранятся только в `UTF-8 with BOM`, окончания строк — `LF`.
 Дата фиксации baseline: 2026-03-16  
 Этап: `MainForm migration (single-first)`  
 Статус baseline: `Approved`

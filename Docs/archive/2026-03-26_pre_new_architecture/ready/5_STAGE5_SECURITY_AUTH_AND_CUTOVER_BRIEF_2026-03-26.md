@@ -1,5 +1,5 @@
-# Этап 5: Security/Auth boundary, cutover и production hardening
-
+﻿<!-- DOC_ENCODING_REQUIREMENT_UTF8 -->
+> Требование кодировки: все файлы документации (`*.md`) в этом репозитории хранятся только в `UTF-8 with BOM`, окончания строк — `LF`.
 Дата актуализации: 2026-03-26  
 Статус: Completed
 

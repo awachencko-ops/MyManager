@@ -1,5 +1,5 @@
-# Operational Runbook: Replica API Observability/SLO
-
+﻿<!-- DOC_ENCODING_REQUIREMENT_UTF8 -->
+> Требование кодировки: все файлы документации (`*.md`) в этом репозитории хранятся только в `UTF-8 with BOM`, окончания строк — `LF`.
 Статус: Completed
 
 Актуально на `2026-03-23`.

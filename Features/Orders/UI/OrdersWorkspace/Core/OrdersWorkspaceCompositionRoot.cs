@@ -6,14 +6,17 @@ internal sealed class OrdersWorkspaceRuntimeServices
 {
     public OrdersWorkspaceRuntimeServices(
         IOrderApplicationService orderApplicationService,
-        ILanApiIdentityService lanApiIdentityService)
+        ILanApiIdentityService lanApiIdentityService,
+        ILanOrderPushClient lanOrderPushClient)
     {
         OrderApplicationService = orderApplicationService ?? throw new ArgumentNullException(nameof(orderApplicationService));
         LanApiIdentityService = lanApiIdentityService ?? throw new ArgumentNullException(nameof(lanApiIdentityService));
+        LanOrderPushClient = lanOrderPushClient ?? throw new ArgumentNullException(nameof(lanOrderPushClient));
     }
 
     public IOrderApplicationService OrderApplicationService { get; }
     public ILanApiIdentityService LanApiIdentityService { get; }
+    public ILanOrderPushClient LanOrderPushClient { get; }
 }
 
 internal static class OrdersWorkspaceCompositionRoot
@@ -58,6 +61,7 @@ internal static class OrdersWorkspaceCompositionRoot
 
         return new OrdersWorkspaceRuntimeServices(
             orderApplicationService: orderApplicationService,
-            lanApiIdentityService: new LanApiIdentityService(authSessionStore: lanApiAuthSessionStore));
+            lanApiIdentityService: new LanApiIdentityService(authSessionStore: lanApiAuthSessionStore),
+            lanOrderPushClient: new SignalRLanOrderPushClient(authSessionStore: lanApiAuthSessionStore));
     }
 }

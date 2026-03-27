@@ -1,3 +1,5 @@
+﻿<!-- DOC_ENCODING_REQUIREMENT_UTF8 -->
+> Требование кодировки: все файлы документации (`*.md`) в этом репозитории хранятся только в `UTF-8 with BOM`, окончания строк — `LF`.
 # Replica — Service-First Roadmap (Client/Server, Pull+Push, MediatR)
 
 Дата: 2026-03-26  
@@ -273,3 +275,12 @@ Replica.Client/
    - controllers switched to mediator-only runtime path,
    - legacy store fallback kept only for isolated tests,
    - verify/ui-smoke checks passed after cleanup.
+14. `2026-03-27`: Stage 3 SignalR push kickoff:
+   - added `ReplicaOrderHub` (`/hubs/orders`) and push publisher abstraction,
+   - added mediator push behavior with `OrderUpdated/OrderDeleted/ForceRefresh` events,
+   - verify/ui-smoke checks passed for kickoff increment.
+15. `2026-03-27`: Stage 3 client SignalR bridge increment:
+   - added client adapter `ILanOrderPushClient` with `HubConnection` lifecycle and reconnect policy,
+   - integrated push bridge into `OrdersWorkspaceForm` startup/shutdown lifecycle,
+   - added coalesced push-triggered snapshot refresh (`OrderUpdated/OrderDeleted/ForceRefresh`) with reconnect resync,
+   - verify/ui-smoke checks passed for client bridge increment.

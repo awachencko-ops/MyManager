@@ -4,6 +4,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Replica.Api.Data;
 using Replica.Api.Application.Behaviors;
+using Replica.Api.Hubs;
 using Replica.Api.Infrastructure;
 using Replica.Api.Services;
 
@@ -59,7 +60,9 @@ else
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddSignalR();
 builder.Services.AddSingleton<IReplicaApiTokenService, ReplicaApiTokenService>();
+builder.Services.AddSingleton<IReplicaOrderPushPublisher, SignalRReplicaOrderPushPublisher>();
 builder.Services.AddMediatR(typeof(Program));
 builder.Services.AddReplicaApiCommandPipeline();
 builder.Services.Configure<ReplicaApiCommandPipelineOptions>(
@@ -95,6 +98,7 @@ app.UseReplicaApiCurrentUserContext();
 app.UseStaticFiles();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHub<ReplicaOrderHub>("/hubs/orders");
 
 app.MapGet("/live", () => Results.Ok(new
 {

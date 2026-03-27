@@ -37,6 +37,7 @@ namespace Replica
             var services = runtimeServices ?? throw new ArgumentNullException(nameof(runtimeServices));
             _orderApplicationService = services.OrderApplicationService;
             _lanApiIdentityService = services.LanApiIdentityService;
+            _lanOrderPushClient = services.LanOrderPushClient;
             InitializeComponent();
             InitializeDockSidebar();
             InitializeStatusCellVisuals();

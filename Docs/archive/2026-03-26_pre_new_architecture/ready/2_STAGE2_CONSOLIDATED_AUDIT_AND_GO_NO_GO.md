@@ -1,5 +1,5 @@
-﻿# Stage 2 Consolidated Audit (PostgreSQL/LAN)
-
+﻿<!-- DOC_ENCODING_REQUIREMENT_UTF8 -->
+> Требование кодировки: все файлы документации (`*.md`) в этом репозитории хранятся только в `UTF-8 with BOM`, окончания строк — `LF`.
 Дата: 2026-03-19  
 Статус: **Stage 2 Closed**
 

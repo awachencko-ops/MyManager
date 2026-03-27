@@ -62,6 +62,7 @@ namespace Replica
             _acknowledgedErrorCount = CountOrdersWithErrors();
             RefreshTrayIndicators();
             EnsureLocalLanApiStartup();
+            InitializeLanOrderPushBridge();
             RequestLanServerProbe("startup", force: true);
         }
 
@@ -213,6 +214,7 @@ namespace Replica
             _lanServerProbeCts?.Cancel();
             _lanServerProbeCts?.Dispose();
             _lanServerProbeCts = null;
+            DisposeLanOrderPushBridge();
             _lanStatusHttpClient.Dispose();
         }
 
