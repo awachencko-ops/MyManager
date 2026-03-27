@@ -14,6 +14,9 @@ namespace Replica
         private static readonly Color UserProfileCardBackColor = Color.White;
         private static readonly Color UserProfileNameColor = Color.FromArgb(35, 35, 35);
         private static readonly Color UserProfileRoleColor = Color.FromArgb(120, 120, 120);
+        private static readonly Color UserProfileAuthStateColor = Color.FromArgb(96, 96, 96);
+        private static readonly Color UserProfileAuthHealthyColor = Color.FromArgb(46, 125, 50);
+        private static readonly Color UserProfileSessionActionColor = Color.FromArgb(33, 98, 165);
 
         private void InitializeUserProfilePanel()
         {
@@ -72,24 +75,55 @@ namespace Replica
                 Text = _currentUserRoleText
             };
 
+            _userProfileAuthStateLabel = new Label
+            {
+                Name = "lblUserProfileAuthState",
+                Dock = DockStyle.Fill,
+                AutoEllipsis = true,
+                TextAlign = ContentAlignment.MiddleLeft,
+                Font = new Font("Segoe UI", 10f, FontStyle.Regular, GraphicsUnit.Pixel),
+                ForeColor = UserProfileAuthStateColor,
+                BackColor = Color.Transparent,
+                Margin = Padding.Empty,
+                Text = _currentUserAuthStateText
+            };
+
+            _userProfileSessionActionLabel = new LinkLabel
+            {
+                Name = "lnkUserProfileSessionAction",
+                Dock = DockStyle.Left,
+                AutoSize = true,
+                LinkBehavior = LinkBehavior.HoverUnderline,
+                ActiveLinkColor = UserProfileSessionActionColor,
+                LinkColor = UserProfileSessionActionColor,
+                VisitedLinkColor = UserProfileSessionActionColor,
+                Text = "Войти"
+            };
+            _userProfileSessionActionLabel.LinkClicked -= UserProfileSessionActionLabel_LinkClicked;
+            _userProfileSessionActionLabel.LinkClicked += UserProfileSessionActionLabel_LinkClicked;
+
             var textLayout = new TableLayoutPanel
             {
                 Name = "tblUserProfileText",
                 Dock = DockStyle.Fill,
                 BackColor = UserProfileCardBackColor,
                 ColumnCount = 1,
-                RowCount = 2,
+                RowCount = 4,
                 Margin = Padding.Empty,
                 Padding = Padding.Empty
             };
             textLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-            textLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 58f));
-            textLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 42f));
+            textLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 40f));
+            textLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 28f));
+            textLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 22f));
+            textLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 10f));
             textLayout.Controls.Add(_userProfileNameLabel, 0, 0);
             textLayout.Controls.Add(_userProfileRoleLabel, 0, 1);
+            textLayout.Controls.Add(_userProfileAuthStateLabel, 0, 2);
+            textLayout.Controls.Add(_userProfileSessionActionLabel, 0, 3);
 
             splitUser.Panel2.Controls.Add(textLayout);
-            ApplyCurrentUserProfile(GetDefaultUserName(), _currentUserRoleText);
+            ApplyCurrentUserProfile(GetDefaultUserName(), _currentUserRoleText, _currentUserAuthStateText, usesBearerSession: false);
         }
 
         private void RefreshCurrentUserProfile(bool forceRefresh)
@@ -99,7 +133,7 @@ namespace Replica
 
             if (!ShouldUseLanRunApi() || _ordersStorageBackend != OrdersStorageMode.LanPostgreSql)
             {
-                ApplyCurrentUserProfile(GetDefaultUserName(), "Локальный режим");
+                ApplyCurrentUserProfile(GetDefaultUserName(), "Локальный режим", "Сессия: не используется", usesBearerSession: false);
                 return;
             }
 
@@ -108,23 +142,24 @@ namespace Replica
 
             if (!TryResolveLanApiBaseUri(_lanApiBaseUrl, out _))
             {
-                ApplyCurrentUserProfile(GetDefaultUserName(), "API не настроен");
+                ApplyCurrentUserProfile(GetDefaultUserName(), "API не настроен", "Сессия: API не настроен", usesBearerSession: false);
                 return;
             }
 
             var actor = ResolveLanApiActor();
             var baseUrl = _lanApiBaseUrl;
+            var allowSessionBootstrap = !_suppressAutoSessionBootstrap;
             _currentUserProfileRefreshInProgress = true;
-            _ = RefreshCurrentUserProfileCoreAsync(baseUrl, actor);
+            _ = RefreshCurrentUserProfileCoreAsync(baseUrl, actor, allowSessionBootstrap);
         }
 
-        private async Task RefreshCurrentUserProfileCoreAsync(string apiBaseUrl, string actor)
+        private async Task RefreshCurrentUserProfileCoreAsync(string apiBaseUrl, string actor, bool allowSessionBootstrap)
         {
             LanApiIdentityResult result;
             try
             {
                 result = await _lanApiIdentityService
-                    .GetCurrentUserAsync(apiBaseUrl, actor, allowSessionBootstrap: true)
+                    .GetCurrentUserAsync(apiBaseUrl, actor, allowSessionBootstrap: allowSessionBootstrap)
                     .ConfigureAwait(false);
             }
             catch (Exception ex)
@@ -143,21 +178,40 @@ namespace Replica
         {
             var resolvedName = ResolveCurrentUserDisplayName(result.User?.Name, fallbackActor);
             var roleText = ResolveCurrentUserRoleText(result);
-            ApplyCurrentUserProfile(resolvedName, roleText);
+            var authStateText = ResolveCurrentUserAuthStateText(result);
+            var usesBearerSession = ResolveBearerSessionState(result);
+            if (usesBearerSession)
+                _suppressAutoSessionBootstrap = false;
+
+            ApplyCurrentUserProfile(resolvedName, roleText, authStateText, usesBearerSession);
         }
 
-        private void ApplyCurrentUserProfile(string userName, string roleText)
+        private void ApplyCurrentUserProfile(string userName, string roleText, string authStateText, bool usesBearerSession)
         {
             _currentUserName = ResolveCurrentUserDisplayName(userName, GetDefaultUserName());
             _currentUserRoleText = string.IsNullOrWhiteSpace(roleText)
                 ? "Права не определены"
                 : roleText.Trim();
+            _currentUserAuthStateText = string.IsNullOrWhiteSpace(authStateText)
+                ? "Сессия не определена"
+                : authStateText.Trim();
+            _currentUserUsesBearerSession = usesBearerSession;
 
             if (_userProfileNameLabel != null)
                 _userProfileNameLabel.Text = _currentUserName;
 
             if (_userProfileRoleLabel != null)
                 _userProfileRoleLabel.Text = _currentUserRoleText;
+
+            if (_userProfileAuthStateLabel != null)
+            {
+                _userProfileAuthStateLabel.Text = _currentUserAuthStateText;
+                _userProfileAuthStateLabel.ForeColor = usesBearerSession
+                    ? UserProfileAuthHealthyColor
+                    : UserProfileAuthStateColor;
+            }
+
+            UpdateUserProfileSessionActionControl();
         }
 
         private string ResolveCurrentUserDisplayName(string? preferredName, string? fallbackName)
@@ -204,6 +258,90 @@ namespace Replica
                 return "API недоступен";
 
             return "Права не определены";
+        }
+
+        private static string ResolveCurrentUserAuthStateText(LanApiIdentityResult result)
+        {
+            if (result.IsSuccess && result.User != null)
+            {
+                var scheme = string.IsNullOrWhiteSpace(result.User.AuthScheme)
+                    ? "Unknown"
+                    : result.User.AuthScheme.Trim();
+                return $"Сессия: {scheme}";
+            }
+
+            if (result.IsUnauthorized)
+                return "Сессия: не авторизован";
+
+            if (result.IsForbidden)
+                return "Сессия: доступ ограничен";
+
+            if (result.IsUnavailable)
+                return "Сессия: API недоступен";
+
+            return "Сессия: не определена";
+        }
+
+        private static bool ResolveBearerSessionState(LanApiIdentityResult result)
+        {
+            return result.IsSuccess
+                   && result.User != null
+                   && string.Equals(result.User.AuthScheme, "Bearer", StringComparison.OrdinalIgnoreCase)
+                   && !string.IsNullOrWhiteSpace(result.User.SessionId);
+        }
+
+        private async void UserProfileSessionActionLabel_LinkClicked(object? sender, LinkLabelLinkClickedEventArgs e)
+        {
+            if (Disposing || IsDisposed || _currentUserSessionActionInProgress)
+                return;
+
+            if (!ShouldUseLanRunApi() || _ordersStorageBackend != OrdersStorageMode.LanPostgreSql)
+                return;
+
+            _currentUserSessionActionInProgress = true;
+            UpdateUserProfileSessionActionControl();
+
+            try
+            {
+                if (_currentUserUsesBearerSession)
+                {
+                    SetBottomStatus("Завершаем сессию...");
+                    var logoutResult = await _lanApiIdentityService
+                        .LogoutAsync(_lanApiBaseUrl, ResolveLanApiActor())
+                        .ConfigureAwait(true);
+
+                    _suppressAutoSessionBootstrap = true;
+                    if (logoutResult.IsSuccess)
+                        SetBottomStatus("Сессия завершена. Нажмите \"Войти\", чтобы получить новый токен.");
+                    else if (logoutResult.IsUnavailable)
+                        SetBottomStatus("Сессия локально завершена, API временно недоступен.");
+                    else
+                        SetBottomStatus($"Завершение сессии выполнено с предупреждением: {logoutResult.Error}");
+                }
+                else
+                {
+                    _suppressAutoSessionBootstrap = false;
+                    SetBottomStatus("Выполняем вход...");
+                }
+
+                RefreshCurrentUserProfile(forceRefresh: true);
+            }
+            finally
+            {
+                _currentUserSessionActionInProgress = false;
+                UpdateUserProfileSessionActionControl();
+            }
+        }
+
+        private void UpdateUserProfileSessionActionControl()
+        {
+            if (_userProfileSessionActionLabel == null)
+                return;
+
+            var isLanMode = ShouldUseLanRunApi() && _ordersStorageBackend == OrdersStorageMode.LanPostgreSql;
+            _userProfileSessionActionLabel.Visible = isLanMode;
+            _userProfileSessionActionLabel.Enabled = isLanMode && !_currentUserSessionActionInProgress;
+            _userProfileSessionActionLabel.Text = _currentUserUsesBearerSession ? "Выйти" : "Войти";
         }
 
         private void SplitUserPanel1_Resize(object? sender, EventArgs e)

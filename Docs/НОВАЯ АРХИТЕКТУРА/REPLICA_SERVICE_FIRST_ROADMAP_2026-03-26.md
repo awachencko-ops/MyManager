@@ -233,4 +233,12 @@ Replica.Client/
    - единый helper `LanApiAuthSessionHttpFlow` для refresh policy,
    - refresh policy подключена в identity/write/run gateways,
    - unit coverage: refresh path для identity/write/run.
+5. Stage 1 client session UX increment:
+   - профиль пользователя показывает текущее состояние auth-схемы (`AuthScheme`),
+   - добавлено ручное управление сессией `Войти/Выйти`,
+   - `LogoutAsync` ревокает bearer-сессию через `POST /api/auth/revoke` и очищает локальный token-store.
+6. Stage 1 authorization matrix increment:
+   - добавлен test-pack `ApiMutatingEndpointsAuthorizationMatrixTests`,
+   - покрыта матрица `401/403/allowed` для mutating endpoints `Orders/Auth/Users`,
+   - зафиксирована admin-граница для `UsersController.UpsertUser`.
 

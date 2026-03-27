@@ -175,9 +175,15 @@ namespace Replica
         private TreeNode? _hoveredQueueNode;
         private string _currentUserName = string.Empty;
         private string _currentUserRoleText = "Права не определены";
+        private string _currentUserAuthStateText = "Сессия не установлена";
         private Label? _userProfileNameLabel;
         private Label? _userProfileRoleLabel;
+        private Label? _userProfileAuthStateLabel;
+        private LinkLabel? _userProfileSessionActionLabel;
         private bool _currentUserProfileRefreshInProgress;
+        private bool _currentUserUsesBearerSession;
+        private bool _currentUserSessionActionInProgress;
+        private bool _suppressAutoSessionBootstrap;
         private readonly HashSet<string> _selectedFilterStatuses = new(StringComparer.Ordinal);
         private readonly HashSet<string> _selectedFilterUsers = new(StringComparer.Ordinal);
         private string _orderNumberFilterText = string.Empty;

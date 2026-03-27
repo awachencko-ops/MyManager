@@ -17,6 +17,11 @@ public interface ILanApiIdentityService
         string actor,
         bool allowSessionBootstrap = false,
         CancellationToken cancellationToken = default);
+
+    Task<LanApiSessionLogoutResult> LogoutAsync(
+        string apiBaseUrl,
+        string actor,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed class LanApiIdentityService : ILanApiIdentityService
@@ -83,6 +88,62 @@ public sealed class LanApiIdentityService : ILanApiIdentityService
                 cancellationToken)
             .ConfigureAwait(false);
         return secondAttempt.IsSuccess ? secondAttempt : firstAttempt;
+    }
+
+    public async Task<LanApiSessionLogoutResult> LogoutAsync(
+        string apiBaseUrl,
+        string actor,
+        CancellationToken cancellationToken = default)
+    {
+        if (!_authSessionStore.TryGetActiveSession(out var session)
+            || string.IsNullOrWhiteSpace(session.AccessToken))
+        {
+            _authSessionStore.Clear();
+            return LanApiSessionLogoutResult.Success();
+        }
+
+        _authSessionStore.Clear();
+        if (!TryBuildRevokeUri(apiBaseUrl, out var revokeUri))
+            return LanApiSessionLogoutResult.Success();
+
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, revokeUri)
+            {
+                Content = JsonContent.Create(
+                    new RevokeRequestPayload
+                    {
+                        SessionId = session.SessionId
+                    },
+                    options: JsonOptions)
+            };
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessToken.Trim());
+            TryAddActorHeader(request, actor);
+
+            using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            if (response.IsSuccessStatusCode
+                || response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden or HttpStatusCode.NotFound)
+            {
+                return LanApiSessionLogoutResult.Success();
+            }
+
+            var payload = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            var errorMessage = TryReadError(payload)
+                ?? $"LAN API returned {(int)response.StatusCode} ({response.StatusCode})";
+            return LanApiSessionLogoutResult.Failed(errorMessage);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return LanApiSessionLogoutResult.Unavailable("LAN API request timed out");
+        }
+        catch (HttpRequestException ex)
+        {
+            return LanApiSessionLogoutResult.Unavailable(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            return LanApiSessionLogoutResult.Failed(ex.Message);
+        }
     }
 
     private async Task<LanApiIdentityResult> SendMeRequestAsync(
@@ -216,6 +277,19 @@ public sealed class LanApiIdentityService : ILanApiIdentityService
         return true;
     }
 
+    private static bool TryBuildRevokeUri(string apiBaseUrl, out Uri requestUri)
+    {
+        requestUri = null!;
+        if (string.IsNullOrWhiteSpace(apiBaseUrl))
+            return false;
+
+        if (!Uri.TryCreate(apiBaseUrl.Trim(), UriKind.Absolute, out var baseUri))
+            return false;
+
+        requestUri = new Uri(baseUri, "api/auth/revoke");
+        return true;
+    }
+
     private static void TryAddActorHeader(HttpRequestMessage request, string? actor)
     {
         if (string.IsNullOrWhiteSpace(actor))
@@ -299,6 +373,11 @@ public sealed class LanApiIdentityService : ILanApiIdentityService
         public string Role { get; set; } = string.Empty;
         public string SessionId { get; set; } = string.Empty;
     }
+
+    private sealed class RevokeRequestPayload
+    {
+        public string SessionId { get; set; } = string.Empty;
+    }
 }
 
 public sealed class LanApiCurrentUser
@@ -376,4 +455,33 @@ public sealed class LanApiIdentityResult
         isUnavailable: false,
         error: error ?? string.Empty,
         user: null);
+}
+
+public sealed class LanApiSessionLogoutResult
+{
+    private LanApiSessionLogoutResult(bool isSuccess, bool isUnavailable, string error)
+    {
+        IsSuccess = isSuccess;
+        IsUnavailable = isUnavailable;
+        Error = error;
+    }
+
+    public bool IsSuccess { get; }
+    public bool IsUnavailable { get; }
+    public string Error { get; }
+
+    public static LanApiSessionLogoutResult Success() => new(
+        isSuccess: true,
+        isUnavailable: false,
+        error: string.Empty);
+
+    public static LanApiSessionLogoutResult Unavailable(string error) => new(
+        isSuccess: false,
+        isUnavailable: true,
+        error: error ?? string.Empty);
+
+    public static LanApiSessionLogoutResult Failed(string error) => new(
+        isSuccess: false,
+        isUnavailable: false,
+        error: error ?? string.Empty);
 }

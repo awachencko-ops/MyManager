@@ -52,9 +52,16 @@
    - refresh flow централизован в `LanApiAuthSessionHttpFlow`,
    - policy подключена в identity/write/run gateways перед bearer-запросом,
    - покрыта unit-тестами для `LanApiIdentityService`, `LanOrderWriteApiGateway`, `LanOrderRunApiGateway`.
+12. UI session management:
+   - в карточке пользователя добавлена индикация состояния сессии (`AuthScheme`),
+   - добавлено действие `Войти/Выйти` (manual session bootstrap/logout),
+   - `LanApiIdentityService` расширен `LogoutAsync` c `POST /api/auth/revoke`,
+   - при logout локальная bearer-сессия очищается, auto-bootstrap можно включить вручную через `Войти`.
+13. Integration authorization matrix pack:
+   - добавлен `ApiMutatingEndpointsAuthorizationMatrixTests`,
+   - покрыты mutating endpoints Orders/Auth/Users по сценариям `401/403/allowed`,
+   - отдельно подтверждено, что admin-endpoint (`UsersController.UpsertUser`) не доступен роли `Operator`.
 
 ## Что осталось по Stage 1
 
-1. UI-уровень управления сессией (индикация auth state, manual logout/revoke).
-2. Integration pack для `401/403/200` матрицы по всем mutating endpoint.
-3. Явные command-handler role guards (не только controller boundary).
+1. Явные command-handler role guards (не только controller boundary).

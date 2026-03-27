@@ -193,6 +193,51 @@ public sealed class LanApiIdentityServiceTests
         Assert.Equal("rpl1.session-new.secret", refreshedSession.AccessToken);
     }
 
+    [Fact]
+    public async Task LogoutAsync_WithActiveSession_SendsRevokeAndClearsSession()
+    {
+        var authSessionStore = new InMemoryLanApiAuthSessionStore();
+        authSessionStore.Save(new LanApiAuthSession
+        {
+            AccessToken = "rpl1.session-logout.secret",
+            SessionId = "session-logout",
+            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(10),
+            UserName = "Andrew",
+            Role = "Admin"
+        });
+
+        string requestBody = string.Empty;
+        var handler = new StubHttpMessageHandler(async (request, cancellationToken) =>
+        {
+            requestBody = await request.Content!.ReadAsStringAsync(cancellationToken);
+            return new HttpResponseMessage(HttpStatusCode.NoContent);
+        });
+
+        var service = new LanApiIdentityService(new HttpClient(handler), authSessionStore);
+        var result = await service.LogoutAsync("http://localhost:5000/", "Andrew");
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(handler.LastRequest);
+        Assert.Equal("/api/auth/revoke", handler.LastRequest!.RequestUri!.AbsolutePath);
+        Assert.Equal("Bearer", handler.LastRequest.Headers.Authorization?.Scheme);
+        Assert.Equal("rpl1.session-logout.secret", handler.LastRequest.Headers.Authorization?.Parameter);
+        Assert.Contains("\"sessionId\":\"session-logout\"", requestBody, StringComparison.Ordinal);
+        Assert.False(authSessionStore.TryGetActiveSession(out _));
+    }
+
+    [Fact]
+    public async Task LogoutAsync_WithoutActiveSession_ReturnsSuccessWithoutRequest()
+    {
+        var handler = new StubHttpMessageHandler((_, _) =>
+            throw new InvalidOperationException("request should not be executed"));
+
+        var service = new LanApiIdentityService(new HttpClient(handler), new InMemoryLanApiAuthSessionStore());
+        var result = await service.LogoutAsync("http://localhost:5000/", "Andrew");
+
+        Assert.True(result.IsSuccess);
+        Assert.Empty(handler.Requests);
+    }
+
     private sealed class StubHttpMessageHandler : HttpMessageHandler
     {
         private readonly Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> _handler;
