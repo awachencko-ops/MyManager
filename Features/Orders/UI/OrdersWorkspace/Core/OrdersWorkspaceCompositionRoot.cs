@@ -20,8 +20,9 @@ internal static class OrdersWorkspaceCompositionRoot
 {
     public static OrdersWorkspaceRuntimeServices CreateRuntimeServices()
     {
-        var lanRunCommandCoordinator = new LanRunCommandCoordinator(new LanOrderRunApiGateway());
-        var lanOrderWriteCommandService = new LanOrderWriteCommandService(new LanOrderWriteApiGateway());
+        var lanApiAuthSessionStore = new DpapiLanApiAuthSessionStore();
+        var lanRunCommandCoordinator = new LanRunCommandCoordinator(new LanOrderRunApiGateway(authSessionStore: lanApiAuthSessionStore));
+        var lanOrderWriteCommandService = new LanOrderWriteCommandService(new LanOrderWriteApiGateway(authSessionStore: lanApiAuthSessionStore));
         var orderRunStateService = new OrderRunStateService();
         var orderRunWorkflowOrchestrationService = new OrderRunWorkflowOrchestrationService(
             orderRunStateService,
@@ -57,6 +58,6 @@ internal static class OrdersWorkspaceCompositionRoot
 
         return new OrdersWorkspaceRuntimeServices(
             orderApplicationService: orderApplicationService,
-            lanApiIdentityService: new LanApiIdentityService());
+            lanApiIdentityService: new LanApiIdentityService(authSessionStore: lanApiAuthSessionStore));
     }
 }

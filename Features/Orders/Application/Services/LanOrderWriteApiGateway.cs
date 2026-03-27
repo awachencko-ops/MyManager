@@ -1,6 +1,7 @@
 using System;
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading;
@@ -73,13 +74,15 @@ public sealed class LanOrderWriteApiGateway : ILanOrderWriteApiGateway
     };
 
     private readonly HttpClient _httpClient;
+    private readonly ILanApiAuthSessionStore _authSessionStore;
 
-    public LanOrderWriteApiGateway(HttpClient? httpClient = null)
+    public LanOrderWriteApiGateway(HttpClient? httpClient = null, ILanApiAuthSessionStore? authSessionStore = null)
     {
         _httpClient = httpClient ?? new HttpClient
         {
             Timeout = TimeSpan.FromSeconds(10)
         };
+        _authSessionStore = authSessionStore ?? new InMemoryLanApiAuthSessionStore();
     }
 
     public Task<LanOrderWriteApiResult> CreateOrderAsync(
@@ -95,6 +98,7 @@ public sealed class LanOrderWriteApiGateway : ILanOrderWriteApiGateway
             return Task.FromResult(LanOrderWriteApiResult.Unavailable("invalid LAN API base URL"));
 
         return SendAsync(
+            apiBaseUrl,
             requestUri,
             HttpMethod.Post,
             request,
@@ -118,6 +122,7 @@ public sealed class LanOrderWriteApiGateway : ILanOrderWriteApiGateway
             return Task.FromResult(LanOrderWriteApiResult.Unavailable("invalid LAN API base URL"));
 
         return SendAsync(
+            apiBaseUrl,
             requestUri,
             HttpMethod.Delete,
             request,
@@ -141,6 +146,7 @@ public sealed class LanOrderWriteApiGateway : ILanOrderWriteApiGateway
             return Task.FromResult(LanOrderWriteApiResult.Unavailable("invalid LAN API base URL"));
 
         return SendAsync(
+            apiBaseUrl,
             requestUri,
             HttpMethod.Patch,
             request,
@@ -164,6 +170,7 @@ public sealed class LanOrderWriteApiGateway : ILanOrderWriteApiGateway
             return Task.FromResult(LanOrderWriteApiResult.Unavailable("invalid LAN API base URL"));
 
         return SendAsync(
+            apiBaseUrl,
             requestUri,
             HttpMethod.Post,
             request,
@@ -187,6 +194,7 @@ public sealed class LanOrderWriteApiGateway : ILanOrderWriteApiGateway
             return Task.FromResult(LanOrderWriteApiResult.Unavailable("invalid LAN API base URL"));
 
         return SendAsync(
+            apiBaseUrl,
             requestUri,
             HttpMethod.Post,
             request,
@@ -213,6 +221,7 @@ public sealed class LanOrderWriteApiGateway : ILanOrderWriteApiGateway
             return Task.FromResult(LanOrderWriteApiResult.Unavailable("invalid LAN API base URL"));
 
         return SendAsync(
+            apiBaseUrl,
             requestUri,
             HttpMethod.Patch,
             request,
@@ -239,6 +248,7 @@ public sealed class LanOrderWriteApiGateway : ILanOrderWriteApiGateway
             return Task.FromResult(LanOrderWriteApiResult.Unavailable("invalid LAN API base URL"));
 
         return SendAsync(
+            apiBaseUrl,
             requestUri,
             HttpMethod.Delete,
             request,
@@ -247,6 +257,7 @@ public sealed class LanOrderWriteApiGateway : ILanOrderWriteApiGateway
     }
 
     private async Task<LanOrderWriteApiResult> SendAsync(
+        string apiBaseUrl,
         Uri requestUri,
         HttpMethod method,
         object body,
@@ -263,41 +274,46 @@ public sealed class LanOrderWriteApiGateway : ILanOrderWriteApiGateway
         {
             var correlationId = Logger.EnsureCorrelationId();
             var idempotencyKey = BuildIdempotencyKey(correlationId, method.Method, requestUri.AbsolutePath, body);
-            using var request = new HttpRequestMessage(method, requestUri)
+            var preferredAuth = await SendOnceAsync(preferStoredSession: true).ConfigureAwait(false);
+            if (preferredAuth.StatusCode == HttpStatusCode.Unauthorized && preferredAuth.UsedStoredSession)
             {
-                Content = JsonContent.Create(body, options: JsonOptions)
-            };
-
-            request.Headers.TryAddWithoutValidation(CorrelationHeaderName, correlationId);
-            request.Headers.TryAddWithoutValidation(IdempotencyHeaderName, idempotencyKey);
-            TryAddActorHeader(request, actor);
-
-            Logger.Info($"LAN-API | write-send | method={method.Method} | target={requestUri} | idempotency_key={idempotencyKey}");
-            using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-            var payload = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-            Logger.Info($"LAN-API | write-response | status={(int)response.StatusCode}");
-
-            if (response.IsSuccessStatusCode)
-            {
-                var order = DeserializeOrder(payload);
-                if (order != null)
-                    return LanOrderWriteApiResult.Success(order);
-
-                return LanOrderWriteApiResult.Failed("LAN API returned malformed order payload");
+                _authSessionStore.Clear();
+                preferredAuth = await SendOnceAsync(preferStoredSession: false).ConfigureAwait(false);
             }
 
-            var apiError = DeserializeError(payload);
-            var errorMessage = !string.IsNullOrWhiteSpace(apiError.Error)
-                ? apiError.Error!
-                : $"LAN API returned {(int)response.StatusCode} ({response.StatusCode})";
+            return BuildResult(preferredAuth.Payload, preferredAuth.StatusCode);
 
-            return response.StatusCode switch
+            async Task<(HttpStatusCode StatusCode, string Payload, bool UsedStoredSession)> SendOnceAsync(bool preferStoredSession)
             {
-                HttpStatusCode.Conflict => LanOrderWriteApiResult.Conflict(errorMessage, apiError.CurrentVersion ?? 0),
-                HttpStatusCode.NotFound => LanOrderWriteApiResult.NotFound(errorMessage),
-                HttpStatusCode.BadRequest => LanOrderWriteApiResult.BadRequest(errorMessage),
-                _ => LanOrderWriteApiResult.Failed(errorMessage)
-            };
+                using var request = new HttpRequestMessage(method, requestUri)
+                {
+                    Content = JsonContent.Create(body, options: JsonOptions)
+                };
+                request.Headers.TryAddWithoutValidation(CorrelationHeaderName, correlationId);
+                request.Headers.TryAddWithoutValidation(IdempotencyHeaderName, idempotencyKey);
+
+                var usedStoredSession = false;
+                if (preferStoredSession)
+                {
+                    var sessionResolution = await LanApiAuthSessionHttpFlow
+                        .TryResolveSessionForRequestAsync(_httpClient, _authSessionStore, apiBaseUrl, actor, cancellationToken)
+                        .ConfigureAwait(false);
+                    if (sessionResolution.HasSession)
+                    {
+                        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", sessionResolution.Session.AccessToken.Trim());
+                        usedStoredSession = true;
+                    }
+                }
+
+                if (!usedStoredSession)
+                    TryAddActorHeader(request, actor);
+
+                Logger.Info($"LAN-API | write-send | method={method.Method} | target={requestUri} | idempotency_key={idempotencyKey} | auth={(usedStoredSession ? "bearer" : "header")}");
+                using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+                var payload = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                Logger.Info($"LAN-API | write-response | status={(int)response.StatusCode}");
+                return (response.StatusCode, payload, usedStoredSession);
+            }
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -314,6 +330,33 @@ public sealed class LanOrderWriteApiGateway : ILanOrderWriteApiGateway
             Logger.Error($"LAN-API | write-failed | {ex.Message}");
             return LanOrderWriteApiResult.Failed(ex.Message);
         }
+    }
+
+    private LanOrderWriteApiResult BuildResult(string payload, HttpStatusCode statusCode)
+    {
+        if ((int)statusCode >= 200 && (int)statusCode <= 299)
+        {
+            var order = DeserializeOrder(payload);
+            if (order != null)
+                return LanOrderWriteApiResult.Success(order);
+
+            return LanOrderWriteApiResult.Failed("LAN API returned malformed order payload");
+        }
+
+        var apiError = DeserializeError(payload);
+        var errorMessage = !string.IsNullOrWhiteSpace(apiError.Error)
+            ? apiError.Error!
+            : $"LAN API returned {(int)statusCode} ({statusCode})";
+
+        return statusCode switch
+        {
+            HttpStatusCode.Conflict => LanOrderWriteApiResult.Conflict(errorMessage, apiError.CurrentVersion ?? 0),
+            HttpStatusCode.NotFound => LanOrderWriteApiResult.NotFound(errorMessage),
+            HttpStatusCode.BadRequest => LanOrderWriteApiResult.BadRequest(errorMessage),
+            HttpStatusCode.Unauthorized => LanOrderWriteApiResult.Failed(errorMessage),
+            HttpStatusCode.Forbidden => LanOrderWriteApiResult.Failed(errorMessage),
+            _ => LanOrderWriteApiResult.Failed(errorMessage)
+        };
     }
 
     private static bool TryBuildCreateUri(string apiBaseUrl, out Uri requestUri)

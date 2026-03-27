@@ -1,6 +1,7 @@
 using System;
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading;
@@ -37,13 +38,15 @@ public sealed class LanOrderRunApiGateway : ILanOrderRunApiGateway
     };
 
     private readonly HttpClient _httpClient;
+    private readonly ILanApiAuthSessionStore _authSessionStore;
 
-    public LanOrderRunApiGateway(HttpClient? httpClient = null)
+    public LanOrderRunApiGateway(HttpClient? httpClient = null, ILanApiAuthSessionStore? authSessionStore = null)
     {
         _httpClient = httpClient ?? new HttpClient
         {
             Timeout = TimeSpan.FromSeconds(10)
         };
+        _authSessionStore = authSessionStore ?? new InMemoryLanApiAuthSessionStore();
     }
 
     public Task<LanOrderRunApiResult> StartRunAsync(
@@ -103,46 +106,51 @@ public sealed class LanOrderRunApiGateway : ILanOrderRunApiGateway
         {
             var correlationId = Logger.EnsureCorrelationId();
             var idempotencyKey = BuildIdempotencyKey(correlationId, command, orderInternalId, expectedOrderVersion);
-            using var request = new HttpRequestMessage(HttpMethod.Post, requestUri)
+            var preferredAuth = await SendOnceAsync(preferStoredSession: true).ConfigureAwait(false);
+            if (preferredAuth.StatusCode == HttpStatusCode.Unauthorized && preferredAuth.UsedStoredSession)
             {
-                Content = JsonContent.Create(
-                    new RunCommandRequest
-                    {
-                        ExpectedOrderVersion = expectedOrderVersion
-                    },
-                    options: JsonOptions)
-            };
-
-            request.Headers.TryAddWithoutValidation(CorrelationHeaderName, correlationId);
-            request.Headers.TryAddWithoutValidation(IdempotencyHeaderName, idempotencyKey);
-            TryAddActorHeader(request, actor);
-
-            Logger.Info($"LAN-API | command-send | target={requestUri} | idempotency_key={idempotencyKey}");
-            using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-            var payload = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-            Logger.Info($"LAN-API | command-response | status={(int)response.StatusCode}");
-
-            if (response.IsSuccessStatusCode)
-            {
-                var order = DeserializeOrder(payload);
-                if (order != null)
-                    return LanOrderRunApiResult.Success(order);
-
-                return LanOrderRunApiResult.Failed("LAN API returned malformed order payload");
+                _authSessionStore.Clear();
+                preferredAuth = await SendOnceAsync(preferStoredSession: false).ConfigureAwait(false);
             }
 
-            var apiError = DeserializeError(payload);
-            var errorMessage = !string.IsNullOrWhiteSpace(apiError.Error)
-                ? apiError.Error!
-                : $"LAN API returned {(int)response.StatusCode} ({response.StatusCode})";
+            return BuildResult(preferredAuth.Payload, preferredAuth.StatusCode);
 
-            return response.StatusCode switch
+            async Task<(HttpStatusCode StatusCode, string Payload, bool UsedStoredSession)> SendOnceAsync(bool preferStoredSession)
             {
-                HttpStatusCode.Conflict => LanOrderRunApiResult.Conflict(errorMessage, apiError.CurrentVersion ?? 0),
-                HttpStatusCode.NotFound => LanOrderRunApiResult.NotFound(errorMessage),
-                HttpStatusCode.BadRequest => LanOrderRunApiResult.BadRequest(errorMessage),
-                _ => LanOrderRunApiResult.Failed(errorMessage)
-            };
+                using var request = new HttpRequestMessage(HttpMethod.Post, requestUri)
+                {
+                    Content = JsonContent.Create(
+                        new RunCommandRequest
+                        {
+                            ExpectedOrderVersion = expectedOrderVersion
+                        },
+                        options: JsonOptions)
+                };
+                request.Headers.TryAddWithoutValidation(CorrelationHeaderName, correlationId);
+                request.Headers.TryAddWithoutValidation(IdempotencyHeaderName, idempotencyKey);
+
+                var usedStoredSession = false;
+                if (preferStoredSession)
+                {
+                    var sessionResolution = await LanApiAuthSessionHttpFlow
+                        .TryResolveSessionForRequestAsync(_httpClient, _authSessionStore, apiBaseUrl, actor, cancellationToken)
+                        .ConfigureAwait(false);
+                    if (sessionResolution.HasSession)
+                    {
+                        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", sessionResolution.Session.AccessToken.Trim());
+                        usedStoredSession = true;
+                    }
+                }
+
+                if (!usedStoredSession)
+                    TryAddActorHeader(request, actor);
+
+                Logger.Info($"LAN-API | command-send | target={requestUri} | idempotency_key={idempotencyKey} | auth={(usedStoredSession ? "bearer" : "header")}");
+                using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+                var payload = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                Logger.Info($"LAN-API | command-response | status={(int)response.StatusCode}");
+                return (response.StatusCode, payload, usedStoredSession);
+            }
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -159,6 +167,33 @@ public sealed class LanOrderRunApiGateway : ILanOrderRunApiGateway
             Logger.Error($"LAN-API | command-failed | {ex.Message}");
             return LanOrderRunApiResult.Failed(ex.Message);
         }
+    }
+
+    private static LanOrderRunApiResult BuildResult(string payload, HttpStatusCode statusCode)
+    {
+        if ((int)statusCode >= 200 && (int)statusCode <= 299)
+        {
+            var order = DeserializeOrder(payload);
+            if (order != null)
+                return LanOrderRunApiResult.Success(order);
+
+            return LanOrderRunApiResult.Failed("LAN API returned malformed order payload");
+        }
+
+        var apiError = DeserializeError(payload);
+        var errorMessage = !string.IsNullOrWhiteSpace(apiError.Error)
+            ? apiError.Error!
+            : $"LAN API returned {(int)statusCode} ({statusCode})";
+
+        return statusCode switch
+        {
+            HttpStatusCode.Conflict => LanOrderRunApiResult.Conflict(errorMessage, apiError.CurrentVersion ?? 0),
+            HttpStatusCode.NotFound => LanOrderRunApiResult.NotFound(errorMessage),
+            HttpStatusCode.BadRequest => LanOrderRunApiResult.BadRequest(errorMessage),
+            HttpStatusCode.Unauthorized => LanOrderRunApiResult.Failed(errorMessage),
+            HttpStatusCode.Forbidden => LanOrderRunApiResult.Failed(errorMessage),
+            _ => LanOrderRunApiResult.Failed(errorMessage)
+        };
     }
 
     private static string BuildIdempotencyKey(string correlationId, string command, string orderInternalId, long expectedOrderVersion)

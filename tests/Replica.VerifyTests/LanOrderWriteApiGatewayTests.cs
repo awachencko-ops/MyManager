@@ -317,6 +317,106 @@ public sealed class LanOrderWriteApiGatewayTests
         Assert.Null(handler.LastRequest);
     }
 
+    [Fact]
+    public async Task CreateOrderAsync_WithStoredBearerToken_UsesAuthorizationHeader()
+    {
+        var authSessionStore = new InMemoryLanApiAuthSessionStore();
+        authSessionStore.Save(new LanApiAuthSession
+        {
+            AccessToken = "rpl1.session-2.secret",
+            SessionId = "session-2",
+            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(20),
+            UserName = "operator-7",
+            Role = "Operator"
+        });
+
+        var handler = new StubHttpMessageHandler((request, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.Created)
+            {
+                Content = new StringContent(
+                    "{\"internalId\":\"order-8\",\"orderNumber\":\"1008\",\"status\":\"Waiting\",\"version\":1}",
+                    Encoding.UTF8,
+                    "application/json")
+            }));
+
+        var gateway = new LanOrderWriteApiGateway(new HttpClient(handler), authSessionStore);
+        var result = await gateway.CreateOrderAsync(
+            "http://localhost:5000/",
+            new LanCreateOrderRequest
+            {
+                OrderNumber = "1008",
+                UserName = "operator-7"
+            },
+            actor: "operator-7");
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(handler.LastRequest);
+        Assert.Equal("Bearer", handler.LastRequest!.Headers.Authorization?.Scheme);
+        Assert.Equal("rpl1.session-2.secret", handler.LastRequest.Headers.Authorization?.Parameter);
+        Assert.False(handler.LastRequest.Headers.Contains(CurrentUserHeaderCodec.HeaderName));
+    }
+
+    [Fact]
+    public async Task CreateOrderAsync_WithExpiringSession_RefreshesTokenBeforeWriteRequest()
+    {
+        var authSessionStore = new InMemoryLanApiAuthSessionStore();
+        authSessionStore.Save(new LanApiAuthSession
+        {
+            AccessToken = "rpl1.session-old.secret",
+            SessionId = "session-old",
+            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(2),
+            UserName = "operator-8",
+            Role = "Operator"
+        });
+
+        var handler = new StubHttpMessageHandler((request, _) =>
+        {
+            if (request.RequestUri!.AbsolutePath == "/api/auth/refresh")
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(
+                        "{\"accessToken\":\"rpl1.session-new.secret\",\"expiresAtUtc\":\"2030-01-01T00:00:00Z\",\"name\":\"operator-8\",\"role\":\"Operator\",\"sessionId\":\"session-old\"}",
+                        Encoding.UTF8,
+                        "application/json")
+                });
+            }
+
+            if (request.RequestUri.AbsolutePath == "/api/orders")
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Created)
+                {
+                    Content = new StringContent(
+                        "{\"internalId\":\"order-9\",\"orderNumber\":\"1009\",\"status\":\"Waiting\",\"version\":1}",
+                        Encoding.UTF8,
+                        "application/json")
+                });
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest));
+        });
+
+        var gateway = new LanOrderWriteApiGateway(new HttpClient(handler), authSessionStore);
+        var result = await gateway.CreateOrderAsync(
+            "http://localhost:5000/",
+            new LanCreateOrderRequest
+            {
+                OrderNumber = "1009",
+                UserName = "operator-8"
+            },
+            actor: "operator-8");
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(2, handler.Requests.Count);
+        Assert.Equal("/api/auth/refresh", handler.Requests[0].RequestUri!.AbsolutePath);
+        Assert.Equal("/api/orders", handler.Requests[1].RequestUri!.AbsolutePath);
+        Assert.Equal("Bearer", handler.Requests[1].Headers.Authorization?.Scheme);
+        Assert.Equal("rpl1.session-new.secret", handler.Requests[1].Headers.Authorization?.Parameter);
+        Assert.False(handler.Requests[1].Headers.Contains(CurrentUserHeaderCodec.HeaderName));
+        Assert.True(authSessionStore.TryGetActiveSession(out var refreshedSession));
+        Assert.Equal("rpl1.session-new.secret", refreshedSession.AccessToken);
+    }
+
     private sealed class StubHttpMessageHandler : HttpMessageHandler
     {
         private readonly Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> _handler;
@@ -327,10 +427,12 @@ public sealed class LanOrderWriteApiGatewayTests
         }
 
         public HttpRequestMessage? LastRequest { get; private set; }
+        public System.Collections.Generic.List<HttpRequestMessage> Requests { get; } = new();
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             LastRequest = request;
+            Requests.Add(request);
             return _handler(request, cancellationToken);
         }
     }

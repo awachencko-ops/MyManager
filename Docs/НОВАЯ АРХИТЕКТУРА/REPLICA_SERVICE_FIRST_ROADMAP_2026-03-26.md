@@ -223,4 +223,14 @@ Replica.Client/
    - bearer/api-key validation в current-user middleware,
    - auth sessions/audit persistence + migration,
    - unit coverage на token validation и bearer role-resolution.
+3. Stage 1 client auth increment:
+   - единый `ILanApiAuthSessionStore` (`DPAPI` + in-memory fallback),
+   - auto-bearer для LAN identity/write/run gateways,
+   - bootstrap session через `POST /api/auth/login`,
+   - retry fallback на actor-header при `401` bearer.
+4. Stage 1 client token refresh increment:
+   - превентивный refresh перед истечением `expires_at` через `POST /api/auth/refresh`,
+   - единый helper `LanApiAuthSessionHttpFlow` для refresh policy,
+   - refresh policy подключена в identity/write/run gateways,
+   - unit coverage: refresh path для identity/write/run.
 

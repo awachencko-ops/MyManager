@@ -124,7 +124,7 @@ namespace Replica
             try
             {
                 result = await _lanApiIdentityService
-                    .GetCurrentUserAsync(apiBaseUrl, actor)
+                    .GetCurrentUserAsync(apiBaseUrl, actor, allowSessionBootstrap: true)
                     .ConfigureAwait(false);
             }
             catch (Exception ex)

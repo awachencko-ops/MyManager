@@ -5,12 +5,10 @@
 
 ## Scope этого инкремента
 
-Первый рабочий инкремент по `REPLICA_SERVICE_FIRST_ROADMAP_2026-03-26`, фокус только на backend security foundation:
+В работе два последовательных инкремента по `REPLICA_SERVICE_FIRST_ROADMAP_2026-03-26`:
 
-1. Token lifecycle (`login/refresh/revoke`) на API.
-2. Token validation в едином current-user middleware.
-3. DB-контур для auth-аудита и сессий.
-4. Unit-tests на token validation и role-resolution через bearer.
+1. Backend security foundation.
+2. Client bearer propagation + secure local session storage.
 
 ## Выполнено
 
@@ -36,10 +34,27 @@
 6. Покрытие тестами:
    - `ReplicaApiTokenServiceTests`,
    - расширение `OrdersControllerActorValidationTests` для bearer resolution.
+7. Client-side auth session store:
+   - добавлен `ILanApiAuthSessionStore`,
+   - реализация `DpapiLanApiAuthSessionStore` (Windows DPAPI, per-user),
+   - fallback `InMemoryLanApiAuthSessionStore`.
+8. LAN gateways (`identity/write/run`) теперь:
+   - используют `Authorization: Bearer` при наличии активной сессии,
+   - при `401` на bearer очищают сессию и выполняют retry через `X-Current-User`.
+9. `LanApiIdentityService` получил bootstrap сессии:
+   - опциональный `allowSessionBootstrap`,
+   - при необходимости делает `POST /api/auth/login`,
+   - сохраняет access token и повторяет `GET /api/auth/me` через bearer.
+10. Обновлен runtime composition:
+   - единый `DpapiLanApiAuthSessionStore` прокинут в identity/write/run gateways.
+11. Client token refresh policy:
+   - добавлен превентивный refresh (`POST /api/auth/refresh`) при близком истечении токена,
+   - refresh flow централизован в `LanApiAuthSessionHttpFlow`,
+   - policy подключена в identity/write/run gateways перед bearer-запросом,
+   - покрыта unit-тестами для `LanApiIdentityService`, `LanOrderWriteApiGateway`, `LanOrderRunApiGateway`.
 
 ## Что осталось по Stage 1
 
-1. Полноценный client login flow + secure token storage.
-2. Прокидка bearer/api-key в текущие LAN HTTP gateways по умолчанию.
-3. Integration pack для `401/403/200` матрицы по всем mutating endpoint.
-4. Явные command-handler role guards (не только controller boundary).
+1. UI-уровень управления сессией (индикация auth state, manual logout/revoke).
+2. Integration pack для `401/403/200` матрицы по всем mutating endpoint.
+3. Явные command-handler role guards (не только controller boundary).
