@@ -15,6 +15,7 @@ var configuredStoreMode = builder.Configuration["ReplicaApi:StoreMode"]?.Trim();
 var configuredBindAddress = builder.Configuration["ReplicaApi:BindAddress"]?.Trim();
 var configuredPort = builder.Configuration.GetValue<int?>("ReplicaApi:Port") ?? 5000;
 var effectiveAuthMode = ReplicaApiAuthConfiguration.ResolveMode(builder.Configuration);
+var effectiveMigrationOptions = ReplicaApiMigrationConfiguration.Resolve(builder.Configuration);
 if (configuredPort <= 0 || configuredPort > 65535)
     configuredPort = 5000;
 
@@ -63,10 +64,13 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<IReplicaApiTokenService, ReplicaApiTokenService>();
 builder.Services.AddSingleton<IReplicaOrderPushPublisher, SignalRReplicaOrderPushPublisher>();
+builder.Services.AddSingleton<IReplicaApiHistoryShadowWriter, FileReplicaApiHistoryShadowWriter>();
 builder.Services.AddMediatR(typeof(Program));
 builder.Services.AddReplicaApiCommandPipeline();
 builder.Services.Configure<ReplicaApiCommandPipelineOptions>(
     builder.Configuration.GetSection("ReplicaApi:CommandPipeline"));
+builder.Services.Configure<ReplicaApiMigrationOptions>(
+    builder.Configuration.GetSection("ReplicaApi:Migration"));
 
 var app = builder.Build();
 
@@ -105,7 +109,12 @@ app.MapGet("/live", () => Results.Ok(new
     status = "live",
     service = "Replica.Api",
     mode = effectiveStoreMode,
-    authMode = effectiveAuthMode
+    authMode = effectiveAuthMode,
+    migration = new
+    {
+        effectiveMigrationOptions.DualWriteEnabled,
+        effectiveMigrationOptions.ShadowWriteFailurePolicy
+    }
 }));
 
 app.MapGet("/ready", async (IServiceProvider services, ILanOrderStore store) =>
@@ -200,7 +209,12 @@ app.MapGet("/health", (ILanOrderStore store) => Results.Ok(new
     service = "Replica.Api",
     store = store.GetType().Name,
     mode = effectiveStoreMode,
-    authMode = effectiveAuthMode
+    authMode = effectiveAuthMode,
+    migration = new
+    {
+        effectiveMigrationOptions.DualWriteEnabled,
+        effectiveMigrationOptions.ShadowWriteFailurePolicy
+    }
 }));
 
 app.Run();

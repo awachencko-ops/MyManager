@@ -356,3 +356,14 @@ Replica.Client/
    - added dedicated Stage 4 execution checklist document (`REPLICA_STAGE4_DUAL_WRITE_CHECKLIST_2026-03-27.md`),
    - formalized dual-write policy, reconciliation acceptance criteria, daily ops checklist, go/no-go gate and rollback protocol,
    - master doc map updated with Stage 4 handoff entry.
+33. `2026-03-27`: Stage 4 API dual-write scaffold increment:
+   - added migration options contract (`ReplicaApi:Migration`) with `DualWriteEnabled`, `ShadowWriteFailurePolicy`, `ShadowHistoryFilePath`,
+   - added MediatR dual-write behavior for write commands (`warn-only` / `fail-command` policies),
+   - added shadow writer abstraction + file mirror implementation for `history.shadow.json`,
+   - added health/live visibility for migration mode and failure policy,
+   - verify targeted + safety packs passed (`7/7`, `41/41`), ui-smoke pack passed (`35/35`),
+   - execution details tracked in `REPLICA_STAGE4_DUAL_WRITE_PROGRESS_2026-03-27.md`.
+34. `2026-03-27`: Stage 4 dual-write integration coverage increment:
+   - added integration tests for real file-shadow path (`CreateOrder` -> `history.shadow.json`) with enabled/disabled migration flag modes,
+   - validated command pipeline + file writer wiring end-to-end for Stage 4 execution baseline,
+   - stage-4 focused verify pack passed (`9/9` for migration + behavior + integration tests).

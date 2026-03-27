@@ -1,5 +1,6 @@
 using System.Reflection;
 using MediatR;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Replica.Api.Application.Abstractions;
@@ -11,13 +12,18 @@ public static class ReplicaApiCommandPipelineServiceCollectionExtensions
 {
     public static IServiceCollection AddReplicaApiCommandPipeline(this IServiceCollection services)
     {
+        services.AddLogging();
         services.AddOptions<ReplicaApiCommandPipelineOptions>();
+        services.AddOptions<ReplicaApiMigrationOptions>();
+        services.TryAddSingleton<IHttpContextAccessor, HttpContextAccessor>();
         services.TryAddSingleton<IReplicaOrderPushPublisher, NoOpReplicaOrderPushPublisher>();
+        services.TryAddSingleton<IReplicaApiHistoryShadowWriter, NoOpReplicaApiHistoryShadowWriter>();
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ReplicaApiCommandValidationBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ReplicaApiCommandIdempotencyBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ReplicaApiCommandTransactionBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ReplicaApiPushNotificationBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ReplicaApiCommandTelemetryBehavior<,>));
+        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ReplicaApiDualWriteShadowBehavior<,>));
 
         RegisterValidatorsFromAssembly(services, typeof(ReplicaApiCommandPipelineServiceCollectionExtensions).Assembly);
         return services;

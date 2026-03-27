@@ -1001,7 +1001,7 @@ namespace Replica
             var thumbnailSize = _lvPrintTiles.ThumbnailSize;
             var pending = pdfPaths
                 .Select(CleanPath)
-                .Where(path => !string.IsNullOrWhiteSpace(path) && HasExistingFile(path) && IsPdfPath(path) && IsPdfReadyForPreview(path))
+                .Where(path => !string.IsNullOrWhiteSpace(path) && IsPdfPath(path))
                 .Select(NormalizePath)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
@@ -1186,8 +1186,8 @@ namespace Replica
 
             try
             {
-                using var stream = new FileStream(pdfPath, FileMode.Open, FileAccess.Read, FileShare.None);
-                return stream.Length > 0;
+                var fileInfo = new FileInfo(pdfPath);
+                return fileInfo.Exists && fileInfo.Length > 0;
             }
             catch (IOException)
             {
