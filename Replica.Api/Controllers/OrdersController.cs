@@ -1,5 +1,7 @@
+using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
+using Replica.Api.Application.Orders.Commands;
 using Replica.Api.Contracts;
 using Replica.Api.Infrastructure;
 using Replica.Api.Services;
@@ -23,10 +25,17 @@ public sealed class OrdersController : ControllerBase
     private const string RunCommandName = "run";
     private const string StopCommandName = "stop";
     private readonly ILanOrderStore _store;
+    private readonly IMediator? _mediator;
 
     public OrdersController(ILanOrderStore store, ILogger<OrdersController> logger, IConfiguration? configuration)
+        : this(store, logger, configuration, mediator: null)
+    {
+    }
+
+    public OrdersController(ILanOrderStore store, ILogger<OrdersController> logger, IConfiguration? configuration, IMediator? mediator)
     {
         _store = store;
+        _mediator = mediator;
     }
 
     [HttpGet]
@@ -63,15 +72,17 @@ public sealed class OrdersController : ControllerBase
             request.CreatedById = actor;
 
         var idempotencyKey = ResolveIdempotencyKey();
-        if (_store is EfCoreLanOrderStore efCoreStore)
-        {
-            var createResult = efCoreStore.TryCreateOrder(request, actor, idempotencyKey);
-            return BuildCreateResponse(createResult);
-        }
+        var result = ExecuteWriteCommand(
+            new CreateOrderCommand(request, actor, idempotencyKey),
+            () =>
+            {
+                if (_store is EfCoreLanOrderStore efCoreStore)
+                    return efCoreStore.TryCreateOrder(request, actor, idempotencyKey);
 
-        var created = _store.CreateOrder(request, actor);
-        ReplicaApiObservability.RecordWriteCommand(CreateOrderCommandName, "success");
-        return CreatedAtAction(nameof(GetOrderById), new { id = created.InternalId }, created);
+                var created = _store.CreateOrder(request, actor);
+                return StoreOperationResult.Success(created);
+            });
+        return BuildCreateResponse(result);
     }
 
     [HttpDelete("{id}")]
@@ -88,9 +99,11 @@ public sealed class OrdersController : ControllerBase
 
         var actor = GetCurrentActor();
         var idempotencyKey = ResolveIdempotencyKey();
-        var result = _store is EfCoreLanOrderStore efCoreStore
-            ? efCoreStore.TryDeleteOrder(id, request, actor, idempotencyKey)
-            : _store.TryDeleteOrder(id, request, actor);
+        var result = ExecuteWriteCommand(
+            new DeleteOrderCommand(id, request, actor, idempotencyKey),
+            () => _store is EfCoreLanOrderStore efCoreStore
+                ? efCoreStore.TryDeleteOrder(id, request, actor, idempotencyKey)
+                : _store.TryDeleteOrder(id, request, actor));
         return BuildWriteResponse(DeleteOrderCommandName, result);
     }
 
@@ -108,9 +121,11 @@ public sealed class OrdersController : ControllerBase
 
         var actor = GetCurrentActor();
         var idempotencyKey = ResolveIdempotencyKey();
-        var result = _store is EfCoreLanOrderStore efCoreStore
-            ? efCoreStore.TryUpdateOrder(id, request, actor, idempotencyKey)
-            : _store.TryUpdateOrder(id, request, actor);
+        var result = ExecuteWriteCommand(
+            new UpdateOrderCommand(id, request, actor, idempotencyKey),
+            () => _store is EfCoreLanOrderStore efCoreStore
+                ? efCoreStore.TryUpdateOrder(id, request, actor, idempotencyKey)
+                : _store.TryUpdateOrder(id, request, actor));
         return BuildWriteResponse(UpdateOrderCommandName, result);
     }
 
@@ -128,9 +143,11 @@ public sealed class OrdersController : ControllerBase
 
         var actor = GetCurrentActor();
         var idempotencyKey = ResolveIdempotencyKey();
-        var result = _store is EfCoreLanOrderStore efCoreStore
-            ? efCoreStore.TryAddItem(id, request, actor, idempotencyKey)
-            : _store.TryAddItem(id, request, actor);
+        var result = ExecuteWriteCommand(
+            new AddOrderItemCommand(id, request, actor, idempotencyKey),
+            () => _store is EfCoreLanOrderStore efCoreStore
+                ? efCoreStore.TryAddItem(id, request, actor, idempotencyKey)
+                : _store.TryAddItem(id, request, actor));
         return BuildWriteResponse(AddItemCommandName, result);
     }
 
@@ -148,9 +165,11 @@ public sealed class OrdersController : ControllerBase
 
         var actor = GetCurrentActor();
         var idempotencyKey = ResolveIdempotencyKey();
-        var result = _store is EfCoreLanOrderStore efCoreStore
-            ? efCoreStore.TryUpdateItem(id, itemId, request, actor, idempotencyKey)
-            : _store.TryUpdateItem(id, itemId, request, actor);
+        var result = ExecuteWriteCommand(
+            new UpdateOrderItemCommand(id, itemId, request, actor, idempotencyKey),
+            () => _store is EfCoreLanOrderStore efCoreStore
+                ? efCoreStore.TryUpdateItem(id, itemId, request, actor, idempotencyKey)
+                : _store.TryUpdateItem(id, itemId, request, actor));
         return BuildWriteResponse(UpdateItemCommandName, result);
     }
 
@@ -168,9 +187,11 @@ public sealed class OrdersController : ControllerBase
 
         var actor = GetCurrentActor();
         var idempotencyKey = ResolveIdempotencyKey();
-        var result = _store is EfCoreLanOrderStore efCoreStore
-            ? efCoreStore.TryDeleteItem(id, itemId, request, actor, idempotencyKey)
-            : _store.TryDeleteItem(id, itemId, request, actor);
+        var result = ExecuteWriteCommand(
+            new DeleteOrderItemCommand(id, itemId, request, actor, idempotencyKey),
+            () => _store is EfCoreLanOrderStore efCoreStore
+                ? efCoreStore.TryDeleteItem(id, itemId, request, actor, idempotencyKey)
+                : _store.TryDeleteItem(id, itemId, request, actor));
         return BuildWriteResponse(DeleteItemCommandName, result);
     }
 
@@ -188,9 +209,11 @@ public sealed class OrdersController : ControllerBase
 
         var actor = GetCurrentActor();
         var idempotencyKey = ResolveIdempotencyKey();
-        var result = _store is EfCoreLanOrderStore efCoreStore
-            ? efCoreStore.TryReorderItems(id, request, actor, idempotencyKey)
-            : _store.TryReorderItems(id, request, actor);
+        var result = ExecuteWriteCommand(
+            new ReorderOrderItemsCommand(id, request, actor, idempotencyKey),
+            () => _store is EfCoreLanOrderStore efCoreStore
+                ? efCoreStore.TryReorderItems(id, request, actor, idempotencyKey)
+                : _store.TryReorderItems(id, request, actor));
         return BuildWriteResponse(ReorderItemsCommandName, result);
     }
 
@@ -206,9 +229,11 @@ public sealed class OrdersController : ControllerBase
         var actor = GetCurrentActor();
         var runRequest = request ?? new RunOrderRequest();
         var idempotencyKey = ResolveIdempotencyKey();
-        var result = _store is EfCoreLanOrderStore efCoreStore
-            ? efCoreStore.TryStartRun(id, runRequest, actor, idempotencyKey)
-            : _store.TryStartRun(id, runRequest, actor);
+        var result = ExecuteWriteCommand(
+            new StartOrderRunCommand(id, runRequest, actor, idempotencyKey),
+            () => _store is EfCoreLanOrderStore efCoreStore
+                ? efCoreStore.TryStartRun(id, runRequest, actor, idempotencyKey)
+                : _store.TryStartRun(id, runRequest, actor));
         return BuildWriteResponse(RunCommandName, result);
     }
 
@@ -224,10 +249,23 @@ public sealed class OrdersController : ControllerBase
         var actor = GetCurrentActor();
         var stopRequest = request ?? new StopOrderRequest();
         var idempotencyKey = ResolveIdempotencyKey();
-        var result = _store is EfCoreLanOrderStore efCoreStore
-            ? efCoreStore.TryStopRun(id, stopRequest, actor, idempotencyKey)
-            : _store.TryStopRun(id, stopRequest, actor);
+        var result = ExecuteWriteCommand(
+            new StopOrderRunCommand(id, stopRequest, actor, idempotencyKey),
+            () => _store is EfCoreLanOrderStore efCoreStore
+                ? efCoreStore.TryStopRun(id, stopRequest, actor, idempotencyKey)
+                : _store.TryStopRun(id, stopRequest, actor));
         return BuildWriteResponse(StopCommandName, result);
+    }
+
+    private StoreOperationResult ExecuteWriteCommand(
+        IRequest<StoreOperationResult> command,
+        Func<StoreOperationResult> fallback)
+    {
+        if (_mediator == null)
+            return fallback();
+
+        var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
+        return _mediator.Send(command, cancellationToken).GetAwaiter().GetResult();
     }
 
     private string ResolveIdempotencyKey()

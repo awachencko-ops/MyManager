@@ -65,3 +65,9 @@
 ## Что осталось по Stage 1
 
 1. Явные command-handler role guards (не только controller boundary).
+
+## Stage 1 closure update (2026-03-27)
+
+1. Added explicit store-level actor role guards for `UpsertUser` in all store implementations (`InMemory`, `EfCore`, `PostgreSql`) to enforce admin-only mutation at command boundary, not only at controller boundary.
+2. Added verify coverage for boundary guard outcomes (operator rejected, bootstrap actor allowed).
+3. Stage 1 blocking scope is now closed for current roadmap baseline.

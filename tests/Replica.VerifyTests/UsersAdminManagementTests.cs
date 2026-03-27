@@ -67,6 +67,39 @@ public sealed class UsersAdminManagementTests
     }
 
     [Fact]
+    public void UpsertUser_RejectsOperatorActorAtStoreBoundary()
+    {
+        var store = new InMemoryLanOrderStore();
+
+        var result = store.UpsertUser(new UpsertUserRequest
+        {
+            Name = "admin-3",
+            Role = ReplicaApiRoles.Admin,
+            IsActive = true
+        }, actor: "Operator 1");
+
+        Assert.True(result.IsBadRequest);
+        Assert.Equal("actor role is not allowed", result.Error);
+    }
+
+    [Fact]
+    public void UpsertUser_AllowsBootstrapActorAtStoreBoundary()
+    {
+        var store = new InMemoryLanOrderStore();
+
+        var result = store.UpsertUser(new UpsertUserRequest
+        {
+            Name = "bootstrap-admin",
+            Role = ReplicaApiRoles.Admin,
+            IsActive = true
+        }, actor: ReplicaApiBootstrapUsers.BootstrapActor);
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(result.User);
+        Assert.Equal("bootstrap-admin", result.User!.Name);
+    }
+
+    [Fact]
     public void GetUsers_IncludeInactive_ReturnsInactiveUsers()
     {
         var store = new InMemoryLanOrderStore();

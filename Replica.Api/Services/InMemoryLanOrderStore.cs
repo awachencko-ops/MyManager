@@ -34,6 +34,9 @@ public sealed class InMemoryLanOrderStore : ILanOrderStore
     {
         lock (_sync)
         {
+            if (!StoreActorRoleGuard.TryEnsureAdminAccess(_users, actor, out var accessError))
+                return UserOperationResult.BadRequest(accessError);
+
             if (!UserManagementRules.TryNormalizeUpsertRequest(
                 request,
                 out var normalizedName,

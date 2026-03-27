@@ -74,6 +74,12 @@ public sealed class PostgreSqlLanOrderStore : ILanOrderStore
 
     public UserOperationResult UpsertUser(UpsertUserRequest request, string actor)
     {
+        using var connection = OpenConnection();
+        EnsureSchema(connection);
+        var users = LoadUsersForGuard(connection);
+        if (!StoreActorRoleGuard.TryEnsureAdminAccess(users, actor, out var accessError))
+            return UserOperationResult.BadRequest(accessError);
+
         if (!UserManagementRules.TryNormalizeUpsertRequest(
             request,
             out var normalizedName,
@@ -83,9 +89,6 @@ public sealed class PostgreSqlLanOrderStore : ILanOrderStore
         {
             return UserOperationResult.BadRequest(error);
         }
-
-        using var connection = OpenConnection();
-        EnsureSchema(connection);
         using var tx = connection.BeginTransaction();
 
         var existing = TryLoadUser(connection, tx, normalizedName);
@@ -129,6 +132,32 @@ public sealed class PostgreSqlLanOrderStore : ILanOrderStore
             IsActive = nextIsActive,
             UpdatedAt = DateTime.Now
         });
+    }
+
+    private static List<SharedUser> LoadUsersForGuard(NpgsqlConnection connection)
+    {
+        var users = new List<SharedUser>();
+        using var cmd = new NpgsqlCommand(
+            $"select user_name, role, is_active from {UsersTable};",
+            connection);
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            var userName = reader.IsDBNull(0) ? string.Empty : reader.GetString(0);
+            if (string.IsNullOrWhiteSpace(userName))
+                continue;
+
+            var role = reader.IsDBNull(1) ? ReplicaApiRoles.Operator : reader.GetString(1);
+            var isActive = !reader.IsDBNull(2) && reader.GetBoolean(2);
+            users.Add(new SharedUser
+            {
+                Name = userName.Trim(),
+                Role = ReplicaApiRoles.Normalize(role),
+                IsActive = isActive
+            });
+        }
+
+        return users;
     }
 
     public IReadOnlyList<SharedOrder> GetOrders(string createdBy)

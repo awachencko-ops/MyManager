@@ -61,6 +61,19 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
 
     public UserOperationResult UpsertUser(UpsertUserRequest request, string actor)
     {
+        using var db = _dbContextFactory.CreateDbContext();
+        var users = db.Users
+            .AsNoTracking()
+            .Select(x => new SharedUser
+            {
+                Name = x.UserName,
+                Role = x.Role,
+                IsActive = x.IsActive
+            })
+            .ToList();
+        if (!StoreActorRoleGuard.TryEnsureAdminAccess(users, actor, out var accessError))
+            return UserOperationResult.BadRequest(accessError);
+
         if (!UserManagementRules.TryNormalizeUpsertRequest(
             request,
             out var normalizedName,
@@ -70,8 +83,6 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
         {
             return UserOperationResult.BadRequest(error);
         }
-
-        using var db = _dbContextFactory.CreateDbContext();
         var existing = db.Users.FirstOrDefault(x => x.UserName == normalizedName);
         var nextIsActive = normalizedIsActive ?? existing?.IsActive ?? true;
 

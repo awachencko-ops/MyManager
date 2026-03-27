@@ -242,3 +242,13 @@ Replica.Client/
    - покрыта матрица `401/403/allowed` для mutating endpoints `Orders/Auth/Users`,
    - зафиксирована admin-граница для `UsersController.UpsertUser`.
 
+
+## Execution Log Addendum
+
+6. `2026-03-27`: Stage 1 command-boundary hardening finalized:
+   - store-level admin role guard for `UpsertUser` across all stores,
+   - verify coverage for guard enforcement.
+7. `2026-03-27`: Stage 2 command-bus kickoff:
+   - MediatR wired in `Replica.Api`,
+   - mutating `Orders` + `Users.Upsert` endpoints routed through request handlers,
+   - progress tracked in `REPLICA_STAGE2_COMMAND_BUS_PROGRESS_2026-03-27.md`.

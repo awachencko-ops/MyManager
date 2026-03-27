@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Net;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Replica.Api.Data;
 using Replica.Api.Infrastructure;
@@ -58,6 +59,7 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddSingleton<IReplicaApiTokenService, ReplicaApiTokenService>();
+builder.Services.AddMediatR(typeof(Program));
 
 var app = builder.Build();
 
@@ -194,3 +196,4 @@ app.MapGet("/health", (ILanOrderStore store) => Results.Ok(new
 }));
 
 app.Run();
+

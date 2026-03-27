@@ -33,29 +33,25 @@ namespace Replica
             pnlInfoUser.Padding = Padding.Empty;
             pnlInfoUser.Margin = Padding.Empty;
             pictureUser.BackColor = Color.Transparent;
-            pictureUser.SizeMode = PictureBoxSizeMode.Zoom;
-            pictureUser.Resize -= PnlPictureUser_Resize;
-            pictureUser.Resize += PnlPictureUser_Resize;
+            pictureUser.SizeMode = PictureBoxSizeMode.StretchImage;
+            pictureUser.Resize -= PictureUser_Resize;
+            pictureUser.Resize += PictureUser_Resize;
 
             _userProfileNameLabel = userNameLabel;
             _userProfileRoleLabel = statusUserLabel;
             _userProfileAuthStateLabel = null;
             _userProfileSessionActionLabel = null;
 
+            userNameLabel.Name = "lblUserProfileName";
             userNameLabel.AutoSize = true;
-            userNameLabel.Dock = DockStyle.None;
-            userNameLabel.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold, GraphicsUnit.Point);
             userNameLabel.ForeColor = UserProfileNameColor;
             userNameLabel.BackColor = Color.Transparent;
-            userNameLabel.Margin = Padding.Empty;
             userNameLabel.Text = GetDefaultUserName();
 
+            statusUserLabel.Name = "lblUserProfileRole";
             statusUserLabel.AutoSize = true;
-            statusUserLabel.Dock = DockStyle.None;
-            statusUserLabel.Font = new Font("Segoe UI", 8f, FontStyle.Regular, GraphicsUnit.Point);
             statusUserLabel.ForeColor = UserProfileRoleColor;
             statusUserLabel.BackColor = Color.Transparent;
-            statusUserLabel.Margin = Padding.Empty;
             statusUserLabel.Text = _currentUserRoleText;
 
             ReplaceUserProfileIcon();
@@ -70,7 +66,7 @@ namespace Replica
             pnlUser.ResumeLayout(performLayout: true);
         }
 
-        private void PnlPictureUser_Resize(object? sender, EventArgs e)
+        private void PictureUser_Resize(object? sender, EventArgs e)
         {
             if (Disposing || IsDisposed)
                 return;
@@ -326,7 +322,8 @@ namespace Replica
                 Environment.NewLine,
                 [
                     _currentUserName,
-                    _currentUserRoleText
+                    _currentUserRoleText,
+                    _currentUserAuthStateText
                 ]);
 
             _dockToolTip.SetToolTip(pnlUser, toolTipText);
@@ -338,6 +335,9 @@ namespace Replica
 
             if (_userProfileRoleLabel != null)
                 _dockToolTip.SetToolTip(_userProfileRoleLabel, toolTipText);
+
+            if (_userProfileAuthStateLabel != null)
+                _dockToolTip.SetToolTip(_userProfileAuthStateLabel, toolTipText);
         }
 
         private static Image CreateUserProfileIcon(int iconSize)
@@ -410,13 +410,18 @@ namespace Replica
 
         private static string[] ResolveUserProfileIconCandidates(string extension)
         {
-            var fileName = $"account_circle_60dp_1F1F1F_FILL1_wght400_GRAD0_opsz48.{extension}";
+            var primaryFileName = $"account_circle_24dp_1F1F1F_FILL1_wght400_GRAD0_opsz24.{extension}";
+            var fallbackFileName = $"account_circle_60dp_1F1F1F_FILL1_wght400_GRAD0_opsz48.{extension}";
             return
             [
-                Path.Combine(AppContext.BaseDirectory, "Icons", "account circle", fileName),
-                Path.Combine(AppContext.BaseDirectory, fileName),
-                Path.Combine(Directory.GetCurrentDirectory(), "Icons", "account circle", fileName),
-                Path.Combine(Directory.GetCurrentDirectory(), fileName)
+                Path.Combine(AppContext.BaseDirectory, "Icons", "account circle", primaryFileName),
+                Path.Combine(AppContext.BaseDirectory, primaryFileName),
+                Path.Combine(Directory.GetCurrentDirectory(), "Icons", "account circle", primaryFileName),
+                Path.Combine(Directory.GetCurrentDirectory(), primaryFileName),
+                Path.Combine(AppContext.BaseDirectory, "Icons", "account circle", fallbackFileName),
+                Path.Combine(AppContext.BaseDirectory, fallbackFileName),
+                Path.Combine(Directory.GetCurrentDirectory(), "Icons", "account circle", fallbackFileName),
+                Path.Combine(Directory.GetCurrentDirectory(), fallbackFileName)
             ];
         }
 
