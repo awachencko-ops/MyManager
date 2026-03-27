@@ -153,3 +153,17 @@ Targeted verify run result: passed (64/64).
 ### Validation (addendum)
 
 Targeted verify run result: passed (67/67).
+
+## Increment Addendum (2026-03-27, runtime mediator-only cleanup)
+
+### Implemented
+
+1. Controllers switched to mediator-only runtime composition via DI constructor selection (`ActivatorUtilitiesConstructor`).
+2. Legacy store fallback preserved only in explicit test constructors for isolated controller tests.
+3. Read/write execution helpers now fail fast if mediator is missing in runtime mode.
+4. Controller-level write observability fallback remains only for test fallback mode.
+
+### Validation (addendum)
+
+- Verify target pack: passed (67/67).
+- UiSmoke target pack: passed (2/2).

@@ -269,3 +269,7 @@ Replica.Client/
 12. `2026-03-27`: Stage 2 read-side mediator increment:
    - `GET` endpoints for orders/users moved to mediator query handlers with fallback path,
    - verify coverage added for query handlers.
+13. `2026-03-27`: Stage 2 runtime cleanup increment:
+   - controllers switched to mediator-only runtime path,
+   - legacy store fallback kept only for isolated tests,
+   - verify/ui-smoke checks passed after cleanup.

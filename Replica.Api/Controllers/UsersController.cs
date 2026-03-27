@@ -1,5 +1,6 @@
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
 using Replica.Api.Application.Users.Commands;
 using Replica.Api.Application.Users.Queries;
 using Replica.Api.Contracts;
@@ -14,18 +15,24 @@ namespace Replica.Api.Controllers;
 [ReplicaAuthorize(ReplicaApiRoles.Operator)]
 public sealed class UsersController : ControllerBase
 {
-    private readonly ILanOrderStore _store;
+    private readonly ILanOrderStore? _store;
     private readonly IMediator? _mediator;
+    private readonly bool _allowStoreFallback;
 
-    public UsersController(ILanOrderStore store)
-        : this(store, mediator: null)
+    [ActivatorUtilitiesConstructor]
+    public UsersController(IMediator mediator)
     {
+        _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
+        _store = null;
+        _allowStoreFallback = false;
     }
 
-    public UsersController(ILanOrderStore store, IMediator? mediator)
+    // Fallback constructor for isolated controller tests.
+    public UsersController(ILanOrderStore store)
     {
         _store = store;
-        _mediator = mediator;
+        _mediator = null;
+        _allowStoreFallback = true;
     }
 
     [HttpGet]
@@ -34,7 +41,7 @@ public sealed class UsersController : ControllerBase
     {
         var users = ExecuteQuery(
             new GetUsersQuery(IncludeInactive: false),
-            () => _store.GetUsers());
+            () => _store!.GetUsers());
         return Ok(users);
     }
 
@@ -47,7 +54,7 @@ public sealed class UsersController : ControllerBase
     {
         var users = ExecuteQuery(
             new GetUsersQuery(IncludeInactive: true),
-            () => _store.GetUsers(includeInactive: true));
+            () => _store!.GetUsers(includeInactive: true));
         return Ok(users);
     }
 
@@ -62,7 +69,7 @@ public sealed class UsersController : ControllerBase
         var actor = GetCurrentActor();
         var result = ExecuteWriteCommand(
             new UpsertUserCommand(request, actor),
-            () => _store.UpsertUser(request, actor));
+            () => _store!.UpsertUser(request, actor));
         if (result.IsSuccess && result.User != null)
             return Ok(result.User);
 
@@ -73,22 +80,32 @@ public sealed class UsersController : ControllerBase
         IRequest<UserOperationResult> command,
         Func<UserOperationResult> fallback)
     {
-        if (_mediator == null)
+        if (_mediator != null)
+        {
+            var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
+            return _mediator.Send(command, cancellationToken).GetAwaiter().GetResult();
+        }
+
+        if (_allowStoreFallback)
             return fallback();
 
-        var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
-        return _mediator.Send(command, cancellationToken).GetAwaiter().GetResult();
+        throw new InvalidOperationException("UsersController requires IMediator in runtime composition.");
     }
 
     private TResponse ExecuteQuery<TResponse>(
         IRequest<TResponse> query,
         Func<TResponse> fallback)
     {
-        if (_mediator == null)
+        if (_mediator != null)
+        {
+            var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
+            return _mediator.Send(query, cancellationToken).GetAwaiter().GetResult();
+        }
+
+        if (_allowStoreFallback)
             return fallback();
 
-        var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
-        return _mediator.Send(query, cancellationToken).GetAwaiter().GetResult();
+        throw new InvalidOperationException("UsersController requires IMediator in runtime composition.");
     }
 
     private string GetCurrentActor()
