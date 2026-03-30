@@ -1,58 +1,35 @@
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Replica.Api.Application.Abstractions;
 using Replica.Api.Application.Orders.Commands;
 using Replica.Api.Application.Orders.Queries;
 using Replica.Api.Contracts;
-using Replica.Api.Infrastructure;
-using Replica.Api.Services;
 using Replica.Shared.Models;
 
 namespace Replica.Api.Controllers;
 
 [ApiController]
 [Route("api/orders")]
-[ReplicaAuthorize(ReplicaApiRoles.Operator)]
+[Replica.Api.Infrastructure.ReplicaAuthorize(Replica.Api.Infrastructure.ReplicaApiRoles.Operator)]
 public sealed class OrdersController : ControllerBase
 {
     private const string IdempotencyHeaderName = "Idempotency-Key";
-    private const string CreateOrderCommandName = "create-order";
-    private const string DeleteOrderCommandName = "delete-order";
-    private const string UpdateOrderCommandName = "update-order";
-    private const string AddItemCommandName = "add-item";
-    private const string UpdateItemCommandName = "update-item";
-    private const string DeleteItemCommandName = "delete-item";
-    private const string ReorderItemsCommandName = "reorder-items";
-    private const string RunCommandName = "run";
-    private const string StopCommandName = "stop";
-    private readonly ILanOrderStore? _store;
-    private readonly IMediator? _mediator;
-    private readonly bool _allowStoreFallback;
+    private readonly IMediator _mediator;
+    private readonly IReplicaApiCurrentActorAccessor _currentActorAccessor;
 
     [ActivatorUtilitiesConstructor]
-    public OrdersController(IMediator mediator)
+    public OrdersController(IMediator mediator, IReplicaApiCurrentActorAccessor currentActorAccessor)
     {
         _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
-        _store = null;
-        _allowStoreFallback = false;
-    }
-
-    // Fallback constructor for isolated controller tests.
-    public OrdersController(ILanOrderStore store, ILogger<OrdersController> logger, IConfiguration? configuration)
-    {
-        _store = store;
-        _mediator = null;
-        _allowStoreFallback = true;
+        _currentActorAccessor = currentActorAccessor ?? throw new ArgumentNullException(nameof(currentActorAccessor));
     }
 
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyList<SharedOrder>), StatusCodes.Status200OK)]
     public ActionResult<IReadOnlyList<SharedOrder>> GetOrders([FromQuery] string createdBy = "")
     {
-        var orders = ExecuteQuery(
-            new GetOrdersQuery(createdBy),
-            () => _store!.GetOrders(createdBy));
+        var orders = ExecuteQuery(new GetOrdersQuery(createdBy));
         return Ok(orders);
     }
 
@@ -61,14 +38,7 @@ public sealed class OrdersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public ActionResult<SharedOrder> GetOrderById(string id)
     {
-        var order = ExecuteQuery(
-            new GetOrderByIdQuery(id),
-            () =>
-            {
-                return _store!.TryGetOrder(id, out var loaded)
-                    ? loaded
-                    : null;
-            });
+        var order = ExecuteQuery(new GetOrderByIdQuery(id));
         return order != null
             ? Ok(order)
             : NotFound(new { error = "order not found" });
@@ -91,16 +61,7 @@ public sealed class OrdersController : ControllerBase
             request.CreatedById = actor;
 
         var idempotencyKey = ResolveIdempotencyKey();
-        var result = ExecuteWriteCommand(
-            new CreateOrderCommand(request, actor, idempotencyKey),
-            () =>
-            {
-                if (_store is EfCoreLanOrderStore efCoreStore)
-                    return efCoreStore.TryCreateOrder(request, actor, idempotencyKey);
-
-                var created = _store!.CreateOrder(request, actor);
-                return StoreOperationResult.Success(created);
-            });
+        var result = ExecuteWriteCommand(new CreateOrderCommand(request, actor, idempotencyKey));
         return BuildCreateResponse(result);
     }
 
@@ -118,12 +79,8 @@ public sealed class OrdersController : ControllerBase
 
         var actor = GetCurrentActor();
         var idempotencyKey = ResolveIdempotencyKey();
-        var result = ExecuteWriteCommand(
-            new DeleteOrderCommand(id, request, actor, idempotencyKey),
-            () => _store is EfCoreLanOrderStore efCoreStore
-                ? efCoreStore.TryDeleteOrder(id, request, actor, idempotencyKey)
-                : _store!.TryDeleteOrder(id, request, actor));
-        return BuildWriteResponse(DeleteOrderCommandName, result);
+        var result = ExecuteWriteCommand(new DeleteOrderCommand(id, request, actor, idempotencyKey));
+        return BuildWriteResponse(result);
     }
 
     [HttpPatch("{id}")]
@@ -140,12 +97,8 @@ public sealed class OrdersController : ControllerBase
 
         var actor = GetCurrentActor();
         var idempotencyKey = ResolveIdempotencyKey();
-        var result = ExecuteWriteCommand(
-            new UpdateOrderCommand(id, request, actor, idempotencyKey),
-            () => _store is EfCoreLanOrderStore efCoreStore
-                ? efCoreStore.TryUpdateOrder(id, request, actor, idempotencyKey)
-                : _store!.TryUpdateOrder(id, request, actor));
-        return BuildWriteResponse(UpdateOrderCommandName, result);
+        var result = ExecuteWriteCommand(new UpdateOrderCommand(id, request, actor, idempotencyKey));
+        return BuildWriteResponse(result);
     }
 
     [HttpPost("{id}/items")]
@@ -162,12 +115,8 @@ public sealed class OrdersController : ControllerBase
 
         var actor = GetCurrentActor();
         var idempotencyKey = ResolveIdempotencyKey();
-        var result = ExecuteWriteCommand(
-            new AddOrderItemCommand(id, request, actor, idempotencyKey),
-            () => _store is EfCoreLanOrderStore efCoreStore
-                ? efCoreStore.TryAddItem(id, request, actor, idempotencyKey)
-                : _store!.TryAddItem(id, request, actor));
-        return BuildWriteResponse(AddItemCommandName, result);
+        var result = ExecuteWriteCommand(new AddOrderItemCommand(id, request, actor, idempotencyKey));
+        return BuildWriteResponse(result);
     }
 
     [HttpPatch("{id}/items/{itemId}")]
@@ -184,12 +133,8 @@ public sealed class OrdersController : ControllerBase
 
         var actor = GetCurrentActor();
         var idempotencyKey = ResolveIdempotencyKey();
-        var result = ExecuteWriteCommand(
-            new UpdateOrderItemCommand(id, itemId, request, actor, idempotencyKey),
-            () => _store is EfCoreLanOrderStore efCoreStore
-                ? efCoreStore.TryUpdateItem(id, itemId, request, actor, idempotencyKey)
-                : _store!.TryUpdateItem(id, itemId, request, actor));
-        return BuildWriteResponse(UpdateItemCommandName, result);
+        var result = ExecuteWriteCommand(new UpdateOrderItemCommand(id, itemId, request, actor, idempotencyKey));
+        return BuildWriteResponse(result);
     }
 
     [HttpDelete("{id}/items/{itemId}")]
@@ -206,12 +151,8 @@ public sealed class OrdersController : ControllerBase
 
         var actor = GetCurrentActor();
         var idempotencyKey = ResolveIdempotencyKey();
-        var result = ExecuteWriteCommand(
-            new DeleteOrderItemCommand(id, itemId, request, actor, idempotencyKey),
-            () => _store is EfCoreLanOrderStore efCoreStore
-                ? efCoreStore.TryDeleteItem(id, itemId, request, actor, idempotencyKey)
-                : _store!.TryDeleteItem(id, itemId, request, actor));
-        return BuildWriteResponse(DeleteItemCommandName, result);
+        var result = ExecuteWriteCommand(new DeleteOrderItemCommand(id, itemId, request, actor, idempotencyKey));
+        return BuildWriteResponse(result);
     }
 
     [HttpPost("{id}/items/reorder")]
@@ -228,12 +169,8 @@ public sealed class OrdersController : ControllerBase
 
         var actor = GetCurrentActor();
         var idempotencyKey = ResolveIdempotencyKey();
-        var result = ExecuteWriteCommand(
-            new ReorderOrderItemsCommand(id, request, actor, idempotencyKey),
-            () => _store is EfCoreLanOrderStore efCoreStore
-                ? efCoreStore.TryReorderItems(id, request, actor, idempotencyKey)
-                : _store!.TryReorderItems(id, request, actor));
-        return BuildWriteResponse(ReorderItemsCommandName, result);
+        var result = ExecuteWriteCommand(new ReorderOrderItemsCommand(id, request, actor, idempotencyKey));
+        return BuildWriteResponse(result);
     }
 
     [HttpPost("{id}/run")]
@@ -248,12 +185,8 @@ public sealed class OrdersController : ControllerBase
         var actor = GetCurrentActor();
         var runRequest = request ?? new RunOrderRequest();
         var idempotencyKey = ResolveIdempotencyKey();
-        var result = ExecuteWriteCommand(
-            new StartOrderRunCommand(id, runRequest, actor, idempotencyKey),
-            () => _store is EfCoreLanOrderStore efCoreStore
-                ? efCoreStore.TryStartRun(id, runRequest, actor, idempotencyKey)
-                : _store!.TryStartRun(id, runRequest, actor));
-        return BuildWriteResponse(RunCommandName, result);
+        var result = ExecuteWriteCommand(new StartOrderRunCommand(id, runRequest, actor, idempotencyKey));
+        return BuildWriteResponse(result);
     }
 
     [HttpPost("{id}/stop")]
@@ -268,44 +201,21 @@ public sealed class OrdersController : ControllerBase
         var actor = GetCurrentActor();
         var stopRequest = request ?? new StopOrderRequest();
         var idempotencyKey = ResolveIdempotencyKey();
-        var result = ExecuteWriteCommand(
-            new StopOrderRunCommand(id, stopRequest, actor, idempotencyKey),
-            () => _store is EfCoreLanOrderStore efCoreStore
-                ? efCoreStore.TryStopRun(id, stopRequest, actor, idempotencyKey)
-                : _store!.TryStopRun(id, stopRequest, actor));
-        return BuildWriteResponse(StopCommandName, result);
+        var result = ExecuteWriteCommand(new StopOrderRunCommand(id, stopRequest, actor, idempotencyKey));
+        return BuildWriteResponse(result);
     }
 
-    private StoreOperationResult ExecuteWriteCommand(
-        IRequest<StoreOperationResult> command,
-        Func<StoreOperationResult> fallback)
+    private Replica.Api.Services.StoreOperationResult ExecuteWriteCommand(
+        IRequest<Replica.Api.Services.StoreOperationResult> command)
     {
-        if (_mediator != null)
-        {
-            var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
-            return _mediator.Send(command, cancellationToken).GetAwaiter().GetResult();
-        }
-
-        if (_allowStoreFallback)
-            return fallback();
-
-        throw new InvalidOperationException("OrdersController requires IMediator in runtime composition.");
+        var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
+        return _mediator.Send(command, cancellationToken).GetAwaiter().GetResult();
     }
 
-    private TResponse ExecuteQuery<TResponse>(
-        IRequest<TResponse> query,
-        Func<TResponse> fallback)
+    private TResponse ExecuteQuery<TResponse>(IRequest<TResponse> query)
     {
-        if (_mediator != null)
-        {
-            var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
-            return _mediator.Send(query, cancellationToken).GetAwaiter().GetResult();
-        }
-
-        if (_allowStoreFallback)
-            return fallback();
-
-        throw new InvalidOperationException("OrdersController requires IMediator in runtime composition.");
+        var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
+        return _mediator.Send(query, cancellationToken).GetAwaiter().GetResult();
     }
 
     private string ResolveIdempotencyKey()
@@ -320,64 +230,36 @@ public sealed class OrdersController : ControllerBase
         return value.Length <= 128 ? value : value[..128];
     }
 
-    private ActionResult<SharedOrder> BuildCreateResponse(StoreOperationResult result)
+    private ActionResult<SharedOrder> BuildCreateResponse(Replica.Api.Services.StoreOperationResult result)
     {
         if (result.IsSuccess && result.Order != null)
-        {
-            if (_allowStoreFallback)
-                ReplicaApiObservability.RecordWriteCommand(CreateOrderCommandName, "success");
             return CreatedAtAction(nameof(GetOrderById), new { id = result.Order.InternalId }, result.Order);
-        }
 
         if (result.IsConflict)
-        {
-            if (_allowStoreFallback)
-                ReplicaApiObservability.RecordWriteCommand(CreateOrderCommandName, "conflict");
             return Conflict(new { error = result.Error, currentVersion = result.CurrentVersion });
-        }
 
         if (result.IsNotFound)
-        {
-            if (_allowStoreFallback)
-                ReplicaApiObservability.RecordWriteCommand(CreateOrderCommandName, "not_found");
             return NotFound(new { error = result.Error });
-        }
 
-        if (_allowStoreFallback)
-            ReplicaApiObservability.RecordWriteCommand(CreateOrderCommandName, "bad_request");
         return BadRequest(new { error = result.Error });
     }
 
-    private ActionResult<SharedOrder> BuildWriteResponse(string commandName, StoreOperationResult result)
+    private ActionResult<SharedOrder> BuildWriteResponse(Replica.Api.Services.StoreOperationResult result)
     {
         if (result.IsSuccess)
-        {
-            if (_allowStoreFallback)
-                ReplicaApiObservability.RecordWriteCommand(commandName, "success");
             return Ok(result.Order);
-        }
 
         if (result.IsNotFound)
-        {
-            if (_allowStoreFallback)
-                ReplicaApiObservability.RecordWriteCommand(commandName, "not_found");
             return NotFound(new { error = result.Error });
-        }
 
         if (result.IsConflict)
-        {
-            if (_allowStoreFallback)
-                ReplicaApiObservability.RecordWriteCommand(commandName, "conflict");
             return Conflict(new { error = result.Error, currentVersion = result.CurrentVersion });
-        }
 
-        if (_allowStoreFallback)
-            ReplicaApiObservability.RecordWriteCommand(commandName, "bad_request");
         return BadRequest(new { error = result.Error });
     }
 
     private string GetCurrentActor()
     {
-        return ReplicaApiCurrentUserContext.Get(HttpContext).Name;
+        return _currentActorAccessor.GetCurrentActorName();
     }
 }

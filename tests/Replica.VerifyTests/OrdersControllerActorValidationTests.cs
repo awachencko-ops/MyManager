@@ -1,11 +1,13 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
+using MediatR;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Routing;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.DependencyInjection;
+using Replica.Api.Application.Abstractions;
+using Replica.Api.Application.Orders.Commands;
 using Replica.Api.Contracts;
 using Replica.Api.Controllers;
 using Replica.Api.Infrastructure;
@@ -218,14 +220,7 @@ public sealed class OrdersControllerActorValidationTests
     public void CreateOrder_UsesActorFromCurrentUserContext()
     {
         var store = new StubLanOrderStore();
-        var controller = CreateController(store);
-        ReplicaApiCurrentUserContext.Set(controller.ControllerContext.HttpContext, new ReplicaApiCurrentUser
-        {
-            Name = "operator3",
-            Role = ReplicaApiRoles.Operator,
-            IsAuthenticated = true,
-            IsValidated = true
-        });
+        var controller = CreateController(store, actorName: "operator3");
 
         var result = controller.CreateOrder(new CreateOrderRequest { OrderNumber = "1004" });
 
@@ -236,19 +231,39 @@ public sealed class OrdersControllerActorValidationTests
         Assert.Equal("operator3", order.CreatedById);
     }
 
-    private static OrdersController CreateController(StubLanOrderStore store)
+    private static OrdersController CreateController(StubLanOrderStore store, string actorName)
     {
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>())
-            .Build();
+        var services = new ServiceCollection();
+        services.AddSingleton<ILanOrderStore>(store);
+        services.AddMediatR(typeof(CreateOrderCommand).Assembly);
+        var serviceProvider = services.BuildServiceProvider();
+        var mediator = serviceProvider.GetRequiredService<IMediator>();
 
-        return new OrdersController(store, NullLogger<OrdersController>.Instance, configuration)
+        return new OrdersController(mediator, new StubCurrentActorAccessor(actorName))
         {
             ControllerContext = new ControllerContext
             {
-                HttpContext = new DefaultHttpContext()
+                HttpContext = new DefaultHttpContext
+                {
+                    RequestServices = serviceProvider
+                }
             }
         };
+    }
+
+    private sealed class StubCurrentActorAccessor : IReplicaApiCurrentActorAccessor
+    {
+        private readonly string _actorName;
+
+        public StubCurrentActorAccessor(string actorName)
+        {
+            _actorName = actorName;
+        }
+
+        public string GetCurrentActorName()
+        {
+            return _actorName;
+        }
     }
 
     private sealed class StubLanOrderStore : ILanOrderStore
@@ -259,7 +274,7 @@ public sealed class OrdersControllerActorValidationTests
 
         public UserOperationResult UpsertUser(UpsertUserRequest request, string actor)
         {
-            throw new System.NotImplementedException();
+            throw new NotImplementedException();
         }
 
         public IReadOnlyList<SharedOrder> GetOrders(string createdBy)
@@ -289,42 +304,42 @@ public sealed class OrdersControllerActorValidationTests
 
         public StoreOperationResult TryUpdateOrder(string orderId, UpdateOrderRequest request, string actor)
         {
-            throw new System.NotImplementedException();
+            throw new NotImplementedException();
         }
 
         public StoreOperationResult TryDeleteOrder(string orderId, DeleteOrderRequest request, string actor)
         {
-            throw new System.NotImplementedException();
+            throw new NotImplementedException();
         }
 
         public StoreOperationResult TryAddItem(string orderId, AddOrderItemRequest request, string actor)
         {
-            throw new System.NotImplementedException();
+            throw new NotImplementedException();
         }
 
         public StoreOperationResult TryUpdateItem(string orderId, string itemId, UpdateOrderItemRequest request, string actor)
         {
-            throw new System.NotImplementedException();
+            throw new NotImplementedException();
         }
 
         public StoreOperationResult TryDeleteItem(string orderId, string itemId, DeleteOrderItemRequest request, string actor)
         {
-            throw new System.NotImplementedException();
+            throw new NotImplementedException();
         }
 
         public StoreOperationResult TryReorderItems(string orderId, ReorderOrderItemsRequest request, string actor)
         {
-            throw new System.NotImplementedException();
+            throw new NotImplementedException();
         }
 
         public StoreOperationResult TryStartRun(string orderId, RunOrderRequest request, string actor)
         {
-            throw new System.NotImplementedException();
+            throw new NotImplementedException();
         }
 
         public StoreOperationResult TryStopRun(string orderId, StopOrderRequest request, string actor)
         {
-            throw new System.NotImplementedException();
+            throw new NotImplementedException();
         }
     }
 

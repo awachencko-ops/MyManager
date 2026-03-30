@@ -441,3 +441,9 @@ Replica.Client/
    - refactored `AuthController` to use application abstractions for users/token lifecycle/current-user snapshot,
    - removed `AuthController` from allowed Presentation->Infrastructure/Data/Services coupling baseline,
    - verify pack passed after refactor (`348/348`).
+53. `2026-03-30`: Stage 5 orders-controller decoupling increment:
+   - refactored `OrdersController` to mediator-only runtime path (store fallback removed, actor via `IReplicaApiCurrentActorAccessor`),
+   - removed direct presentation `using` dependencies to `Infrastructure` and `Services` from orders controller,
+   - updated actor-validation verify test to real MediatR handler composition with stub store + actor accessor,
+   - removed `OrdersController` from allowed Presentation->Infrastructure/Data/Services coupling baseline (baseline reduced to zero),
+   - verify pack passed after refactor (`348/348`).

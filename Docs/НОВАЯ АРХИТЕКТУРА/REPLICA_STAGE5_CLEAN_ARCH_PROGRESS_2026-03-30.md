@@ -60,6 +60,17 @@ Status: In progress
 5. Reduced presentation coupling baseline:
    - `AuthController.cs` removed from allowed `Presentation -> Infrastructure/Data/Services` baseline.
 
+## Completed Increment: Orders Controller Decoupling
+
+1. Refactored `Replica.Api/Controllers/OrdersController.cs`:
+   - switched to mediator-only runtime path (store fallback constructor/path removed),
+   - switched actor resolution to injected `IReplicaApiCurrentActorAccessor`,
+   - removed direct controller `using` dependencies to `Infrastructure` and `Services`.
+2. Updated verify coverage for actor propagation:
+   - `tests/Replica.VerifyTests/OrdersControllerActorValidationTests.cs` now composes controller with real MediatR handler path + store stub + actor accessor stub.
+3. Reduced presentation coupling baseline to zero:
+   - `OrdersController.cs` removed from allowed `Presentation -> Infrastructure/Data/Services` baseline.
+
 ## Test Evidence
 
 1. `dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj --filter "ReplicaApiArchitectureBoundaryTests"`  
@@ -69,8 +80,8 @@ Status: In progress
 
 ## Open Notes
 
-1. Current baseline still contains direct presentation coupling only in `OrdersController`.
-2. Stage 5 work should reduce this baseline gradually (without breaking current runtime path).
+1. Baseline for direct `Presentation -> Infrastructure/Data/Services` `using` coupling is now zero in `Controllers/Hubs`.
+2. Next hardening step can replace baseline-lock semantics with strict zero-coupling assertion for presentation `using` imports.
 
 ## Next Increment (planned)
 

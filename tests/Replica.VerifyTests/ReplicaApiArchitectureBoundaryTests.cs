@@ -41,10 +41,7 @@ public sealed class ReplicaApiArchitectureBoundaryTests
                 "Replica.Api.Services"
             ]);
 
-        var allowedBaseline = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            NormalizeRelativePath(repoRoot, Path.Combine(repoRoot, "Replica.Api", "Controllers", "OrdersController.cs"))
-        };
+        var allowedBaseline = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         var unexpected = offenders
             .Where(path => !allowedBaseline.Contains(path))
