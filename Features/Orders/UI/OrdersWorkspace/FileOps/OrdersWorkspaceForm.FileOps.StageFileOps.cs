@@ -208,6 +208,7 @@ namespace Replica
                 return false;
             }
 
+            var previousPath = GetOrderStagePath(order, stage);
             var newPath = plan.UsePrintCopy
                 ? await CopyPrintFileAsync(order, plan.CleanSourcePath, plan.TargetFileName)
                 : await CopyIntoStageAsync(order, stage, plan.CleanSourcePath, plan.TargetFileName);
@@ -216,6 +217,10 @@ namespace Replica
                 await EnsureSourceCopyAsync(order, plan.CleanSourcePath);
 
             UpdateOrderFilePath(order, stage, newPath);
+            AppendOrderOperationLog(
+                order,
+                OrderOperationNames.SetStageFile,
+                $"scope=order | stage={GetStageLogKey(stage)} | src={Path.GetFileName(plan.CleanSourcePath)} | prev={Path.GetFileName(previousPath)} | now={Path.GetFileName(newPath)} | mode={(plan.UsePrintCopy ? "copy-print" : "copy-stage")}");
             return true;
         }
 
@@ -239,11 +244,17 @@ namespace Replica
                 return false;
             }
 
+            var previousPath = GetItemStagePath(item, stage);
             var newPath = plan.UsePrintCopy
                 ? await CopyPrintFileAsync(order, plan.CleanSourcePath, plan.TargetFileName)
                 : await CopyIntoStageAsync(order, stage, plan.CleanSourcePath, plan.TargetFileName);
 
             UpdateItemFilePath(order, item, stage, newPath);
+            var itemLabel = string.IsNullOrWhiteSpace(item.ClientFileLabel) ? item.ItemId : item.ClientFileLabel;
+            AppendOrderOperationLog(
+                order,
+                OrderOperationNames.SetStageFile,
+                $"scope=item | item={itemLabel} | stage={GetStageLogKey(stage)} | src={Path.GetFileName(plan.CleanSourcePath)} | prev={Path.GetFileName(previousPath)} | now={Path.GetFileName(newPath)} | mode={(plan.UsePrintCopy ? "copy-print" : "copy-stage")}");
             TrySyncLanOrderItemUpsert(order, item, $"add-item-file-stage-{stage}");
             return true;
         }
@@ -347,6 +358,7 @@ namespace Replica
                 return;
             }
 
+            var removedFileName = Path.GetFileName(currentPath);
             var statusUpdate = _orderApplicationService.ApplyOrderFileRemoved(order, stage);
             SetOrderStatus(
                 order,
@@ -355,6 +367,10 @@ namespace Replica
                 statusUpdate.Reason,
                 persistHistory: false,
                 rebuildGrid: false);
+            AppendOrderOperationLog(
+                order,
+                OrderOperationNames.RemoveStageFile,
+                $"scope=order | stage={GetStageLogKey(stage)} | removed={removedFileName}");
             PersistGridChanges(OrderGridLogic.BuildOrderTag(order.InternalId));
             SetBottomStatus("Файл удален");
         }
@@ -392,6 +408,11 @@ namespace Replica
             }
 
             var removedFileName = Path.GetFileName(currentPath);
+            var itemLabel = string.IsNullOrWhiteSpace(item.ClientFileLabel) ? item.ItemId : item.ClientFileLabel;
+            AppendOrderOperationLog(
+                order,
+                OrderOperationNames.RemoveStageFile,
+                $"scope=item | item={itemLabel} | stage={GetStageLogKey(stage)} | removed={removedFileName}");
             var removeOutcome = _orderApplicationService.ApplyItemFileRemoved(
                 order,
                 item,
@@ -519,6 +540,10 @@ namespace Replica
                 statusUpdate.Reason,
                 persistHistory: false,
                 rebuildGrid: false);
+            AppendOrderOperationLog(
+                order,
+                OrderOperationNames.RenameStageFile,
+                $"scope=order | stage={GetStageLogKey(stage)} | from={Path.GetFileName(currentPath)} | to={Path.GetFileName(renamedPath)}");
             PersistGridChanges(OrderGridLogic.BuildOrderTag(order.InternalId));
             SetBottomStatus("Файл переименован");
         }
@@ -554,6 +579,11 @@ namespace Replica
                 statusUpdate.Reason,
                 persistHistory: false,
                 rebuildGrid: false);
+            var itemLabel = string.IsNullOrWhiteSpace(item.ClientFileLabel) ? item.ItemId : item.ClientFileLabel;
+            AppendOrderOperationLog(
+                order,
+                OrderOperationNames.RenameStageFile,
+                $"scope=item | item={itemLabel} | stage={GetStageLogKey(stage)} | from={Path.GetFileName(currentPath)} | to={Path.GetFileName(renamedPath)}");
             TrySyncLanOrderItemUpsert(order, item, $"rename-item-file-stage-{stage}");
             PersistGridChanges(OrderGridLogic.BuildItemTag(order.InternalId, item.ItemId));
             SetBottomStatus("Файл item переименован");
@@ -886,6 +916,17 @@ namespace Replica
                 OrderStages.Prepared => "\"2. подготовка\"",
                 OrderStages.Print => "\"3. печать\"",
                 _ => "этап"
+            };
+        }
+
+        private static string GetStageLogKey(int stage)
+        {
+            return stage switch
+            {
+                OrderStages.Source => "source",
+                OrderStages.Prepared => "prepared",
+                OrderStages.Print => "print",
+                _ => "unknown"
             };
         }
 

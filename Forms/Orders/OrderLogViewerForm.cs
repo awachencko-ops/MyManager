@@ -8,12 +8,20 @@ namespace Replica
     public sealed class OrderLogViewerForm : Form
     {
         private readonly string _path;
+        private readonly string _emptyText;
         private readonly TextBox _text;
 
-        public OrderLogViewerForm(string path, string orderId)
+        public OrderLogViewerForm(
+            string path,
+            string subject,
+            string titlePrefix = "Лог заказа",
+            string emptyText = "Лог заказа пока не создан.")
         {
             _path = path;
-            Text = $"Лог заказа: {orderId}";
+            _emptyText = string.IsNullOrWhiteSpace(emptyText)
+                ? "Лог пока не создан."
+                : emptyText;
+            Text = $"{titlePrefix}: {subject}";
             StartPosition = FormStartPosition.CenterParent;
             Size = new Size(1520, 780);
             MinimumSize = new Size(1200, 600);
@@ -59,7 +67,7 @@ namespace Replica
         {
             _text.Text = File.Exists(_path)
                 ? File.ReadAllText(_path)
-                : "Лог заказа пока не создан.";
+                : _emptyText;
             _text.SelectionStart = _text.TextLength;
             _text.ScrollToCaret();
         }

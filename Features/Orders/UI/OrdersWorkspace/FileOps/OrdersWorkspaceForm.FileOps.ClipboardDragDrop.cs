@@ -54,6 +54,10 @@ namespace Replica
                 return;
 
             PersistGridChanges(OrderGridLogic.BuildOrderTag(order.InternalId));
+            AppendOrderOperationLog(
+                order,
+                OrderOperationNames.PasteStageFile,
+                $"scope=order | stage={GetStageLogKey(stage)} | source={Path.GetFileName(clipboardFilePath)}");
         }
 
         private async Task PasteFileFromClipboardAsync(OrderData order, OrderFileItem item, int stage)
@@ -66,6 +70,11 @@ namespace Replica
                 return;
 
             PersistGridChanges(OrderGridLogic.BuildItemTag(order.InternalId, item.ItemId));
+            var itemLabel = string.IsNullOrWhiteSpace(item.ClientFileLabel) ? item.ItemId : item.ClientFileLabel;
+            AppendOrderOperationLog(
+                order,
+                OrderOperationNames.PasteStageFile,
+                $"scope=item | item={itemLabel} | stage={GetStageLogKey(stage)} | source={Path.GetFileName(clipboardFilePath)}");
         }
 
         private string? TryGetClipboardFilePath()

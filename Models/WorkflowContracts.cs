@@ -196,6 +196,14 @@ namespace Replica
         public const string AddItem = "add-item";
         public const string RemoveItem = "remove-item";
         public const string Topology = "topology";
+        public const string EditOrder = "edit-order";
+        public const string SetStageFile = "set-stage-file";
+        public const string RenameStageFile = "rename-stage-file";
+        public const string RemoveStageFile = "remove-stage-file";
+        public const string PasteStageFile = "paste-stage-file";
+        public const string CopyPrintToGrandpa = "copy-print-to-grandpa";
+        public const string Watermark = "watermark";
+        public const string ActionChange = "action-change";
     }
 
     public static class OrderStatusSourceNames

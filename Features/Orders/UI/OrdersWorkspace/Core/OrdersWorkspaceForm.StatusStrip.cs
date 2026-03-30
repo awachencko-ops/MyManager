@@ -21,7 +21,7 @@ namespace Replica
     {
         private void InitializeTrayIndicators()
         {
-            statusStrip1.ShowItemToolTips = true;
+            statusStrip1.ShowItemToolTips = false;
             toolStatus.Spring = true;
             toolStatus.TextAlign = ContentAlignment.MiddleLeft;
 
@@ -34,6 +34,16 @@ namespace Replica
             toolAlerts.IsLink = true;
             toolAlerts.LinkBehavior = LinkBehavior.HoverUnderline;
             toolAlerts.Click += ToolAlerts_Click;
+            toolAlerts.AutoToolTip = false;
+            toolAlerts.MouseEnter -= ToolAlerts_MouseEnter;
+            toolAlerts.MouseEnter += ToolAlerts_MouseEnter;
+            toolAlerts.MouseLeave -= ToolAlerts_MouseLeave;
+            toolAlerts.MouseLeave += ToolAlerts_MouseLeave;
+            toolDiskFree.AutoToolTip = false;
+            toolDiskFree.MouseEnter -= ToolDiskFree_MouseEnter;
+            toolDiskFree.MouseEnter += ToolDiskFree_MouseEnter;
+            toolDiskFree.MouseLeave -= ToolDiskFree_MouseLeave;
+            toolDiskFree.MouseLeave += ToolDiskFree_MouseLeave;
 
             toolConnection.MouseEnter -= ToolConnection_MouseEnter;
             toolConnection.MouseEnter += ToolConnection_MouseEnter;
@@ -70,12 +80,34 @@ namespace Replica
         private void ToolAlerts_Click(object? sender, EventArgs e)
         {
             AcknowledgeErrorNotifications();
-            OpenLogForSelectionOrManager();
+            OpenManagerLog();
         }
 
         private void ToolConnection_MouseEnter(object? sender, EventArgs e)
         {
             ShowPersistentConnectionToolTip();
+        }
+
+        private void ToolDiskFree_MouseEnter(object? sender, EventArgs e)
+        {
+            ShowTrayPopupForItem(toolDiskFree, BuildDiskTrayPopupContent());
+        }
+
+        private void ToolDiskFree_MouseLeave(object? sender, EventArgs e)
+        {
+            if (ReferenceEquals(_trayStatusPopupTargetItem, toolDiskFree))
+                HidePersistentConnectionToolTip();
+        }
+
+        private void ToolAlerts_MouseEnter(object? sender, EventArgs e)
+        {
+            ShowTrayPopupForItem(toolAlerts, BuildLogTrayPopupContent());
+        }
+
+        private void ToolAlerts_MouseLeave(object? sender, EventArgs e)
+        {
+            if (ReferenceEquals(_trayStatusPopupTargetItem, toolAlerts))
+                HidePersistentConnectionToolTip();
         }
 
         private void ToolConnection_MouseLeave(object? sender, EventArgs e)
@@ -89,11 +121,8 @@ namespace Replica
                 return;
 
             var hoveredItem = statusStrip1.GetItemAt(e.Location);
-            if (hoveredItem == toolConnection)
-            {
-                ShowPersistentConnectionToolTip();
+            if (TryShowTrayPopupForItem(hoveredItem))
                 return;
-            }
 
             HidePersistentConnectionToolTip();
         }
@@ -209,6 +238,10 @@ namespace Replica
             toolConnection.MouseEnter -= ToolConnection_MouseEnter;
             toolConnection.MouseLeave -= ToolConnection_MouseLeave;
             toolConnection.Click -= ToolConnection_Click;
+            toolAlerts.MouseEnter -= ToolAlerts_MouseEnter;
+            toolAlerts.MouseLeave -= ToolAlerts_MouseLeave;
+            toolDiskFree.MouseEnter -= ToolDiskFree_MouseEnter;
+            toolDiskFree.MouseLeave -= ToolDiskFree_MouseLeave;
             statusStrip1.MouseMove -= StatusStrip1_MouseMove;
             statusStrip1.MouseLeave -= StatusStrip1_MouseLeave;
             HidePersistentConnectionToolTip();
@@ -495,25 +528,60 @@ namespace Replica
 
         private void ShowPersistentConnectionToolTip(bool forceRefresh = false)
         {
-            if (statusStrip1.IsDisposed || toolConnection.IsDisposed)
+            ShowTrayPopupForItem(toolConnection, _connectionStatusToolTipContent ?? string.Empty, forceRefresh);
+        }
+
+        private bool TryShowTrayPopupForItem(ToolStripItem? hoveredItem)
+        {
+            if (hoveredItem == null || hoveredItem.IsDisposed)
+                return false;
+
+            if (hoveredItem == toolConnection)
+            {
+                ShowPersistentConnectionToolTip();
+                return true;
+            }
+
+            if (hoveredItem == toolDiskFree)
+            {
+                ShowTrayPopupForItem(toolDiskFree, BuildDiskTrayPopupContent());
+                return true;
+            }
+
+            if (hoveredItem == toolAlerts)
+            {
+                ShowTrayPopupForItem(toolAlerts, BuildLogTrayPopupContent());
+                return true;
+            }
+
+            return false;
+        }
+
+        private void ShowTrayPopupForItem(ToolStripItem item, string popupText, bool forceRefresh = false)
+        {
+            if (statusStrip1.IsDisposed || item == null || item.IsDisposed)
                 return;
 
-            var toolTipText = _connectionStatusToolTipContent ?? string.Empty;
+            var toolTipText = popupText ?? string.Empty;
             if (string.IsNullOrWhiteSpace(toolTipText))
             {
                 HidePersistentConnectionToolTip();
                 return;
             }
 
-            if (!forceRefresh && _connectionStatusToolTipVisible)
+            var isSameTarget = ReferenceEquals(_trayStatusPopupTargetItem, item);
+            var isSameContent = string.Equals(_trayStatusPopupContent, toolTipText, StringComparison.Ordinal);
+            if (!forceRefresh && _connectionStatusToolTipVisible && isSameTarget && isSameContent)
             {
                 return;
             }
 
-            var bounds = toolConnection.Bounds;
+            var bounds = item.Bounds;
             var anchorScreenPoint = statusStrip1.PointToScreen(new Point(bounds.Left + 8, bounds.Top - 8));
             _connectionStatusPopup.ShowPopup(toolTipText, anchorScreenPoint);
             _connectionStatusToolTipVisible = true;
+            _trayStatusPopupTargetItem = item;
+            _trayStatusPopupContent = toolTipText;
         }
 
         private void HidePersistentConnectionToolTip()
@@ -523,9 +591,46 @@ namespace Replica
 
             _connectionStatusPopup.Hide();
             _connectionStatusToolTipVisible = false;
+            _trayStatusPopupTargetItem = null;
+            _trayStatusPopupContent = string.Empty;
 
             if (_pendingConnectionIndicatorRefresh && !toolConnection.IsDisposed)
                 UpdateTrayConnectionIndicator();
+        }
+
+        private string BuildDiskTrayPopupContent()
+        {
+            List<string> lines = [];
+            var summaryLine = (toolDiskFree.Text ?? string.Empty).Trim().TrimStart('●').Trim();
+            if (!string.IsNullOrWhiteSpace(summaryLine))
+                lines.Add(summaryLine);
+
+            var details = (toolDiskFree.ToolTipText ?? string.Empty).Trim();
+            if (!string.IsNullOrWhiteSpace(details)
+                && !string.Equals(details, summaryLine, StringComparison.Ordinal))
+            {
+                lines.Add(details);
+            }
+
+            return string.Join(Environment.NewLine, lines.Where(line => !string.IsNullOrWhiteSpace(line)));
+        }
+
+        private string BuildLogTrayPopupContent()
+        {
+            var errorCount = CountOrdersWithErrors();
+            var lines = new List<string>
+            {
+                "Лог менеджера",
+                errorCount == 0
+                    ? "Ошибок нет."
+                    : $"Ошибок: {errorCount}.",
+                "Нажмите, чтобы открыть лог."
+            };
+
+            if (errorCount > _acknowledgedErrorCount)
+                lines[1] = $"Есть новые ошибки: {errorCount}.";
+
+            return string.Join(Environment.NewLine, lines);
         }
 
         private string BuildLanConnectionToolTip(
@@ -544,30 +649,15 @@ namespace Replica
             };
 
             var problemReasons = BuildLanProblemReasons(snapshot, dependencyHealthLevel, probeInProgress);
-            if (problemReasons.Count > 0)
-            {
-                lines.Add("Причины:");
-                foreach (var reason in problemReasons)
-                    lines.Add($"- {reason}");
-            }
 
             if (snapshot.CompletedAtUtc > DateTime.MinValue)
                 lines.Add($"Последняя проверка: {FormatLanProbeStamp(snapshot.CompletedAtUtc)}");
-            if (snapshot.SuccessfulAtUtc > DateTime.MinValue)
-                lines.Add($"Последний успешный ответ: {FormatLanProbeStamp(snapshot.SuccessfulAtUtc)}");
 
-            lines.Add($"Проверок за сессию: {requestCount}");
-            if (snapshot.ConsecutiveFailureCount > 0)
-                lines.Add($"Сбоев подряд: {snapshot.ConsecutiveFailureCount}");
-
-            if (probeInProgress)
-                lines.Add("Проверка выполняется...");
-            if (!string.IsNullOrWhiteSpace(snapshot.Error))
-                lines.Add($"Подробно: {TruncateTooltipText(snapshot.Error)}");
             if (snapshot.HttpRequests5xx >= 0 || snapshot.WriteBadRequest >= 0)
             {
                 lines.Add($"Ошибки API: 5xx={Math.Max(0, snapshot.HttpRequests5xx)}, bad_request={Math.Max(0, snapshot.WriteBadRequest)}");
             }
+
             if (snapshot.PushPublishedTotal >= 0 || snapshot.PushPublishFailuresTotal >= 0)
             {
                 var successRatioText = snapshot.PushPublishSuccessRatio >= 0
@@ -575,6 +665,23 @@ namespace Replica
                     : "n/a";
                 lines.Add($"Push API publish/fail: {Math.Max(0, snapshot.PushPublishedTotal)}/{Math.Max(0, snapshot.PushPublishFailuresTotal)} ({successRatioText})");
             }
+
+            if (problemReasons.Count == 0)
+                return string.Join(Environment.NewLine, lines.Where(line => !string.IsNullOrWhiteSpace(line)));
+
+            lines.Add("Причины:");
+            foreach (var reason in problemReasons)
+                lines.Add($"- {reason}");
+
+            if (snapshot.SuccessfulAtUtc > DateTime.MinValue)
+                lines.Add($"Последний успешный ответ: {FormatLanProbeStamp(snapshot.SuccessfulAtUtc)}");
+            lines.Add($"Проверок за сессию: {requestCount}");
+            if (snapshot.ConsecutiveFailureCount > 0)
+                lines.Add($"Сбоев подряд: {snapshot.ConsecutiveFailureCount}");
+            if (probeInProgress)
+                lines.Add("Проверка выполняется...");
+            if (!string.IsNullOrWhiteSpace(snapshot.Error))
+                lines.Add($"Подробно: {TruncateTooltipText(snapshot.Error)}");
             if (snapshot.LastServerEventAtUtc > DateTime.MinValue)
             {
                 var eventOrderText = string.IsNullOrWhiteSpace(snapshot.LastServerEventOrderId)
@@ -1569,7 +1676,7 @@ namespace Replica
 
             if (!TryGetProbeDrive(out var drive))
             {
-                toolDiskFree.Text = "Свободно: н/д";
+                toolDiskFree.Text = "● Свободно: н/д";
                 toolDiskFree.ForeColor = Color.Gray;
                 toolDiskFree.ToolTipText = "Не удалось определить диск.";
                 return;
@@ -1582,15 +1689,14 @@ namespace Replica
             }
             catch
             {
-                toolDiskFree.Text = $"Свободно {drive.Name} н/д";
+                toolDiskFree.Text = $"● Свободно {drive.Name} н/д";
                 toolDiskFree.ForeColor = Color.Gray;
                 toolDiskFree.ToolTipText = "Нет доступа к данным о диске.";
                 return;
             }
 
-            toolDiskFree.Text = $"Свободно {drive.Name} {FormatStorageSize(freeBytes)}";
+            toolDiskFree.Text = $"● Свободно {drive.Name} {FormatStorageSize(freeBytes)}";
             toolDiskFree.ToolTipText = $"Свободное место на диске {drive.Name}";
-
             if (freeBytes <= DiskCriticalThresholdBytes)
                 toolDiskFree.ForeColor = Color.Firebrick;
             else if (freeBytes <= DiskWarningThresholdBytes)
@@ -1611,19 +1717,25 @@ namespace Replica
                 _acknowledgedErrorCount = errorCount;
 
             var hasUnseenErrors = errorCount > _acknowledgedErrorCount;
-            toolAlerts.Text = $"⚠ {errorCount}";
+            if (errorCount == 0)
+                toolAlerts.Text = "● Лог: чисто";
+            else
+                toolAlerts.Text = $"● Лог: ошибки {errorCount}";
             toolAlerts.ToolTipText = errorCount == 0
                 ? "Ошибок нет. Нажмите, чтобы открыть лог."
                 : hasUnseenErrors
                     ? $"Есть новые ошибки: {errorCount}. Нажмите, чтобы открыть лог."
                     : $"Ошибок: {errorCount}. Нажмите, чтобы открыть лог.";
 
-            if (errorCount == 0)
-                toolAlerts.ForeColor = Color.Gray;
-            else if (hasUnseenErrors)
-                toolAlerts.ForeColor = Color.Firebrick;
-            else
-                toolAlerts.ForeColor = Color.Goldenrod;
+            var statusColor = errorCount == 0
+                ? Color.Gray
+                : hasUnseenErrors
+                    ? Color.Firebrick
+                    : Color.Goldenrod;
+            toolAlerts.ForeColor = statusColor;
+            toolAlerts.LinkColor = statusColor;
+            toolAlerts.ActiveLinkColor = statusColor;
+            toolAlerts.VisitedLinkColor = statusColor;
         }
 
         private void ApplyProcessorProgress(string orderId, int progressValue)
@@ -1983,7 +2095,14 @@ namespace Replica
         {
             try
             {
-                var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} | status: {oldStatus} -> {newStatus} | source: {source} | reason: {reason} | print-weight: {DescribePrintWeight(order)}";
+                var line =
+                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} | kind=status" +
+                    $" | from={NormalizeLogToken(oldStatus, 96)}" +
+                    $" | to={NormalizeLogToken(newStatus, 96)}" +
+                    $" | source={NormalizeLogToken(source, 96)}" +
+                    $" | reason={NormalizeLogToken(reason, 256)}" +
+                    $" | print_weight={NormalizeLogToken(DescribePrintWeight(order), 96)}" +
+                    $" | {BuildOrderLogContext(order)}";
                 File.AppendAllText(GetOrderLogFilePath(order), line + Environment.NewLine);
                 Logger.Info($"ORDER-STATUS | order={GetOrderDisplayId(order)} | {line}");
             }
@@ -2002,7 +2121,11 @@ namespace Replica
             {
                 var opName = string.IsNullOrWhiteSpace(operation) ? "operation" : operation.Trim();
                 var opDetails = string.IsNullOrWhiteSpace(details) ? "-" : details.Trim();
-                var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} | op: {opName} | details: {opDetails}";
+                var line =
+                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} | kind=operation" +
+                    $" | op={NormalizeLogToken(opName, 96)}" +
+                    $" | details={NormalizeLogToken(opDetails, 512)}" +
+                    $" | {BuildOrderLogContext(order)}";
                 File.AppendAllText(GetOrderLogFilePath(order), line + Environment.NewLine);
                 Logger.Info($"ORDER-OP | order={GetOrderDisplayId(order)} | {line}");
 
@@ -2032,7 +2155,10 @@ namespace Replica
             try
             {
                 var trimmed = message.Trim();
-                var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} | {trimmed}";
+                var line =
+                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} | kind=processor" +
+                    $" | message={NormalizeLogToken(trimmed, 512)}" +
+                    $" | {BuildOrderLogContext(order)}";
                 File.AppendAllText(GetOrderLogFilePath(order), line + Environment.NewLine);
                 Logger.Info($"ORDER-CAPTURED | order={GetOrderDisplayId(order)} | {trimmed}");
             }
@@ -2040,6 +2166,74 @@ namespace Replica
             {
                 // Лог не должен ломать основной поток.
             }
+        }
+
+        private string BuildOrderLogContext(OrderData order)
+        {
+            if (order == null)
+                return "order=-";
+
+            var topology = OrderTopologyService.IsMultiOrder(order) ? "group-order" : "single-order";
+            var itemsCount = (order.Items ?? []).Count(item => item != null);
+            var sourceItemsCount = CountItemsWithStagePath(order, OrderStages.Source);
+            var preparedItemsCount = CountItemsWithStagePath(order, OrderStages.Prepared);
+            var printItemsCount = CountItemsWithStagePath(order, OrderStages.Print);
+
+            return
+                $"order={NormalizeLogToken(GetOrderDisplayId(order), 96)}" +
+                $" | order_no={NormalizeLogToken(order.Id, 96)}" +
+                $" | internal_id={NormalizeLogToken(order.InternalId, 96)}" +
+                $" | user={NormalizeLogToken(order.UserName, 96)}" +
+                $" | accepted_at={FormatOrderLogDate(order.OrderDate)}" +
+                $" | received_at={FormatOrderLogDate(order.ArrivalDate)}" +
+                $" | processed_at={FormatOrderLogDate(order.LastStatusAt)}" +
+                $" | status={NormalizeLogToken(order.Status, 96)}" +
+                $" | status_source={NormalizeLogToken(order.LastStatusSource, 96)}" +
+                $" | status_reason={NormalizeLogToken(order.LastStatusReason, 256)}" +
+                $" | topology={topology}" +
+                $" | items={itemsCount}" +
+                $" | files=src:{NormalizeLogToken(Path.GetFileName(order.SourcePath), 96)},prep:{NormalizeLogToken(Path.GetFileName(order.PreparedPath), 96)},print:{NormalizeLogToken(Path.GetFileName(order.PrintPath), 96)}" +
+                $" | item_files=src:{sourceItemsCount},prep:{preparedItemsCount},print:{printItemsCount}" +
+                $" | storage_version={order.StorageVersion.ToString(CultureInfo.InvariantCulture)}";
+        }
+
+        private static int CountItemsWithStagePath(OrderData order, int stage)
+        {
+            if (order?.Items == null || order.Items.Count == 0)
+                return 0;
+
+            var count = 0;
+            foreach (var item in order.Items.Where(item => item != null))
+            {
+                var stagePath = GetItemStagePath(item, stage);
+                if (!string.IsNullOrWhiteSpace(stagePath))
+                    count++;
+            }
+
+            return count;
+        }
+
+        private static string FormatOrderLogDate(DateTime value)
+        {
+            return value == default || value <= DateTime.MinValue
+                ? "n/a"
+                : value.ToString("dd.MM.yyyy HH:mm:ss", CultureInfo.InvariantCulture);
+        }
+
+        private static string NormalizeLogToken(string? value, int maxLength)
+        {
+            var normalized = string.IsNullOrWhiteSpace(value)
+                ? "-"
+                : value.Trim();
+
+            normalized = normalized
+                .Replace('\r', ' ')
+                .Replace('\n', ' ');
+
+            if (maxLength > 0 && normalized.Length > maxLength)
+                normalized = normalized[..maxLength];
+
+            return normalized;
         }
 
         private void RunOnUiThread(Action action)
@@ -2070,7 +2264,7 @@ namespace Replica
             ShowInTaskbar = false;
             StartPosition = FormStartPosition.Manual;
             BackColor = Color.FromArgb(255, 255, 225);
-            Padding = new Padding(10, 8, 10, 8);
+            Padding = new Padding(8);
             AutoScaleMode = AutoScaleMode.None;
 
             _contentLabel = new Label
@@ -2112,9 +2306,13 @@ namespace Replica
             ClientSize = new Size(preferredSize.Width + Padding.Horizontal, preferredSize.Height + Padding.Vertical);
             _contentLabel.Location = new Point(Padding.Left, Padding.Top);
 
-            Location = new Point(
-                Math.Max(anchorScreenPoint.X, 0),
-                Math.Max(anchorScreenPoint.Y - Height, 0));
+            var workingArea = Screen.FromPoint(anchorScreenPoint).WorkingArea;
+            var targetX = Math.Max(anchorScreenPoint.X, workingArea.Left);
+            targetX = Math.Min(targetX, workingArea.Right - Width);
+            var targetY = Math.Max(anchorScreenPoint.Y - Height, workingArea.Top);
+            targetY = Math.Min(targetY, workingArea.Bottom - Height);
+
+            Location = new Point(targetX, targetY);
 
             if (!Visible)
             {

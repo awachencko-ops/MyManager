@@ -118,7 +118,7 @@ namespace Replica
 
             if (e.ClickedItem == tsbConsole)
             {
-                OpenLogForSelectionOrManager();
+                OpenSelectedOrderLog();
                 return;
             }
 
@@ -275,12 +275,18 @@ namespace Replica
             if (form.ShowDialog(this) != DialogResult.OK)
                 return;
 
+            var previousOrderNumber = order.Id;
+            var previousOrderDate = order.OrderDate;
             if (ShouldUseLanRunApi())
             {
+                var nextOrderNumber = form.OrderNumber?.Trim() ?? string.Empty;
+                var nextOrderDate = form.OrderDate == default
+                    ? order.OrderDate
+                    : form.OrderDate;
                 var updatedOrder = new OrderData
                 {
-                    Id = form.OrderNumber?.Trim() ?? string.Empty,
-                    OrderDate = form.OrderDate,
+                    Id = string.IsNullOrWhiteSpace(nextOrderNumber) ? order.Id : nextOrderNumber,
+                    OrderDate = nextOrderDate,
                     UserName = order.UserName,
                     Status = order.Status,
                     Keyword = order.Keyword,
@@ -289,7 +295,7 @@ namespace Replica
                     ImposingAction = order.ImposingAction
                 };
 
-                await ApplyLanOrderEditAsync(order, updatedOrder);
+                await ApplyLanOrderEditAsync(order, updatedOrder, previousOrderNumber, previousOrderDate, editScope: "simple");
                 return;
             }
 
@@ -298,6 +304,10 @@ namespace Replica
             SaveHistory();
             RebuildOrdersGrid();
             TryRestoreSelectedRowByTag(OrderGridLogic.BuildOrderTag(order.InternalId));
+            AppendOrderOperationLog(
+                order,
+                OrderOperationNames.EditOrder,
+                $"scope=simple | order_no={NormalizeEditLogValue(previousOrderNumber)}->{NormalizeEditLogValue(order.Id)} | accepted_at={FormatEditLogDate(previousOrderDate)}->{FormatEditLogDate(order.OrderDate)}");
         }
 
         private async Task EditOrderExtendedAsync(OrderData order)
@@ -306,9 +316,11 @@ namespace Replica
             if (form.ShowDialog(this) != DialogResult.OK || form.ResultOrder == null)
                 return;
 
+            var previousOrderNumber = order.Id;
+            var previousOrderDate = order.OrderDate;
             if (ShouldUseLanRunApi())
             {
-                await ApplyLanOrderEditAsync(order, form.ResultOrder);
+                await ApplyLanOrderEditAsync(order, form.ResultOrder, previousOrderNumber, previousOrderDate, editScope: "extended");
                 return;
             }
 
@@ -317,9 +329,18 @@ namespace Replica
             SaveHistory();
             RebuildOrdersGrid();
             TryRestoreSelectedRowByTag(OrderGridLogic.BuildOrderTag(order.InternalId));
+            AppendOrderOperationLog(
+                order,
+                OrderOperationNames.EditOrder,
+                $"scope=extended | order_no={NormalizeEditLogValue(previousOrderNumber)}->{NormalizeEditLogValue(order.Id)} | accepted_at={FormatEditLogDate(previousOrderDate)}->{FormatEditLogDate(order.OrderDate)}");
         }
 
-        private async Task ApplyLanOrderEditAsync(OrderData order, OrderData updatedOrder)
+        private async Task ApplyLanOrderEditAsync(
+            OrderData order,
+            OrderData updatedOrder,
+            string previousOrderNumber,
+            DateTime previousOrderDate,
+            string editScope)
         {
             var writeResult = await _orderApplicationService.TryUpdateOrderViaLanApiAsync(
                 order,
@@ -340,6 +361,30 @@ namespace Replica
 
             RebuildOrdersGrid();
             TryRestoreSelectedRowByTag(OrderGridLogic.BuildOrderTag(order.InternalId));
+
+            var resolvedOrder = FindOrderByInternalId(order.InternalId) ?? writeOutcome.Order ?? order;
+            AppendOrderOperationLog(
+                resolvedOrder,
+                OrderOperationNames.EditOrder,
+                $"scope={NormalizeEditLogValue(editScope)} | order_no={NormalizeEditLogValue(previousOrderNumber)}->{NormalizeEditLogValue(resolvedOrder.Id)} | accepted_at={FormatEditLogDate(previousOrderDate)}->{FormatEditLogDate(resolvedOrder.OrderDate)}");
+        }
+
+        private static string FormatEditLogDate(DateTime value)
+        {
+            return value == default || value <= DateTime.MinValue
+                ? "n/a"
+                : value.ToString("dd.MM.yyyy HH:mm:ss", CultureInfo.InvariantCulture);
+        }
+
+        private static string NormalizeEditLogValue(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return "-";
+
+            return value
+                .Trim()
+                .Replace('\r', ' ')
+                .Replace('\n', ' ');
         }
 
         private void ApplyLanOrderWriteOutcome(LanOrderWriteApplyOutcome writeOutcome)

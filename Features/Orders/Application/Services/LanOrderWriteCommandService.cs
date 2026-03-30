@@ -262,11 +262,15 @@ public sealed class LanOrderWriteCommandService
         Func<string, string> normalizeUserName)
     {
         var normalizedUserName = normalizeUserName?.Invoke(updatedOrder.UserName ?? currentOrder.UserName ?? string.Empty) ?? string.Empty;
+        var normalizedOrderNumber = updatedOrder.Id?.Trim() ?? string.Empty;
+        var managerOrderDate = updatedOrder.OrderDate == default
+            ? currentOrder.OrderDate
+            : updatedOrder.OrderDate;
         return new LanUpdateOrderRequest
         {
             ExpectedVersion = currentOrder.StorageVersion,
-            OrderNumber = updatedOrder.Id?.Trim() ?? string.Empty,
-            ManagerOrderDate = updatedOrder.OrderDate == default ? null : updatedOrder.OrderDate,
+            OrderNumber = string.IsNullOrWhiteSpace(normalizedOrderNumber) ? null : normalizedOrderNumber,
+            ManagerOrderDate = managerOrderDate == default ? null : managerOrderDate,
             UserName = normalizedUserName,
             Status = NormalizeStatus(updatedOrder.Status),
             Keyword = updatedOrder.Keyword?.Trim() ?? string.Empty,

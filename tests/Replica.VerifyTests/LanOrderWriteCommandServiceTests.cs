@@ -118,6 +118,53 @@ public sealed class LanOrderWriteCommandServiceTests
     }
 
     [Fact]
+    public async Task TryUpdateOrderAsync_WhenOrderNumberAndDateAreMissing_DoesNotOverwriteExistingValues()
+    {
+        var gateway = new StubGateway
+        {
+            UpdateResponse = LanOrderWriteApiResult.Success(new SharedOrder
+            {
+                InternalId = "o-2",
+                OrderNumber = "2001",
+                UserName = "operator-2",
+                Status = "Waiting",
+                Version = 15,
+                ManagerOrderDate = new DateTime(2026, 3, 24),
+                ArrivalDate = new DateTime(2026, 3, 23, 11, 0, 0)
+            })
+        };
+
+        var service = new LanOrderWriteCommandService(gateway);
+        var currentOrder = new OrderData
+        {
+            InternalId = "o-2",
+            StorageVersion = 14,
+            Id = "2001",
+            OrderDate = new DateTime(2026, 3, 24)
+        };
+
+        var updatedOrder = new OrderData
+        {
+            Id = "   ",
+            OrderDate = default,
+            UserName = " operator-2 ",
+            Status = "Waiting"
+        };
+
+        var result = await service.TryUpdateOrderAsync(
+            currentOrder,
+            updatedOrder,
+            "http://localhost:5000/",
+            "operator-2",
+            user => user.Trim());
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(gateway.LastUpdateRequest);
+        Assert.Null(gateway.LastUpdateRequest!.OrderNumber);
+        Assert.Equal(new DateTime(2026, 3, 24), gateway.LastUpdateRequest.ManagerOrderDate);
+    }
+
+    [Fact]
     public async Task TryDeleteOrderAsync_UsesDeleteEndpointWithExpectedVersion()
     {
         var gateway = new StubGateway

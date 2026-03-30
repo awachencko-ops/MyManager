@@ -167,8 +167,8 @@ public sealed class MainFormCoreRegressionTests
 
             Assert.StartsWith("\u0421\u0442\u0440\u043E\u043A:", toolStats.Text);
             Assert.Contains("\u0421\u0435\u0440\u0432\u0435\u0440:", toolConnection.Text);
-            Assert.StartsWith("\u0421\u0432\u043E\u0431\u043E\u0434\u043D\u043E", toolDiskFree.Text);
-            Assert.Contains("\u26A0", toolAlerts.Text);
+            Assert.Contains("\u0421\u0432\u043E\u0431\u043E\u0434\u043D\u043E", toolDiskFree.Text);
+            Assert.Contains("\u041B\u043E\u0433:", toolAlerts.Text);
             Assert.Contains("1", toolAlerts.Text);
 
             var progressByOrder = MainFormTestHarness.GetPrivateField<Dictionary<string, int>>(form, "_runProgressByOrderInternalId");

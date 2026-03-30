@@ -388,7 +388,15 @@ namespace Replica
             {
                 if (TryGetContextOrderItem(out var itemOrder, out var item))
                 {
-                    await CopyToGrandpaAsync(itemOrder!, item!);
+                    var copiedPath = await CopyToGrandpaAsync(itemOrder!, item!);
+                    if (!string.IsNullOrWhiteSpace(copiedPath))
+                    {
+                        var itemLabel = string.IsNullOrWhiteSpace(item!.ClientFileLabel) ? item.ItemId : item.ClientFileLabel;
+                        AppendOrderOperationLog(
+                            itemOrder!,
+                            OrderOperationNames.CopyPrintToGrandpa,
+                            $"scope=item | item={itemLabel} | source={Path.GetFileName(item.PrintPath)} | target={Path.GetFileName(copiedPath)}");
+                    }
                     return;
                 }
 
@@ -396,7 +404,14 @@ namespace Replica
                 if (order == null)
                     return;
 
-                await CopyToGrandpaAsync(order);
+                var orderCopiedPath = await CopyToGrandpaAsync(order);
+                if (!string.IsNullOrWhiteSpace(orderCopiedPath))
+                {
+                    AppendOrderOperationLog(
+                        order,
+                        OrderOperationNames.CopyPrintToGrandpa,
+                        $"scope=order | source={Path.GetFileName(ResolveSingleOrderDisplayPath(order, OrderStages.Print))} | target={Path.GetFileName(orderCopiedPath)}");
+                }
             }
             catch (Exception ex)
             {
@@ -482,6 +497,10 @@ namespace Replica
                     order.PrintPath = originalPrintPath;
                 }
                 var pos = isVertical ? "слева" : "сверху";
+                AppendOrderOperationLog(
+                    order,
+                    OrderOperationNames.Watermark,
+                    $"scope=order | orientation={(isVertical ? "vertical" : "horizontal")} | position={pos} | print={Path.GetFileName(printPath)}");
                 SetBottomStatus($"Водяной знак ({pos}) нанесен на {GetOrderDisplayId(order)}");
             }
             catch (IOException)
@@ -520,6 +539,11 @@ namespace Replica
 
                 var pos = isVertical ? "слева" : "сверху";
                 var fileName = Path.GetFileName(item.PrintPath);
+                var itemLabel = string.IsNullOrWhiteSpace(item.ClientFileLabel) ? item.ItemId : item.ClientFileLabel;
+                AppendOrderOperationLog(
+                    order,
+                    OrderOperationNames.Watermark,
+                    $"scope=item | item={itemLabel} | orientation={(isVertical ? "vertical" : "horizontal")} | position={pos} | print={fileName}");
                 SetBottomStatus($"Водяной знак ({pos}) нанесен на {fileName}");
             }
             catch (IOException)
@@ -547,6 +571,10 @@ namespace Replica
             }
 
             PersistGridChanges(OrderGridLogic.BuildOrderTag(order.InternalId));
+            AppendOrderOperationLog(
+                order,
+                OrderOperationNames.ActionChange,
+                "scope=order | action=pitstop | value=- | applied_to=order+items");
             SetBottomStatus($"PitStop очищен для {GetOrderDisplayId(order)}");
         }
 
@@ -563,6 +591,10 @@ namespace Replica
             }
 
             PersistGridChanges(OrderGridLogic.BuildOrderTag(order.InternalId));
+            AppendOrderOperationLog(
+                order,
+                OrderOperationNames.ActionChange,
+                "scope=order | action=imposing | value=- | applied_to=order+items");
             SetBottomStatus($"Imposing очищен для {GetOrderDisplayId(order)}");
         }
 
@@ -573,6 +605,11 @@ namespace Replica
 
             item.PitStopAction = "-";
             PersistGridChanges(OrderGridLogic.BuildItemTag(order.InternalId, item.ItemId));
+            var itemLabel = string.IsNullOrWhiteSpace(item.ClientFileLabel) ? item.ItemId : item.ClientFileLabel;
+            AppendOrderOperationLog(
+                order,
+                OrderOperationNames.ActionChange,
+                $"scope=item | item={itemLabel} | action=pitstop | value=-");
             SetBottomStatus($"PitStop очищен для item {item.ClientFileLabel}");
         }
 
@@ -583,6 +620,11 @@ namespace Replica
 
             item.ImposingAction = "-";
             PersistGridChanges(OrderGridLogic.BuildItemTag(order.InternalId, item.ItemId));
+            var itemLabel = string.IsNullOrWhiteSpace(item.ClientFileLabel) ? item.ItemId : item.ClientFileLabel;
+            AppendOrderOperationLog(
+                order,
+                OrderOperationNames.ActionChange,
+                $"scope=item | item={itemLabel} | action=imposing | value=-");
             SetBottomStatus($"Imposing очищен для item {item.ClientFileLabel}");
         }
 

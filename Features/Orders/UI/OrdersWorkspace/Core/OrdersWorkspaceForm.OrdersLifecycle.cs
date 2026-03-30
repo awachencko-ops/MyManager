@@ -1798,19 +1798,46 @@ namespace Replica
 
         private void OpenLogForSelectionOrManager()
         {
-            AcknowledgeErrorNotifications();
-
             var order = GetSelectedOrder();
             if (order != null)
             {
-                var orderLogPath = GetOrderLogFilePath(order);
-                if (File.Exists(orderLogPath))
-                {
-                    using var viewer = new OrderLogViewerForm(orderLogPath, GetOrderDisplayId(order));
-                    viewer.ShowDialog(this);
-                    return;
-                }
+                OpenSelectedOrderLog();
+                return;
             }
+
+            OpenManagerLog();
+        }
+
+        private void OpenSelectedOrderLog()
+        {
+            AcknowledgeErrorNotifications();
+
+            var order = GetSelectedOrder();
+            if (order == null)
+            {
+                const string noSelectionMessage = "Выберите заказ, чтобы открыть его лог.";
+                SetBottomStatus(noSelectionMessage);
+                MessageBox.Show(this, noSelectionMessage, "Лог заказа", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var orderLogPath = GetOrderLogFilePath(order);
+            if (!File.Exists(orderLogPath))
+            {
+                var missingMessage = $"Лог заказа №{GetOrderDisplayId(order)} пока не создан.";
+                SetBottomStatus(missingMessage);
+                MessageBox.Show(this, missingMessage, "Лог заказа", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            using var viewer = new OrderLogViewerForm(orderLogPath, GetOrderDisplayId(order));
+            viewer.ShowDialog(this);
+            SetBottomStatus($"Открыт лог заказа №{GetOrderDisplayId(order)}");
+        }
+
+        private void OpenManagerLog()
+        {
+            AcknowledgeErrorNotifications();
 
             if (!File.Exists(_managerLogFilePath))
             {
@@ -1819,11 +1846,12 @@ namespace Replica
                 return;
             }
 
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = _managerLogFilePath,
-                UseShellExecute = true
-            });
+            using var managerViewer = new OrderLogViewerForm(
+                _managerLogFilePath,
+                "Менеджер",
+                titlePrefix: "Лог",
+                emptyText: "Лог менеджера пока не создан.");
+            managerViewer.ShowDialog(this);
             SetBottomStatus("Открыт лог менеджера");
         }
 

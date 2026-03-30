@@ -132,6 +132,8 @@ namespace Replica
         private bool _connectionStatusToolTipVisible;
         private bool _pendingConnectionIndicatorRefresh;
         private string _connectionStatusToolTipContent = string.Empty;
+        private ToolStripItem? _trayStatusPopupTargetItem;
+        private string _trayStatusPopupContent = string.Empty;
         private bool _serverHardLockActive;
         private DateTime _serverHardLockLastDialogUtc = DateTime.MinValue;
         private Panel? _serverHardLockOverlayPanelMain;
