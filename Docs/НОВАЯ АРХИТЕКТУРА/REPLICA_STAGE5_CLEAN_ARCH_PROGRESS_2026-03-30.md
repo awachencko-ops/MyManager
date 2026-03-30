@@ -28,6 +28,22 @@ Status: In progress
 3. Reduced presentation coupling baseline:
    - `DiagnosticsController.cs` removed from allowed `Presentation -> Infrastructure/Data/Services` baseline in architecture verify tests.
 
+## Completed Increment: Users Controller Decoupling
+
+1. Added actor accessor abstraction:
+   - `Replica.Api/Application/Abstractions/IReplicaApiCurrentActorAccessor.cs`.
+2. Added infrastructure implementation:
+   - `Replica.Api/Infrastructure/ReplicaApiCurrentActorAccessor.cs`,
+   - resolves actor from request `HttpContext` through existing current-user context.
+3. Runtime DI updated:
+   - registered `AddHttpContextAccessor()` and scoped `IReplicaApiCurrentActorAccessor`.
+4. Refactored `Replica.Api/Controllers/UsersController.cs`:
+   - switched to mediator-only controller flow (removed `ILanOrderStore` fallback constructor/path),
+   - switched actor resolution to injected accessor,
+   - removed direct `using` dependencies to `Infrastructure` and `Services`.
+5. Reduced presentation coupling baseline:
+   - `UsersController.cs` removed from allowed `Presentation -> Infrastructure/Data/Services` baseline.
+
 ## Test Evidence
 
 1. `dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj --filter "ReplicaApiArchitectureBoundaryTests"`  
@@ -37,7 +53,7 @@ Status: In progress
 
 ## Open Notes
 
-1. Current baseline still contains direct presentation coupling in API controllers (`AuthController`, `OrdersController`, `UsersController`).
+1. Current baseline still contains direct presentation coupling in API controllers (`AuthController`, `OrdersController`).
 2. Stage 5 work should reduce this baseline gradually (without breaking current runtime path).
 
 ## Next Increment (planned)

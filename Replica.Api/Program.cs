@@ -2,6 +2,7 @@
 using System.Net;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Replica.Api.Application.Abstractions;
 using Replica.Api.Data;
 using Replica.Api.Application.Behaviors;
 using Replica.Api.Hubs;
@@ -62,7 +63,9 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddSignalR();
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<IReplicaApiTokenService, ReplicaApiTokenService>();
+builder.Services.AddScoped<IReplicaApiCurrentActorAccessor, ReplicaApiCurrentActorAccessor>();
 builder.Services.AddSingleton<IReplicaOrderPushPublisher, SignalRReplicaOrderPushPublisher>();
 builder.Services.AddSingleton<IReplicaApiHistoryShadowWriter, FileReplicaApiHistoryShadowWriter>();
 builder.Services.AddMediatR(typeof(Program));

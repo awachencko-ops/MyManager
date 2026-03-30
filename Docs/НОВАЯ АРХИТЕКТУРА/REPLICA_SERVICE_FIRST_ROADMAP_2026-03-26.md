@@ -429,3 +429,9 @@ Replica.Client/
    - refactored `DiagnosticsController` to query-handler path with test-only fallback constructor,
    - removed `DiagnosticsController` from allowed Presentation->Infrastructure/Data/Services coupling baseline,
    - verify pack passed after refactor (`348/348`, isolated output path due running API process lock).
+51. `2026-03-30`: Stage 5 users-controller decoupling increment:
+   - added actor accessor abstraction + implementation (`IReplicaApiCurrentActorAccessor`, `ReplicaApiCurrentActorAccessor`),
+   - updated DI composition (`AddHttpContextAccessor`, scoped current-actor accessor),
+   - refactored `UsersController` to mediator-only path (store fallback removed, actor resolved via accessor),
+   - removed `UsersController` from allowed Presentation->Infrastructure/Data/Services coupling baseline,
+   - verify pack passed after refactor (`348/348`).
