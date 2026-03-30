@@ -135,6 +135,30 @@ public sealed class OrderRunFeedbackServiceTests
     }
 
     [Fact]
+    public void BuildStartUiFeedback_ForAlreadyActiveServerReject_UsesFriendlyMessageAndInfoLog()
+    {
+        var service = new OrderRunFeedbackService();
+        var runPlan = new OrderRunStateService.RunPlan(RunnableOrders: [], OrdersWithoutNumber: [], AlreadyRunningOrders: []);
+        var preparation = RunStartPreparationResult.From(
+            runPlan,
+            runnableOrders: [],
+            skippedByServer: ["00736: уже запущен на сервере"],
+            usedLanApi: true,
+            snapshotRefreshFailed: false);
+        var startPhase = OrderRunStartPhaseResult.ServerRejected(preparation);
+
+        var feedback = service.BuildStartUiFeedback(startPhase);
+
+        Assert.True(feedback.ShouldAbort);
+        Assert.Contains("уже запущены", feedback.BottomStatus);
+        Assert.NotNull(feedback.Dialog);
+        Assert.Contains("уже запущены", feedback.Dialog!.Message);
+        var log = Assert.Single(feedback.Logs);
+        Assert.Contains("RUN | command-already-active", log.Message);
+        Assert.False(log.IsWarning);
+    }
+
+    [Fact]
     public void BuildStopUiFeedback_ForNotRunning_ReturnsInfoDialogAndWarningLog()
     {
         var service = new OrderRunFeedbackService();
@@ -257,6 +281,24 @@ public sealed class OrderRunFeedbackServiceTests
         Assert.Contains("пропущена", feedback.BottomStatus);
         Assert.NotNull(feedback.Dialog);
         Assert.Contains("order-1: locked", feedback.Dialog!.Message);
+    }
+
+    [Fact]
+    public void BuildStartProgressUiFeedback_WithAlreadyActiveServerSkip_UsesFriendlyDialogText()
+    {
+        var service = new OrderRunFeedbackService();
+        var runPlan = new OrderRunStateService.RunPlan(
+            RunnableOrders: new List<OrderData> { new() },
+            OrdersWithoutNumber: new List<OrderData>(),
+            AlreadyRunningOrders: new List<OrderData>());
+
+        var feedback = service.BuildStartProgressUiFeedback(
+            runnableOrdersCount: 1,
+            runPlan: runPlan,
+            serverSkipped: new[] { "00736: run already active" });
+
+        Assert.NotNull(feedback.Dialog);
+        Assert.Contains("уже была запущена", feedback.Dialog!.Message);
     }
 
     [Fact]

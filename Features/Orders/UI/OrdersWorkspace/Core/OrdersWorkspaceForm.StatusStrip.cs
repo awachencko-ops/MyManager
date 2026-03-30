@@ -767,11 +767,11 @@ namespace Replica
             }
             else if (string.Equals(snapshot.ReadyStatus, "degraded", StringComparison.OrdinalIgnoreCase))
             {
-                reasons.Add("Ready: degraded (сервер работает с ограничениями).");
+                reasons.Add("Ready: нестабильно (сервер работает с ограничениями).");
             }
 
             if (!snapshot.SloHealthy)
-                reasons.Add($"SLO: {NormalizeLanProbeStatusForUi(snapshot.SloStatus)}.");
+                reasons.Add(BuildLanSloReason(snapshot));
 
             if (dependencyHealthLevel == DependencyHealthLevel.Unavailable)
                 reasons.Add("Локальные зависимости: есть недоступные сервисы.");
@@ -806,13 +806,41 @@ namespace Replica
             if (string.Equals(status, "ok", StringComparison.OrdinalIgnoreCase))
                 return "ok";
             if (string.Equals(status, "degraded", StringComparison.OrdinalIgnoreCase))
-                return "degraded";
+                return "нестабильно";
             if (string.Equals(status, "error", StringComparison.OrdinalIgnoreCase))
                 return "ошибка";
             if (string.Equals(status, "cancelled", StringComparison.OrdinalIgnoreCase))
                 return "отменено";
 
             return status;
+        }
+
+        private static string BuildLanSloReason(LanServerProbeSnapshot snapshot)
+        {
+            List<string> failedChecks = [];
+
+            if (snapshot.AvailabilityRatio >= 0 && snapshot.AvailabilityRatio < LanSloAvailabilityTarget)
+            {
+                failedChecks.Add(
+                    $"доступность {snapshot.AvailabilityRatio:P1} < {LanSloAvailabilityTarget:P1}");
+            }
+
+            if (snapshot.LatencyP95Ms >= 0 && snapshot.LatencyP95Ms > LanSloLatencyP95TargetMs)
+            {
+                failedChecks.Add(
+                    $"latency p95 {snapshot.LatencyP95Ms:0} мс > {LanSloLatencyP95TargetMs:0} мс");
+            }
+
+            if (snapshot.WriteSuccessRatio >= 0 && snapshot.WriteSuccessRatio < LanSloWriteSuccessTarget)
+            {
+                failedChecks.Add(
+                    $"успешные записи {snapshot.WriteSuccessRatio:P1} < {LanSloWriteSuccessTarget:P1}");
+            }
+
+            if (failedChecks.Count == 0)
+                return $"SLO: {NormalizeLanProbeStatusForUi(snapshot.SloStatus)}.";
+
+            return $"SLO: цели не выполнены ({string.Join(", ", failedChecks)}).";
         }
 
         private static string TruncateTooltipText(string text, int maxLength = 260)
@@ -2194,7 +2222,8 @@ namespace Replica
                 $" | items={itemsCount}" +
                 $" | files=src:{NormalizeLogToken(Path.GetFileName(order.SourcePath), 96)},prep:{NormalizeLogToken(Path.GetFileName(order.PreparedPath), 96)},print:{NormalizeLogToken(Path.GetFileName(order.PrintPath), 96)}" +
                 $" | item_files=src:{sourceItemsCount},prep:{preparedItemsCount},print:{printItemsCount}" +
-                $" | storage_version={order.StorageVersion.ToString(CultureInfo.InvariantCulture)}";
+                $" | storage_version={order.StorageVersion.ToString(CultureInfo.InvariantCulture)}" +
+                $" | correlation_id={NormalizeLogToken(Logger.CurrentCorrelationId, 128)}";
         }
 
         private static int CountItemsWithStagePath(OrderData order, int stage)

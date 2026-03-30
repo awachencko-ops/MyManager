@@ -4,6 +4,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Replica.Api.Contracts;
 using Replica.Api.Data;
@@ -16,6 +17,7 @@ namespace Replica.Api.Services;
 public sealed class EfCoreLanOrderStore : ILanOrderStore
 {
     private readonly IDbContextFactory<ReplicaDbContext> _dbContextFactory;
+    private readonly IHttpContextAccessor? _httpContextAccessor;
     private const string CreateOrderCommandName = "create-order";
     private const string DeleteOrderCommandName = "delete-order";
     private const string UpdateOrderCommandName = "update-order";
@@ -29,9 +31,12 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
 
     private readonly List<SharedUser> _fallbackUsers = ReplicaApiBootstrapUsers.GetDefaultUsers().ToList();
 
-    public EfCoreLanOrderStore(IDbContextFactory<ReplicaDbContext> dbContextFactory)
+    public EfCoreLanOrderStore(
+        IDbContextFactory<ReplicaDbContext> dbContextFactory,
+        IHttpContextAccessor? httpContextAccessor = null)
     {
         _dbContextFactory = dbContextFactory;
+        _httpContextAccessor = httpContextAccessor;
     }
 
     public IReadOnlyList<SharedUser> GetUsers(bool includeInactive = false)
@@ -391,6 +396,7 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
             return StoreOperationResult.Conflict(orderRecord.Version, "order version mismatch");
 
         var order = DeserializeOrder(orderRecord);
+        var previousStatus = order.Status ?? string.Empty;
 
         if (request.OrderNumber != null)
             order.OrderNumber = request.OrderNumber.Trim();
@@ -429,7 +435,16 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
         ApplyOrderRecord(orderRecord, order);
 
         UpsertUser(db, order.UserName);
-        db.OrderEvents.Add(BuildEventRecord(order.InternalId, string.Empty, "update-order", "api", actor, new { order_id = order.InternalId, version = order.Version }));
+        db.OrderEvents.Add(BuildEventRecord(order.InternalId, string.Empty, "update-order", "api", actor, new
+        {
+            order_id = order.InternalId,
+            version = order.Version,
+            status_transition = new
+            {
+                from = previousStatus,
+                to = order.Status ?? string.Empty
+            }
+        }));
 
         try
         {
@@ -991,6 +1006,7 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
             lockRecord.UpdatedAt = DateTime.Now;
         }
 
+        var previousStatus = order.Status ?? string.Empty;
         order.Version = orderRecord.Version + 1;
         order.Status = "Processing";
         order.LastStatusAt = DateTime.Now;
@@ -1001,7 +1017,12 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
         db.OrderEvents.Add(BuildEventRecord(orderRecord.InternalId, string.Empty, "run", "api", actor ?? string.Empty, new
         {
             lease_token = leaseToken,
-            order_version = order.Version
+            order_version = order.Version,
+            status_transition = new
+            {
+                from = previousStatus,
+                to = order.Status
+            }
         }));
 
         try
@@ -1041,6 +1062,7 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
         lockRecord.UpdatedAt = DateTime.Now;
 
         var order = DeserializeOrder(orderRecord);
+        var previousStatus = order.Status ?? string.Empty;
         order.Version = orderRecord.Version + 1;
         order.Status = "Cancelled";
         order.LastStatusAt = DateTime.Now;
@@ -1051,7 +1073,12 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
         db.OrderEvents.Add(BuildEventRecord(orderRecord.InternalId, string.Empty, "stop", "api", actor, new
         {
             lease_token = lockRecord.LeaseToken,
-            order_version = order.Version
+            order_version = order.Version,
+            status_transition = new
+            {
+                from = previousStatus,
+                to = order.Status
+            }
         }));
 
         try
@@ -1410,8 +1437,9 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
         existing.UpdatedAt = DateTime.Now;
     }
 
-    private static OrderEventRecord BuildEventRecord(string orderId, string itemId, string eventType, string eventSource, string actor, object payload)
+    private OrderEventRecord BuildEventRecord(string orderId, string itemId, string eventType, string eventSource, string actor, object payload)
     {
+        var correlationId = ResolveCorrelationId();
         return new OrderEventRecord
         {
             OrderInternalId = orderId ?? string.Empty,
@@ -1421,10 +1449,20 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
             PayloadJson = JsonSerializer.Serialize(new
             {
                 actor = actor ?? string.Empty,
+                correlation_id = correlationId,
                 payload
             }),
             CreatedAt = DateTime.Now
         };
+    }
+
+    private string ResolveCorrelationId()
+    {
+        var correlationId = _httpContextAccessor?.HttpContext?.TraceIdentifier;
+        if (!string.IsNullOrWhiteSpace(correlationId))
+            return correlationId.Trim();
+
+        return string.Empty;
     }
 
     private static string BuildUserId(string userName)

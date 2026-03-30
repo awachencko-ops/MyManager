@@ -71,9 +71,7 @@ public sealed class LanRunCommandCoordinator
             if (apiResult.IsConflict || apiResult.IsBadRequest || apiResult.IsNotFound)
             {
                 var orderDisplayId = orderDisplayIdResolver?.Invoke(order) ?? order.InternalId;
-                var reason = string.IsNullOrWhiteSpace(apiResult.Error)
-                    ? "server rejected run command"
-                    : apiResult.Error;
+                var reason = NormalizeRunSkipReason(apiResult.Error);
                 skippedByServer.Add($"{orderDisplayId}: {reason}");
                 continue;
             }
@@ -182,6 +180,18 @@ public sealed class LanRunCommandCoordinator
             return false;
 
         return value.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    private static string NormalizeRunSkipReason(string? rawReason)
+    {
+        if (string.IsNullOrWhiteSpace(rawReason))
+            return "server rejected run command";
+
+        var reason = rawReason.Trim();
+        if (ContainsToken(reason, RunAlreadyActiveError))
+            return "уже запущен на сервере";
+
+        return reason;
     }
 
     private static void ApplyLanApiOrderSnapshot(OrderData localOrder, SharedOrder? apiOrder)

@@ -186,6 +186,9 @@ namespace Replica
         private const int TrayIndicatorsRefreshIntervalMs = 15000;
         private const int LanServerProbeMinIntervalMs = 5000;
         private const int LanServerProbeFailureThreshold = 3;
+        private const double LanSloAvailabilityTarget = 0.995;
+        private const double LanSloLatencyP95TargetMs = 500;
+        private const double LanSloWriteSuccessTarget = 0.99;
         private int LanPushMinRefreshIntervalMs = AppSettings.DefaultLanPushMinRefreshIntervalMs;
         private const int LanPushReasonCountersMaxItems = 4;
         private int LanPushPressureAlertMinEvents = AppSettings.DefaultLanPushPressureAlertMinEvents;

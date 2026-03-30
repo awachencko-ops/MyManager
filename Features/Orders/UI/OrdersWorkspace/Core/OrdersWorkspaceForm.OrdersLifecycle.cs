@@ -199,9 +199,12 @@ namespace Replica
 
             EnsureOrdersRepository();
             var orderInternalId = order.InternalId ?? string.Empty;
-            var payloadJson = payload == null
-                ? "{}"
-                : JsonSerializer.Serialize(payload);
+            var correlationId = Logger.CurrentCorrelationId;
+            var payloadJson = JsonSerializer.Serialize(new
+            {
+                correlation_id = string.IsNullOrWhiteSpace(correlationId) ? string.Empty : correlationId.Trim(),
+                payload = payload ?? new { }
+            });
 
             if (_orderApplicationService.TryAppendHistoryEvent(
                     orderInternalId,

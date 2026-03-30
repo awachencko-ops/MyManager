@@ -69,6 +69,29 @@ public sealed class LanRunCommandCoordinatorTests
     }
 
     [Fact]
+    public async Task TryStartRunsAsync_WhenRunAlreadyActive_NormalizesServerSkipReasonForUi()
+    {
+        var gateway = new StubLanGateway();
+        gateway.StartResponses.Enqueue(LanOrderRunApiResult.Conflict("run already active", currentVersion: 8));
+
+        var coordinator = new LanRunCommandCoordinator(gateway);
+        var order = new OrderData { InternalId = "order-7", Id = "00736", StorageVersion = 3 };
+
+        var result = await coordinator.TryStartRunsAsync(
+            new[] { order },
+            useLanApi: true,
+            lanApiBaseUrl: "http://localhost:5000/",
+            actor: "operator-1",
+            orderDisplayIdResolver: value => value.Id);
+
+        Assert.False(result.IsFatal);
+        var skipped = Assert.Single(result.SkippedByServer);
+        Assert.Contains("00736", skipped);
+        Assert.Contains("уже запущен на сервере", skipped);
+        Assert.Equal(8, order.StorageVersion);
+    }
+
+    [Fact]
     public async Task TryStartRunsAsync_WhenFatalError_ReturnsFatalAndStopsBatch()
     {
         var gateway = new StubLanGateway();

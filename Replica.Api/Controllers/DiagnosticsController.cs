@@ -39,6 +39,19 @@ public sealed class DiagnosticsController : ControllerBase
         return Ok(operations.Select(ToDto).ToList());
     }
 
+    [HttpGet("operations/by-correlation")]
+    [ProducesResponseType(typeof(IReadOnlyList<ServerOperationDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<ServerOperationDto>>> GetOperationsByCorrelation(
+        [FromQuery] string correlationId,
+        [FromQuery] int limit = 100)
+    {
+        var operations = await ExecuteQueryAsync(
+            new GetOperationsByCorrelationQuery(correlationId, limit),
+            () => Task.FromResult<IReadOnlyList<ServerOperationReadModel>>(Array.Empty<ServerOperationReadModel>()));
+
+        return Ok(operations.Select(ToDto).ToList());
+    }
+
     [HttpGet("push")]
     [ProducesResponseType(typeof(PushDiagnosticsDto), StatusCodes.Status200OK)]
     public async Task<ActionResult<PushDiagnosticsDto>> GetPushDiagnostics()
