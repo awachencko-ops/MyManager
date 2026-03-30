@@ -400,3 +400,8 @@ Replica.Client/
    - registered scheduled task `Replica Stage4 Reconciliation Daily`,
    - executed manual start with successful completion (`LastTaskResult=0`),
    - execution journal entry appended by scheduled run (`Responsible actor: task-scheduler`).
+44. `2026-03-30`: Stage 4 live-sources scheduler increment:
+   - added `Prepare-ReconciliationSnapshots.ps1` (build snapshots from API + local `history.json`),
+   - added `Run-ReconciliationLive.ps1` (prepare + journal chain for one run),
+   - extended scheduler registration with mode switch (`LiveSources` / `StaticSnapshots`) and switched task action to `Run-ReconciliationLive.ps1`,
+   - dry-run validation passed for `Prepare/Live/Register` path; first successful live scheduled run pending API availability.

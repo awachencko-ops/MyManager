@@ -105,3 +105,16 @@ Status: Active
    - is_zero_diff = true
 4. Decision: Continue rollout preparation.
 5. Notes: report_path=C:\Users\user\Desktop\MyManager 1.0.1\artifacts\reconciliation\reports\reconciliation-20260330-113819.json; cli_exit_code=0.
+
+### 2026-03-30 11:52 (Asia/Vladivostok)
+
+1. Responsible actor: codex-assisted update.
+2. Operational mode update:
+   - Task Scheduler action switched to `Run-ReconciliationLive.ps1` (`Mode=LiveSources`),
+   - live chain now uses API + local `history.json` to prepare snapshots before reconciliation.
+3. Verification:
+   - `Prepare-ReconciliationSnapshots.ps1 -DryRun` passed,
+   - `Run-ReconciliationLive.ps1 -DryRun` passed,
+   - `Register-ReconciliationScheduledTask.ps1 -Mode LiveSources -ForceRecreate` passed.
+4. Decision: Continue rollout preparation.
+5. Notes: `http://localhost:5000/live` was unreachable during this check; first successful live scheduled run will be зафиксирован после старта API.

@@ -1,4 +1,4 @@
-<!-- DOC_ENCODING_REQUIREMENT_UTF8 -->
+﻿<!-- DOC_ENCODING_REQUIREMENT_UTF8 -->
 > Требование кодировки: все файлы документации (`*.md`) в этом репозитории хранятся только в `UTF-8 with BOM`, окончания строк — `LF`.
 
 # Replica Stage 4 Progress (Dual-Write Execution)
@@ -38,9 +38,9 @@ Status: In progress
 9. Заведён ежедневный execution journal Stage 4:
    - документ `REPLICA_STAGE4_EXECUTION_JOURNAL_2026-03-30.md`,
    - добавлена стартовая запись и шаблон daily-отметок.
-10. Операционные snapshot paths задаются напрямую в Task Scheduler setup:
+10. Операционные snapshot paths задаются в Task Scheduler setup:
    - `-PgSnapshotPath` и `-JsonSnapshotPath` передаются в registration script,
-   - scheduled task вызывает `Run-ReconciliationJournal.ps1` с этими путями.
+   - в режиме `LiveSources` snapshots пересобираются автоматически из API + `history.json`.
 11. Добавлен runbook Stage 4 reconciliation:
    - документ `REPLICA_STAGE4_RECONCILIATION_RUNBOOK_2026-03-30.md`,
    - описаны setup/run/verification шаги для Task Scheduler и operator checklist.
@@ -52,6 +52,10 @@ Status: In progress
    - registered task: `Replica Stage4 Reconciliation Daily` (`09:15`, daily),
    - manual start succeeded (`LastTaskResult=0`),
    - execution journal получил автоматическую запись от `task-scheduler`.
+15. Добавлен live execution-chain для реальных источников:
+   - `scripts/stage4/Prepare-ReconciliationSnapshots.ps1`,
+   - `scripts/stage4/Run-ReconciliationLive.ps1`,
+   - registration script поддерживает `-Mode LiveSources` и переключён на этот режим.
 
 ## Test Evidence
 
@@ -73,13 +77,20 @@ Status: In progress
    Result: validated (Task Scheduler action/paths resolved without side effects).
 9. `powershell -ExecutionPolicy Bypass -File scripts/stage4/Register-ReconciliationScheduledTask.ps1 -ForceRecreate` + `Start-ScheduledTask`  
    Result: validated (task registered and manual run completed with `LastTaskResult=0`).
+10. `powershell -ExecutionPolicy Bypass -File scripts/stage4/Prepare-ReconciliationSnapshots.ps1 -DryRun`  
+   Result: validated (API/history/settings paths resolved, snapshot output paths resolved).
+11. `powershell -ExecutionPolicy Bypass -File scripts/stage4/Run-ReconciliationLive.ps1 -DryRun`  
+   Result: validated (prepare step invoked successfully, journal step skipped by design).
+12. `powershell -ExecutionPolicy Bypass -File scripts/stage4/Register-ReconciliationScheduledTask.ps1 -Mode LiveSources -ForceRecreate`  
+   Result: validated (scheduled task action switched to `Run-ReconciliationLive.ps1`).
 
 ## Open Notes
 
 1. Ранее падавшие run-workflow тесты восстановлены; полный `Verify` снова зелёный (`346/346`).
 2. Основной daily-контур перенесён на локальный Task Scheduler; GitHub workflow используется только как fallback.
+3. На момент последней проверки `http://localhost:5000/live` был недоступен; полный live-run от планировщика ожидает поднятый API-процесс.
 
 ## Next Increment (planned)
 
-1. Перевести Task Scheduler задачу на реальные snapshot paths (вместо sample baseline).
-2. Продолжить ежедневные journal entries на основе reconcile-отчётов и backup checks.
+1. Выполнить первый успешный live-run через Task Scheduler при доступном API (`/live` reachable) и зафиксировать запись в execution journal.
+2. Добавить операторский check/алерт для недоступного API перед reconciliation-окном.

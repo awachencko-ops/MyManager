@@ -1,4 +1,4 @@
-<!-- DOC_ENCODING_REQUIREMENT_UTF8 -->
+﻿<!-- DOC_ENCODING_REQUIREMENT_UTF8 -->
 > Требование кодировки: все файлы документации (`*.md`) в этом репозитории хранятся только в `UTF-8 with BOM`, окончания строк — `LF`.
 
 # Replica Stage 4 Reconciliation Runbook
@@ -14,28 +14,48 @@ Status: Active
 
 Основной путь эксплуатации: **локально на сервере/рабочем ПК через Windows Task Scheduler**.
 
-1. По расписанию запускается `scripts/stage4/Run-ReconciliationJournal.ps1`.
-2. Скрипт вызывает reconciliation CLI.
-3. CLI строит JSON-отчёт с mismatch buckets.
-4. Скрипт автоматически дописывает запись в execution journal.
+1. По расписанию запускается `scripts/stage4/Run-ReconciliationLive.ps1`.
+2. `Run-ReconciliationLive.ps1` вызывает `Prepare-ReconciliationSnapshots.ps1`:
+   - читает `history.json` (локальная рабочая таблица),
+   - запрашивает API (`/api/orders`),
+   - формирует актуальные snapshots `json vs pg`.
+3. Затем запускается `Run-ReconciliationJournal.ps1`.
+4. `Run-ReconciliationJournal.ps1` вызывает reconciliation CLI, формирует diff-report и дописывает запись в execution journal.
 
 GitHub Actions в этом контуре не обязателен и рассматривается только как опциональный внешний fallback.
 
 ## Scripts
 
-1. `scripts/stage4/Run-ReconciliationJournal.ps1`  
-   Daily-run script: reconciliation + report + journal append.
-2. `scripts/stage4/Register-ReconciliationScheduledTask.ps1`  
+1. `scripts/stage4/Prepare-ReconciliationSnapshots.ps1`  
+   Подготовка актуальных snapshots из API + `history.json`.
+2. `scripts/stage4/Run-ReconciliationJournal.ps1`  
+   Reconciliation + report + journal append.
+3. `scripts/stage4/Run-ReconciliationLive.ps1`  
+   Оркестрация prepare + journal для ежедневного запуска.
+4. `scripts/stage4/Register-ReconciliationScheduledTask.ps1`  
    Setup script: регистрация ежедневной задачи Task Scheduler.
+5. `scripts/stage4/Unregister-ReconciliationScheduledTask.ps1`  
+   Удаление зарегистрированной задачи (при пересоздании/откате).
 
 ## One-Time Setup (Task Scheduler)
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/stage4/Register-ReconciliationScheduledTask.ps1 `
-  -PgSnapshotPath "<real_pg_snapshot.json>" `
-  -JsonSnapshotPath "<real_json_snapshot.json>" `
+  -Mode LiveSources `
   -At "09:15" `
   -ResponsibleActor "task-scheduler"
+```
+
+Опциональные overrides для нестандартного окружения:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/stage4/Register-ReconciliationScheduledTask.ps1 `
+  -Mode LiveSources `
+  -ApiBaseUrl "http://localhost:5000/" `
+  -HistoryFilePath "C:\Path\To\history.json" `
+  -SettingsFilePath "C:\Path\To\settings.json" `
+  -ResponsibleActor "task-scheduler" `
+  -ForceRecreate
 ```
 
 Проверить задачу:
@@ -60,9 +80,16 @@ powershell -ExecutionPolicy Bypass -File scripts/stage4/Unregister-Reconciliatio
 ## Manual Run (Operator)
 
 ```powershell
+powershell -ExecutionPolicy Bypass -File scripts/stage4/Run-ReconciliationLive.ps1 `
+  -ResponsibleActor "<operator_name>"
+```
+
+Fallback ручной run со статическими snapshots:
+
+```powershell
 powershell -ExecutionPolicy Bypass -File scripts/stage4/Run-ReconciliationJournal.ps1 `
-  -PgSnapshotPath "<real_pg_snapshot.json>" `
-  -JsonSnapshotPath "<real_json_snapshot.json>" `
+  -PgSnapshotPath "<pg_snapshot.json>" `
+  -JsonSnapshotPath "<json_snapshot.json>" `
   -ResponsibleActor "<operator_name>"
 ```
 
@@ -83,10 +110,11 @@ Mismatch buckets:
 ## Daily Operator Checklist
 
 1. Убедиться, что задача отработала (`LastTaskResult`).
-2. Проверить свежий reconciliation report в `artifacts/reconciliation/reports/`.
-3. Проверить последнюю запись в:
+2. Проверить доступность API (`/live`) и актуальность `history.json` пути в `settings.json` (если есть инцидент).
+3. Проверить свежий reconciliation report в `artifacts/reconciliation/reports/`.
+4. Проверить последнюю запись в:
    - `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_EXECUTION_JOURNAL_2026-03-30.md`
-4. Если любое mismatch-поле > 0:
+5. Если любое mismatch-поле > 0:
    - создать incident,
    - остановить расширение rollout,
    - выполнить root-cause/replay по Stage 4 checklist.
