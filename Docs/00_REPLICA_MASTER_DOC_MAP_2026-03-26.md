@@ -18,6 +18,7 @@
 7. `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_RECONCILIATION_RUNBOOK_2026-03-30.md` (операционный runbook Task Scheduler/manual reconciliation)
 8. `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE5_CLEAN_ARCH_PROGRESS_2026-03-30.md` (текущий execution progress Stage 5)
 9. `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE6_CUTOVER_PROGRESS_2026-03-30.md` (текущий execution progress Stage 6)
+10. `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE6_CUTOVER_CLOSURE_CHECKLIST_2026-03-30.md` (финальный go/no-go checklist Stage 6)
 
 ## 2. Сводный статус
 
@@ -29,7 +30,8 @@
 | Stage 4 execution journal | Active | `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_EXECUTION_JOURNAL_2026-03-30.md` |
 | Stage 4 reconciliation runbook | Active | `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_RECONCILIATION_RUNBOOK_2026-03-30.md` |
 | Stage 5 Clean Architecture progress | Done | `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE5_CLEAN_ARCH_PROGRESS_2026-03-30.md` |
-| Stage 6 Cutover progress | In progress | `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE6_CUTOVER_PROGRESS_2026-03-30.md` |
+| Stage 6 Cutover progress | Done | `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE6_CUTOVER_PROGRESS_2026-03-30.md` |
+| Stage 6 Closure checklist | Signed-off (Go) | `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE6_CUTOVER_CLOSURE_CHECKLIST_2026-03-30.md` |
 | UI Design System | Active | `Docs/REPLICA_DESIGN_SYSTEM_2026-03-27.md` |
 | Legacy docs set (active + ready, до пересборки плана) | Archived | `Docs/archive/2026-03-26_pre_new_architecture/` |
 
@@ -47,6 +49,7 @@
 8. `REPLICA_STAGE4_RECONCILIATION_RUNBOOK_2026-03-30.md`
 9. `REPLICA_STAGE5_CLEAN_ARCH_PROGRESS_2026-03-30.md`
 10. `REPLICA_STAGE6_CUTOVER_PROGRESS_2026-03-30.md`
+11. `REPLICA_STAGE6_CUTOVER_CLOSURE_CHECKLIST_2026-03-30.md`
 
 ### 3.2 `Docs/archive/2026-03-26_pre_new_architecture` (архив согласованного переноса)
 

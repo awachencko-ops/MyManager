@@ -105,6 +105,32 @@ else
         -Details ([PSCustomObject]@{ path = $settingsDialogPath })
 }
 
+$historyCoordinatorPath = Join-Path $resolvedRepoRoot "Features\Orders\Application\Services\OrdersHistoryRepositoryCoordinator.cs"
+if (Test-Path -LiteralPath $historyCoordinatorPath)
+{
+    $historyCoordinatorSource = Get-Content -LiteralPath $historyCoordinatorPath -Raw
+    $hasRuntimeFileBootstrap = [bool]($historyCoordinatorSource -match "TryBootstrapFromFileHistory\s*\(")
+    $hasRuntimeFileMirror = [bool]($historyCoordinatorSource -match "TryMirrorLanHistoryToFileSnapshot\s*\(")
+    $hasLegacyRuntimeFileFlow = $hasRuntimeFileBootstrap -or $hasRuntimeFileMirror
+    Add-Check `
+        -Name "lan_runtime_legacy_file_flow" `
+        -IsRisk $hasLegacyRuntimeFileFlow `
+        -Message ($(if ($hasLegacyRuntimeFileFlow) { "LAN runtime still contains legacy history.json bootstrap/mirror flow." } else { "LAN runtime legacy history.json bootstrap/mirror flow is disabled." })) `
+        -Details ([PSCustomObject]@{
+            path = $historyCoordinatorPath
+            has_runtime_bootstrap = $hasRuntimeFileBootstrap
+            has_runtime_mirror = $hasRuntimeFileMirror
+        })
+}
+else
+{
+    Add-Check `
+        -Name "lan_runtime_legacy_file_flow" `
+        -IsRisk $true `
+        -Message "Features/Orders/Application/Services/OrdersHistoryRepositoryCoordinator.cs not found." `
+        -Details ([PSCustomObject]@{ path = $historyCoordinatorPath })
+}
+
 $stage4TaskName = "Replica Stage4 Reconciliation Daily"
 try
 {

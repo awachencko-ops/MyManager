@@ -4,7 +4,7 @@
 # Replica Stage 6 Progress (Cutover + Legacy Flow Decommission)
 
 Date: 2026-03-30  
-Status: In progress
+Status: Done
 
 ## Stage 6 Kickoff
 
@@ -101,7 +101,70 @@ Observed status:
 2. Active risks (`0`):
    - none.
 
+## Completed Increment: Runtime Legacy File-Flow Decommission
+
+1. Removed LAN runtime bootstrap/mirror interaction with `history.json`:
+   - `Features/Orders/Application/Services/OrdersHistoryRepositoryCoordinator.cs`
+   - LAN mode no longer:
+     - bootstraps PostgreSQL from `history.json` during load,
+     - mirrors PostgreSQL snapshot to `history.json` during load/save.
+2. Stage 6 readiness script strengthened:
+   - added check `lan_runtime_legacy_file_flow`,
+   - risk is raised if coordinator still contains runtime bootstrap/mirror methods.
+3. Regression evidence:
+   - `dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj` passed (`349/349`).
+4. Integration coverage update:
+   - LAN coordinator integration expectation switched to “primary without runtime file sync”,
+   - added explicit integration case for “no bootstrap from file in LAN mode”.
+
+## Fourth Execution Evidence
+
+Command:
+
+```powershell
+dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj `
+  -p:BaseOutputPath="C:\Users\user\Desktop\MyManager 1.0.1\artifacts\tmp\test-out\"
+
+powershell -ExecutionPolicy Bypass -File "scripts/stage6/Get-CutoverReadinessStatus.ps1" `
+  -RepoRoot "." `
+  -OutJsonPath "artifacts/stage6/cutover-readiness.latest.json"
+```
+
+Observed status:
+
+1. Tests: `349/349` passed.
+2. Readiness: `ready_for_cutover`.
+3. Active risks (`0`):
+   - none.
+4. New check state:
+   - `lan_runtime_legacy_file_flow = OK`.
+
+## Completed Increment: Stage 6 Closure Checklist Publication
+
+1. Added final closure/go-no-go document:
+   - `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE6_CUTOVER_CLOSURE_CHECKLIST_2026-03-30.md`.
+2. Master doc map updated to include Stage 6 closure checklist as active handoff artifact.
+
+## Go/No-Go Walkthrough Snapshot
+
+1. Checklist command set executed (readiness + verify tests).
+2. Current technical gate result:
+   - `ready_for_cutover`,
+   - `risk_count=0`,
+   - verify pack `349/349` green.
+3. Decision state:
+   - technical gate passed,
+   - awaiting owner sign-off in closure checklist.
+
+## Completed Increment: Final Sign-off and Stage Closure
+
+1. Sign-off decision recorded in closure checklist:
+   - `REPLICA_STAGE6_CUTOVER_CLOSURE_CHECKLIST_2026-03-30.md` -> `Signed-off (Go)`.
+2. Stage 6 execution status closed as `Done`.
+3. Final gate snapshot:
+   - readiness `ready_for_cutover`, `risk_count=0`,
+   - verify tests `349/349` passed.
+
 ## Next Increment (planned)
 
-1. Finalize Stage 6 rollback/recovery wording (file-based path only as explicit utility/recovery flow, not runtime mode).
-2. Prepare Stage 6 closure checklist and handoff notes.
+1. Start post-Stage6 roadmap block (next architecture stage execution document).

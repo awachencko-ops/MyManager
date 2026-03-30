@@ -467,3 +467,16 @@ Replica.Client/
    - executed `scripts/stage4/Unregister-ReconciliationScheduledTask.ps1` to remove legacy Stage 4 daily task,
    - reran readiness scan (`scripts/stage6/Get-CutoverReadinessStatus.ps1`) and reached `ready_for_cutover` with `risk_count=0`,
    - Stage 6 cutover gate status moved to green (remaining work: closure/handoff docs).
+58. `2026-03-30`: Stage 6 runtime legacy file-flow decommission increment:
+   - removed LAN runtime bootstrap/mirror behavior with `history.json` from `OrdersHistoryRepositoryCoordinator` (PostgreSQL is the only runtime persistence source in LAN mode),
+   - extended Stage 6 readiness script with `lan_runtime_legacy_file_flow` check,
+   - updated coordinator integration coverage for new contract (no runtime file sync/bootstrap in LAN mode),
+   - verify pack passed (`349/349`) and readiness remained green (`ready_for_cutover`, `risk_count=0`).
+59. `2026-03-30`: Stage 6 closure checklist + go/no-go prep increment:
+   - published `REPLICA_STAGE6_CUTOVER_CLOSURE_CHECKLIST_2026-03-30.md`,
+   - updated master doc map with Stage 6 closure artifact and Stage 6 status `Ready for sign-off`,
+   - recorded technical go/no-go walkthrough snapshot (gates green, owner sign-off pending).
+60. `2026-03-30`: Stage 6 final sign-off increment:
+   - closure checklist moved to `Signed-off (Go)` with final gate note,
+   - Stage 6 progress status moved to `Done`,
+   - master doc map synchronized (`Stage 6 Cutover progress = Done`, `Stage 6 Closure checklist = Signed-off (Go)`).

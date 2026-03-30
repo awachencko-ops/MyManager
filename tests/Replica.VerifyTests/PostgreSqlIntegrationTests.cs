@@ -601,7 +601,7 @@ public sealed class PostgreSqlIntegrationTests
     }
 
     [Fact]
-    public void PostgreSqlIntegration_Coordinator_UsesLanAsPrimaryAndMirrorsToFile()
+    public void PostgreSqlIntegration_Coordinator_UsesLanAsPrimaryWithoutRuntimeFileSync()
     {
         if (!IsIntegrationEnabled())
             return;
@@ -656,8 +656,59 @@ public sealed class PostgreSqlIntegrationTests
 
             Assert.True(fileRepository.TryLoadAll(out var fileAfterSync, out var fileAfterSyncError), fileAfterSyncError);
             Assert.Single(fileAfterSync);
-            Assert.Contains(fileAfterSync, order => order.InternalId == lanOrder.InternalId);
-            Assert.DoesNotContain(fileAfterSync, order => order.InternalId == fileOrder.InternalId);
+            Assert.DoesNotContain(fileAfterSync, order => order.InternalId == lanOrder.InternalId);
+            Assert.Contains(fileAfterSync, order => order.InternalId == fileOrder.InternalId);
+        }
+        finally
+        {
+            if (Directory.Exists(tempRootPath))
+                Directory.Delete(tempRootPath, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void PostgreSqlIntegration_Coordinator_DoesNotBootstrapFromFileInLanMode()
+    {
+        if (!IsIntegrationEnabled())
+            return;
+
+        using var db = TemporaryPostgreSqlDatabase.Create();
+        var lanRepository = new PostgreSqlOrdersRepository(db.ConnectionString);
+        Assert.True(lanRepository.TryLoadAll(out var initialLanOrders, out var initialLanLoadError), initialLanLoadError);
+        Assert.Empty(initialLanOrders);
+
+        var tempRootPath = Path.Combine(Path.GetTempPath(), "Replica_CoordinatorNoBootstrap_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempRootPath);
+        var historyPath = Path.Combine(tempRootPath, "history.json");
+
+        try
+        {
+            var fileRepository = new FileSystemOrdersRepository(historyPath);
+            var fileOrder = new OrderData
+            {
+                InternalId = "file-order-1",
+                Id = "FILE-100",
+                UserName = "File User",
+                Status = WorkflowStatusNames.Waiting,
+                OrderDate = new DateTime(2026, 3, 20),
+                ArrivalDate = new DateTime(2026, 3, 20, 9, 5, 0),
+                Items = new List<OrderFileItem>()
+            };
+            Assert.True(fileRepository.TrySaveAll(new List<OrderData> { fileOrder }, out var fileSaveError), fileSaveError);
+
+            var coordinator = new OrdersHistoryRepositoryCoordinator();
+            coordinator.Configure(OrdersStorageMode.LanPostgreSql, db.ConnectionString, historyPath);
+
+            Assert.True(coordinator.TryLoadAll(out var lanOrders));
+            Assert.Empty(lanOrders);
+
+            var lanVerifier = new PostgreSqlOrdersRepository(db.ConnectionString);
+            Assert.True(lanVerifier.TryLoadAll(out var lanAfterLoad, out var lanAfterLoadError), lanAfterLoadError);
+            Assert.Empty(lanAfterLoad);
+
+            Assert.True(fileRepository.TryLoadAll(out var fileAfterLoad, out var fileAfterLoadError), fileAfterLoadError);
+            Assert.Single(fileAfterLoad);
+            Assert.Contains(fileAfterLoad, order => order.InternalId == fileOrder.InternalId);
         }
         finally
         {

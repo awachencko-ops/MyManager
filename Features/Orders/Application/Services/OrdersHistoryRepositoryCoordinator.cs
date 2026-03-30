@@ -7,8 +7,6 @@ namespace Replica;
 
 public sealed class OrdersHistoryRepositoryCoordinator
 {
-    private const string HistoryBootstrapMarkerKey = "history_json_bootstrap_v1";
-
     private string _historyFilePath = AppSettings.DefaultHistoryFilePath;
     private OrdersStorageMode _ordersStorageBackend = OrdersStorageMode.LanPostgreSql;
     private string _lanPostgreSqlConnectionString = AppSettings.DefaultLanPostgreSqlConnectionString;
@@ -41,14 +39,8 @@ public sealed class OrdersHistoryRepositoryCoordinator
         if (_ordersRepository != null
             && _ordersRepository.TryLoadAll(out orders, out primaryError))
         {
-            if (orders.Count == 0 && _ordersStorageBackend == OrdersStorageMode.LanPostgreSql)
-                TryBootstrapFromFileHistory(ref orders);
-
             if (_ordersStorageBackend == OrdersStorageMode.LanPostgreSql)
-            {
                 orders = NormalizeOrdersForSync(orders);
-                TryMirrorLanHistoryToFileSnapshot(orders);
-            }
 
             return true;
         }
@@ -89,9 +81,6 @@ public sealed class OrdersHistoryRepositoryCoordinator
         if (_ordersRepository != null
             && _ordersRepository.TrySaveAll(orders, out primaryError))
         {
-            if (_ordersStorageBackend == OrdersStorageMode.LanPostgreSql)
-                TryMirrorLanHistoryToFileSnapshot(orders);
-
             error = string.Empty;
             return true;
         }
@@ -149,101 +138,6 @@ public sealed class OrdersHistoryRepositoryCoordinator
             out error);
     }
 
-    private void TryBootstrapFromFileHistory(ref List<OrderData> orders)
-    {
-        if (_ordersRepository is not PostgreSqlOrdersRepository postgreSqlRepository)
-            return;
-
-        var bootstrapMarkerExists = false;
-        if (postgreSqlRepository.TryGetMetaValue(
-                HistoryBootstrapMarkerKey,
-                out var bootstrapMarkerValue,
-                out var markerReadError))
-        {
-            bootstrapMarkerExists = !string.IsNullOrWhiteSpace(bootstrapMarkerValue);
-            if (bootstrapMarkerExists)
-            {
-                Logger.Info(
-                    $"HISTORY | bootstrap-skip-by-marker | backend={BackendName} | marker={HistoryBootstrapMarkerKey}");
-                return;
-            }
-        }
-        else if (!string.IsNullOrWhiteSpace(markerReadError))
-        {
-            Logger.Warn(
-                $"HISTORY | bootstrap-marker-read-failed | backend={BackendName} | marker={HistoryBootstrapMarkerKey} | {markerReadError}");
-        }
-
-        var bootstrapRepository = OrdersRepositoryFactory.CreateFileSystem(_historyFilePath);
-        if (!bootstrapRepository.TryLoadAll(out var bootstrapOrders, out var bootstrapLoadError))
-        {
-            if (!string.IsNullOrWhiteSpace(bootstrapLoadError))
-            {
-                Logger.Warn(
-                    $"HISTORY | bootstrap-load-failed | backend={bootstrapRepository.BackendName} | {bootstrapLoadError}");
-            }
-
-            return;
-        }
-
-        if (bootstrapOrders.Count > 0)
-        {
-            orders = bootstrapOrders;
-            Logger.Warn(
-                $"HISTORY | bootstrap-load | source={bootstrapRepository.BackendName} | target={BackendName} | orders={bootstrapOrders.Count}");
-
-            if (!_ordersRepository!.TrySaveAll(bootstrapOrders, out var bootstrapSaveError))
-            {
-                Logger.Warn(
-                    $"HISTORY | bootstrap-save-failed | backend={BackendName} | {bootstrapSaveError}");
-                return;
-            }
-
-            Logger.Info(
-                $"HISTORY | bootstrap-save-success | backend={BackendName} | orders={bootstrapOrders.Count}");
-
-            var markerPayload = JsonSerializer.Serialize(new
-            {
-                state = "imported",
-                imported_orders = bootstrapOrders.Count,
-                source = "history.json",
-                completed_at = DateTime.Now
-            });
-            WriteBootstrapMarker(postgreSqlRepository, markerPayload, "imported");
-            return;
-        }
-
-        if (bootstrapMarkerExists)
-            return;
-
-        var emptyMarkerPayload = JsonSerializer.Serialize(new
-        {
-            state = "empty-source",
-            imported_orders = 0,
-            source = "history.json",
-            completed_at = DateTime.Now
-        });
-        WriteBootstrapMarker(postgreSqlRepository, emptyMarkerPayload, "empty-source");
-    }
-
-    private void TryMirrorLanHistoryToFileSnapshot(IReadOnlyCollection<OrderData> lanOrders)
-    {
-        if (_ordersRepository is not PostgreSqlOrdersRepository)
-            return;
-
-        var fileRepository = OrdersRepositoryFactory.CreateFileSystem(_historyFilePath);
-        var normalizedLanOrders = NormalizeOrdersForSync(lanOrders);
-        if (!fileRepository.TrySaveAll(normalizedLanOrders, out var mirrorError))
-        {
-            Logger.Warn(
-                $"HISTORY | sync-lan-to-file-failed | backend={fileRepository.BackendName} | {mirrorError}");
-            return;
-        }
-
-        Logger.Info(
-            $"HISTORY | sync-lan-to-file | orders={normalizedLanOrders.Count} | backend={fileRepository.BackendName}");
-    }
-
     private static List<OrderData> NormalizeOrdersForSync(IEnumerable<OrderData>? orders)
     {
         var normalized = new List<OrderData>();
@@ -276,19 +170,6 @@ public sealed class OrdersHistoryRepositoryCoordinator
     {
         var json = JsonSerializer.Serialize(source);
         return JsonSerializer.Deserialize<OrderData>(json) ?? new OrderData();
-    }
-
-    private static void WriteBootstrapMarker(PostgreSqlOrdersRepository repository, string markerPayload, string state)
-    {
-        if (!repository.TryUpsertMetaValue(HistoryBootstrapMarkerKey, markerPayload, out var markerWriteError))
-        {
-            Logger.Warn(
-                $"HISTORY | bootstrap-marker-write-failed | backend={repository.BackendName} | marker={HistoryBootstrapMarkerKey} | {markerWriteError}");
-            return;
-        }
-
-        Logger.Info(
-            $"HISTORY | bootstrap-marker-written | backend={repository.BackendName} | marker={HistoryBootstrapMarkerKey} | state={state}");
     }
 
     private void EnsureRepository()
