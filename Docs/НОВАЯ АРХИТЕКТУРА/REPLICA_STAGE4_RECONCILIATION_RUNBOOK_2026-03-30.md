@@ -4,7 +4,7 @@
 # Replica Stage 4 Reconciliation Runbook
 
 Date: 2026-03-30  
-Status: Active
+Status: Archived (reference runbook after Stage 6 closure)
 
 ## Purpose
 

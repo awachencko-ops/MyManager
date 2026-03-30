@@ -4,7 +4,7 @@
 # Replica Stage 4 Progress (Dual-Write Execution)
 
 Date: 2026-03-30  
-Status: In progress
+Status: Done (historical, closed by Stage 6 cutover)
 
 ## Completed Increment: API dual-write scaffolding
 

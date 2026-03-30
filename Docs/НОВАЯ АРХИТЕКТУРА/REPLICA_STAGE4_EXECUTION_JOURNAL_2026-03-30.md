@@ -4,7 +4,7 @@
 # Replica Stage 4 Execution Journal
 
 Date: 2026-03-30  
-Status: Active
+Status: Archived (historical record after Stage 6 closure)
 
 ## Purpose
 

@@ -480,3 +480,6 @@ Replica.Client/
    - closure checklist moved to `Signed-off (Go)` with final gate note,
    - Stage 6 progress status moved to `Done`,
    - master doc map synchronized (`Stage 6 Cutover progress = Done`, `Stage 6 Closure checklist = Signed-off (Go)`).
+61. `2026-03-30`: Stage 4 documentation status normalization:
+   - Stage 4 docs switched from active execution wording to historical/archive statuses after Stage 6 closure,
+   - master doc map updated (`Stage 4 checklist/progress = Done (historical)`, journal/runbook = archived references).

@@ -12,10 +12,10 @@
 1. `Docs/00_REPLICA_MASTER_DOC_MAP_2026-03-26.md`
 2. `Docs/REPLICA_DESIGN_SYSTEM_2026-03-27.md`
 3. `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_SERVICE_FIRST_ROADMAP_2026-03-26.md`
-4. `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_DUAL_WRITE_CHECKLIST_2026-03-27.md` (для запуска Stage 4)
-5. `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_DUAL_WRITE_PROGRESS_2026-03-27.md` (текущий execution progress Stage 4)
-6. `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_EXECUTION_JOURNAL_2026-03-30.md` (ежедневный операционный журнал Stage 4)
-7. `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_RECONCILIATION_RUNBOOK_2026-03-30.md` (операционный runbook Task Scheduler/manual reconciliation)
+4. `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_DUAL_WRITE_CHECKLIST_2026-03-27.md` (исторический handoff checklist Stage 4)
+5. `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_DUAL_WRITE_PROGRESS_2026-03-27.md` (исторический execution progress Stage 4)
+6. `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_EXECUTION_JOURNAL_2026-03-30.md` (исторический execution journal Stage 4)
+7. `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_RECONCILIATION_RUNBOOK_2026-03-30.md` (архивный runbook Stage 4)
 8. `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE5_CLEAN_ARCH_PROGRESS_2026-03-30.md` (текущий execution progress Stage 5)
 9. `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE6_CUTOVER_PROGRESS_2026-03-30.md` (текущий execution progress Stage 6)
 10. `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE6_CUTOVER_CLOSURE_CHECKLIST_2026-03-30.md` (финальный go/no-go checklist Stage 6)
@@ -25,10 +25,10 @@
 | Блок | Статус | Главный документ |
 |---|---|---|
 | New Architecture roadmap (Service-First / Push-Pull / MediatR) | In progress | `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_SERVICE_FIRST_ROADMAP_2026-03-26.md` |
-| Stage 4 Dual-Write handoff checklist | Ready for execution | `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_DUAL_WRITE_CHECKLIST_2026-03-27.md` |
-| Stage 4 Dual-Write execution progress | In progress | `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_DUAL_WRITE_PROGRESS_2026-03-27.md` |
-| Stage 4 execution journal | Active | `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_EXECUTION_JOURNAL_2026-03-30.md` |
-| Stage 4 reconciliation runbook | Active | `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_RECONCILIATION_RUNBOOK_2026-03-30.md` |
+| Stage 4 Dual-Write handoff checklist | Done (historical) | `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_DUAL_WRITE_CHECKLIST_2026-03-27.md` |
+| Stage 4 Dual-Write execution progress | Done (historical) | `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_DUAL_WRITE_PROGRESS_2026-03-27.md` |
+| Stage 4 execution journal | Archived (historical record) | `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_EXECUTION_JOURNAL_2026-03-30.md` |
+| Stage 4 reconciliation runbook | Archived (reference) | `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_RECONCILIATION_RUNBOOK_2026-03-30.md` |
 | Stage 5 Clean Architecture progress | Done | `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE5_CLEAN_ARCH_PROGRESS_2026-03-30.md` |
 | Stage 6 Cutover progress | Done | `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE6_CUTOVER_PROGRESS_2026-03-30.md` |
 | Stage 6 Closure checklist | Signed-off (Go) | `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE6_CUTOVER_CLOSURE_CHECKLIST_2026-03-30.md` |

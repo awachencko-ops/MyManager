@@ -4,7 +4,7 @@
 # Replica Stage 4 Checklist (Dual-Write + Reconciliation)
 
 Date: 2026-03-27  
-Status: Ready for execution handoff
+Status: Done (historical baseline, closed by Stage 6 cutover)
 
 ## Purpose
 
