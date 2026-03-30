@@ -1,0 +1,101 @@
+name: Stage4 Reconciliation Nightly
+
+on:
+  workflow_dispatch:
+    inputs:
+      pg_snapshot_path:
+        description: "Path to PostgreSQL snapshot JSON (array of orders)"
+        required: false
+        default: ""
+      json_snapshot_path:
+        description: "Path to JSON snapshot (array or Orders/orders envelope)"
+        required: false
+        default: ""
+  schedule:
+    # 09:15 Asia/Vladivostok (UTC+10)
+    - cron: "15 23 * * *"
+
+jobs:
+  reconciliation:
+    runs-on: ubuntu-latest
+    env:
+      PG_SNAPSHOT_PATH: ${{ inputs.pg_snapshot_path != '' && inputs.pg_snapshot_path || vars.REPLICA_PG_SNAPSHOT_PATH || 'artifacts/reconciliation/snapshots/pg.snapshot.json' }}
+      JSON_SNAPSHOT_PATH: ${{ inputs.json_snapshot_path != '' && inputs.json_snapshot_path || vars.REPLICA_JSON_SNAPSHOT_PATH || 'artifacts/reconciliation/snapshots/json.snapshot.json' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Resolve report path
+        id: paths
+        shell: pwsh
+        run: |
+          $reportPath = "artifacts/reconciliation/reports/reconciliation-${{ github.run_id }}.json"
+          New-Item -ItemType Directory -Path (Split-Path -Parent $reportPath) -Force | Out-Null
+          "report_path=$reportPath" >> $env:GITHUB_OUTPUT
+
+      - name: Validate snapshot inputs
+        shell: pwsh
+        run: |
+          if (-not (Test-Path $env:PG_SNAPSHOT_PATH)) {
+            Write-Error "PG snapshot not found: $env:PG_SNAPSHOT_PATH"
+            exit 1
+          }
+          if (-not (Test-Path $env:JSON_SNAPSHOT_PATH)) {
+            Write-Error "JSON snapshot not found: $env:JSON_SNAPSHOT_PATH"
+            exit 1
+          }
+
+      - name: Run reconciliation CLI
+        id: reconcile
+        shell: pwsh
+        run: |
+          dotnet run --project tools/Replica.Reconciliation.Cli -- --pg $env:PG_SNAPSHOT_PATH --json $env:JSON_SNAPSHOT_PATH --out "${{ steps.paths.outputs.report_path }}"
+          $exitCode = $LASTEXITCODE
+          "cli_exit_code=$exitCode" >> $env:GITHUB_OUTPUT
+          if ($exitCode -eq 1) {
+            Write-Error "Reconciliation CLI failed with execution error (exit=1)."
+            exit 1
+          }
+
+      - name: Upload reconciliation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage4-reconciliation-report-${{ github.run_id }}
+          path: ${{ steps.paths.outputs.report_path }}
+          if-no-files-found: error
+
+      - name: Publish summary
+        if: always()
+        shell: pwsh
+        run: |
+          $reportPath = "${{ steps.paths.outputs.report_path }}"
+          if (-not (Test-Path $reportPath)) {
+            "Reconciliation report is missing." >> $env:GITHUB_STEP_SUMMARY
+            exit 0
+          }
+
+          $report = Get-Content -Path $reportPath -Raw | ConvertFrom-Json
+          @"
+          ## Stage4 Reconciliation Summary
+          - pg_orders_total: $($report.pg_orders_total)
+          - json_orders_total: $($report.json_orders_total)
+          - missing_in_pg: $($report.summary.missing_in_pg)
+          - missing_in_json: $($report.summary.missing_in_json)
+          - version_mismatch: $($report.summary.version_mismatch)
+          - payload_mismatch: $($report.summary.payload_mismatch)
+          - is_zero_diff: $($report.summary.is_zero_diff)
+          - report_path: `${{ steps.paths.outputs.report_path }}`
+          "@ >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Fail workflow on mismatches
+        if: ${{ steps.reconcile.outputs.cli_exit_code == '2' }}
+        shell: pwsh
+        run: |
+          Write-Error "Reconciliation mismatches detected (CLI exit code 2)."
+          exit 2

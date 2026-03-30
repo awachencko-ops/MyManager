@@ -375,3 +375,10 @@ Replica.Client/
    - fixed run-state plan regression for orders without number in run-start flow,
    - recovered previously failing tests `OrderRunCommandServiceTests` and `OrderRunWorkflowOrchestrationServiceTests`,
    - full verify pack passed (`346/346`), ui-smoke targeted pack passed (`35/35`).
+37. `2026-03-30`: Stage 4 nightly reconciliation pipeline increment:
+   - added GitHub Actions workflow `.github/workflows/stage4-reconciliation-nightly.yml`,
+   - wired scheduled + manual execution with artifact upload for reconciliation report JSON,
+   - added sample snapshots for baseline pipeline bootstrap in `artifacts/reconciliation/snapshots/`.
+38. `2026-03-30`: Stage 4 execution journal increment:
+   - added dedicated daily journal `REPLICA_STAGE4_EXECUTION_JOURNAL_2026-03-30.md`,
+   - added journal template and initial entry for backup/reconcile/decision tracking.

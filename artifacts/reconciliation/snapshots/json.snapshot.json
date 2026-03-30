@@ -1,0 +1,19 @@
+{
+  "GeneratedAtUtc": "2026-03-30T00:00:00Z",
+  "Orders": [
+    {
+      "InternalId": "stage4-sample-order-1",
+      "OrderNumber": "R-1001",
+      "Status": "Waiting",
+      "Version": 1,
+      "Items": [
+        {
+          "ItemId": "stage4-sample-item-1",
+          "Version": 1,
+          "FileStatus": "Waiting",
+          "Variant": "A"
+        }
+      ]
+    }
+  ]
+}

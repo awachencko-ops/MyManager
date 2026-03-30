@@ -3,7 +3,7 @@
 
 # Replica Stage 4 Progress (Dual-Write Execution)
 
-Date: 2026-03-27  
+Date: 2026-03-30  
 Status: In progress
 
 ## Completed Increment: API dual-write scaffolding
@@ -31,6 +31,13 @@ Status: In progress
    - `ReplicaApiReconciliationReportBuilder` (bucket-логика `missing_in_pg`, `missing_in_json`, `version_mismatch`, `payload_mismatch`),
    - file I/O helper `ReplicaApiReconciliationReportIo` (чтение snapshot + запись отчёта),
    - CLI-инструмент `tools/Replica.Reconciliation.Cli` для запуска из терминала.
+8. Подключен nightly/ops pipeline для reconciliation:
+   - добавлен GitHub Actions workflow `.github/workflows/stage4-reconciliation-nightly.yml`,
+   - режимы запуска: `schedule` + `workflow_dispatch`,
+   - report JSON публикуется как workflow artifact.
+9. Заведён ежедневный execution journal Stage 4:
+   - документ `REPLICA_STAGE4_EXECUTION_JOURNAL_2026-03-30.md`,
+   - добавлена стартовая запись и шаблон daily-отметок.
 
 ## Test Evidence
 
@@ -44,12 +51,17 @@ Status: In progress
    Result: passed (`346/346`).
 5. `dotnet run --project tools/Replica.Reconciliation.Cli -- --pg <pg_snapshot.json> --json <json_snapshot.json> --out <reconciliation-report.json>`  
    Result: validated (zero-diff report generated, exit code `0`).
+6. `dotnet run --project tools/Replica.Reconciliation.Cli -- --pg <pg_snapshot.json> --json <json_snapshot.json> --out <reconciliation-report.json>` (mismatch sample)  
+   Result: validated (non-zero diff report generated, exit code `2`).
 
 ## Open Notes
 
 1. Ранее падавшие run-workflow тесты восстановлены; полный `Verify` снова зелёный (`346/346`).
+2. Nightly workflow по умолчанию использует sample snapshots из репозитория; для реального operational запуска нужно задать repo vars:
+   - `REPLICA_PG_SNAPSHOT_PATH`,
+   - `REPLICA_JSON_SNAPSHOT_PATH`.
 
 ## Next Increment (planned)
 
-1. Завести ежедневный execution journal для dual-write окна и прогонять Go/No-Go критерии.
-2. Подключить CLI reconciliation в nightly/ops pipeline с сохранением артефакта отчёта.
+1. Подключить реальные snapshot exports в nightly workflow через repo vars/secrets и проверить первый operational артефакт.
+2. Начать ежедневные journal entries на основе реальных reconcile-отчётов и backup checks.

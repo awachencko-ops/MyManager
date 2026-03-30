@@ -2,7 +2,7 @@
 > Требование кодировки: все файлы документации (`*.md`) в этом репозитории хранятся только в `UTF-8 with BOM`, окончания строк — `LF`.
 # Replica: Master Doc Map (Single Source of Truth)
 
-Дата актуализации: 2026-03-27  
+Дата актуализации: 2026-03-30  
 Статус: `Active`
 
 ## 1. Точка входа
@@ -14,6 +14,7 @@
 3. `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_SERVICE_FIRST_ROADMAP_2026-03-26.md`
 4. `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_DUAL_WRITE_CHECKLIST_2026-03-27.md` (для запуска Stage 4)
 5. `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_DUAL_WRITE_PROGRESS_2026-03-27.md` (текущий execution progress Stage 4)
+6. `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_EXECUTION_JOURNAL_2026-03-30.md` (ежедневный операционный журнал Stage 4)
 
 ## 2. Сводный статус
 
@@ -22,6 +23,7 @@
 | New Architecture roadmap (Service-First / Push-Pull / MediatR) | In progress | `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_SERVICE_FIRST_ROADMAP_2026-03-26.md` |
 | Stage 4 Dual-Write handoff checklist | Ready for execution | `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_DUAL_WRITE_CHECKLIST_2026-03-27.md` |
 | Stage 4 Dual-Write execution progress | In progress | `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_DUAL_WRITE_PROGRESS_2026-03-27.md` |
+| Stage 4 execution journal | Active | `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_EXECUTION_JOURNAL_2026-03-30.md` |
 | UI Design System | Active | `Docs/REPLICA_DESIGN_SYSTEM_2026-03-27.md` |
 | Legacy docs set (active + ready, до пересборки плана) | Archived | `Docs/archive/2026-03-26_pre_new_architecture/` |
 
@@ -35,6 +37,7 @@
 4. `REPLICA_STAGE3_SIGNALR_PROGRESS_2026-03-27.md`
 5. `REPLICA_STAGE4_DUAL_WRITE_CHECKLIST_2026-03-27.md`
 6. `REPLICA_STAGE4_DUAL_WRITE_PROGRESS_2026-03-27.md`
+7. `REPLICA_STAGE4_EXECUTION_JOURNAL_2026-03-30.md`
 
 ### 3.2 `Docs/archive/2026-03-26_pre_new_architecture` (архив согласованного переноса)
 
