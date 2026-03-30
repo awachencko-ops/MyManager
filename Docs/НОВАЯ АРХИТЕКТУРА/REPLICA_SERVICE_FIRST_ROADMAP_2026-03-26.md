@@ -420,3 +420,7 @@ Replica.Client/
 48. `2026-03-30`: Stage 4 operator monitoring increment:
    - added `Get-ReconciliationOpsStatus.ps1` for one-shot operational status (API `/live`, Task Scheduler, latest report, latest journal entry),
    - added `-FailOnRisk` mode for non-zero gate status in operator checks.
+49. `2026-03-30`: Stage 5 architecture guardrails kickoff:
+   - added verify pack `ReplicaApiArchitectureBoundaryTests`,
+   - locked baseline for API Presentation->Infrastructure/Data/Services coupling (no expansion rule),
+   - added explicit boundary guard that `Application` layer cannot reference presentation namespaces.
