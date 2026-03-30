@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Threading;
 using System.Windows.Forms;
 
 namespace Replica
@@ -26,7 +27,20 @@ namespace Replica
             if (snapshot.ApiReachable && snapshot.IsReady)
                 return true;
 
+            var previousCompletedAtUtc = snapshot.CompletedAtUtc;
             RequestLanServerProbe("write-guard", force: true);
+            var shouldWaitForProbe = probeInProgress || snapshot.CompletedAtUtc <= DateTime.MinValue;
+            if (shouldWaitForProbe)
+            {
+                WaitForLanProbeRefresh(previousCompletedAtUtc, TimeSpan.FromSeconds(2));
+                snapshot = GetLanServerProbeSnapshot(out probeInProgress, out _);
+                if (snapshot.ApiReachable && snapshot.IsReady)
+                {
+                    ApplyServerHardLockState(shouldLock: false, details: string.Empty);
+                    return true;
+                }
+            }
+
             var details = BuildServerUnavailableDetails(snapshot, probeInProgress);
             ApplyServerHardLockState(shouldLock: true, details);
             SetBottomStatus($"{operationCaption}: \u043d\u0435\u0442 \u0441\u043e\u0435\u0434\u0438\u043d\u0435\u043d\u0438\u044f \u0441 \u0441\u0435\u0440\u0432\u0435\u0440\u043e\u043c");
@@ -44,6 +58,19 @@ namespace Replica
             }
 
             return false;
+        }
+
+        private void WaitForLanProbeRefresh(DateTime previousCompletedAtUtc, TimeSpan timeout)
+        {
+            var startedAtUtc = DateTime.UtcNow;
+            while (DateTime.UtcNow - startedAtUtc < timeout)
+            {
+                var current = GetLanServerProbeSnapshot(out var probeInProgress, out _);
+                if (!probeInProgress && current.CompletedAtUtc > previousCompletedAtUtc)
+                    return;
+
+                Thread.Sleep(80);
+            }
         }
 
         private void ApplyServerHardLockFromLanSnapshot(LanServerProbeSnapshot snapshot, bool probeInProgress)
@@ -176,9 +203,12 @@ namespace Replica
 
         private string BuildServerUnavailableDetails(LanServerProbeSnapshot snapshot, bool probeInProgress)
         {
-            var readyState = $"{snapshot.LiveStatus}/{snapshot.ReadyStatus}/{snapshot.SloStatus}";
+            var readyState = BuildProbeStateText(snapshot);
             if (probeInProgress && snapshot.CompletedAtUtc <= DateTime.MinValue)
-                return $"\u0418\u0434\u0451\u0442 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0430 \u0441\u0435\u0440\u0432\u0435\u0440\u0430 ({readyState}).";
+                return "\u0421\u0435\u0440\u0432\u0435\u0440 \u0441\u0435\u0439\u0447\u0430\u0441 \u043f\u0440\u043e\u0432\u0435\u0440\u044f\u0435\u0442\u0441\u044f. \u041f\u043e\u0434\u043e\u0436\u0434\u0438\u0442\u0435 2-3 \u0441\u0435\u043a\u0443\u043d\u0434\u044b \u0438 \u043f\u043e\u043f\u0440\u043e\u0431\u0443\u0439\u0442\u0435 \u0441\u043d\u043e\u0432\u0430.";
+
+            if (snapshot.CompletedAtUtc <= DateTime.MinValue)
+                return $"\u0421\u0435\u0440\u0432\u0435\u0440 \u0435\u0449\u0451 \u043d\u0435 \u0434\u0430\u043b \u043e\u0442\u0432\u0435\u0442 \u043d\u0430 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0443. \u0421\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435: {readyState}.";
 
             var lastReply = snapshot.CompletedAtUtc > DateTime.MinValue
                 ? FormatLanProbeStamp(snapshot.CompletedAtUtc)
@@ -189,6 +219,28 @@ namespace Replica
                 : snapshot.Error.Trim();
 
             return $"\u0421\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435 live/ready/slo: {readyState}. \u041f\u043e\u0441\u043b\u0435\u0434\u043d\u0438\u0439 \u043e\u0442\u0432\u0435\u0442: {lastReply}. \u041e\u0448\u0438\u0431\u043a\u0430: {errorText}";
+        }
+
+        private static string BuildProbeStateText(LanServerProbeSnapshot snapshot)
+        {
+            return $"{NormalizeProbeStatus(snapshot.LiveStatus)}/{NormalizeProbeStatus(snapshot.ReadyStatus)}/{NormalizeProbeStatus(snapshot.SloStatus)}";
+        }
+
+        private static string NormalizeProbeStatus(string status)
+        {
+            if (string.IsNullOrWhiteSpace(status))
+                return "\u043f\u0440\u043e\u0432\u0435\u0440\u044f\u0435\u0442\u0441\u044f";
+
+            if (string.Equals(status, "unknown", StringComparison.OrdinalIgnoreCase))
+                return "\u043f\u0440\u043e\u0432\u0435\u0440\u044f\u0435\u0442\u0441\u044f";
+
+            if (string.Equals(status, "cancelled", StringComparison.OrdinalIgnoreCase))
+                return "\u043e\u0442\u043c\u0435\u043d\u0435\u043d\u043e";
+
+            if (string.Equals(status, "error", StringComparison.OrdinalIgnoreCase))
+                return "\u043e\u0448\u0438\u0431\u043a\u0430";
+
+            return status;
         }
     }
 }
