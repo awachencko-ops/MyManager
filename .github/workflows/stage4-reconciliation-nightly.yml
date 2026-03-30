@@ -19,6 +19,8 @@ jobs:
   reconciliation:
     runs-on: ubuntu-latest
     env:
+      DEFAULT_PG_SNAPSHOT_PATH: artifacts/reconciliation/snapshots/pg.snapshot.json
+      DEFAULT_JSON_SNAPSHOT_PATH: artifacts/reconciliation/snapshots/json.snapshot.json
       PG_SNAPSHOT_PATH: ${{ inputs.pg_snapshot_path != '' && inputs.pg_snapshot_path || vars.REPLICA_PG_SNAPSHOT_PATH || 'artifacts/reconciliation/snapshots/pg.snapshot.json' }}
       JSON_SNAPSHOT_PATH: ${{ inputs.json_snapshot_path != '' && inputs.json_snapshot_path || vars.REPLICA_JSON_SNAPSHOT_PATH || 'artifacts/reconciliation/snapshots/json.snapshot.json' }}
     steps:
@@ -41,6 +43,17 @@ jobs:
       - name: Validate snapshot inputs
         shell: pwsh
         run: |
+          if ("${{ github.event_name }}" -eq "schedule") {
+            if ($env:PG_SNAPSHOT_PATH -eq $env:DEFAULT_PG_SNAPSHOT_PATH) {
+              Write-Error "Scheduled run requires repo var REPLICA_PG_SNAPSHOT_PATH (current path uses sample fallback)."
+              exit 1
+            }
+            if ($env:JSON_SNAPSHOT_PATH -eq $env:DEFAULT_JSON_SNAPSHOT_PATH) {
+              Write-Error "Scheduled run requires repo var REPLICA_JSON_SNAPSHOT_PATH (current path uses sample fallback)."
+              exit 1
+            }
+          }
+
           if (-not (Test-Path $env:PG_SNAPSHOT_PATH)) {
             Write-Error "PG snapshot not found: $env:PG_SNAPSHOT_PATH"
             exit 1

@@ -382,3 +382,7 @@ Replica.Client/
 38. `2026-03-30`: Stage 4 execution journal increment:
    - added dedicated daily journal `REPLICA_STAGE4_EXECUTION_JOURNAL_2026-03-30.md`,
    - added journal template and initial entry for backup/reconcile/decision tracking.
+39. `2026-03-30`: Stage 4 reconciliation operationalization increment:
+   - nightly workflow hardened to require operational repo vars for scheduled runs (`REPLICA_PG_SNAPSHOT_PATH`, `REPLICA_JSON_SNAPSHOT_PATH`),
+   - fallback sample snapshots remain allowed only for manual/probe executions,
+   - added dedicated runbook `REPLICA_STAGE4_RECONCILIATION_RUNBOOK_2026-03-30.md` with `gh variable set` commands and operator checklist.

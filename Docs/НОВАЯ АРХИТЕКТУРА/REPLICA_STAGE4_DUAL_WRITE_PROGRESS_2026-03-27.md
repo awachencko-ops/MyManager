@@ -38,6 +38,12 @@ Status: In progress
 9. Заведён ежедневный execution journal Stage 4:
    - документ `REPLICA_STAGE4_EXECUTION_JOURNAL_2026-03-30.md`,
    - добавлена стартовая запись и шаблон daily-отметок.
+10. Операционные snapshot paths подвязаны через repo variables:
+   - scheduled run теперь требует `REPLICA_PG_SNAPSHOT_PATH` и `REPLICA_JSON_SNAPSHOT_PATH`,
+   - fallback sample paths допускаются только для manual/probe запусков.
+11. Добавлен runbook Stage 4 reconciliation:
+   - документ `REPLICA_STAGE4_RECONCILIATION_RUNBOOK_2026-03-30.md`,
+   - описаны команды `gh variable set`, manual run, интерпретация exit codes и ежедневный checklist.
 
 ## Test Evidence
 
@@ -60,8 +66,9 @@ Status: In progress
 2. Nightly workflow по умолчанию использует sample snapshots из репозитория; для реального operational запуска нужно задать repo vars:
    - `REPLICA_PG_SNAPSHOT_PATH`,
    - `REPLICA_JSON_SNAPSHOT_PATH`.
+3. Для scheduled runs без repo vars workflow завершится ошибкой (guardrail against sample fallback in production cadence).
 
 ## Next Increment (planned)
 
-1. Подключить реальные snapshot exports в nightly workflow через repo vars/secrets и проверить первый operational артефакт.
+1. Задать реальные пути snapshot через repo vars и выполнить первый operational nightly run.
 2. Начать ежедневные journal entries на основе реальных reconcile-отчётов и backup checks.

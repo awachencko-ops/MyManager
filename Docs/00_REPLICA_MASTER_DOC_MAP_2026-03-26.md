@@ -15,6 +15,7 @@
 4. `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_DUAL_WRITE_CHECKLIST_2026-03-27.md` (для запуска Stage 4)
 5. `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_DUAL_WRITE_PROGRESS_2026-03-27.md` (текущий execution progress Stage 4)
 6. `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_EXECUTION_JOURNAL_2026-03-30.md` (ежедневный операционный журнал Stage 4)
+7. `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_RECONCILIATION_RUNBOOK_2026-03-30.md` (операционный runbook nightly/manual reconciliation)
 
 ## 2. Сводный статус
 
@@ -24,6 +25,7 @@
 | Stage 4 Dual-Write handoff checklist | Ready for execution | `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_DUAL_WRITE_CHECKLIST_2026-03-27.md` |
 | Stage 4 Dual-Write execution progress | In progress | `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_DUAL_WRITE_PROGRESS_2026-03-27.md` |
 | Stage 4 execution journal | Active | `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_EXECUTION_JOURNAL_2026-03-30.md` |
+| Stage 4 reconciliation runbook | Active | `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_RECONCILIATION_RUNBOOK_2026-03-30.md` |
 | UI Design System | Active | `Docs/REPLICA_DESIGN_SYSTEM_2026-03-27.md` |
 | Legacy docs set (active + ready, до пересборки плана) | Archived | `Docs/archive/2026-03-26_pre_new_architecture/` |
 
@@ -38,6 +40,7 @@
 5. `REPLICA_STAGE4_DUAL_WRITE_CHECKLIST_2026-03-27.md`
 6. `REPLICA_STAGE4_DUAL_WRITE_PROGRESS_2026-03-27.md`
 7. `REPLICA_STAGE4_EXECUTION_JOURNAL_2026-03-30.md`
+8. `REPLICA_STAGE4_RECONCILIATION_RUNBOOK_2026-03-30.md`
 
 ### 3.2 `Docs/archive/2026-03-26_pre_new_architecture` (архив согласованного переноса)
 
