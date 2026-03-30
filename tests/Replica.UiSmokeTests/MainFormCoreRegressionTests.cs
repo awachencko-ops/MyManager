@@ -359,6 +359,91 @@ public sealed class MainFormCoreRegressionTests
     }
 
     [Fact]
+    public void SR12C_StorageSnapshotMerge_UpdatesOrderAndItemInPlace()
+    {
+        MainFormTestHarness.RunWithIsolatedForm((form, _) =>
+        {
+            var localOrder = CreateOrder(
+                "SR12C-LOCAL",
+                WorkflowStatusNames.Waiting,
+                "QA User",
+                new DateTime(2026, 3, 30),
+                new DateTime(2026, 3, 30));
+            localOrder.SourcePath = @"C:\orders\local\source-old.pdf";
+            localOrder.PreparedPath = @"C:\orders\local\prep-old.pdf";
+            localOrder.PrintPath = @"C:\orders\local\print-old.pdf";
+            localOrder.Items =
+            [
+                new OrderFileItem
+                {
+                    ItemId = "item-1",
+                    ClientFileLabel = "item-local",
+                    SourcePath = @"C:\orders\local\item-old.pdf",
+                    FileStatus = WorkflowStatusNames.Waiting,
+                    SequenceNo = 0
+                }
+            ];
+
+            MainFormTestHarness.InvokePrivate(form, "AddCreatedOrder", localOrder);
+            var localOrderReference = localOrder;
+            var localItemReference = localOrder.Items[0];
+
+            var storageOrder = CreateOrder(
+                "SR12C-SERVER",
+                WorkflowStatusNames.Completed,
+                "Server User",
+                new DateTime(2026, 3, 31),
+                new DateTime(2026, 3, 31));
+            storageOrder.InternalId = localOrder.InternalId;
+            storageOrder.StorageVersion = 42;
+            storageOrder.SourcePath = @"C:\orders\server\source-new.pdf";
+            storageOrder.PreparedPath = @"C:\orders\server\prep-new.pdf";
+            storageOrder.PrintPath = @"C:\orders\server\print-new.pdf";
+            storageOrder.Items =
+            [
+                new OrderFileItem
+                {
+                    ItemId = "item-1",
+                    ClientFileLabel = "item-server",
+                    SourcePath = @"C:\orders\server\item-new.pdf",
+                    FileStatus = WorkflowStatusNames.Completed,
+                    SequenceNo = 1
+                },
+                new OrderFileItem
+                {
+                    ItemId = "item-2",
+                    ClientFileLabel = "item-server-2",
+                    SourcePath = @"C:\orders\server\item-2.pdf",
+                    FileStatus = WorkflowStatusNames.Waiting,
+                    SequenceNo = 2
+                }
+            ];
+
+            MainFormTestHarness.InvokePrivate(
+                form,
+                "MergeStorageSnapshotIntoLocalHistory",
+                (IReadOnlyCollection<OrderData>)new[] { storageOrder });
+
+            var orderHistory = MainFormTestHarness.GetPrivateField<List<OrderData>>(form, "_orderHistory");
+            var mergedOrder = Assert.Single(orderHistory);
+            Assert.Same(localOrderReference, mergedOrder);
+            Assert.Equal("SR12C-SERVER", mergedOrder.Id);
+            Assert.Equal(42, mergedOrder.StorageVersion);
+            Assert.Equal(WorkflowStatusNames.Completed, mergedOrder.Status);
+            Assert.Equal(@"C:\orders\server\source-new.pdf", mergedOrder.SourcePath);
+
+            Assert.Equal(2, mergedOrder.Items.Count);
+            var mergedItem1 = mergedOrder.Items.Single(item => item.ItemId == "item-1");
+            Assert.Same(localItemReference, mergedItem1);
+            Assert.Equal(@"C:\orders\server\item-new.pdf", mergedItem1.SourcePath);
+            Assert.Equal(WorkflowStatusNames.Completed, mergedItem1.FileStatus);
+
+            var mergedItem2 = mergedOrder.Items.Single(item => item.ItemId == "item-2");
+            Assert.Equal(@"C:\orders\server\item-2.pdf", mergedItem2.SourcePath);
+        });
+    }
+
+    [Fact]
     public void SR12D_ToolConnectionClick_AcknowledgesPushPressureAlertState()
     {
         MainFormTestHarness.RunWithIsolatedForm((form, _) =>

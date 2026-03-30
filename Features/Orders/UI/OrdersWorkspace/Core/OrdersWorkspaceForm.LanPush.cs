@@ -567,7 +567,13 @@ namespace Replica
                     continue;
                 }
 
-                _orderApplicationService.UpsertOrderInHistory(_orderHistory, storageOrder);
+                if (localOrder != null)
+                {
+                    ApplyStorageOrderSnapshot(localOrder, storageOrder);
+                    continue;
+                }
+
+                _orderHistory.Add(CloneStorageOrder(storageOrder));
             }
 
             for (var index = _orderHistory.Count - 1; index >= 0; index--)
@@ -601,6 +607,119 @@ namespace Replica
 
                 _runProgressByOrderInternalId.Remove(key);
             }
+        }
+
+        private static void ApplyStorageOrderSnapshot(OrderData localOrder, OrderData storageOrder)
+        {
+            if (localOrder == null || storageOrder == null)
+                return;
+
+            localOrder.InternalId = string.IsNullOrWhiteSpace(storageOrder.InternalId)
+                ? localOrder.InternalId
+                : storageOrder.InternalId;
+            localOrder.StorageVersion = storageOrder.StorageVersion;
+            localOrder.Id = storageOrder.Id ?? string.Empty;
+            localOrder.StartMode = storageOrder.StartMode;
+            localOrder.FileTopologyMarker = storageOrder.FileTopologyMarker;
+            localOrder.Keyword = storageOrder.Keyword ?? string.Empty;
+            localOrder.UserName = storageOrder.UserName ?? string.Empty;
+            localOrder.ArrivalDate = storageOrder.ArrivalDate;
+            localOrder.OrderDate = storageOrder.OrderDate;
+            localOrder.FolderName = storageOrder.FolderName ?? string.Empty;
+            localOrder.Status = storageOrder.Status ?? string.Empty;
+            localOrder.SourcePath = storageOrder.SourcePath ?? string.Empty;
+            localOrder.SourceFileSizeBytes = storageOrder.SourceFileSizeBytes;
+            localOrder.SourceFileHash = storageOrder.SourceFileHash ?? string.Empty;
+            localOrder.PreparedPath = storageOrder.PreparedPath ?? string.Empty;
+            localOrder.PreparedFileSizeBytes = storageOrder.PreparedFileSizeBytes;
+            localOrder.PreparedFileHash = storageOrder.PreparedFileHash ?? string.Empty;
+            localOrder.PrintPath = storageOrder.PrintPath ?? string.Empty;
+            localOrder.PrintFileSizeBytes = storageOrder.PrintFileSizeBytes;
+            localOrder.PrintFileHash = storageOrder.PrintFileHash ?? string.Empty;
+            localOrder.PitStopAction = storageOrder.PitStopAction ?? "-";
+            localOrder.ImposingAction = storageOrder.ImposingAction ?? "-";
+            localOrder.LastStatusReason = storageOrder.LastStatusReason ?? string.Empty;
+            localOrder.LastStatusSource = storageOrder.LastStatusSource ?? string.Empty;
+            localOrder.LastStatusAt = storageOrder.LastStatusAt;
+
+            ApplyStorageOrderItemsSnapshot(localOrder, storageOrder.Items);
+        }
+
+        private static void ApplyStorageOrderItemsSnapshot(OrderData localOrder, IReadOnlyCollection<OrderFileItem>? storageItems)
+        {
+            localOrder.Items ??= [];
+            var localItemsById = localOrder.Items
+                .Where(item => item != null && !string.IsNullOrWhiteSpace(item.ItemId))
+                .ToDictionary(item => item.ItemId, item => item, StringComparer.Ordinal);
+
+            var mergedItems = new List<OrderFileItem>();
+            foreach (var storageItem in storageItems ?? Array.Empty<OrderFileItem>())
+            {
+                if (storageItem == null)
+                    continue;
+
+                if (!string.IsNullOrWhiteSpace(storageItem.ItemId)
+                    && localItemsById.TryGetValue(storageItem.ItemId, out var localItem))
+                {
+                    ApplyStorageOrderItemSnapshot(localItem, storageItem);
+                    mergedItems.Add(localItem);
+                    continue;
+                }
+
+                mergedItems.Add(CloneStorageOrderItem(storageItem));
+            }
+
+            localOrder.Items.Clear();
+            localOrder.Items.AddRange(mergedItems);
+        }
+
+        private static void ApplyStorageOrderItemSnapshot(OrderFileItem localItem, OrderFileItem storageItem)
+        {
+            if (localItem == null || storageItem == null)
+                return;
+
+            localItem.ItemId = string.IsNullOrWhiteSpace(storageItem.ItemId)
+                ? localItem.ItemId
+                : storageItem.ItemId;
+            localItem.StorageVersion = storageItem.StorageVersion;
+            localItem.ClientFileLabel = storageItem.ClientFileLabel ?? string.Empty;
+            localItem.Variant = storageItem.Variant ?? string.Empty;
+            localItem.SourcePath = storageItem.SourcePath ?? string.Empty;
+            localItem.SourceFileSizeBytes = storageItem.SourceFileSizeBytes;
+            localItem.SourceFileHash = storageItem.SourceFileHash ?? string.Empty;
+            localItem.PreparedPath = storageItem.PreparedPath ?? string.Empty;
+            localItem.PreparedFileSizeBytes = storageItem.PreparedFileSizeBytes;
+            localItem.PreparedFileHash = storageItem.PreparedFileHash ?? string.Empty;
+            localItem.PrintPath = storageItem.PrintPath ?? string.Empty;
+            localItem.PrintFileSizeBytes = storageItem.PrintFileSizeBytes;
+            localItem.PrintFileHash = storageItem.PrintFileHash ?? string.Empty;
+            localItem.TechnicalFiles = storageItem.TechnicalFiles == null
+                ? []
+                : storageItem.TechnicalFiles.Where(path => !string.IsNullOrWhiteSpace(path)).ToList();
+            localItem.FileStatus = storageItem.FileStatus ?? string.Empty;
+            localItem.LastReason = storageItem.LastReason ?? string.Empty;
+            localItem.UpdatedAt = storageItem.UpdatedAt;
+            localItem.PitStopAction = storageItem.PitStopAction ?? "-";
+            localItem.ImposingAction = storageItem.ImposingAction ?? "-";
+            localItem.SequenceNo = storageItem.SequenceNo;
+        }
+
+        private static OrderData CloneStorageOrder(OrderData storageOrder)
+        {
+            var clonedOrder = new OrderData();
+            ApplyStorageOrderSnapshot(clonedOrder, storageOrder);
+            if (string.IsNullOrWhiteSpace(clonedOrder.InternalId))
+                clonedOrder.InternalId = Guid.NewGuid().ToString("N");
+            return clonedOrder;
+        }
+
+        private static OrderFileItem CloneStorageOrderItem(OrderFileItem storageItem)
+        {
+            var clonedItem = new OrderFileItem();
+            ApplyStorageOrderItemSnapshot(clonedItem, storageItem);
+            if (string.IsNullOrWhiteSpace(clonedItem.ItemId))
+                clonedItem.ItemId = Guid.NewGuid().ToString("N");
+            return clonedItem;
         }
     }
 }

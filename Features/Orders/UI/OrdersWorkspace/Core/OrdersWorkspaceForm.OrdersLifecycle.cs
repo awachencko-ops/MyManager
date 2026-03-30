@@ -1278,7 +1278,54 @@ namespace Replica
                 return false;
             }
 
-            _orderApplicationService.SyncStorageVersions(localOrders, reloadedOrders);
+            var normalizedReason = string.IsNullOrWhiteSpace(reason)
+                ? string.Empty
+                : reason.Trim();
+            var versionOnlyRefresh = string.Equals(normalizedReason, "run-start", StringComparison.OrdinalIgnoreCase)
+                                     || string.Equals(normalizedReason, "run-stop", StringComparison.OrdinalIgnoreCase);
+
+            if (versionOnlyRefresh)
+            {
+                _orderApplicationService.SyncStorageVersions(localOrders, reloadedOrders);
+                return true;
+            }
+
+            var mergeApplied = false;
+            try
+            {
+                if (InvokeRequired)
+                {
+                    Invoke((Action)(() =>
+                    {
+                        if (Disposing || IsDisposed)
+                            return;
+
+                        MergeStorageSnapshotIntoLocalHistory(reloadedOrders);
+                        mergeApplied = true;
+                    }));
+                }
+                else
+                {
+                    MergeStorageSnapshotIntoLocalHistory(reloadedOrders);
+                    mergeApplied = true;
+                }
+            }
+            catch (ObjectDisposedException)
+            {
+                mergeApplied = false;
+            }
+            catch (InvalidOperationException)
+            {
+                mergeApplied = false;
+            }
+
+            if (!mergeApplied)
+            {
+                Logger.Warn($"HISTORY | snapshot-refresh-merge-failed | reason={normalizedReason} | backend={_orderApplicationService.OrdersRepositoryBackendName} | fallback=versions-only");
+                _orderApplicationService.SyncStorageVersions(localOrders, reloadedOrders);
+                return false;
+            }
+
             return true;
         }
 
