@@ -44,6 +44,22 @@ Status: In progress
 5. Reduced presentation coupling baseline:
    - `UsersController.cs` removed from allowed `Presentation -> Infrastructure/Data/Services` baseline.
 
+## Completed Increment: Auth Controller Decoupling
+
+1. Added auth-focused application abstractions:
+   - `Replica.Api/Application/Abstractions/IReplicaApiAuthService.cs`,
+   - `Replica.Api/Application/Abstractions/IReplicaApiCurrentUserAccessor.cs`.
+2. Added infrastructure adapters:
+   - `Replica.Api/Infrastructure/ReplicaApiAuthServiceAdapter.cs`,
+   - `Replica.Api/Infrastructure/ReplicaApiCurrentActorAccessor.cs` extended to provide full current-user snapshot.
+3. Runtime DI updated:
+   - registered scoped `IReplicaApiCurrentUserAccessor` and `IReplicaApiAuthService`.
+4. Refactored `Replica.Api/Controllers/AuthController.cs`:
+   - controller now depends on application abstractions for users/token lifecycle/current-user snapshot,
+   - direct controller `using` dependencies to `Infrastructure` and `Services` removed.
+5. Reduced presentation coupling baseline:
+   - `AuthController.cs` removed from allowed `Presentation -> Infrastructure/Data/Services` baseline.
+
 ## Test Evidence
 
 1. `dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj --filter "ReplicaApiArchitectureBoundaryTests"`  
@@ -53,7 +69,7 @@ Status: In progress
 
 ## Open Notes
 
-1. Current baseline still contains direct presentation coupling in API controllers (`AuthController`, `OrdersController`).
+1. Current baseline still contains direct presentation coupling only in `OrdersController`.
 2. Stage 5 work should reduce this baseline gradually (without breaking current runtime path).
 
 ## Next Increment (planned)

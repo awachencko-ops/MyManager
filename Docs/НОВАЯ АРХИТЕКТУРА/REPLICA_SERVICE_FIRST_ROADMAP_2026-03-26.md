@@ -435,3 +435,9 @@ Replica.Client/
    - refactored `UsersController` to mediator-only path (store fallback removed, actor resolved via accessor),
    - removed `UsersController` from allowed Presentation->Infrastructure/Data/Services coupling baseline,
    - verify pack passed after refactor (`348/348`).
+52. `2026-03-30`: Stage 5 auth-controller decoupling increment:
+   - added application auth/user abstractions (`IReplicaApiAuthService`, `IReplicaApiCurrentUserAccessor`),
+   - added infrastructure adapters (`ReplicaApiAuthServiceAdapter`, extended `ReplicaApiCurrentActorAccessor`),
+   - refactored `AuthController` to use application abstractions for users/token lifecycle/current-user snapshot,
+   - removed `AuthController` from allowed Presentation->Infrastructure/Data/Services coupling baseline,
+   - verify pack passed after refactor (`348/348`).

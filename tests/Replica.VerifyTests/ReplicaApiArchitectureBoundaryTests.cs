@@ -43,7 +43,6 @@ public sealed class ReplicaApiArchitectureBoundaryTests
 
         var allowedBaseline = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            NormalizeRelativePath(repoRoot, Path.Combine(repoRoot, "Replica.Api", "Controllers", "AuthController.cs")),
             NormalizeRelativePath(repoRoot, Path.Combine(repoRoot, "Replica.Api", "Controllers", "OrdersController.cs"))
         };
 

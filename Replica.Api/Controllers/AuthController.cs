@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using Replica.Api.Application.Abstractions;
 using Replica.Api.Contracts;
-using Replica.Api.Infrastructure;
-using Replica.Api.Services;
 
 namespace Replica.Api.Controllers;
 
@@ -9,44 +8,44 @@ namespace Replica.Api.Controllers;
 [Route("api/auth")]
 public sealed class AuthController : ControllerBase
 {
-    private readonly ILanOrderStore _store;
-    private readonly IReplicaApiTokenService _tokenService;
+    private readonly IReplicaApiAuthService _authService;
+    private readonly IReplicaApiCurrentUserAccessor _currentUserAccessor;
 
-    public AuthController(ILanOrderStore store, IReplicaApiTokenService tokenService)
+    public AuthController(IReplicaApiAuthService authService, IReplicaApiCurrentUserAccessor currentUserAccessor)
     {
-        _store = store;
-        _tokenService = tokenService;
+        _authService = authService;
+        _currentUserAccessor = currentUserAccessor;
     }
 
     [HttpGet("me")]
-    [ReplicaAuthorize(ReplicaApiRoles.Operator)]
+    [Replica.Api.Infrastructure.ReplicaAuthorize(Replica.Api.Infrastructure.ReplicaApiRoles.Operator)]
     [ProducesResponseType(typeof(AuthMeResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public ActionResult<AuthMeResponse> GetCurrentUser()
     {
-        var currentUser = ReplicaApiCurrentUserContext.Get(HttpContext);
+        var currentUser = _currentUserAccessor.GetCurrentUser();
         return Ok(new AuthMeResponse
         {
             Name = currentUser.Name,
             Role = currentUser.Role,
             IsAuthenticated = currentUser.IsAuthenticated,
             IsValidated = currentUser.IsValidated,
-            CanManageUsers = ReplicaApiRoles.IsInRole(currentUser.Role, ReplicaApiRoles.Admin),
+            CanManageUsers = currentUser.CanManageUsers,
             AuthScheme = currentUser.AuthScheme,
             SessionId = currentUser.SessionId
         });
     }
 
     [HttpPost("login")]
-    [ReplicaAuthorize(ReplicaApiRoles.Operator)]
+    [Replica.Api.Infrastructure.ReplicaAuthorize(Replica.Api.Infrastructure.ReplicaApiRoles.Operator)]
     [ProducesResponseType(typeof(AuthTokenResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public ActionResult<AuthTokenResponse> Login([FromBody] AuthLoginRequest? request)
     {
-        var currentUser = ReplicaApiCurrentUserContext.Get(HttpContext);
+        var currentUser = _currentUserAccessor.GetCurrentUser();
         var requestedUserName = request?.UserName?.Trim() ?? string.Empty;
         var targetUserName = string.IsNullOrWhiteSpace(requestedUserName)
             ? currentUser.Name
@@ -54,18 +53,17 @@ public sealed class AuthController : ControllerBase
         if (string.IsNullOrWhiteSpace(targetUserName))
             return BadRequest(new { error = "user name is required" });
 
-        var currentUserIsAdmin = ReplicaApiRoles.IsInRole(currentUser.Role, ReplicaApiRoles.Admin);
-        if (!string.Equals(targetUserName, currentUser.Name, StringComparison.OrdinalIgnoreCase) && !currentUserIsAdmin)
+        if (!string.Equals(targetUserName, currentUser.Name, StringComparison.OrdinalIgnoreCase) && !currentUser.CanManageUsers)
             return Forbid();
 
-        var knownUsers = _store.GetUsers(includeInactive: true);
+        var knownUsers = _authService.GetUsers(includeInactive: true);
         var targetUser = knownUsers.FirstOrDefault(user =>
             !string.IsNullOrWhiteSpace(user.Name)
             && string.Equals(user.Name.Trim(), targetUserName, StringComparison.OrdinalIgnoreCase));
         if (targetUser == null || !targetUser.IsActive)
             return Forbid();
 
-        var issueResult = _tokenService.IssueToken(
+        var issueResult = _authService.IssueToken(
             targetUser.Name.Trim(),
             targetUser.Role,
             currentUser.Name,
@@ -78,7 +76,7 @@ public sealed class AuthController : ControllerBase
     }
 
     [HttpPost("refresh")]
-    [ReplicaAuthorize(ReplicaApiRoles.Operator)]
+    [Replica.Api.Infrastructure.ReplicaAuthorize(Replica.Api.Infrastructure.ReplicaApiRoles.Operator)]
     [ProducesResponseType(typeof(AuthTokenResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -86,7 +84,7 @@ public sealed class AuthController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public ActionResult<AuthTokenResponse> Refresh([FromBody] AuthRefreshRequest? request)
     {
-        var currentUser = ReplicaApiCurrentUserContext.Get(HttpContext);
+        var currentUser = _currentUserAccessor.GetCurrentUser();
         var requestedSessionId = request?.SessionId?.Trim() ?? string.Empty;
         var targetSessionId = string.IsNullOrWhiteSpace(requestedSessionId)
             ? currentUser.SessionId
@@ -94,11 +92,10 @@ public sealed class AuthController : ControllerBase
         if (string.IsNullOrWhiteSpace(targetSessionId))
             return BadRequest(new { error = "refresh requires bearer/api-key session id" });
 
-        var currentUserIsAdmin = ReplicaApiRoles.IsInRole(currentUser.Role, ReplicaApiRoles.Admin);
-        if (!string.Equals(targetSessionId, currentUser.SessionId, StringComparison.Ordinal) && !currentUserIsAdmin)
+        if (!string.Equals(targetSessionId, currentUser.SessionId, StringComparison.Ordinal) && !currentUser.CanManageUsers)
             return Forbid();
 
-        var refreshResult = _tokenService.RefreshToken(
+        var refreshResult = _authService.RefreshToken(
             targetSessionId,
             currentUser.Name,
             ResolveClientIpAddress(),
@@ -115,7 +112,7 @@ public sealed class AuthController : ControllerBase
     }
 
     [HttpPost("revoke")]
-    [ReplicaAuthorize(ReplicaApiRoles.Operator)]
+    [Replica.Api.Infrastructure.ReplicaAuthorize(Replica.Api.Infrastructure.ReplicaApiRoles.Operator)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -123,7 +120,7 @@ public sealed class AuthController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public IActionResult Revoke([FromBody] AuthRevokeRequest? request)
     {
-        var currentUser = ReplicaApiCurrentUserContext.Get(HttpContext);
+        var currentUser = _currentUserAccessor.GetCurrentUser();
         var requestedSessionId = request?.SessionId?.Trim() ?? string.Empty;
         var targetSessionId = string.IsNullOrWhiteSpace(requestedSessionId)
             ? currentUser.SessionId
@@ -131,11 +128,10 @@ public sealed class AuthController : ControllerBase
         if (string.IsNullOrWhiteSpace(targetSessionId))
             return BadRequest(new { error = "session id is required" });
 
-        var currentUserIsAdmin = ReplicaApiRoles.IsInRole(currentUser.Role, ReplicaApiRoles.Admin);
-        if (!string.Equals(targetSessionId, currentUser.SessionId, StringComparison.Ordinal) && !currentUserIsAdmin)
+        if (!string.Equals(targetSessionId, currentUser.SessionId, StringComparison.Ordinal) && !currentUser.CanManageUsers)
             return Forbid();
 
-        var revokeResult = _tokenService.RevokeToken(
+        var revokeResult = _authService.RevokeToken(
             targetSessionId,
             currentUser.Name,
             ResolveClientIpAddress(),
@@ -151,7 +147,7 @@ public sealed class AuthController : ControllerBase
         return NoContent();
     }
 
-    private static AuthTokenResponse ToTokenResponse(ReplicaApiTokenIssueResult source)
+    private static AuthTokenResponse ToTokenResponse(ReplicaApiAuthTokenIssueResult source)
     {
         return new AuthTokenResponse
         {

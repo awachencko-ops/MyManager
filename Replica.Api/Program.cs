@@ -66,6 +66,8 @@ builder.Services.AddSignalR();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<IReplicaApiTokenService, ReplicaApiTokenService>();
 builder.Services.AddScoped<IReplicaApiCurrentActorAccessor, ReplicaApiCurrentActorAccessor>();
+builder.Services.AddScoped<IReplicaApiCurrentUserAccessor, ReplicaApiCurrentActorAccessor>();
+builder.Services.AddScoped<IReplicaApiAuthService, ReplicaApiAuthServiceAdapter>();
 builder.Services.AddSingleton<IReplicaOrderPushPublisher, SignalRReplicaOrderPushPublisher>();
 builder.Services.AddSingleton<IReplicaApiHistoryShadowWriter, FileReplicaApiHistoryShadowWriter>();
 builder.Services.AddMediatR(typeof(Program));

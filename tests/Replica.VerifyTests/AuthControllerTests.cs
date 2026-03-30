@@ -1,11 +1,7 @@
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging.Abstractions;
+using Replica.Api.Application.Abstractions;
 using Replica.Api.Contracts;
 using Replica.Api.Controllers;
-using Replica.Api.Infrastructure;
-using Replica.Api.Services;
 using Xunit;
 
 namespace Replica.VerifyTests;
@@ -15,42 +11,62 @@ public sealed class AuthControllerTests
     [Fact]
     public void GetCurrentUser_ReturnsResolvedActorSnapshot()
     {
-        var controller = CreateController();
-
-        ReplicaApiCurrentUserContext.Set(controller.ControllerContext.HttpContext, new ReplicaApiCurrentUser
+        var currentUserAccessor = new FakeCurrentUserAccessor
         {
-            Name = "Andrew",
-            Role = ReplicaApiRoles.Admin,
-            IsAuthenticated = true,
-            IsValidated = true,
-            AuthScheme = "Header"
-        });
+            Snapshot = new ReplicaApiCurrentUserSnapshot
+            {
+                Name = "Andrew",
+                Role = Replica.Api.Infrastructure.ReplicaApiRoles.Admin,
+                IsAuthenticated = true,
+                IsValidated = true,
+                CanManageUsers = true,
+                AuthScheme = "Header"
+            }
+        };
+        var controller = new AuthController(new FakeAuthService(), currentUserAccessor);
 
         var result = controller.GetCurrentUser();
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         var payload = Assert.IsType<AuthMeResponse>(ok.Value);
         Assert.Equal("Andrew", payload.Name);
-        Assert.Equal(ReplicaApiRoles.Admin, payload.Role);
+        Assert.Equal(Replica.Api.Infrastructure.ReplicaApiRoles.Admin, payload.Role);
         Assert.True(payload.IsAuthenticated);
         Assert.True(payload.IsValidated);
         Assert.True(payload.CanManageUsers);
         Assert.Equal("Header", payload.AuthScheme);
     }
 
-    private static AuthController CreateController()
+    private sealed class FakeCurrentUserAccessor : IReplicaApiCurrentUserAccessor
     {
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>())
-            .Build();
-        var tokenService = new ReplicaApiTokenService(configuration, NullLogger<ReplicaApiTokenService>.Instance);
+        public ReplicaApiCurrentUserSnapshot Snapshot { get; set; } = new();
 
-        return new AuthController(new InMemoryLanOrderStore(), tokenService)
+        public ReplicaApiCurrentUserSnapshot GetCurrentUser()
         {
-            ControllerContext = new ControllerContext
-            {
-                HttpContext = new DefaultHttpContext()
-            }
-        };
+            return Snapshot;
+        }
+    }
+
+    private sealed class FakeAuthService : IReplicaApiAuthService
+    {
+        public IReadOnlyList<Replica.Shared.Models.SharedUser> GetUsers(bool includeInactive)
+        {
+            return Array.Empty<Replica.Shared.Models.SharedUser>();
+        }
+
+        public ReplicaApiAuthTokenIssueResult IssueToken(string userName, string role, string issuedBy, string ipAddress, string userAgent)
+        {
+            return ReplicaApiAuthTokenIssueResult.Failed("not implemented for this test");
+        }
+
+        public ReplicaApiAuthTokenIssueResult RefreshToken(string sessionId, string requestedBy, string ipAddress, string userAgent)
+        {
+            return ReplicaApiAuthTokenIssueResult.Failed("not implemented for this test");
+        }
+
+        public ReplicaApiAuthTokenRevokeResult RevokeToken(string sessionId, string requestedBy, string ipAddress, string userAgent)
+        {
+            return ReplicaApiAuthTokenRevokeResult.Failed("not implemented for this test");
+        }
     }
 }
