@@ -4,7 +4,7 @@
 # Replica Stage 5 Progress (Clean Architecture Repackaging)
 
 Date: 2026-03-30  
-Status: In progress
+Status: Done
 
 ## Completed Increment: Architecture Guardrails (Baseline Lock)
 
@@ -78,12 +78,12 @@ Status: In progress
 2. `dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj -p:BaseOutputPath=".../artifacts/tmp/test-out/"`  
    Result: passed (`348/348`).
 
-## Open Notes
+## Closure Criteria (Met)
 
-1. Baseline for direct `Presentation -> Infrastructure/Data/Services` `using` coupling is now zero in `Controllers/Hubs`.
-2. Next hardening step can replace baseline-lock semantics with strict zero-coupling assertion for presentation `using` imports.
+1. Direct `Presentation -> Infrastructure/Data/Services` namespace references are removed in `Controllers/Hubs`.
+2. Architecture verify guard upgraded to strict zero-coupling assertion for presentation layer namespace references.
+3. Verify pack passed after final cleanup (`348/348`).
 
-## Next Increment (planned)
+## Stage 6 Handoff
 
-1. Reduce approved baseline by moving controller runtime dependencies behind application ports/handlers.
-2. Extend architecture tests with additional no-new-coupling rules for newly extracted seams.
+1. Stage 5 is closed and handed off to Stage 6 (`Cutover + Legacy file-flow decommission`).

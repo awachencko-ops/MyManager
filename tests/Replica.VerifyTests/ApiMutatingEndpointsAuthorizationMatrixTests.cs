@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -99,16 +100,21 @@ public sealed class ApiMutatingEndpointsAuthorizationMatrixTests
         return filterContext.Result;
     }
 
-    private static IReadOnlyList<ReplicaAuthorizeAttribute> ResolveAuthorizeFilters(MethodInfo method)
+    private static IReadOnlyList<IAuthorizationFilter> ResolveAuthorizeFilters(MethodInfo method)
     {
-        var filters = new List<ReplicaAuthorizeAttribute>();
+        var filters = new List<IAuthorizationFilter>();
         if (method.DeclaringType != null)
         {
             filters.AddRange(method.DeclaringType
-                .GetCustomAttributes<ReplicaAuthorizeAttribute>(inherit: true));
+                .GetCustomAttributes(inherit: true)
+                .OfType<IAuthorizationFilter>()
+                .Where(filter => string.Equals(filter.GetType().Name, "ReplicaAuthorizeAttribute", StringComparison.Ordinal)));
         }
 
-        filters.AddRange(method.GetCustomAttributes<ReplicaAuthorizeAttribute>(inherit: true));
+        filters.AddRange(method
+            .GetCustomAttributes(inherit: true)
+            .OfType<IAuthorizationFilter>()
+            .Where(filter => string.Equals(filter.GetType().Name, "ReplicaAuthorizeAttribute", StringComparison.Ordinal)));
         return filters;
     }
 

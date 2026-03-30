@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Replica.Api.Application.Abstractions;
 using Replica.Api.Contracts;
 
@@ -18,7 +18,7 @@ public sealed class AuthController : ControllerBase
     }
 
     [HttpGet("me")]
-    [Replica.Api.Infrastructure.ReplicaAuthorize(Replica.Api.Infrastructure.ReplicaApiRoles.Operator)]
+    [ReplicaAuthorize(ReplicaApiRoleNames.Operator)]
     [ProducesResponseType(typeof(AuthMeResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -38,7 +38,7 @@ public sealed class AuthController : ControllerBase
     }
 
     [HttpPost("login")]
-    [Replica.Api.Infrastructure.ReplicaAuthorize(Replica.Api.Infrastructure.ReplicaApiRoles.Operator)]
+    [ReplicaAuthorize(ReplicaApiRoleNames.Operator)]
     [ProducesResponseType(typeof(AuthTokenResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -76,7 +76,7 @@ public sealed class AuthController : ControllerBase
     }
 
     [HttpPost("refresh")]
-    [Replica.Api.Infrastructure.ReplicaAuthorize(Replica.Api.Infrastructure.ReplicaApiRoles.Operator)]
+    [ReplicaAuthorize(ReplicaApiRoleNames.Operator)]
     [ProducesResponseType(typeof(AuthTokenResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -112,7 +112,7 @@ public sealed class AuthController : ControllerBase
     }
 
     [HttpPost("revoke")]
-    [Replica.Api.Infrastructure.ReplicaAuthorize(Replica.Api.Infrastructure.ReplicaApiRoles.Operator)]
+    [ReplicaAuthorize(ReplicaApiRoleNames.Operator)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -172,3 +172,4 @@ public sealed class AuthController : ControllerBase
             : string.Empty;
     }
 }
+

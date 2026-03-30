@@ -183,7 +183,7 @@ public sealed class OrdersControllerActorValidationTests
             IsValidated = true
         });
 
-        var filter = new ReplicaAuthorizeAttribute(ReplicaApiRoles.Admin);
+        var filter = new Replica.Api.Infrastructure.ReplicaAuthorizeAttribute(ReplicaApiRoles.Admin);
         var context = new AuthorizationFilterContext(
             new ActionContext(httpContext, new RouteData(), new ActionDescriptor()),
             new List<IFilterMetadata>());
@@ -206,7 +206,7 @@ public sealed class OrdersControllerActorValidationTests
             IsValidated = true
         });
 
-        var filter = new ReplicaAuthorizeAttribute(ReplicaApiRoles.Operator);
+        var filter = new Replica.Api.Infrastructure.ReplicaAuthorizeAttribute(ReplicaApiRoles.Operator);
         var context = new AuthorizationFilterContext(
             new ActionContext(httpContext, new RouteData(), new ActionDescriptor()),
             new List<IFilterMetadata>());

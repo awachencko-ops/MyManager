@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using Replica.Api.Application.Abstractions;
 using Replica.Api.Contracts;
 using Replica.Api.Infrastructure;
 using Replica.Shared.Models;
@@ -540,7 +541,7 @@ public sealed class InMemoryLanOrderStore : ILanOrderStore
     }
 }
 
-public sealed class StoreOperationResult
+public sealed class StoreOperationResult : IReplicaApiOrderOperationResult
 {
     public bool IsSuccess { get; init; }
     public bool IsNotFound { get; init; }

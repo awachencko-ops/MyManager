@@ -447,3 +447,13 @@ Replica.Client/
    - updated actor-validation verify test to real MediatR handler composition with stub store + actor accessor,
    - removed `OrdersController` from allowed Presentation->Infrastructure/Data/Services coupling baseline (baseline reduced to zero),
    - verify pack passed after refactor (`348/348`).
+54. `2026-03-30`: Stage 5 formal closure increment:
+   - presentation-layer architecture guard upgraded from baseline-lock to strict zero-coupling assertion for `Infrastructure/Data/Services` namespace references,
+   - controller authorization attributes switched to presentation contracts (`ReplicaAuthorize` in `Replica.Api.Contracts`),
+   - verify pack passed after closure hardening (`348/348`),
+   - Stage 5 marked `Done` in progress tracking doc.
+55. `2026-03-30`: Stage 6 kickoff increment:
+   - added Stage 6 progress document `REPLICA_STAGE6_CUTOVER_PROGRESS_2026-03-30.md`,
+   - added readiness script `scripts/stage6/Get-CutoverReadinessStatus.ps1`,
+   - executed first readiness scan and stored artifact `artifacts/stage6/cutover-readiness.latest.json`,
+   - initial scan reported `risk_detected` (`3` active blockers: FileSystem default mode, UI file-mode option, Stage 4 scheduler still registered).

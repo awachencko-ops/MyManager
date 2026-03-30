@@ -1,4 +1,4 @@
-using MediatR;
+﻿using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Replica.Api.Application.Abstractions;
@@ -11,7 +11,7 @@ namespace Replica.Api.Controllers;
 
 [ApiController]
 [Route("api/orders")]
-[Replica.Api.Infrastructure.ReplicaAuthorize(Replica.Api.Infrastructure.ReplicaApiRoles.Operator)]
+[ReplicaAuthorize(ReplicaApiRoleNames.Operator)]
 public sealed class OrdersController : ControllerBase
 {
     private const string IdempotencyHeaderName = "Idempotency-Key";
@@ -205,8 +205,8 @@ public sealed class OrdersController : ControllerBase
         return BuildWriteResponse(result);
     }
 
-    private Replica.Api.Services.StoreOperationResult ExecuteWriteCommand(
-        IRequest<Replica.Api.Services.StoreOperationResult> command)
+    private TResult ExecuteWriteCommand<TResult>(IRequest<TResult> command)
+        where TResult : IReplicaApiOrderOperationResult
     {
         var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
         return _mediator.Send(command, cancellationToken).GetAwaiter().GetResult();
@@ -230,7 +230,7 @@ public sealed class OrdersController : ControllerBase
         return value.Length <= 128 ? value : value[..128];
     }
 
-    private ActionResult<SharedOrder> BuildCreateResponse(Replica.Api.Services.StoreOperationResult result)
+    private ActionResult<SharedOrder> BuildCreateResponse(IReplicaApiOrderOperationResult result)
     {
         if (result.IsSuccess && result.Order != null)
             return CreatedAtAction(nameof(GetOrderById), new { id = result.Order.InternalId }, result.Order);
@@ -244,7 +244,7 @@ public sealed class OrdersController : ControllerBase
         return BadRequest(new { error = result.Error });
     }
 
-    private ActionResult<SharedOrder> BuildWriteResponse(Replica.Api.Services.StoreOperationResult result)
+    private ActionResult<SharedOrder> BuildWriteResponse(IReplicaApiOrderOperationResult result)
     {
         if (result.IsSuccess)
             return Ok(result.Order);
@@ -263,3 +263,4 @@ public sealed class OrdersController : ControllerBase
         return _currentActorAccessor.GetCurrentActorName();
     }
 }
+

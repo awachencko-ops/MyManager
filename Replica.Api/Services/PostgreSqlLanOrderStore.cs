@@ -756,7 +756,11 @@ public sealed class PostgreSqlLanOrderStore : ILanOrderStore
         return Convert.ToInt32(cmd.ExecuteScalar() ?? 0);
     }
 
-    private static void UpsertUser(NpgsqlConnection connection, NpgsqlTransaction tx, string userName, string role = ReplicaApiRoles.Operator)
+    private static void UpsertUser(
+        NpgsqlConnection connection,
+        NpgsqlTransaction tx,
+        string userName,
+        string role = Replica.Api.Infrastructure.ReplicaApiRoles.Operator)
     {
         if (string.IsNullOrWhiteSpace(userName))
             return;
@@ -776,7 +780,7 @@ public sealed class PostgreSqlLanOrderStore : ILanOrderStore
             connection,
             tx);
         cmd.Parameters.AddWithValue("user_name", userName.Trim());
-        cmd.Parameters.AddWithValue("role", ReplicaApiRoles.Normalize(role));
+        cmd.Parameters.AddWithValue("role", Replica.Api.Infrastructure.ReplicaApiRoles.Normalize(role));
         cmd.ExecuteNonQuery();
     }
 

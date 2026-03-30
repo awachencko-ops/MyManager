@@ -1,13 +1,14 @@
-using MediatR;
+﻿using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Replica.Api.Application.Diagnostics.Queries;
+using Replica.Api.Contracts;
 
 namespace Replica.Api.Controllers;
 
 [ApiController]
 [Route("api/diagnostics")]
-[Replica.Api.Infrastructure.ReplicaAuthorize(Replica.Api.Infrastructure.ReplicaApiRoles.Admin)]
+[ReplicaAuthorize(ReplicaApiRoleNames.Admin)]
 public sealed class DiagnosticsController : ControllerBase
 {
     private readonly IMediator? _mediator;
@@ -135,3 +136,4 @@ public sealed class PushDiagnosticsDto
     public long OrderDeletedFailures { get; set; }
     public long ForceRefreshFailures { get; set; }
 }
+

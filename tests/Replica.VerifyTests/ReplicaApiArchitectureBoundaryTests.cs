@@ -24,7 +24,7 @@ public sealed class ReplicaApiArchitectureBoundaryTests
     }
 
     [Fact]
-    public void ApiPresentationLayer_InfrastructureCoupling_DoesNotExpandBeyondBaseline()
+    public void ApiPresentationLayer_DoesNotReferenceInfrastructureDataOrServicesNamespaces()
     {
         var repoRoot = FindRepositoryRoot();
         var presentationDirs = new[]
@@ -33,7 +33,7 @@ public sealed class ReplicaApiArchitectureBoundaryTests
             Path.Combine(repoRoot, "Replica.Api", "Hubs")
         };
 
-        var offenders = FindFilesWithUsingNamespace(
+        var offenders = FindFilesWithNamespaceTokens(
             presentationDirs,
             [
                 "Replica.Api.Infrastructure",
@@ -41,17 +41,10 @@ public sealed class ReplicaApiArchitectureBoundaryTests
                 "Replica.Api.Services"
             ]);
 
-        var allowedBaseline = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        var unexpected = offenders
-            .Where(path => !allowedBaseline.Contains(path))
-            .OrderBy(path => path, StringComparer.Ordinal)
-            .ToList();
-
         Assert.True(
-            unexpected.Count == 0,
-            "New Presentation->Infrastructure/Data/Services coupling detected: "
-            + string.Join(", ", unexpected));
+            offenders.Count == 0,
+            "Presentation layer must not reference Infrastructure/Data/Services namespaces directly. Offenders: "
+            + string.Join(", ", offenders));
     }
 
     private static List<string> FindFilesWithUsingNamespace(string rootDirectory, IReadOnlyCollection<string> namespaces)
@@ -68,6 +61,40 @@ public sealed class ReplicaApiArchitectureBoundaryTests
 
         var pattern = @"^\s*using\s+(" + string.Join("|", namespaces.Select(Regex.Escape)) + @")\s*;";
         var matcher = new Regex(pattern, RegexOptions.Multiline | RegexOptions.CultureInvariant);
+
+        foreach (var root in rootDirectories)
+        {
+            if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
+                continue;
+
+            foreach (var filePath in Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
+            {
+                if (IsBuildArtifactPath(filePath))
+                    continue;
+
+                var content = File.ReadAllText(filePath);
+                if (!matcher.IsMatch(content))
+                    continue;
+
+                results.Add(NormalizeRelativePath(repoRoot, filePath));
+            }
+        }
+
+        return results
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToList();
+    }
+
+    private static List<string> FindFilesWithNamespaceTokens(IEnumerable<string> rootDirectories, IReadOnlyCollection<string> namespaces)
+    {
+        var repoRoot = FindRepositoryRoot();
+        var results = new List<string>();
+        if (namespaces.Count == 0)
+            return results;
+
+        var pattern = @"\b(" + string.Join("|", namespaces.Select(Regex.Escape)) + @")\b";
+        var matcher = new Regex(pattern, RegexOptions.CultureInvariant);
 
         foreach (var root in rootDirectories)
         {

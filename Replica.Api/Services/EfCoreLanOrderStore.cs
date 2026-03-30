@@ -1381,7 +1381,10 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
         target.UpdatedAt = source.UpdatedAt == default ? DateTime.Now : source.UpdatedAt;
     }
 
-    private static void UpsertUser(ReplicaDbContext db, string userName, string role = ReplicaApiRoles.Operator)
+    private static void UpsertUser(
+        ReplicaDbContext db,
+        string userName,
+        string role = Replica.Api.Infrastructure.ReplicaApiRoles.Operator)
     {
         if (string.IsNullOrWhiteSpace(userName))
             return;
@@ -1393,7 +1396,7 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
             db.Users.Add(new UserRecord
             {
                 UserName = normalized,
-                Role = ReplicaApiRoles.Normalize(role),
+                Role = Replica.Api.Infrastructure.ReplicaApiRoles.Normalize(role),
                 IsActive = true,
                 UpdatedAt = DateTime.Now
             });
@@ -1401,8 +1404,8 @@ public sealed class EfCoreLanOrderStore : ILanOrderStore
         }
 
         existing.Role = string.IsNullOrWhiteSpace(existing.Role)
-            ? ReplicaApiRoles.Normalize(role)
-            : ReplicaApiRoles.Normalize(existing.Role);
+            ? Replica.Api.Infrastructure.ReplicaApiRoles.Normalize(role)
+            : Replica.Api.Infrastructure.ReplicaApiRoles.Normalize(existing.Role);
         existing.IsActive = true;
         existing.UpdatedAt = DateTime.Now;
     }

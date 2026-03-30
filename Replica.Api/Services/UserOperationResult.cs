@@ -1,8 +1,9 @@
+using Replica.Api.Application.Abstractions;
 using Replica.Shared.Models;
 
 namespace Replica.Api.Services;
 
-public sealed class UserOperationResult
+public sealed class UserOperationResult : IReplicaApiUserOperationResult
 {
     public bool IsSuccess { get; init; }
     public bool IsBadRequest { get; init; }
