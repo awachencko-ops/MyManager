@@ -1,19 +1,351 @@
-{
-  "GeneratedAtUtc": "2026-03-30T00:00:00Z",
-  "Orders": [
+﻿[
     {
-      "InternalId": "stage4-sample-order-1",
-      "OrderNumber": "R-1001",
-      "Status": "Waiting",
-      "Version": 1,
-      "Items": [
-        {
-          "ItemId": "stage4-sample-item-1",
-          "Version": 1,
-          "FileStatus": "Waiting",
-          "Variant": "A"
-        }
-      ]
+        "InternalId":  "7ae5841c223c46f89fee886f85419514",
+        "OrderNumber":  "00631",
+        "Status":  "В архиве",
+        "Version":  31,
+        "UserName":  "Сервер \"Таудеми\"",
+        "Keyword":  "",
+        "FolderName":  "",
+        "CreatedById":  "",
+        "CreatedByUser":  "",
+        "ManagerOrderDate":  "2026-03-18T00:00:00",
+        "ArrivalDate":  "2026-03-19T15:43:24.6997118+10:00",
+        "Items":  [
+                      {
+                          "ItemId":  "38cf3a6384274228a0bfa05ce94187d2",
+                          "Version":  31,
+                          "SequenceNo":  0,
+                          "ClientFileLabel":  "Меню 99, 2026 год",
+                          "Variant":  "",
+                          "SourcePath":  "C:\\Андрей ПК\\Replica BASEFOLDER\\TempReplica\\in\\Меню 99, 2026 год.pdf",
+                          "PreparedPath":  "C:\\Андрей ПК\\Replica BASEFOLDER\\TempReplica\\prepress\\Меню 99, 2026 год.pdf",
+                          "PrintPath":  "\\\\NAS\\work\\Temp\\!!!Дедушка\\00631.pdf",
+                          "FileStatus":  "Обрабатывается",
+                          "LastReason":  "",
+                          "UpdatedAt":  "2026-03-19T15:43:39.9674003+10:00"
+                      }
+                  ]
+    },
+    {
+        "InternalId":  "4609558ea3c14beebef5bc4f6c5584f3",
+        "OrderNumber":  "00632",
+        "Status":  "В архиве",
+        "Version":  31,
+        "UserName":  "Сервер \"Таудеми\"",
+        "Keyword":  "",
+        "FolderName":  "",
+        "CreatedById":  "",
+        "CreatedByUser":  "",
+        "ManagerOrderDate":  "2026-03-18T00:00:00",
+        "ArrivalDate":  "2026-03-19T15:32:05.4447242+10:00",
+        "Items":  [
+                      {
+                          "ItemId":  "a48456f4354247568062c6336c07f7a9",
+                          "Version":  31,
+                          "SequenceNo":  0,
+                          "ClientFileLabel":  "меню комплексные обеды",
+                          "Variant":  "",
+                          "SourcePath":  "C:\\Андрей ПК\\Replica BASEFOLDER\\TempReplica\\in\\меню комплексные обеды.pdf",
+                          "PreparedPath":  "C:\\Андрей ПК\\Replica BASEFOLDER\\TempReplica\\prepress\\меню комплексные обеды.pdf",
+                          "PrintPath":  "\\\\NAS\\work\\Temp\\!!!Дедушка\\00632.pdf",
+                          "FileStatus":  "Обрабатывается",
+                          "LastReason":  "",
+                          "UpdatedAt":  "2026-03-19T15:32:17.3278491+10:00"
+                      }
+                  ]
+    },
+    {
+        "InternalId":  "e1ca9df6259b428d809cee46aef71a37",
+        "OrderNumber":  "00576",
+        "Status":  "Завершено",
+        "Version":  31,
+        "UserName":  "Сервер \"Таудеми\"",
+        "Keyword":  "",
+        "FolderName":  "",
+        "CreatedById":  "",
+        "CreatedByUser":  "",
+        "ManagerOrderDate":  "2026-03-13T00:00:00",
+        "ArrivalDate":  "2026-03-17T09:15:47.2117674+10:00",
+        "Items":  [
+                      {
+                          "ItemId":  "fcbaf491d1984688a660623a1cd4bcab",
+                          "Version":  31,
+                          "SequenceNo":  0,
+                          "ClientFileLabel":  "1-6921208814289 СОЕВЫЙ СОУС КРЕВЕТОЧНЫЙ, 0,5 Л 1-15000",
+                          "Variant":  "",
+                          "SourcePath":  "\\\\NAS\\work\\Первая Чукотская Типография\\Шкалы\\Replica BASEFOLDER\\Orders\\TempReplica\\in\\1-6921208814289 СОЕВЫЙ СОУС КРЕВЕТОЧНЫЙ, 0,5 Л 1-15000.pdf",
+                          "PreparedPath":  "\\\\NAS\\work\\Первая Чукотская Типография\\Шкалы\\Replica BASEFOLDER\\Orders\\TempReplica\\prepress\\1-6921208814289 СОЕВЫЙ СОУС КРЕВЕТОЧНЫЙ, 0,5 Л 1-15000.pdf",
+                          "PrintPath":  "\\\\NAS\\work\\Temp\\!!!Дедушка\\00576_1.pdf",
+                          "FileStatus":  "Завершено",
+                          "LastReason":  "",
+                          "UpdatedAt":  "2026-03-19T10:23:25.4359384+10:00"
+                      },
+                      {
+                          "ItemId":  "a441e73d1bb94e94b14e5f9e0a9c1eff",
+                          "Version":  31,
+                          "SequenceNo":  1,
+                          "ClientFileLabel":  "2-6921208814265 СОЕВЫЙ СОУС КРАБОВЫЙ, 0,5 Л 1-6000",
+                          "Variant":  "",
+                          "SourcePath":  "\\\\NAS\\work\\Первая Чукотская Типография\\Шкалы\\Replica BASEFOLDER\\Orders\\TempReplica\\in\\2-6921208814265 СОЕВЫЙ СОУС КРАБОВЫЙ, 0,5 Л 1-6000.pdf",
+                          "PreparedPath":  "\\\\NAS\\work\\Первая Чукотская Типография\\Шкалы\\Replica BASEFOLDER\\Orders\\TempReplica\\prepress\\2-6921208814265 СОЕВЫЙ СОУС КРАБОВЫЙ, 0,5 Л 1-6000_1.pdf",
+                          "PrintPath":  "\\\\NAS\\work\\Temp\\!!!Дедушка\\00576_2.pdf",
+                          "FileStatus":  "Завершено",
+                          "LastReason":  "",
+                          "UpdatedAt":  "2026-03-18T09:19:50.4816524+10:00"
+                      }
+                  ]
+    },
+    {
+        "InternalId":  "e5dae862a8764e67906e8cc702c48def",
+        "OrderNumber":  "00554",
+        "Status":  "Ожидание",
+        "Version":  31,
+        "UserName":  "Сервер \"Таудеми\"",
+        "Keyword":  "",
+        "FolderName":  "",
+        "CreatedById":  "",
+        "CreatedByUser":  "",
+        "ManagerOrderDate":  "2026-03-12T14:25:43.0278804+10:00",
+        "ArrivalDate":  "2026-03-12T14:27:08.4293925+10:00",
+        "Items":  [
+                      {
+                          "ItemId":  "0b1b5cb6e9fc43c38c8cafb48ea042c9",
+                          "Version":  31,
+                          "SequenceNo":  0,
+                          "ClientFileLabel":  "Binder1",
+                          "Variant":  "",
+                          "SourcePath":  "\\\\NAS\\work\\Первая Чукотская Типография\\Шкалы\\MYMANAGER BASEFOLDER\\Orders\\TempMyManager\\in\\Binder1.pdf",
+                          "PreparedPath":  "\\\\NAS\\work\\Первая Чукотская Типография\\Шкалы\\MYMANAGER BASEFOLDER\\Orders\\TempMyManager\\prepress\\бигарт.pdf",
+                          "PrintPath":  "\\\\NAS\\work\\Temp\\!!!Дедушка\\00554.pdf",
+                          "FileStatus":  "Обрабатывается",
+                          "LastReason":  "",
+                          "UpdatedAt":  "2026-03-12T14:40:13.6652495+10:00"
+                      }
+                  ]
+    },
+    {
+        "InternalId":  "e4d77bf20e4f467286d0867813d21bb2",
+        "OrderNumber":  "00499",
+        "Status":  "Ожидание",
+        "Version":  31,
+        "UserName":  "Сервер \"Таудеми\"",
+        "Keyword":  "",
+        "FolderName":  "",
+        "CreatedById":  "",
+        "CreatedByUser":  "",
+        "ManagerOrderDate":  "2026-03-12T09:24:11.6874744+10:00",
+        "ArrivalDate":  "2026-03-12T09:24:20.3206464+10:00",
+        "Items":  [
+                      {
+                          "ItemId":  "806b5f400e3940d28e9f3a2a6beb305f",
+                          "Version":  31,
+                          "SequenceNo":  0,
+                          "ClientFileLabel":  "Наклейка тестер 8,5х1 см",
+                          "Variant":  "",
+                          "SourcePath":  "\\\\NAS\\work\\Первая Чукотская Типография\\Шкалы\\MYMANAGER BASEFOLDER\\Orders\\TempMyManager\\in\\Наклейка тестер 8,5х1 см.cdr",
+                          "PreparedPath":  "\\\\NAS\\work\\Первая Чукотская Типография\\Шкалы\\MYMANAGER BASEFOLDER\\Orders\\TempMyManager\\prepress\\Наклейка тестер 8,5х1 см_1.pdf",
+                          "PrintPath":  "\\\\NAS\\work\\Temp\\!!!Дедушка\\00499.pdf",
+                          "FileStatus":  "Завершено",
+                          "LastReason":  "",
+                          "UpdatedAt":  "2026-03-12T09:50:17.0472066+10:00"
+                      }
+                  ]
+    },
+    {
+        "InternalId":  "225d019cdfc54209a62d527634ec6377",
+        "OrderNumber":  "00535",
+        "Status":  "Ожидание",
+        "Version":  31,
+        "UserName":  "Сервер \"Таудеми\"",
+        "Keyword":  "",
+        "FolderName":  "",
+        "CreatedById":  "",
+        "CreatedByUser":  "",
+        "ManagerOrderDate":  "2026-03-10T11:29:44.464",
+        "ArrivalDate":  "2026-03-12T11:29:50.8394563+10:00",
+        "Items":  [
+                      {
+                          "ItemId":  "1d17c0cb3d08470c87e3639fad48a6ea",
+                          "Version":  31,
+                          "SequenceNo":  0,
+                          "ClientFileLabel":  "Визитки глазастик",
+                          "Variant":  "",
+                          "SourcePath":  "\\\\NAS\\work\\Первая Чукотская Типография\\Шкалы\\MYMANAGER BASEFOLDER\\Orders\\TempMyManager\\in\\Визитки глазастик.pdf",
+                          "PreparedPath":  "\\\\NAS\\work\\Первая Чукотская Типография\\Шкалы\\MYMANAGER BASEFOLDER\\Orders\\TempMyManager\\prepress\\Визитки глазастик.pdf",
+                          "PrintPath":  "\\\\NAS\\work\\Temp\\!!!Дедушка\\00535.pdf",
+                          "FileStatus":  "Обрабатывается",
+                          "LastReason":  "",
+                          "UpdatedAt":  "2026-03-12T11:29:55.2673346+10:00"
+                      }
+                  ]
+    },
+    {
+        "InternalId":  "11943a707ae2491790a43846a0564c2f",
+        "OrderNumber":  "00536",
+        "Status":  "Ожидание",
+        "Version":  31,
+        "UserName":  "Сервер \"Таудеми\"",
+        "Keyword":  "",
+        "FolderName":  "",
+        "CreatedById":  "",
+        "CreatedByUser":  "",
+        "ManagerOrderDate":  "2026-03-10T11:13:54.313",
+        "ArrivalDate":  "2026-03-12T11:14:11.3350726+10:00",
+        "Items":  [
+                      {
+                          "ItemId":  "91a975b9e0b9452db33c7672d873c70d",
+                          "Version":  31,
+                          "SequenceNo":  0,
+                          "ClientFileLabel":  "Сертификат ЦОК Клавин (1) (2)",
+                          "Variant":  "",
+                          "SourcePath":  "\\\\NAS\\work\\Первая Чукотская Типография\\Шкалы\\MYMANAGER BASEFOLDER\\Orders\\TempMyManager\\in\\Сертификат ЦОК Клавин (1) (2).pdf",
+                          "PreparedPath":  "\\\\NAS\\work\\Первая Чукотская Типография\\Шкалы\\MYMANAGER BASEFOLDER\\Orders\\TempMyManager\\prepress\\Сертификат ЦОК Клавин (1) (2).pdf",
+                          "PrintPath":  "\\\\NAS\\work\\Temp\\!!!Дедушка\\00536.pdf",
+                          "FileStatus":  "Завершено",
+                          "LastReason":  "",
+                          "UpdatedAt":  "2026-03-12T11:15:38.9097445+10:00"
+                      }
+                  ]
+    },
+    {
+        "InternalId":  "eef9430ea5504159aa8109c51a5badcd",
+        "OrderNumber":  "00526",
+        "Status":  "Завершено",
+        "Version":  31,
+        "UserName":  "Сервер \"Таудеми\"",
+        "Keyword":  "",
+        "FolderName":  "",
+        "CreatedById":  "",
+        "CreatedByUser":  "",
+        "ManagerOrderDate":  "2026-03-06T09:26:01.98",
+        "ArrivalDate":  "2026-03-10T09:26:01.9808174+10:00",
+        "Items":  [
+                      {
+                          "ItemId":  "a4ce9f35b8294e008399755918fa7303",
+                          "Version":  31,
+                          "SequenceNo":  0,
+                          "ClientFileLabel":  "Сертификат 100шт 300гр",
+                          "Variant":  "",
+                          "SourcePath":  "\\\\NAS\\work\\Первая Чукотская Типография\\Шкалы\\Replica BASEFOLDER\\Orders\\TempReplica\\in\\00576_1.pdf",
+                          "PreparedPath":  "\\\\NAS\\work\\Первая Чукотская Типография\\Шкалы\\Replica BASEFOLDER\\Orders\\TempReplica\\prepress\\00576_1.pdf",
+                          "PrintPath":  "\\\\NAS\\work\\Temp\\!!!Дедушка\\00526.pdf",
+                          "FileStatus":  "Завершено",
+                          "LastReason":  "",
+                          "UpdatedAt":  "2026-03-19T10:22:53.7048926+10:00"
+                      }
+                  ]
+    },
+    {
+        "InternalId":  "14f9a7246b5847bd8a5570528f5e6c04",
+        "OrderNumber":  "00501",
+        "Status":  "Завершено",
+        "Version":  31,
+        "UserName":  "Сервер \"Таудеми\"",
+        "Keyword":  "",
+        "FolderName":  "",
+        "CreatedById":  "",
+        "CreatedByUser":  "",
+        "ManagerOrderDate":  "2026-03-03T13:08:51.161",
+        "ArrivalDate":  "2026-03-10T13:08:51.1615553+10:00",
+        "Items":  [
+                      {
+                          "ItemId":  "ea49e7664dfe44c5bf1e9dd0d3b0b7e9",
+                          "Version":  31,
+                          "SequenceNo":  0,
+                          "ClientFileLabel":  "Плакат А3",
+                          "Variant":  "",
+                          "SourcePath":  "C:\\MyManager\\Orders\\TempMyManager\\in\\Плакат А3.pdf",
+                          "PreparedPath":  "C:\\MyManager\\Orders\\TempMyManager\\prepress\\Плакат А3.pdf",
+                          "PrintPath":  "\\\\NAS\\work\\Temp\\!!!Дедушка\\00501.pdf",
+                          "FileStatus":  "Завершено",
+                          "LastReason":  "Could not find file \u0027C:\\MyManager\\Orders\\TempMyManager\\prepress\\Плакат А3.pdf\u0027.",
+                          "UpdatedAt":  "2026-03-18T09:25:27.7680249+10:00"
+                      }
+                  ]
+    },
+    {
+        "InternalId":  "412296ad2a4249779be4f4a7d524c012",
+        "OrderNumber":  "",
+        "Status":  "Обрабатывается",
+        "Version":  9,
+        "UserName":  "Andrew",
+        "Keyword":  "",
+        "FolderName":  "",
+        "CreatedById":  "",
+        "CreatedByUser":  "",
+        "ManagerOrderDate":  "2000-01-01T00:00:00",
+        "ArrivalDate":  "2026-03-26T16:27:49.5106312+10:00",
+        "Items":  [
+                      {
+                          "ItemId":  "8f07bc8603f14b88ba9cb22024581310",
+                          "Version":  5,
+                          "SequenceNo":  0,
+                          "ClientFileLabel":  "тму наклейка",
+                          "Variant":  "",
+                          "SourcePath":  "C:\\Андрей ПК\\Replica BASEFOLDER\\TempReplica\\in\\тму наклейка.pdf",
+                          "PreparedPath":  "C:\\Андрей ПК\\Replica BASEFOLDER\\TempReplica\\prepress\\тму наклейка.pdf",
+                          "PrintPath":  "",
+                          "FileStatus":  "Обрабатывается",
+                          "LastReason":  "",
+                          "UpdatedAt":  "2026-03-26T16:31:00.8525661+10:00"
+                      }
+                  ]
+    },
+    {
+        "InternalId":  "e1de1595f1d848febb329e6aa6249ccc",
+        "OrderNumber":  "test",
+        "Status":  "Завершено",
+        "Version":  28,
+        "UserName":  "Сервер \"Таудеми\"",
+        "Keyword":  "",
+        "FolderName":  "",
+        "CreatedById":  "",
+        "CreatedByUser":  "",
+        "ManagerOrderDate":  "2000-01-01T00:00:00",
+        "ArrivalDate":  "2026-03-20T11:09:46.3923303+10:00",
+        "Items":  [
+                      {
+                          "ItemId":  "8d99febc01c5457d89063b9c8844be7c",
+                          "Version":  26,
+                          "SequenceNo":  0,
+                          "ClientFileLabel":  "90х50_визитки_элизиум",
+                          "Variant":  "",
+                          "SourcePath":  "C:\\Андрей ПК\\Replica BASEFOLDER\\TempReplica\\in\\90х50_визитки_элизиум.pdf",
+                          "PreparedPath":  "C:\\Андрей ПК\\Replica BASEFOLDER\\TempReplica\\prepress\\Письмо и грамота.pdf",
+                          "PrintPath":  "\\\\NAS\\work\\Temp\\!!!Дедушка\\test.pdf",
+                          "FileStatus":  "Обрабатывается",
+                          "LastReason":  "",
+                          "UpdatedAt":  "2026-03-23T16:39:54.0317892+10:00"
+                      }
+                  ]
+    },
+    {
+        "InternalId":  "0192b19c17cf45f69b510857a40603e1",
+        "OrderNumber":  "промо",
+        "Status":  "В архиве",
+        "Version":  31,
+        "UserName":  "Сервер \"Таудеми\"",
+        "Keyword":  "",
+        "FolderName":  "",
+        "CreatedById":  "",
+        "CreatedByUser":  "",
+        "ManagerOrderDate":  "2000-01-01T00:00:00",
+        "ArrivalDate":  "2026-03-19T14:01:07.4429249+10:00",
+        "Items":  [
+                      {
+                          "ItemId":  "843410816e9c4d7e8f00780a64171cde",
+                          "Version":  31,
+                          "SequenceNo":  0,
+                          "ClientFileLabel":  "90х50_визитки_элизиум",
+                          "Variant":  "",
+                          "SourcePath":  "C:\\Андрей ПК\\Replica BASEFOLDER\\TempReplica\\in\\90х50_визитки_элизиум.pdf",
+                          "PreparedPath":  "C:\\Андрей ПК\\Replica BASEFOLDER\\TempReplica\\prepress\\90х50_визитки_элизиум.pdf",
+                          "PrintPath":  "\\\\NAS\\work\\Temp\\!!!Дедушка\\промо.pdf",
+                          "FileStatus":  "Обрабатывается",
+                          "LastReason":  "",
+                          "UpdatedAt":  "2026-03-19T14:11:53.9512581+10:00"
+                      }
+                  ]
     }
-  ]
-}
+]

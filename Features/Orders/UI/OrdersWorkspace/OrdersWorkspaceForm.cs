@@ -342,16 +342,39 @@ namespace Replica
             DateTime previousOrderDate,
             string editScope)
         {
+            var currentOrder = order;
+            TryRefreshRepositorySnapshotFromStorage(new[] { order }, "lan-api-update-order-preflight");
+            var refreshedOrder = FindOrderByInternalId(order.InternalId);
+            if (refreshedOrder != null)
+                currentOrder = refreshedOrder;
+
             var writeResult = await _orderApplicationService.TryUpdateOrderViaLanApiAsync(
-                order,
+                currentOrder,
                 updatedOrder,
                 _lanApiBaseUrl,
                 ResolveLanApiActor(),
                 NormalizeOrderUserName);
+            if (writeResult.IsConflict)
+            {
+                TryRefreshRepositorySnapshotFromStorage(new[] { currentOrder }, "lan-api-update-order-conflict-retry");
+                var retryOrder = FindOrderByInternalId(currentOrder.InternalId);
+                if (retryOrder != null && writeResult.CurrentVersion > 0)
+                    retryOrder.StorageVersion = Math.Max(retryOrder.StorageVersion, writeResult.CurrentVersion);
+
+                if (retryOrder != null)
+                {
+                    writeResult = await _orderApplicationService.TryUpdateOrderViaLanApiAsync(
+                        retryOrder,
+                        updatedOrder,
+                        _lanApiBaseUrl,
+                        ResolveLanApiActor(),
+                        NormalizeOrderUserName);
+                }
+            }
 
             var writeOutcome = _orderApplicationService.ApplyLanOrderWriteResult(
                 _orderHistory,
-                targetOrder: order,
+                targetOrder: currentOrder,
                 writeResult,
                 operationCaption: "Редактирование заказа",
                 successSnapshotReason: "lan-api-update-order");
@@ -360,9 +383,9 @@ namespace Replica
                 return;
 
             RebuildOrdersGrid();
-            TryRestoreSelectedRowByTag(OrderGridLogic.BuildOrderTag(order.InternalId));
+            TryRestoreSelectedRowByTag(OrderGridLogic.BuildOrderTag(currentOrder.InternalId));
 
-            var resolvedOrder = FindOrderByInternalId(order.InternalId) ?? writeOutcome.Order ?? order;
+            var resolvedOrder = FindOrderByInternalId(currentOrder.InternalId) ?? writeOutcome.Order ?? currentOrder;
             AppendOrderOperationLog(
                 resolvedOrder,
                 OrderOperationNames.EditOrder,

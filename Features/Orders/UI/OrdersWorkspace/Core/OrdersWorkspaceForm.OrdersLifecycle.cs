@@ -992,6 +992,33 @@ namespace Replica
 
             using var correlationScope = Logger.BeginCorrelationScope();
             var useLanApi = ShouldUseLanRunApi();
+            var selectedOrderIds = selectedOrders
+                .Where(order => order != null && !string.IsNullOrWhiteSpace(order.InternalId))
+                .Select(order => order.InternalId.Trim())
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            if (useLanApi && selectedOrderIds.Count > 0)
+            {
+                var preflightSyncOk = TryRefreshRepositorySnapshotFromStorage(selectedOrders, "run-preflight");
+                selectedOrders = selectedOrderIds
+                    .Select(FindOrderByInternalId)
+                    .OfType<OrderData>()
+                    .ToList();
+
+                if (!preflightSyncOk)
+                {
+                    ApplyOrderRunFeedbackLogs(
+                        _orderApplicationService.BuildRunSnapshotRefreshWarningUiFeedback("run-preflight").Logs);
+                }
+
+                if (selectedOrders.Count == 0)
+                {
+                    var selectionUiFeedback = _orderApplicationService.BuildRunSelectionRequiredUiFeedback();
+                    RenderRunStartUiFeedback(selectionUiFeedback);
+                    return;
+                }
+            }
+
             using var runScope = Logger.BeginScope(
                 ("component", "main_form"),
                 ("workflow", "run-selected"),
@@ -1451,9 +1478,15 @@ namespace Replica
             if (selectedOrders == null || selectedOrders.Count == 0)
                 return;
 
-            var normalizedOrders = selectedOrders
-                .Where(order => order != null)
-                .DistinctBy(order => order.InternalId, StringComparer.Ordinal)
+            var selectedOrderIds = selectedOrders
+                .Where(order => order != null && !string.IsNullOrWhiteSpace(order.InternalId))
+                .Select(order => order.InternalId.Trim())
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            TryRefreshRepositorySnapshotFromStorage(selectedOrders, "lan-api-delete-order-preflight");
+            var normalizedOrders = selectedOrderIds
+                .Select(FindOrderByInternalId)
+                .OfType<OrderData>()
                 .ToList();
 
             var removedCount = 0;
@@ -1481,8 +1514,23 @@ namespace Replica
                         _lanApiBaseUrl,
                         ResolveLanApiActor());
                 var deleteResultValue = await deleteResult;
+                if (deleteResultValue.IsConflict)
+                {
+                    TryRefreshRepositorySnapshotFromStorage(new[] { order }, "lan-api-delete-order-conflict-retry");
+                    var retryOrder = FindOrderByInternalId(order.InternalId);
+                    if (retryOrder != null && deleteResultValue.CurrentVersion > 0)
+                        retryOrder.StorageVersion = Math.Max(retryOrder.StorageVersion, deleteResultValue.CurrentVersion);
 
-                if (deleteResultValue.IsSuccess)
+                    if (retryOrder != null)
+                    {
+                        deleteResultValue = await _orderApplicationService.TryDeleteOrderViaLanApiAsync(
+                            retryOrder,
+                            _lanApiBaseUrl,
+                            ResolveLanApiActor());
+                    }
+                }
+
+                if (deleteResultValue.IsSuccess || deleteResultValue.IsNotFound)
                 {
                     if (_runTokensByOrder.TryGetValue(order.InternalId, out var cts))
                     {
@@ -1493,13 +1541,17 @@ namespace Replica
 
                     _runProgressByOrderInternalId.Remove(order.InternalId);
                     _expandedOrderIds.Remove(order.InternalId);
-                    _orderHistory.Remove(order);
+                    _orderHistory.RemoveAll(existing =>
+                        existing != null
+                        && string.Equals(existing.InternalId, order.InternalId, StringComparison.Ordinal));
                     AppendOrderOperationLog(
                         order,
                         OrderOperationNames.Delete,
-                        removeFilesFromDisk
-                            ? "Удален из списка и с диска"
-                            : "Удален из списка");
+                        deleteResultValue.IsNotFound
+                            ? "Удален из списка (на сервере уже отсутствовал)"
+                            : removeFilesFromDisk
+                                ? "Удален из списка и с диска"
+                                : "Удален из списка");
                     removedCount++;
                     continue;
                 }

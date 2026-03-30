@@ -57,6 +57,16 @@ public sealed class LanOrderWriteCommandService
             request,
             actor,
             cancellationToken);
+        if (apiResult.IsConflict && apiResult.CurrentVersion > 0 && apiResult.CurrentVersion != request.ExpectedVersion)
+        {
+            request.ExpectedVersion = apiResult.CurrentVersion;
+            apiResult = await _lanOrderWriteApiGateway.UpdateOrderAsync(
+                lanApiBaseUrl,
+                currentOrder.InternalId,
+                request,
+                actor,
+                cancellationToken);
+        }
 
         return ToCommandResult(apiResult);
     }
@@ -83,6 +93,16 @@ public sealed class LanOrderWriteCommandService
             request,
             actor,
             cancellationToken);
+        if (apiResult.IsConflict && apiResult.CurrentVersion > 0 && apiResult.CurrentVersion != request.ExpectedVersion)
+        {
+            request.ExpectedVersion = apiResult.CurrentVersion;
+            apiResult = await _lanOrderWriteApiGateway.DeleteOrderAsync(
+                lanApiBaseUrl,
+                order.InternalId,
+                request,
+                actor,
+                cancellationToken);
+        }
 
         return ToCommandResult(apiResult);
     }

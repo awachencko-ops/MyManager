@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Replica.Shared.Models;
@@ -165,6 +166,53 @@ public sealed class LanOrderWriteCommandServiceTests
     }
 
     [Fact]
+    public async Task TryUpdateOrderAsync_WhenConflictReturnsCurrentVersion_RetriesOnceWithUpdatedExpectedVersion()
+    {
+        var gateway = new StubGateway();
+        gateway.EnqueueUpdateResponse(LanOrderWriteApiResult.Conflict("order version mismatch", currentVersion: 15));
+        gateway.EnqueueUpdateResponse(LanOrderWriteApiResult.Success(new SharedOrder
+        {
+            InternalId = "o-2",
+            OrderNumber = "2002",
+            UserName = "operator-2",
+            Status = "Waiting",
+            Version = 16,
+            ManagerOrderDate = new DateTime(2026, 3, 24),
+            ArrivalDate = new DateTime(2026, 3, 23, 11, 0, 0)
+        }));
+
+        var service = new LanOrderWriteCommandService(gateway);
+        var currentOrder = new OrderData
+        {
+            InternalId = "o-2",
+            StorageVersion = 14,
+            Id = "2001"
+        };
+
+        var updatedOrder = new OrderData
+        {
+            Id = "2002",
+            OrderDate = new DateTime(2026, 3, 24),
+            UserName = " operator-2 ",
+            Status = "Waiting"
+        };
+
+        var result = await service.TryUpdateOrderAsync(
+            currentOrder,
+            updatedOrder,
+            "http://localhost:5000/",
+            "operator-2",
+            user => user.Trim());
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(2, gateway.UpdateOrderCallCount);
+        Assert.Equal(14, gateway.UpdateRequestHistory[0].ExpectedVersion);
+        Assert.Equal(15, gateway.UpdateRequestHistory[1].ExpectedVersion);
+        Assert.NotNull(result.Order);
+        Assert.Equal(16, result.Order!.StorageVersion);
+    }
+
+    [Fact]
     public async Task TryDeleteOrderAsync_UsesDeleteEndpointWithExpectedVersion()
     {
         var gateway = new StubGateway
@@ -195,6 +243,38 @@ public sealed class LanOrderWriteCommandServiceTests
         Assert.Equal("o-del-1", gateway.LastDeleteOrderId);
         Assert.NotNull(result.Order);
         Assert.Equal(33, result.Order!.StorageVersion);
+    }
+
+    [Fact]
+    public async Task TryDeleteOrderAsync_WhenConflictReturnsCurrentVersion_RetriesOnceWithUpdatedExpectedVersion()
+    {
+        var gateway = new StubGateway();
+        gateway.EnqueueDeleteOrderResponse(LanOrderWriteApiResult.Conflict("order version mismatch", currentVersion: 33));
+        gateway.EnqueueDeleteOrderResponse(LanOrderWriteApiResult.Success(new SharedOrder
+        {
+            InternalId = "o-del-1",
+            Version = 34,
+            Status = "Waiting"
+        }));
+
+        var service = new LanOrderWriteCommandService(gateway);
+        var order = new OrderData
+        {
+            InternalId = "o-del-1",
+            StorageVersion = 32
+        };
+
+        var result = await service.TryDeleteOrderAsync(
+            order,
+            "http://localhost:5000/",
+            "operator-del");
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(2, gateway.DeleteOrderCallCount);
+        Assert.Equal(32, gateway.DeleteOrderRequestHistory[0].ExpectedVersion);
+        Assert.Equal(33, gateway.DeleteOrderRequestHistory[1].ExpectedVersion);
+        Assert.NotNull(result.Order);
+        Assert.Equal(34, result.Order!.StorageVersion);
     }
 
     [Fact]
@@ -392,9 +472,16 @@ public sealed class LanOrderWriteCommandServiceTests
 
     private sealed class StubGateway : ILanOrderWriteApiGateway
     {
+        private readonly Queue<LanOrderWriteApiResult> _updateResponses = new();
+        private readonly Queue<LanOrderWriteApiResult> _deleteOrderResponses = new();
+
         public LanCreateOrderRequest? LastCreateRequest { get; private set; }
         public LanUpdateOrderRequest? LastUpdateRequest { get; private set; }
+        public List<LanUpdateOrderRequest> UpdateRequestHistory { get; } = new();
+        public int UpdateOrderCallCount { get; private set; }
         public LanDeleteOrderRequest? LastDeleteOrderRequest { get; private set; }
+        public List<LanDeleteOrderRequest> DeleteOrderRequestHistory { get; } = new();
+        public int DeleteOrderCallCount { get; private set; }
         public string? LastDeleteOrderId { get; private set; }
         public LanReorderOrderItemsRequest? LastReorderRequest { get; private set; }
         public LanAddOrderItemRequest? LastAddItemRequest { get; private set; }
@@ -409,6 +496,12 @@ public sealed class LanOrderWriteCommandServiceTests
         public LanOrderWriteApiResult AddItemResponse { get; set; } = LanOrderWriteApiResult.Failed("no response");
         public LanOrderWriteApiResult UpdateItemResponse { get; set; } = LanOrderWriteApiResult.Failed("no response");
         public LanOrderWriteApiResult DeleteItemResponse { get; set; } = LanOrderWriteApiResult.Failed("no response");
+
+        public void EnqueueUpdateResponse(LanOrderWriteApiResult response)
+            => _updateResponses.Enqueue(response);
+
+        public void EnqueueDeleteOrderResponse(LanOrderWriteApiResult response)
+            => _deleteOrderResponses.Enqueue(response);
 
         public Task<LanOrderWriteApiResult> CreateOrderAsync(
             string apiBaseUrl,
@@ -428,7 +521,23 @@ public sealed class LanOrderWriteCommandServiceTests
             CancellationToken cancellationToken = default)
         {
             LastUpdateRequest = request;
-            return Task.FromResult(UpdateResponse);
+            UpdateOrderCallCount++;
+            UpdateRequestHistory.Add(new LanUpdateOrderRequest
+            {
+                ExpectedVersion = request.ExpectedVersion,
+                OrderNumber = request.OrderNumber,
+                UserName = request.UserName,
+                Status = request.Status,
+                Keyword = request.Keyword,
+                FolderName = request.FolderName,
+                PitStopAction = request.PitStopAction,
+                ImposingAction = request.ImposingAction,
+                ManagerOrderDate = request.ManagerOrderDate
+            });
+
+            return Task.FromResult(_updateResponses.Count > 0
+                ? _updateResponses.Dequeue()
+                : UpdateResponse);
         }
 
         public Task<LanOrderWriteApiResult> DeleteOrderAsync(
@@ -440,7 +549,15 @@ public sealed class LanOrderWriteCommandServiceTests
         {
             LastDeleteOrderRequest = request;
             LastDeleteOrderId = orderInternalId;
-            return Task.FromResult(DeleteOrderResponse);
+            DeleteOrderCallCount++;
+            DeleteOrderRequestHistory.Add(new LanDeleteOrderRequest
+            {
+                ExpectedVersion = request.ExpectedVersion
+            });
+
+            return Task.FromResult(_deleteOrderResponses.Count > 0
+                ? _deleteOrderResponses.Dequeue()
+                : DeleteOrderResponse);
         }
 
         public Task<LanOrderWriteApiResult> ReorderOrderItemsAsync(

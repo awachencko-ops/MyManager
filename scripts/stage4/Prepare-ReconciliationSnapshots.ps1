@@ -165,6 +165,22 @@ function Normalize-OrdersArray {
     return $normalizedOrders
 }
 
+function Convert-OrdersToJsonArray {
+    param([object]$Orders)
+
+    $normalized = @($Orders)
+    if ($normalized.Count -eq 0) {
+        return "[]"
+    }
+
+    if ($normalized.Count -eq 1) {
+        $singleJson = $normalized[0] | ConvertTo-Json -Depth 50
+        return "[`n$singleJson`n]"
+    }
+
+    return ($normalized | ConvertTo-Json -Depth 50)
+}
+
 function Get-ExceptionStatusCode {
     param([System.Exception]$Exception)
 
@@ -373,17 +389,18 @@ catch {
     exit 1
 }
 
-$pgJson = $pgOrders | ConvertTo-Json -Depth 50
+$normalizedPgOrders = Normalize-OrdersArray -Source $pgOrders
+$pgJson = Convert-OrdersToJsonArray -Orders $normalizedPgOrders
 [System.IO.File]::WriteAllText($resolvedPgSnapshotPath, $pgJson, (New-Object System.Text.UTF8Encoding($true)))
 
 $historyRaw = Get-Content -Path $resolvedHistoryPath -Raw -Encoding UTF8
 $historyParsed = $historyRaw | ConvertFrom-Json
 $normalizedHistory = Normalize-OrdersArray -Source $historyParsed
-$jsonSnapshot = $normalizedHistory | ConvertTo-Json -Depth 50
+$jsonSnapshot = Convert-OrdersToJsonArray -Orders $normalizedHistory
 [System.IO.File]::WriteAllText($resolvedJsonSnapshotPath, $jsonSnapshot, (New-Object System.Text.UTF8Encoding($true)))
 
 Write-Host "Snapshots prepared."
 Write-Host "PG snapshot: $resolvedPgSnapshotPath"
 Write-Host "JSON snapshot: $resolvedJsonSnapshotPath"
-Write-Host ("PG orders count: " + @($pgOrders).Count)
+Write-Host ("PG orders count: " + @($normalizedPgOrders).Count)
 Write-Host ("JSON orders count: " + @($normalizedHistory).Count)
