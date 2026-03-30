@@ -444,6 +444,40 @@ public sealed class MainFormCoreRegressionTests
     }
 
     [Fact]
+    public void SR12C_EditOrderNumberAndDate_PersistsAfterFormRestart()
+    {
+        MainFormTestHarness.RunWithIsolatedForm((form, tempRootPath) =>
+        {
+            var createdOrder = CreateOrder(
+                "SR12C-ORIGINAL",
+                WorkflowStatusNames.Waiting,
+                "QA User",
+                new DateTime(2026, 3, 30),
+                new DateTime(2026, 3, 30));
+
+            MainFormTestHarness.InvokePrivate(form, "AddCreatedOrder", createdOrder);
+
+            var orderHistory = MainFormTestHarness.GetPrivateField<List<OrderData>>(form, "_orderHistory");
+            var localOrder = Assert.Single(orderHistory);
+            var editedOrderDate = new DateTime(2026, 3, 31, 15, 10, 0);
+            localOrder.Id = "SR12C-EDITED";
+            localOrder.OrderDate = editedOrderDate;
+
+            MainFormTestHarness.InvokePrivate(form, "SaveHistory");
+
+            using var reopenedForm = new MainForm();
+            _ = reopenedForm.Handle;
+            MainFormTestHarness.SetPrivateField(reopenedForm, "_ordersStorageBackend", OrdersStorageMode.FileSystem);
+            MainFormTestHarness.InvokePrivate(reopenedForm, "LoadHistory");
+
+            var reopenedHistory = MainFormTestHarness.GetPrivateField<List<OrderData>>(reopenedForm, "_orderHistory");
+            var reopenedOrder = reopenedHistory.Single(order => string.Equals(order.InternalId, localOrder.InternalId, StringComparison.Ordinal));
+            Assert.Equal("SR12C-EDITED", reopenedOrder.Id);
+            Assert.Equal(editedOrderDate, reopenedOrder.OrderDate);
+        });
+    }
+
+    [Fact]
     public void SR12D_ToolConnectionClick_AcknowledgesPushPressureAlertState()
     {
         MainFormTestHarness.RunWithIsolatedForm((form, _) =>
