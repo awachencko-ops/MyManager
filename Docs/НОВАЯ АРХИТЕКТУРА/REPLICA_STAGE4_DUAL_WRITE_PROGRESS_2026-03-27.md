@@ -65,6 +65,10 @@ Status: In progress
    - чтение snapshots переведено на case-insensitive JSON десериализацию,
    - добавлен verify-тест для `camelCase` snapshot payload,
    - результат live-run после фикса: `missing_in_pg=0`, `missing_in_json=0`, осталось `payload_mismatch=1`.
+18. Закрыт remaining payload mismatch по `OrderNumber`:
+   - добавлен recovery-script `scripts/stage4/Repair-HistoryOrderNumbersFromApi.ps1` (API->history backfill + auto-backup),
+   - для `internal_id=412296ad2a4249779be4f4a7d524c012` выполнен backfill `Id="тест 1"` в `history.json`,
+   - повторные manual/scheduled live-runs подтверждают `is_zero_diff=true`.
 
 ## Test Evidence
 
@@ -102,18 +106,23 @@ Status: In progress
    Result: validated (`missing_in_pg=0`, `missing_in_json=0`, `payload_mismatch=1`, `exit code 2`).
 17. `Start-ScheduledTask -TaskName "Replica Stage4 Reconciliation Daily"` (при доступном API)  
    Result: validated (`LastTaskResult=2`, report/journal created by scheduler with same single payload mismatch).
+18. `powershell -ExecutionPolicy Bypass -File scripts/stage4/Repair-HistoryOrderNumbersFromApi.ps1 -DryRun` (при доступном API)  
+   Result: validated (`1` patch candidate detected, no file changes).
+19. `powershell -ExecutionPolicy Bypass -File scripts/stage4/Repair-HistoryOrderNumbersFromApi.ps1` (при доступном API)  
+   Result: validated (history backup created + targeted backfill applied).
+20. `powershell -ExecutionPolicy Bypass -File scripts/stage4/Run-ReconciliationLive.ps1 -ApiPreflightPolicy Fail -ResponsibleActor "codex-local"` (post-repair)  
+   Result: validated (`missing_in_pg=0`, `missing_in_json=0`, `payload_mismatch=0`, `is_zero_diff=true`, `exit code 0`).
+21. `Start-ScheduledTask -TaskName "Replica Stage4 Reconciliation Daily"` (post-repair, API reachable)  
+   Result: validated (`LastTaskResult=0`, zero-diff report and journal entry created).
 
 ## Open Notes
 
 1. Ранее падавшие run-workflow тесты восстановлены; полный `Verify` снова зелёный (`346/346`).
 2. Основной daily-контур перенесён на локальный Task Scheduler; GitHub workflow используется только как fallback.
 3. При текущей политике `ApiPreflightPolicy=Fail` non-zero `LastTaskResult` при недоступном API считается ожидаемым сигналом для оператора.
-4. После фикса case-insensitive parsing ложный `12/12` missing-блок устранён; остался один реальный mismatch:
-   - `internal_id=412296ad2a4249779be4f4a7d524c012`,
-   - field=`OrderNumber`,
-   - `pg_value="тест 1"`, `json_value=""`.
+4. Recovery-script `Repair-HistoryOrderNumbersFromApi.ps1` доступен как точечный remediation tool для `OrderNumber` gaps в `history.json`.
 
 ## Next Increment (planned)
 
-1. Провести root-cause по единственному payload mismatch (`OrderNumber`) и выбрать remediation-путь (repair data vs mapping rule).
-2. После устранения mismatch подтвердить `is_zero_diff=true` на ручном и scheduled live-run и зафиксировать Go/No-Go запись.
+1. Продолжить ежедневный live reconciliation monitoring через Task Scheduler и execution journal.
+2. При следующем non-zero diff выполнять recovery/incindent workflow из runbook (preflight check -> report triage -> targeted remediation).

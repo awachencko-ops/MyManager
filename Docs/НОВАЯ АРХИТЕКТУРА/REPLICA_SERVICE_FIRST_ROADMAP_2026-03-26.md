@@ -413,3 +413,7 @@ Replica.Client/
    - fixed snapshot deserialization mismatch by enabling case-insensitive JSON reading in reconciliation I/O,
    - added verify coverage for `camelCase` snapshot payloads,
    - executed manual + scheduled live runs with reachable API: missing buckets reduced from `12/12` to `0/0`, one payload mismatch remains (`OrderNumber`).
+47. `2026-03-30`: Stage 4 targeted payload remediation increment:
+   - added `Repair-HistoryOrderNumbersFromApi.ps1` for API->history backfill of missing order numbers with auto-backup,
+   - remediated `OrderNumber` gap for `internal_id=412296ad2a4249779be4f4a7d524c012`,
+   - manual + scheduled live reconciliation re-run completed with `is_zero_diff=true` and `LastTaskResult=0`.

@@ -202,3 +202,60 @@ Status: Active
    - remaining diff is single `payload_mismatch=1` (`OrderNumber`) for `internal_id=412296ad2a4249779be4f4a7d524c012`.
 4. Decision: Pause expansion rollout and continue root-cause/remediation for remaining payload mismatch.
 5. Notes: next action is targeted data repair/alignment for `OrderNumber` and confirmation run to zero-diff.
+
+### 2026-03-30 12:14 (Asia/Vladivostok)
+
+1. Responsible actor: codex-local
+2. Backups:
+   - history.json immutable copy: available.
+   - pg snapshot: available.
+3. Reconciliation summary:
+   - missing_in_pg = 0
+   - missing_in_json = 0
+   - version_mismatch = 0
+   - payload_mismatch = 1
+   - is_zero_diff = false
+4. Decision: Pause expansion rollout and start incident workflow.
+5. Notes: report_path=C:\Users\user\Desktop\MyManager 1.0.1\artifacts\reconciliation\reports\reconciliation-20260330-121407.json; cli_exit_code=2.
+
+### 2026-03-30 12:16 (Asia/Vladivostok)
+
+1. Responsible actor: codex-local
+2. Backups:
+   - history.json immutable copy: available.
+   - pg snapshot: available.
+3. Reconciliation summary:
+   - missing_in_pg = 0
+   - missing_in_json = 0
+   - version_mismatch = 0
+   - payload_mismatch = 0
+   - is_zero_diff = true
+4. Decision: Continue rollout preparation.
+5. Notes: report_path=C:\Users\user\Desktop\MyManager 1.0.1\artifacts\reconciliation\reports\reconciliation-20260330-121650.json; cli_exit_code=0.
+
+### 2026-03-30 12:16 (Asia/Vladivostok)
+
+1. Responsible actor: task-scheduler
+2. Backups:
+   - history.json immutable copy: available.
+   - pg snapshot: available.
+3. Reconciliation summary:
+   - missing_in_pg = 0
+   - missing_in_json = 0
+   - version_mismatch = 0
+   - payload_mismatch = 0
+   - is_zero_diff = true
+4. Decision: Continue rollout preparation.
+5. Notes: report_path=C:\Users\user\Desktop\MyManager 1.0.1\artifacts\reconciliation\reports\reconciliation-20260330-121653.json; cli_exit_code=0.
+
+### 2026-03-30 12:18 (Asia/Vladivostok)
+
+1. Responsible actor: codex-assisted update.
+2. Incident remediation:
+   - ran `Repair-HistoryOrderNumbersFromApi.ps1` to backfill missing order number in local `history.json`,
+   - backup created: `C:\Андрей ПК\Replica BASEFOLDER\AppData\history.json.bak-20260330-121649`.
+3. Verification:
+   - manual live reconciliation: `is_zero_diff=true` (`cli_exit_code=0`),
+   - scheduled live reconciliation: `LastTaskResult=0`.
+4. Decision: Continue rollout preparation.
+5. Notes: remaining Stage 4 activity switched back to daily monitoring mode.
