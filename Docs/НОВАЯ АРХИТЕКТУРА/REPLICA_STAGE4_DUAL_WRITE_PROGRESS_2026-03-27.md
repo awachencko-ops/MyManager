@@ -69,6 +69,9 @@ Status: In progress
    - добавлен recovery-script `scripts/stage4/Repair-HistoryOrderNumbersFromApi.ps1` (API->history backfill + auto-backup),
    - для `internal_id=412296ad2a4249779be4f4a7d524c012` выполнен backfill `Id="тест 1"` в `history.json`,
    - повторные manual/scheduled live-runs подтверждают `is_zero_diff=true`.
+19. Добавлен one-shot операторский статус Stage 4:
+   - `scripts/stage4/Get-ReconciliationOpsStatus.ps1` агрегирует API `/live`, Scheduler status, latest reconciliation report и latest journal entry,
+   - поддержан режим `-FailOnRisk` (exit code `2`) для быстрого gate-check.
 
 ## Test Evidence
 
@@ -114,6 +117,10 @@ Status: In progress
    Result: validated (`missing_in_pg=0`, `missing_in_json=0`, `payload_mismatch=0`, `is_zero_diff=true`, `exit code 0`).
 21. `Start-ScheduledTask -TaskName "Replica Stage4 Reconciliation Daily"` (post-repair, API reachable)  
    Result: validated (`LastTaskResult=0`, zero-diff report and journal entry created).
+22. `powershell -ExecutionPolicy Bypass -File scripts/stage4/Get-ReconciliationOpsStatus.ps1`  
+   Result: validated (one-shot status output generated with API/Scheduler/report/journal sections).
+23. `powershell -ExecutionPolicy Bypass -File scripts/stage4/Get-ReconciliationOpsStatus.ps1 -FailOnRisk`  
+   Result: validated (returns `exit code 2` when risk detected, e.g. API unreachable).
 
 ## Open Notes
 
@@ -121,6 +128,7 @@ Status: In progress
 2. Основной daily-контур перенесён на локальный Task Scheduler; GitHub workflow используется только как fallback.
 3. При текущей политике `ApiPreflightPolicy=Fail` non-zero `LastTaskResult` при недоступном API считается ожидаемым сигналом для оператора.
 4. Recovery-script `Repair-HistoryOrderNumbersFromApi.ps1` доступен как точечный remediation tool для `OrderNumber` gaps в `history.json`.
+5. Daily operator quick-check автоматизирован через `Get-ReconciliationOpsStatus.ps1`.
 
 ## Next Increment (planned)
 

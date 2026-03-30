@@ -259,3 +259,15 @@ Status: Active
    - scheduled live reconciliation: `LastTaskResult=0`.
 4. Decision: Continue rollout preparation.
 5. Notes: remaining Stage 4 activity switched back to daily monitoring mode.
+
+### 2026-03-30 12:37 (Asia/Vladivostok)
+
+1. Responsible actor: codex-assisted update.
+2. Operational tooling update:
+   - added `Get-ReconciliationOpsStatus.ps1` for one-shot daily status check,
+   - script surfaces API `/live`, scheduled task info, latest report summary and latest journal decision.
+3. Verification:
+   - standard run output validated,
+   - `-FailOnRisk` mode validated (`exit code 2` when API is unreachable).
+4. Decision: Continue rollout preparation.
+5. Notes: operator can now run one command for daily health gate before production hours.

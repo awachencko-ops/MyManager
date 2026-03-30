@@ -417,3 +417,6 @@ Replica.Client/
    - added `Repair-HistoryOrderNumbersFromApi.ps1` for API->history backfill of missing order numbers with auto-backup,
    - remediated `OrderNumber` gap for `internal_id=412296ad2a4249779be4f4a7d524c012`,
    - manual + scheduled live reconciliation re-run completed with `is_zero_diff=true` and `LastTaskResult=0`.
+48. `2026-03-30`: Stage 4 operator monitoring increment:
+   - added `Get-ReconciliationOpsStatus.ps1` for one-shot operational status (API `/live`, Task Scheduler, latest report, latest journal entry),
+   - added `-FailOnRisk` mode for non-zero gate status in operator checks.
