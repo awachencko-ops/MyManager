@@ -1,4 +1,4 @@
-<!-- DOC_ENCODING_REQUIREMENT_UTF8 -->
+﻿<!-- DOC_ENCODING_REQUIREMENT_UTF8 -->
 > Требование кодировки: все файлы документации (`*.md`) в этом репозитории хранятся только в `UTF-8 with BOM`, окончания строк — `LF`.
 
 # Replica Stage 4 Execution Journal
@@ -47,3 +47,33 @@ Status: Active
    - is_zero_diff = true
 5. Decision: Continue rollout preparation.
 6. Notes: перейти на реальные snapshot inputs через repo vars `REPLICA_PG_SNAPSHOT_PATH` и `REPLICA_JSON_SNAPSHOT_PATH`.
+
+### 2026-03-30 11:05 (Asia/Vladivostok)
+
+1. Responsible actor: codex-local
+2. Backups:
+   - history.json immutable copy: available.
+   - pg snapshot: available.
+3. Reconciliation summary:
+   - missing_in_pg = 0
+   - missing_in_json = 0
+   - version_mismatch = 0
+   - payload_mismatch = 0
+   - is_zero_diff = true
+4. Decision: Continue rollout preparation.
+5. Notes: report_path=C:\Users\user\Desktop\MyManager 1.0.1\artifacts\reconciliation\reports\reconciliation-20260330-110536.json; cli_exit_code=0.
+
+### 2026-03-30 11:07 (Asia/Vladivostok)
+
+1. Responsible actor: codex-local
+2. Backups:
+   - history.json immutable copy: available.
+   - pg snapshot: available.
+3. Reconciliation summary:
+   - missing_in_pg = 0
+   - missing_in_json = 0
+   - version_mismatch = 0
+   - payload_mismatch = 0
+   - is_zero_diff = true
+4. Decision: Continue rollout preparation.
+5. Notes: report_path=C:\Users\user\Desktop\MyManager 1.0.1\artifacts\reconciliation\reports\reconciliation-20260330-110720.json; cli_exit_code=0.

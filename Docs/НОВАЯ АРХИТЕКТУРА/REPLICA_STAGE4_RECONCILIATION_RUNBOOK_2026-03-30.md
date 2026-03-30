@@ -53,6 +53,15 @@ gh workflow run "Stage4 Reconciliation Nightly" `
   -f json_snapshot_path="artifacts/reconciliation/snapshots/json.snapshot.json"
 ```
 
+Local operator command (CLI + auto-journal entry):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/stage4/Run-ReconciliationJournal.ps1 `
+  -PgSnapshotPath "<pg_snapshot.json>" `
+  -JsonSnapshotPath "<json_snapshot.json>" `
+  -ResponsibleActor "<operator_name>"
+```
+
 ## Result Interpretation
 
 CLI exit codes:

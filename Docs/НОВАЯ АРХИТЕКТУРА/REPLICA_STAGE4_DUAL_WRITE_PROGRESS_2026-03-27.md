@@ -44,6 +44,9 @@ Status: In progress
 11. Добавлен runbook Stage 4 reconciliation:
    - документ `REPLICA_STAGE4_RECONCILIATION_RUNBOOK_2026-03-30.md`,
    - описаны команды `gh variable set`, manual run, интерпретация exit codes и ежедневный checklist.
+12. Добавлен операционный helper-script для daily журнала:
+   - `scripts/stage4/Run-ReconciliationJournal.ps1`,
+   - выполняет reconciliation CLI и автоматически дописывает entry в execution journal.
 
 ## Test Evidence
 
@@ -59,16 +62,15 @@ Status: In progress
    Result: validated (zero-diff report generated, exit code `0`).
 6. `dotnet run --project tools/Replica.Reconciliation.Cli -- --pg <pg_snapshot.json> --json <json_snapshot.json> --out <reconciliation-report.json>` (mismatch sample)  
    Result: validated (non-zero diff report generated, exit code `2`).
+7. `powershell -ExecutionPolicy Bypass -File scripts/stage4/Run-ReconciliationJournal.ps1 -ResponsibleActor "codex-local"`  
+   Result: validated (report generated + journal entry appended).
 
 ## Open Notes
 
 1. Ранее падавшие run-workflow тесты восстановлены; полный `Verify` снова зелёный (`346/346`).
-2. Nightly workflow по умолчанию использует sample snapshots из репозитория; для реального operational запуска нужно задать repo vars:
-   - `REPLICA_PG_SNAPSHOT_PATH`,
-   - `REPLICA_JSON_SNAPSHOT_PATH`.
-3. Для scheduled runs без repo vars workflow завершится ошибкой (guardrail against sample fallback in production cadence).
+2. Для scheduled runs без repo vars workflow завершится ошибкой (guardrail against sample fallback in production cadence).
 
 ## Next Increment (planned)
 
 1. Задать реальные пути snapshot через repo vars и выполнить первый operational nightly run.
-2. Начать ежедневные journal entries на основе реальных reconcile-отчётов и backup checks.
+2. Продолжить ежедневные journal entries на основе реальных reconcile-отчётов и backup checks.
