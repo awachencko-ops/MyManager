@@ -3,13 +3,13 @@
 # Replica: Master Doc Map (Single Source of Truth)
 
 Дата актуализации: 2026-03-30  
-Статус: `Active`
+Статус: `Archived`
 
 ## 1. Точка входа
 
 Открывать в таком порядке:
 
-1. `Docs/00_REPLICA_MASTER_DOC_MAP_2026-03-26.md`
+1. `Docs/archive/2026-03-30_new_architecture_stage1-6_closed/00_REPLICA_MASTER_DOC_MAP_2026-03-26.md`
 2. `Docs/REPLICA_DESIGN_SYSTEM_2026-03-27.md`
 3. `Docs/archive/2026-03-30_new_architecture_stage1-6_closed/НОВАЯ АРХИТЕКТУРА/REPLICA_SERVICE_FIRST_ROADMAP_2026-03-26.md`
 4. `Docs/archive/2026-03-30_new_architecture_stage1-6_closed/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_DUAL_WRITE_CHECKLIST_2026-03-27.md` (исторический handoff checklist Stage 4)
