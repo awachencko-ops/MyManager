@@ -1058,12 +1058,12 @@ namespace Replica
 
         }
 
-        private void treeView1_AfterSelect(object sender, TreeViewEventArgs e)
+        private void TreeView1AfterSelect(object sender, TreeViewEventArgs e)
         {
 
         }
 
-        private void pictureBox5_Click(object sender, EventArgs e)
+        private void PictureBox5Click(object sender, EventArgs e)
         {
 
         }

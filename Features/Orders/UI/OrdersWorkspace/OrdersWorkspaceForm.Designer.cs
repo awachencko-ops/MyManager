@@ -232,7 +232,7 @@
             treeView1.Name = "treeView1";
             treeView1.Size = new Size(460, 1154);
             treeView1.TabIndex = 1;
-            treeView1.AfterSelect += treeView1_AfterSelect;
+            treeView1.AfterSelect += TreeView1AfterSelect;
             // 
             // pnlUser
             // 

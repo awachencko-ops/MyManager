@@ -392,7 +392,7 @@ namespace Replica
             if (_dependencyHealthByName.Count == 0)
                 return string.Empty;
 
-            var parts = new List<string>();
+            List<string> parts = [];
             foreach (var dependency in _dependencyHealthByName.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase))
             {
                 var levelText = dependency.Value switch
@@ -539,8 +539,17 @@ namespace Replica
             {
                 "Режим: работа через сервер",
                 $"API: {NormalizeLanApiUrlForUi(_lanApiBaseUrl)}",
-                $"Статус: {operatorStatus}"
+                $"Статус: {operatorStatus}",
+                $"Проверки live/ready/slo: {BuildLanProbeStateSummary(snapshot)}"
             };
+
+            var problemReasons = BuildLanProblemReasons(snapshot, dependencyHealthLevel, probeInProgress);
+            if (problemReasons.Count > 0)
+            {
+                lines.Add("Причины:");
+                foreach (var reason in problemReasons)
+                    lines.Add($"- {reason}");
+            }
 
             if (snapshot.CompletedAtUtc > DateTime.MinValue)
                 lines.Add($"Последняя проверка: {FormatLanProbeStamp(snapshot.CompletedAtUtc)}");
@@ -613,6 +622,90 @@ namespace Replica
                 return "есть связь, но есть проблемы";
 
             return "подключен";
+        }
+
+        private List<string> BuildLanProblemReasons(
+            LanServerProbeSnapshot snapshot,
+            DependencyHealthLevel dependencyHealthLevel,
+            bool probeInProgress)
+        {
+            List<string> reasons = [];
+            var hasProblemState =
+                !snapshot.ApiReachable
+                || !snapshot.IsReady
+                || snapshot.IsDegraded
+                || !snapshot.SloHealthy
+                || dependencyHealthLevel != DependencyHealthLevel.Healthy
+                || !string.IsNullOrWhiteSpace(snapshot.ProcessAlert)
+                || (probeInProgress && snapshot.CompletedAtUtc <= DateTime.MinValue);
+
+            if (!hasProblemState)
+                return reasons;
+
+            if (probeInProgress && snapshot.CompletedAtUtc <= DateTime.MinValue)
+            {
+                reasons.Add("Идет первая проверка сервера.");
+                return reasons;
+            }
+
+            if (!snapshot.ApiReachable)
+            {
+                reasons.Add("API не отвечает на health-проверки.");
+                return reasons;
+            }
+
+            if (!snapshot.IsReady)
+            {
+                reasons.Add($"Ready: {NormalizeLanProbeStatusForUi(snapshot.ReadyStatus)} (сервер еще не готов к записи).");
+            }
+            else if (string.Equals(snapshot.ReadyStatus, "degraded", StringComparison.OrdinalIgnoreCase))
+            {
+                reasons.Add("Ready: degraded (сервер работает с ограничениями).");
+            }
+
+            if (!snapshot.SloHealthy)
+                reasons.Add($"SLO: {NormalizeLanProbeStatusForUi(snapshot.SloStatus)}.");
+
+            if (dependencyHealthLevel == DependencyHealthLevel.Unavailable)
+                reasons.Add("Локальные зависимости: есть недоступные сервисы.");
+            else if (dependencyHealthLevel == DependencyHealthLevel.Degraded)
+                reasons.Add("Локальные зависимости: часть сервисов работает нестабильно.");
+
+            if (!string.IsNullOrWhiteSpace(snapshot.ProcessAlert))
+                reasons.Add("Сервер сообщил о внутренних ошибках в недавних операциях.");
+
+            if (snapshot.HttpRequests5xx > 0)
+                reasons.Add($"Ошибки API 5xx за сессию: {snapshot.HttpRequests5xx}.");
+            if (snapshot.WriteBadRequest > 0)
+                reasons.Add($"Ошибки API bad_request за сессию: {snapshot.WriteBadRequest}.");
+
+            return reasons;
+        }
+
+        private static string BuildLanProbeStateSummary(LanServerProbeSnapshot snapshot)
+        {
+            return $"{NormalizeLanProbeStatusForUi(snapshot.LiveStatus)}/{NormalizeLanProbeStatusForUi(snapshot.ReadyStatus)}/{NormalizeLanProbeStatusForUi(snapshot.SloStatus)}";
+        }
+
+        private static string NormalizeLanProbeStatusForUi(string status)
+        {
+            if (string.IsNullOrWhiteSpace(status))
+                return "нет данных";
+
+            if (string.Equals(status, "unknown", StringComparison.OrdinalIgnoreCase))
+                return "проверяется";
+            if (string.Equals(status, "ready", StringComparison.OrdinalIgnoreCase))
+                return "ready";
+            if (string.Equals(status, "ok", StringComparison.OrdinalIgnoreCase))
+                return "ok";
+            if (string.Equals(status, "degraded", StringComparison.OrdinalIgnoreCase))
+                return "degraded";
+            if (string.Equals(status, "error", StringComparison.OrdinalIgnoreCase))
+                return "ошибка";
+            if (string.Equals(status, "cancelled", StringComparison.OrdinalIgnoreCase))
+                return "отменено";
+
+            return status;
         }
 
         private static string TruncateTooltipText(string text, int maxLength = 260)
@@ -1842,7 +1935,7 @@ namespace Replica
             if (_runTokensByOrder.Count == 0)
                 return string.Empty;
 
-            var runningOrderIds = new List<string>();
+            List<string> runningOrderIds = [];
             foreach (var internalId in _runTokensByOrder.Keys)
             {
                 var order = FindOrderByInternalId(internalId);
