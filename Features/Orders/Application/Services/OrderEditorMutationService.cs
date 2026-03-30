@@ -42,7 +42,9 @@ public sealed class OrderEditorMutationService
         if (order == null)
             throw new ArgumentNullException(nameof(order));
 
-        order.Id = orderNumber?.Trim() ?? string.Empty;
+        var normalizedOrderNumber = orderNumber?.Trim() ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(normalizedOrderNumber))
+            order.Id = normalizedOrderNumber;
         order.OrderDate = orderDate;
         if (order.ArrivalDate == default)
             order.ArrivalDate = _nowProvider();
@@ -55,7 +57,9 @@ public sealed class OrderEditorMutationService
         if (updatedOrder == null)
             throw new ArgumentNullException(nameof(updatedOrder));
 
-        targetOrder.Id = updatedOrder.Id;
+        var normalizedOrderNumber = updatedOrder.Id?.Trim() ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(normalizedOrderNumber))
+            targetOrder.Id = normalizedOrderNumber;
         targetOrder.StartMode = updatedOrder.StartMode;
         targetOrder.Keyword = updatedOrder.Keyword;
         targetOrder.ArrivalDate = updatedOrder.ArrivalDate;

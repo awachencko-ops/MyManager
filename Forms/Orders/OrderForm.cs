@@ -103,8 +103,12 @@ namespace Replica
 
         private void ValidateMainFields()
         {
-            buttonCreateFolder.Enabled = !string.IsNullOrWhiteSpace(textBoxNumberOrder.Text) &&
-                                       !string.IsNullOrWhiteSpace(textKey.Text);
+            var hasOrderNumber = !string.IsNullOrWhiteSpace(textBoxNumberOrder.Text);
+            var hasKeyword = !string.IsNullOrWhiteSpace(textKey.Text);
+            buttonCreateFolder.Enabled = hasOrderNumber && hasKeyword;
+
+            if (!_infoOnly && textOriginal.Enabled)
+                btnOk.Enabled = hasOrderNumber;
         }
 
         private void buttonCreateFolder_Click(object sender, EventArgs e)
@@ -129,6 +133,7 @@ namespace Replica
                 if (string.IsNullOrEmpty(textPrint.Text)) textPrint.Text = Path.Combine(fullPath, "3. печать");
 
                 ToggleFields(true);
+                ValidateMainFields();
                 MessageBox.Show("Папки созданы: " + fullPath);
             }
             catch (Exception ex) { MessageBox.Show("Ошибка: " + ex.Message); }
@@ -183,6 +188,12 @@ namespace Replica
 
         private void btnOk_Click(object sender, EventArgs e)
         {
+            if (string.IsNullOrWhiteSpace(textBoxNumberOrder.Text))
+            {
+                MessageBox.Show("Введите номер заказа.");
+                return;
+            }
+
             string datePart = dateTimeOrder.Value.ToString("dd_MM_yy");
             ResultOrder = new OrderData
             {

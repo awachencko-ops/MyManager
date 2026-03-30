@@ -242,7 +242,7 @@ namespace Replica
             }
         }
 
-        private void EditOrderFromGrid(int rowIndex)
+        private async Task EditOrderFromGridAsync(int rowIndex)
         {
             if (!EnsureServerWriteAllowed("Редактирование заказа"))
                 return;
@@ -264,12 +264,12 @@ namespace Replica
 
             var settings = _settingsProvider.Load();
             if (settings.UseExtendedMode)
-                EditOrderExtended(order);
+                await EditOrderExtendedAsync(order);
             else
-                EditOrderSimple(order);
+                await EditOrderSimpleAsync(order);
         }
 
-        private void EditOrderSimple(OrderData order)
+        private async Task EditOrderSimpleAsync(OrderData order)
         {
             using var form = new SimpleOrderForm(order);
             if (form.ShowDialog(this) != DialogResult.OK)
@@ -289,27 +289,7 @@ namespace Replica
                     ImposingAction = order.ImposingAction
                 };
 
-                var writeResult = _orderApplicationService
-                    .TryUpdateOrderViaLanApiAsync(
-                        order,
-                        updatedOrder,
-                        _lanApiBaseUrl,
-                        ResolveLanApiActor(),
-                        NormalizeOrderUserName)
-                    .GetAwaiter()
-                    .GetResult();
-                var writeOutcome = _orderApplicationService.ApplyLanOrderWriteResult(
-                    _orderHistory,
-                    targetOrder: order,
-                    writeResult,
-                    operationCaption: "Редактирование заказа",
-                    successSnapshotReason: "lan-api-update-order");
-                ApplyLanOrderWriteOutcome(writeOutcome);
-                if (!writeOutcome.IsSuccess)
-                    return;
-
-                RebuildOrdersGrid();
-                TryRestoreSelectedRowByTag(OrderGridLogic.BuildOrderTag(order.InternalId));
+                await ApplyLanOrderEditAsync(order, updatedOrder);
                 return;
             }
 
@@ -320,7 +300,7 @@ namespace Replica
             TryRestoreSelectedRowByTag(OrderGridLogic.BuildOrderTag(order.InternalId));
         }
 
-        private void EditOrderExtended(OrderData order)
+        private async Task EditOrderExtendedAsync(OrderData order)
         {
             using var form = new OrderForm(_ordersRootPath, order);
             if (form.ShowDialog(this) != DialogResult.OK || form.ResultOrder == null)
@@ -328,33 +308,36 @@ namespace Replica
 
             if (ShouldUseLanRunApi())
             {
-                var writeResult = _orderApplicationService
-                    .TryUpdateOrderViaLanApiAsync(
-                        order,
-                        form.ResultOrder,
-                        _lanApiBaseUrl,
-                        ResolveLanApiActor(),
-                        NormalizeOrderUserName)
-                    .GetAwaiter()
-                    .GetResult();
-                var writeOutcome = _orderApplicationService.ApplyLanOrderWriteResult(
-                    _orderHistory,
-                    targetOrder: order,
-                    writeResult,
-                    operationCaption: "Редактирование заказа",
-                    successSnapshotReason: "lan-api-update-order");
-                ApplyLanOrderWriteOutcome(writeOutcome);
-                if (!writeOutcome.IsSuccess)
-                    return;
-
-                RebuildOrdersGrid();
-                TryRestoreSelectedRowByTag(OrderGridLogic.BuildOrderTag(order.InternalId));
+                await ApplyLanOrderEditAsync(order, form.ResultOrder);
                 return;
             }
 
             _orderApplicationService.ApplyExtendedEdit(order, form.ResultOrder);
 
             SaveHistory();
+            RebuildOrdersGrid();
+            TryRestoreSelectedRowByTag(OrderGridLogic.BuildOrderTag(order.InternalId));
+        }
+
+        private async Task ApplyLanOrderEditAsync(OrderData order, OrderData updatedOrder)
+        {
+            var writeResult = await _orderApplicationService.TryUpdateOrderViaLanApiAsync(
+                order,
+                updatedOrder,
+                _lanApiBaseUrl,
+                ResolveLanApiActor(),
+                NormalizeOrderUserName);
+
+            var writeOutcome = _orderApplicationService.ApplyLanOrderWriteResult(
+                _orderHistory,
+                targetOrder: order,
+                writeResult,
+                operationCaption: "Редактирование заказа",
+                successSnapshotReason: "lan-api-update-order");
+            ApplyLanOrderWriteOutcome(writeOutcome);
+            if (!writeOutcome.IsSuccess)
+                return;
+
             RebuildOrdersGrid();
             TryRestoreSelectedRowByTag(OrderGridLogic.BuildOrderTag(order.InternalId));
         }

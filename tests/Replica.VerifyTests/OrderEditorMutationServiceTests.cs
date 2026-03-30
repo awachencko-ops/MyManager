@@ -80,6 +80,22 @@ public sealed class OrderEditorMutationServiceTests
     }
 
     [Fact]
+    public void ApplySimpleEdit_WhenOrderNumberIsBlank_PreservesExistingOrderNumber()
+    {
+        var service = new OrderEditorMutationService();
+        var order = new OrderData
+        {
+            Id = "EXISTING-1001",
+            ArrivalDate = new DateTime(2026, 3, 20, 9, 15, 0, DateTimeKind.Local)
+        };
+
+        service.ApplySimpleEdit(order, "   ", new DateTime(2026, 3, 11));
+
+        Assert.Equal("EXISTING-1001", order.Id);
+        Assert.Equal(new DateTime(2026, 3, 11), order.OrderDate);
+    }
+
+    [Fact]
     public void ApplyExtendedEdit_CopiesEditableFieldsFromUpdatedOrder()
     {
         var service = new OrderEditorMutationService();
@@ -118,5 +134,26 @@ public sealed class OrderEditorMutationServiceTests
         Assert.Equal(@"C:\print\out.pdf", target.PrintPath);
         Assert.Equal("pit", target.PitStopAction);
         Assert.Equal("imp", target.ImposingAction);
+    }
+
+    [Fact]
+    public void ApplyExtendedEdit_WhenOrderNumberIsBlank_PreservesExistingOrderNumber()
+    {
+        var service = new OrderEditorMutationService();
+        var target = new OrderData
+        {
+            Id = "EXISTING-2002",
+            Keyword = "old-keyword"
+        };
+        var updated = new OrderData
+        {
+            Id = " ",
+            Keyword = "new-keyword"
+        };
+
+        service.ApplyExtendedEdit(target, updated);
+
+        Assert.Equal("EXISTING-2002", target.Id);
+        Assert.Equal("new-keyword", target.Keyword);
     }
 }

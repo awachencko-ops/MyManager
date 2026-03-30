@@ -516,7 +516,7 @@ namespace Replica
             StopGridHoverActivation();
         }
 
-        private void DgvJobs_CellDoubleClick(object? sender, DataGridViewCellEventArgs e)
+        private async void DgvJobs_CellDoubleClick(object? sender, DataGridViewCellEventArgs e)
         {
             if (IsGridInputOverOrdersViewScrollBar())
                 return;
@@ -545,9 +545,21 @@ namespace Replica
 
             if (e.ColumnIndex == colOrderNumber.Index)
             {
-                if (!EnsureServerWriteAllowed("Редактирование заказа"))
-                    return;
-                EditOrderFromGrid(e.RowIndex);
+                try
+                {
+                    await EditOrderFromGridAsync(e.RowIndex);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn($"ORDER-EDIT | async-wrapper-failed | {ex}");
+                    SetBottomStatus("Редактирование заказа не выполнено");
+                    MessageBox.Show(
+                        this,
+                        $"Не удалось сохранить изменения заказа.{Environment.NewLine}{ex.Message}",
+                        "Редактирование заказа",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                }
                 return;
             }
         }

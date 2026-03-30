@@ -278,6 +278,30 @@ public sealed class OrderApplicationServiceTests
     }
 
     [Fact]
+    public void UpsertOrderInHistory_WhenIncomingOrderNumberIsBlank_PreservesExistingOrderNumber()
+    {
+        var service = CreateService();
+        var history = new List<OrderData>
+        {
+            new() { InternalId = "ord-1", Id = "1001" }
+        };
+
+        var updated = new OrderData
+        {
+            InternalId = "ord-1",
+            Id = " ",
+            Status = WorkflowStatusNames.Processing
+        };
+
+        service.UpsertOrderInHistory(history, updated);
+
+        Assert.Single(history);
+        Assert.Same(updated, history[0]);
+        Assert.Equal("1001", history[0].Id);
+        Assert.Equal(WorkflowStatusNames.Processing, history[0].Status);
+    }
+
+    [Fact]
     public void ApplyLanStatusSnapshot_UpdatesStatusFieldsFromServer()
     {
         var service = CreateService();

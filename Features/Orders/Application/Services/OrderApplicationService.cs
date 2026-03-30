@@ -808,6 +808,14 @@ public sealed class OrderApplicationService : IOrderApplicationService
 
         if (index >= 0)
         {
+            var existingOrder = orderHistory[index];
+            if (existingOrder != null
+                && string.IsNullOrWhiteSpace(updatedOrder.Id)
+                && !string.IsNullOrWhiteSpace(existingOrder.Id))
+            {
+                updatedOrder.Id = existingOrder.Id;
+            }
+
             orderHistory[index] = updatedOrder;
             return;
         }
