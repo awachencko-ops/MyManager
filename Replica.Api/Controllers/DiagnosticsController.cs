@@ -1,62 +1,114 @@
+using MediatR;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Replica.Api.Data;
-using Replica.Api.Infrastructure;
+using Replica.Api.Application.Diagnostics.Queries;
 
 namespace Replica.Api.Controllers;
 
 [ApiController]
 [Route("api/diagnostics")]
-[ReplicaAuthorize(ReplicaApiRoles.Admin)]
+[Replica.Api.Infrastructure.ReplicaAuthorize(Replica.Api.Infrastructure.ReplicaApiRoles.Admin)]
 public sealed class DiagnosticsController : ControllerBase
 {
+    private readonly IMediator? _mediator;
+    private readonly bool _allowFallback;
+
+    [ActivatorUtilitiesConstructor]
+    public DiagnosticsController(IMediator mediator)
+    {
+        _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
+        _allowFallback = false;
+    }
+
+    // Fallback constructor for isolated controller tests.
+    public DiagnosticsController()
+    {
+        _mediator = null;
+        _allowFallback = true;
+    }
+
     [HttpGet("operations/recent")]
     [ProducesResponseType(typeof(IReadOnlyList<ServerOperationDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<ServerOperationDto>>> GetRecentOperations([FromQuery] int limit = 30)
     {
-        var normalizedLimit = Math.Clamp(limit, 1, 200);
-        var dbContextFactory = HttpContext.RequestServices.GetService<IDbContextFactory<ReplicaDbContext>>();
-        if (dbContextFactory == null)
-            return Ok(Array.Empty<ServerOperationDto>());
+        var operations = await ExecuteQueryAsync(
+            new GetRecentOperationsQuery(limit),
+            () => Task.FromResult<IReadOnlyList<ServerOperationReadModel>>(Array.Empty<ServerOperationReadModel>()));
 
-        await using var db = await dbContextFactory.CreateDbContextAsync();
-        var operations = await db.OrderEvents
-            .AsNoTracking()
-            .OrderByDescending(x => x.EventId)
-            .Take(normalizedLimit)
-            .Select(x => new ServerOperationDto
-            {
-                EventId = x.EventId,
-                OrderId = x.OrderInternalId,
-                ItemId = x.ItemId,
-                EventType = x.EventType,
-                EventSource = x.EventSource,
-                CreatedAtUtc = x.CreatedAt,
-                PayloadJson = x.PayloadJson
-            })
-            .ToListAsync();
-
-        return Ok(operations);
+        return Ok(operations.Select(ToDto).ToList());
     }
 
     [HttpGet("push")]
     [ProducesResponseType(typeof(PushDiagnosticsDto), StatusCodes.Status200OK)]
     public ActionResult<PushDiagnosticsDto> GetPushDiagnostics()
     {
-        var snapshot = ReplicaApiObservability.GetSnapshot();
-        return Ok(new PushDiagnosticsDto
+        var diagnostics = ExecuteQuery(
+            new GetPushDiagnosticsQuery(),
+            PushDiagnosticsReadModel.FromCurrentSnapshot);
+
+        return Ok(ToDto(diagnostics));
+    }
+
+    private async Task<TResponse> ExecuteQueryAsync<TResponse>(
+        IRequest<TResponse> query,
+        Func<Task<TResponse>> fallback)
+    {
+        if (_mediator != null)
         {
-            PublishedTotal = snapshot.PushPublishedTotal,
-            PublishFailuresTotal = snapshot.PushPublishFailuresTotal,
-            PublishSuccessRatio = snapshot.PushPublishSuccessRatio,
-            OrderUpdatedPublished = snapshot.PushOrderUpdatedPublished,
-            OrderDeletedPublished = snapshot.PushOrderDeletedPublished,
-            ForceRefreshPublished = snapshot.PushForceRefreshPublished,
-            OrderUpdatedFailures = snapshot.PushOrderUpdatedFailures,
-            OrderDeletedFailures = snapshot.PushOrderDeletedFailures,
-            ForceRefreshFailures = snapshot.PushForceRefreshFailures
-        });
+            var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
+            return await _mediator.Send(query, cancellationToken);
+        }
+
+        if (_allowFallback)
+            return await fallback();
+
+        throw new InvalidOperationException("DiagnosticsController requires IMediator in runtime composition.");
+    }
+
+    private TResponse ExecuteQuery<TResponse>(
+        IRequest<TResponse> query,
+        Func<TResponse> fallback)
+    {
+        if (_mediator != null)
+        {
+            var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
+            return _mediator.Send(query, cancellationToken).GetAwaiter().GetResult();
+        }
+
+        if (_allowFallback)
+            return fallback();
+
+        throw new InvalidOperationException("DiagnosticsController requires IMediator in runtime composition.");
+    }
+
+    private static ServerOperationDto ToDto(ServerOperationReadModel source)
+    {
+        return new ServerOperationDto
+        {
+            EventId = source.EventId,
+            OrderId = source.OrderId,
+            ItemId = source.ItemId,
+            EventType = source.EventType,
+            EventSource = source.EventSource,
+            CreatedAtUtc = source.CreatedAtUtc,
+            PayloadJson = source.PayloadJson
+        };
+    }
+
+    private static PushDiagnosticsDto ToDto(PushDiagnosticsReadModel source)
+    {
+        return new PushDiagnosticsDto
+        {
+            PublishedTotal = source.PublishedTotal,
+            PublishFailuresTotal = source.PublishFailuresTotal,
+            PublishSuccessRatio = source.PublishSuccessRatio,
+            OrderUpdatedPublished = source.OrderUpdatedPublished,
+            OrderDeletedPublished = source.OrderDeletedPublished,
+            ForceRefreshPublished = source.ForceRefreshPublished,
+            OrderUpdatedFailures = source.OrderUpdatedFailures,
+            OrderDeletedFailures = source.OrderDeletedFailures,
+            ForceRefreshFailures = source.ForceRefreshFailures
+        };
     }
 }
 

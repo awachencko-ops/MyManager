@@ -424,3 +424,8 @@ Replica.Client/
    - added verify pack `ReplicaApiArchitectureBoundaryTests`,
    - locked baseline for API Presentation->Infrastructure/Data/Services coupling (no expansion rule),
    - added explicit boundary guard that `Application` layer cannot reference presentation namespaces.
+50. `2026-03-30`: Stage 5 diagnostics decoupling increment:
+   - added MediatR diagnostics queries/handlers (`Application/Diagnostics/Queries/DiagnosticsReadQueries.cs`),
+   - refactored `DiagnosticsController` to query-handler path with test-only fallback constructor,
+   - removed `DiagnosticsController` from allowed Presentation->Infrastructure/Data/Services coupling baseline,
+   - verify pack passed after refactor (`348/348`, isolated output path due running API process lock).
