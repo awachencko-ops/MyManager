@@ -136,7 +136,7 @@ powershell -ExecutionPolicy Bypass -File scripts/stage4/Get-ReconciliationOpsSta
 2. Проверить доступность API (`/live`) и актуальность `history.json` пути в `settings.json` (если есть инцидент).
 3. Проверить свежий reconciliation report в `artifacts/reconciliation/reports/`.
 4. Проверить последнюю запись в:
-   - `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_EXECUTION_JOURNAL_2026-03-30.md`
+   - `Docs/archive/2026-03-30_new_architecture_stage1-6_closed/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_EXECUTION_JOURNAL_2026-03-30.md`
 5. Если любое mismatch-поле > 0:
    - создать incident,
    - остановить расширение rollout,

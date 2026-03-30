@@ -142,7 +142,7 @@ Observed status:
 ## Completed Increment: Stage 6 Closure Checklist Publication
 
 1. Added final closure/go-no-go document:
-   - `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE6_CUTOVER_CLOSURE_CHECKLIST_2026-03-30.md`.
+   - `Docs/archive/2026-03-30_new_architecture_stage1-6_closed/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE6_CUTOVER_CLOSURE_CHECKLIST_2026-03-30.md`.
 2. Master doc map updated to include Stage 6 closure checklist as active handoff artifact.
 
 ## Go/No-Go Walkthrough Snapshot
