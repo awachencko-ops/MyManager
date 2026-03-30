@@ -91,6 +91,66 @@ public sealed class OrderDeletionWorkflowServiceTests
     }
 
     [Fact]
+    public void DeleteOrders_WhenFolderMissing_DeletesPreparedAndPrintArtifactsFromOrderAndItems()
+    {
+        var service = new OrderDeletionWorkflowService();
+        var tempRoot = Path.Combine(Path.GetTempPath(), "replica-delete-order-artifacts-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempRoot);
+
+        try
+        {
+            var orderPreparedPath = Path.Combine(tempRoot, "order-prepared.pdf");
+            var orderPrintPath = Path.Combine(tempRoot, "order-print.pdf");
+            var itemPreparedPath = Path.Combine(tempRoot, "item-prepared.pdf");
+            var itemPrintPath = Path.Combine(tempRoot, "item-print.pdf");
+            File.WriteAllText(orderPreparedPath, "prepared");
+            File.WriteAllText(orderPrintPath, "print");
+            File.WriteAllText(itemPreparedPath, "item-prepared");
+            File.WriteAllText(itemPrintPath, "item-print");
+
+            var order = new OrderData
+            {
+                InternalId = "order-artifacts",
+                Id = "1002A",
+                FolderName = "missing-folder",
+                PreparedPath = orderPreparedPath,
+                PrintPath = orderPrintPath,
+                Items = new List<OrderFileItem>
+                {
+                    new()
+                    {
+                        ItemId = "item-1",
+                        PreparedPath = itemPreparedPath,
+                        PrintPath = itemPrintPath,
+                        SequenceNo = 0
+                    }
+                }
+            };
+            var history = new List<OrderData> { order };
+
+            var result = service.DeleteOrders(
+                history,
+                new List<OrderData> { order },
+                removeFilesFromDisk: true,
+                ordersRootPath: tempRoot,
+                onOrderRemoved: _ => { });
+
+            Assert.Equal(1, result.RemovedCount);
+            Assert.Empty(result.FailedOrders);
+            Assert.False(File.Exists(orderPreparedPath));
+            Assert.False(File.Exists(orderPrintPath));
+            Assert.False(File.Exists(itemPreparedPath));
+            Assert.False(File.Exists(itemPrintPath));
+            Assert.Empty(history);
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+                Directory.Delete(tempRoot, true);
+        }
+    }
+
+    [Fact]
     public void DeleteOrderItems_WhenSuccess_RemovesItemAndReindexes()
     {
         var service = new OrderDeletionWorkflowService();
@@ -148,6 +208,100 @@ public sealed class OrderDeletionWorkflowServiceTests
         Assert.Equal("missing.pdf", result.FailedItems[0].ItemDisplayName);
         Assert.Equal(0, callbackCount);
         Assert.Single(order.Items);
+    }
+
+    [Fact]
+    public void DeleteOrderItems_WhenRemovingFromDisk_DeletesPreparedAndPrintFiles()
+    {
+        var service = new OrderDeletionWorkflowService();
+        var tempRoot = Path.Combine(Path.GetTempPath(), "replica-delete-order-items-files-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempRoot);
+
+        try
+        {
+            var preparedPath = Path.Combine(tempRoot, "prepared.pdf");
+            var printPath = Path.Combine(tempRoot, "print.pdf");
+            File.WriteAllText(preparedPath, "prepared");
+            File.WriteAllText(printPath, "print");
+
+            var item = new OrderFileItem
+            {
+                ItemId = "item-remove",
+                ClientFileLabel = "remove.pdf",
+                PreparedPath = preparedPath,
+                PrintPath = printPath,
+                SequenceNo = 0
+            };
+            var order = new OrderData
+            {
+                InternalId = "order-delete-items-files",
+                Id = "1003A",
+                Items = new List<OrderFileItem> { item }
+            };
+
+            var result = service.DeleteOrderItems(
+                new List<OrderItemSelection> { new(order, item) },
+                removeFilesFromDisk: true,
+                onItemRemoved: (_, _, _) => { });
+
+            Assert.Equal(1, result.RemovedCount);
+            Assert.Empty(result.FailedItems);
+            Assert.Empty(order.Items);
+            Assert.False(File.Exists(preparedPath));
+            Assert.False(File.Exists(printPath));
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+                Directory.Delete(tempRoot, true);
+        }
+    }
+
+    [Fact]
+    public void DeleteOrderItems_WhenRemovingOnlyInProgram_LeavesPreparedAndPrintFilesOnDisk()
+    {
+        var service = new OrderDeletionWorkflowService();
+        var tempRoot = Path.Combine(Path.GetTempPath(), "replica-delete-order-items-logical-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempRoot);
+
+        try
+        {
+            var preparedPath = Path.Combine(tempRoot, "prepared.pdf");
+            var printPath = Path.Combine(tempRoot, "print.pdf");
+            File.WriteAllText(preparedPath, "prepared");
+            File.WriteAllText(printPath, "print");
+
+            var item = new OrderFileItem
+            {
+                ItemId = "item-logical-remove",
+                ClientFileLabel = "logical.pdf",
+                PreparedPath = preparedPath,
+                PrintPath = printPath,
+                SequenceNo = 0
+            };
+            var order = new OrderData
+            {
+                InternalId = "order-delete-items-logical",
+                Id = "1004A",
+                Items = new List<OrderFileItem> { item }
+            };
+
+            var result = service.DeleteOrderItems(
+                new List<OrderItemSelection> { new(order, item) },
+                removeFilesFromDisk: false,
+                onItemRemoved: (_, _, _) => { });
+
+            Assert.Equal(1, result.RemovedCount);
+            Assert.Empty(result.FailedItems);
+            Assert.Empty(order.Items);
+            Assert.True(File.Exists(preparedPath));
+            Assert.True(File.Exists(printPath));
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+                Directory.Delete(tempRoot, true);
+        }
     }
 
     [Fact]
