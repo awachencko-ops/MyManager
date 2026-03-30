@@ -453,7 +453,17 @@ Replica.Client/
    - verify pack passed after closure hardening (`348/348`),
    - Stage 5 marked `Done` in progress tracking doc.
 55. `2026-03-30`: Stage 6 kickoff increment:
-   - added Stage 6 progress document `REPLICA_STAGE6_CUTOVER_PROGRESS_2026-03-30.md`,
-   - added readiness script `scripts/stage6/Get-CutoverReadinessStatus.ps1`,
-   - executed first readiness scan and stored artifact `artifacts/stage6/cutover-readiness.latest.json`,
-   - initial scan reported `risk_detected` (`3` active blockers: FileSystem default mode, UI file-mode option, Stage 4 scheduler still registered).
+    - added Stage 6 progress document `REPLICA_STAGE6_CUTOVER_PROGRESS_2026-03-30.md`,
+    - added readiness script `scripts/stage6/Get-CutoverReadinessStatus.ps1`,
+    - executed first readiness scan and stored artifact `artifacts/stage6/cutover-readiness.latest.json`,
+    - initial scan reported `risk_detected` (`3` active blockers: FileSystem default mode, UI file-mode option, Stage 4 scheduler still registered).
+56. `2026-03-30`: Stage 6 storage-mode cutover hardening increment:
+   - switched runtime default storage backend to `LanPostgreSql` (`AppSettings`, `OrdersWorkspaceForm` state, history coordinator),
+   - added automatic normalization/migration of persisted `FileSystem` mode to `LanPostgreSql` during settings load,
+   - removed `FileSystem` option from settings UI storage selector (runtime mode locked to `LAN PostgreSQL`),
+   - reran cutover readiness scan: active risks reduced from `3` to `1` (remaining blocker: Stage 4 scheduler task registration),
+   - verify regression pack passed (`348/348`).
+57. `2026-03-30`: Stage 6 scheduler decommission increment:
+   - executed `scripts/stage4/Unregister-ReconciliationScheduledTask.ps1` to remove legacy Stage 4 daily task,
+   - reran readiness scan (`scripts/stage6/Get-CutoverReadinessStatus.ps1`) and reached `ready_for_cutover` with `risk_count=0`,
+   - Stage 6 cutover gate status moved to green (remaining work: closure/handoff docs).

@@ -271,3 +271,15 @@ Status: Active
    - `-FailOnRisk` mode validated (`exit code 2` when API is unreachable).
 4. Decision: Continue rollout preparation.
 5. Notes: operator can now run one command for daily health gate before production hours.
+
+### 2026-03-30 14:14 (Asia/Vladivostok)
+
+1. Responsible actor: codex-assisted update.
+2. Operational mode update:
+   - Stage 4 daily Task Scheduler job removed (`Replica Stage4 Reconciliation Daily`),
+   - command: `scripts/stage4/Unregister-ReconciliationScheduledTask.ps1`.
+3. Verification:
+   - `scripts/stage6/Get-CutoverReadinessStatus.ps1` returns `ready_for_cutover`,
+   - risk summary: `risk_count=0`.
+4. Decision: Stage 4 operational scheduler path decommissioned; continue Stage 6 cutover closure.
+5. Notes: reconciliation scripts and runbook remain available for manual/audit usage when needed.

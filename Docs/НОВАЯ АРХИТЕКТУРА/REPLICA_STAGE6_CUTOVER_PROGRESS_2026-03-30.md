@@ -1,4 +1,4 @@
-<!-- DOC_ENCODING_REQUIREMENT_UTF8 -->
+﻿<!-- DOC_ENCODING_REQUIREMENT_UTF8 -->
 > Требование кодировки: все файлы документации (`*.md`) в этом репозитории хранятся только в `UTF-8 with BOM`, окончания строк — `LF`.
 
 # Replica Stage 6 Progress (Cutover + Legacy Flow Decommission)
@@ -44,8 +44,64 @@ Observed status:
 3. Non-risk signal:
    - API dual-write flag already disabled (`DualWriteEnabled=false`).
 
+## Completed Increment: Storage Mode UI/Default Cutover
+
+1. Runtime defaults switched to `LanPostgreSql`:
+   - `Models/AppSettings.cs` (`OrdersStorageBackend` default),
+   - `Features/Orders/UI/OrdersWorkspace/Core/OrdersWorkspaceForm.State.cs`,
+   - `Features/Orders/Application/Services/OrdersHistoryRepositoryCoordinator.cs`.
+2. Legacy user settings auto-migration added:
+   - if persisted mode is `FileSystem`, it is normalized to `LanPostgreSql` during `AppSettings.Load()` normalization.
+3. Settings UI no longer exposes `FileSystem` mode option:
+   - `Forms/Settings/SettingsDialogForm.cs` now keeps only `LAN PostgreSQL` and locks selector.
+4. Regression evidence:
+   - `dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj` passed (`348/348`).
+
+## Second Execution Evidence
+
+Command:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "scripts/stage6/Get-CutoverReadinessStatus.ps1" `
+  -RepoRoot "." `
+  -OutJsonPath "artifacts/stage6/cutover-readiness.latest.json"
+```
+
+Observed status:
+
+1. `risk_detected`
+2. Active risks (`1`):
+   - Stage 4 scheduler task is still registered.
+3. Closed risks:
+   - client default storage mode is no longer `FileSystem`,
+   - settings UI no longer exposes file-system mode option.
+
+## Completed Increment: Stage 4 Scheduler Decommission
+
+1. Stage 4 daily task removed from Windows Task Scheduler:
+   - `scripts/stage4/Unregister-ReconciliationScheduledTask.ps1` executed successfully.
+2. Cutover readiness status is now green:
+   - `ready_for_cutover`,
+   - `risk_count = 0`.
+
+## Third Execution Evidence
+
+Command:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "scripts/stage4/Unregister-ReconciliationScheduledTask.ps1"
+powershell -ExecutionPolicy Bypass -File "scripts/stage6/Get-CutoverReadinessStatus.ps1" `
+  -RepoRoot "." `
+  -OutJsonPath "artifacts/stage6/cutover-readiness.latest.json"
+```
+
+Observed status:
+
+1. `ready_for_cutover`
+2. Active risks (`0`):
+   - none.
+
 ## Next Increment (planned)
 
-1. Switch client default backend to API mode for production profile.
-2. Remove/deactivate file-system mode from settings UI and runtime composition (keep only recovery/import utility path).
-3. Decommission Stage 4 daily scheduler path after final go/no-go confirmation.
+1. Finalize Stage 6 rollback/recovery wording (file-based path only as explicit utility/recovery flow, not runtime mode).
+2. Prepare Stage 6 closure checklist and handoff notes.

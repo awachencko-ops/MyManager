@@ -84,7 +84,7 @@ namespace Replica
         public string DefaultOrderSortBy { get; set; } = "SequenceNo";
         public List<string> VariantDictionary { get; set; } = new() { "A4", "A3", "Цветной", "Ч/Б", "draft", "final" };
         public bool AutoRenameOnDuplicate { get; set; } = true;
-        public OrdersStorageMode OrdersStorageBackend { get; set; } = OrdersStorageMode.FileSystem;
+        public OrdersStorageMode OrdersStorageBackend { get; set; } = OrdersStorageMode.LanPostgreSql;
         public string LanPostgreSqlConnectionString { get; set; } = DefaultLanPostgreSqlConnectionString;
         public string LanApiBaseUrl { get; set; } = DefaultLanApiBaseUrl;
         public int LanPushMinRefreshIntervalMs { get; set; } = DefaultLanPushMinRefreshIntervalMs;
@@ -136,7 +136,13 @@ namespace Replica
 
             if (!Enum.IsDefined(typeof(OrdersStorageMode), OrdersStorageBackend))
             {
-                OrdersStorageBackend = OrdersStorageMode.FileSystem;
+                OrdersStorageBackend = OrdersStorageMode.LanPostgreSql;
+                changed = true;
+            }
+            else if (OrdersStorageBackend == OrdersStorageMode.FileSystem)
+            {
+                // Stage 6 cutover: keep FileSystem backend only as internal recovery path.
+                OrdersStorageBackend = OrdersStorageMode.LanPostgreSql;
                 changed = true;
             }
 

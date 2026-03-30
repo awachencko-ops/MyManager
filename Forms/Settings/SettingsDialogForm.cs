@@ -44,7 +44,7 @@ namespace Replica
         public string SharedThumbnailCachePath => _txtSharedThumbnailCachePath.Text.Trim();
         public string FontsFolderPath => _txtFontsFolderPath.Text.Trim();
         public OrdersStorageMode OrdersStorageBackend
-            => (_cmbOrdersStorageBackend.SelectedItem as OrdersStorageBackendOption)?.Mode ?? OrdersStorageMode.FileSystem;
+            => (_cmbOrdersStorageBackend.SelectedItem as OrdersStorageBackendOption)?.Mode ?? OrdersStorageMode.LanPostgreSql;
         public string LanPostgreSqlConnectionString => _txtLanPostgreSqlConnectionString.Text.Trim();
         public string LanApiBaseUrl => _txtLanApiBaseUrl.Text.Trim();
         public int LanPushMinRefreshIntervalMs => (int)_numLanPushMinRefreshIntervalMs.Value;
@@ -329,17 +329,17 @@ namespace Replica
             box.Margin = new Padding(0, 6, 8, 6);
             box.DropDownStyle = ComboBoxStyle.DropDownList;
             box.Items.Clear();
-            box.Items.Add(new OrdersStorageBackendOption(OrdersStorageMode.FileSystem, "Локальный файл (history.json)"));
             box.Items.Add(new OrdersStorageBackendOption(OrdersStorageMode.LanPostgreSql, "LAN PostgreSQL"));
 
             var selected = box.Items
                 .OfType<OrdersStorageBackendOption>()
                 .FirstOrDefault(option => option.Mode == value);
             box.SelectedItem = selected ?? box.Items[0];
+            box.Enabled = false;
 
             var lblHint = new Label
             {
-                Text = "Feature-gate хранения заказов",
+                Text = "Stage 6 cutover: runtime только LAN PostgreSQL",
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleLeft,
                 ForeColor = Color.DimGray,

@@ -26,7 +26,7 @@ namespace Replica
         private string _grandpaFolder = AppSettings.DefaultGrandpaPath;
         private string _archiveDoneSubfolder = "Готово";
         private string _jsonHistoryFile = AppSettings.DefaultHistoryFilePath;
-        private OrdersStorageMode _ordersStorageBackend = OrdersStorageMode.FileSystem;
+        private OrdersStorageMode _ordersStorageBackend = OrdersStorageMode.LanPostgreSql;
         private string _lanPostgreSqlConnectionString = AppSettings.DefaultLanPostgreSqlConnectionString;
         private string _lanApiBaseUrl = AppSettings.DefaultLanApiBaseUrl;
         private readonly IOrderApplicationService _orderApplicationService;

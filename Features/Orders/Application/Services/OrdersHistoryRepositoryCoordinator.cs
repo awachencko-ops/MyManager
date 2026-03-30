@@ -10,7 +10,7 @@ public sealed class OrdersHistoryRepositoryCoordinator
     private const string HistoryBootstrapMarkerKey = "history_json_bootstrap_v1";
 
     private string _historyFilePath = AppSettings.DefaultHistoryFilePath;
-    private OrdersStorageMode _ordersStorageBackend = OrdersStorageMode.FileSystem;
+    private OrdersStorageMode _ordersStorageBackend = OrdersStorageMode.LanPostgreSql;
     private string _lanPostgreSqlConnectionString = AppSettings.DefaultLanPostgreSqlConnectionString;
     private IOrdersRepository? _ordersRepository;
 
