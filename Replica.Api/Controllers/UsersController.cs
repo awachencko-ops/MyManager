@@ -26,9 +26,9 @@ public sealed class UsersController : ControllerBase
 
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyList<SharedUser>), StatusCodes.Status200OK)]
-    public ActionResult<IReadOnlyList<SharedUser>> GetUsers()
+    public async Task<ActionResult<IReadOnlyList<SharedUser>>> GetUsers()
     {
-        var users = ExecuteQuery(new GetUsersQuery(IncludeInactive: false));
+        var users = await ExecuteQueryAsync(new GetUsersQuery(IncludeInactive: false));
         return Ok(users);
     }
 
@@ -37,9 +37,9 @@ public sealed class UsersController : ControllerBase
     [ProducesResponseType(typeof(IReadOnlyList<SharedUser>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    public ActionResult<IReadOnlyList<SharedUser>> GetAllUsers()
+    public async Task<ActionResult<IReadOnlyList<SharedUser>>> GetAllUsers()
     {
-        var users = ExecuteQuery(new GetUsersQuery(IncludeInactive: true));
+        var users = await ExecuteQueryAsync(new GetUsersQuery(IncludeInactive: true));
         return Ok(users);
     }
 
@@ -49,27 +49,27 @@ public sealed class UsersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    public ActionResult<SharedUser> UpsertUser([FromBody] UpsertUserRequest request)
+    public async Task<ActionResult<SharedUser>> UpsertUser([FromBody] UpsertUserRequest request)
     {
         var actor = GetCurrentActor();
-        var result = ExecuteWriteCommand(new UpsertUserCommand(request, actor));
+        var result = await ExecuteWriteCommandAsync(new UpsertUserCommand(request, actor));
         if (result.IsSuccess && result.User != null)
             return Ok(result.User);
 
         return BadRequest(new { error = result.Error });
     }
 
-    private TResult ExecuteWriteCommand<TResult>(IRequest<TResult> command)
+    private Task<TResult> ExecuteWriteCommandAsync<TResult>(IRequest<TResult> command)
         where TResult : IReplicaApiUserOperationResult
     {
         var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
-        return _mediator.Send(command, cancellationToken).GetAwaiter().GetResult();
+        return _mediator.Send(command, cancellationToken);
     }
 
-    private TResponse ExecuteQuery<TResponse>(IRequest<TResponse> query)
+    private Task<TResponse> ExecuteQueryAsync<TResponse>(IRequest<TResponse> query)
     {
         var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
-        return _mediator.Send(query, cancellationToken).GetAwaiter().GetResult();
+        return _mediator.Send(query, cancellationToken);
     }
 
     private string GetCurrentActor()

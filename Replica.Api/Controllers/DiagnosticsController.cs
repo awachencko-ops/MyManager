@@ -41,11 +41,11 @@ public sealed class DiagnosticsController : ControllerBase
 
     [HttpGet("push")]
     [ProducesResponseType(typeof(PushDiagnosticsDto), StatusCodes.Status200OK)]
-    public ActionResult<PushDiagnosticsDto> GetPushDiagnostics()
+    public async Task<ActionResult<PushDiagnosticsDto>> GetPushDiagnostics()
     {
-        var diagnostics = ExecuteQuery(
+        var diagnostics = await ExecuteQueryAsync(
             new GetPushDiagnosticsQuery(),
-            PushDiagnosticsReadModel.FromCurrentSnapshot);
+            () => Task.FromResult(PushDiagnosticsReadModel.FromCurrentSnapshot()));
 
         return Ok(ToDto(diagnostics));
     }
@@ -62,22 +62,6 @@ public sealed class DiagnosticsController : ControllerBase
 
         if (_allowFallback)
             return await fallback();
-
-        throw new InvalidOperationException("DiagnosticsController requires IMediator in runtime composition.");
-    }
-
-    private TResponse ExecuteQuery<TResponse>(
-        IRequest<TResponse> query,
-        Func<TResponse> fallback)
-    {
-        if (_mediator != null)
-        {
-            var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
-            return _mediator.Send(query, cancellationToken).GetAwaiter().GetResult();
-        }
-
-        if (_allowFallback)
-            return fallback();
 
         throw new InvalidOperationException("DiagnosticsController requires IMediator in runtime composition.");
     }

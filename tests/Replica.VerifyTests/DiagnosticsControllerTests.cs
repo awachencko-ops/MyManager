@@ -7,7 +7,7 @@ namespace Replica.VerifyTests;
 public sealed class DiagnosticsControllerTests
 {
     [Fact]
-    public void GetPushDiagnostics_ReturnsCurrentPushSnapshot()
+    public async Task GetPushDiagnostics_ReturnsCurrentPushSnapshot()
     {
         var controller = new DiagnosticsController();
         var before = ReplicaApiObservability.GetSnapshot();
@@ -15,7 +15,7 @@ public sealed class DiagnosticsControllerTests
         ReplicaApiObservability.RecordPushPublished("OrderUpdated");
         ReplicaApiObservability.RecordPushPublishFailure("ForceRefresh");
 
-        var actionResult = controller.GetPushDiagnostics();
+        var actionResult = await controller.GetPushDiagnostics();
         var ok = Assert.IsType<OkObjectResult>(actionResult.Result);
         var payload = Assert.IsType<PushDiagnosticsDto>(ok.Value);
 

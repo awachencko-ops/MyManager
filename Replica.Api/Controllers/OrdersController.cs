@@ -27,18 +27,18 @@ public sealed class OrdersController : ControllerBase
 
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyList<SharedOrder>), StatusCodes.Status200OK)]
-    public ActionResult<IReadOnlyList<SharedOrder>> GetOrders([FromQuery] string createdBy = "")
+    public async Task<ActionResult<IReadOnlyList<SharedOrder>>> GetOrders([FromQuery] string createdBy = "")
     {
-        var orders = ExecuteQuery(new GetOrdersQuery(createdBy));
+        var orders = await ExecuteQueryAsync(new GetOrdersQuery(createdBy));
         return Ok(orders);
     }
 
     [HttpGet("{id}")]
     [ProducesResponseType(typeof(SharedOrder), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public ActionResult<SharedOrder> GetOrderById(string id)
+    public async Task<ActionResult<SharedOrder>> GetOrderById(string id)
     {
-        var order = ExecuteQuery(new GetOrderByIdQuery(id));
+        var order = await ExecuteQueryAsync(new GetOrderByIdQuery(id));
         return order != null
             ? Ok(order)
             : NotFound(new { error = "order not found" });
@@ -49,7 +49,7 @@ public sealed class OrdersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    public ActionResult<SharedOrder> CreateOrder([FromBody] CreateOrderRequest request)
+    public async Task<ActionResult<SharedOrder>> CreateOrder([FromBody] CreateOrderRequest request)
     {
         if (request == null || string.IsNullOrWhiteSpace(request.OrderNumber))
             return BadRequest(new { error = "order number is required" });
@@ -61,7 +61,7 @@ public sealed class OrdersController : ControllerBase
             request.CreatedById = actor;
 
         var idempotencyKey = ResolveIdempotencyKey();
-        var result = ExecuteWriteCommand(new CreateOrderCommand(request, actor, idempotencyKey));
+        var result = await ExecuteWriteCommandAsync(new CreateOrderCommand(request, actor, idempotencyKey));
         return BuildCreateResponse(result);
     }
 
@@ -72,14 +72,14 @@ public sealed class OrdersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
-    public ActionResult<SharedOrder> DeleteOrder(string id, [FromBody] DeleteOrderRequest request)
+    public async Task<ActionResult<SharedOrder>> DeleteOrder(string id, [FromBody] DeleteOrderRequest request)
     {
         if (request == null)
             return BadRequest(new { error = "request body is required" });
 
         var actor = GetCurrentActor();
         var idempotencyKey = ResolveIdempotencyKey();
-        var result = ExecuteWriteCommand(new DeleteOrderCommand(id, request, actor, idempotencyKey));
+        var result = await ExecuteWriteCommandAsync(new DeleteOrderCommand(id, request, actor, idempotencyKey));
         return BuildWriteResponse(result);
     }
 
@@ -90,14 +90,14 @@ public sealed class OrdersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
-    public ActionResult<SharedOrder> UpdateOrder(string id, [FromBody] UpdateOrderRequest request)
+    public async Task<ActionResult<SharedOrder>> UpdateOrder(string id, [FromBody] UpdateOrderRequest request)
     {
         if (request == null)
             return BadRequest(new { error = "request body is required" });
 
         var actor = GetCurrentActor();
         var idempotencyKey = ResolveIdempotencyKey();
-        var result = ExecuteWriteCommand(new UpdateOrderCommand(id, request, actor, idempotencyKey));
+        var result = await ExecuteWriteCommandAsync(new UpdateOrderCommand(id, request, actor, idempotencyKey));
         return BuildWriteResponse(result);
     }
 
@@ -108,14 +108,14 @@ public sealed class OrdersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
-    public ActionResult<SharedOrder> AddOrderItem(string id, [FromBody] AddOrderItemRequest request)
+    public async Task<ActionResult<SharedOrder>> AddOrderItem(string id, [FromBody] AddOrderItemRequest request)
     {
         if (request == null || request.Item == null)
             return BadRequest(new { error = "item payload is required" });
 
         var actor = GetCurrentActor();
         var idempotencyKey = ResolveIdempotencyKey();
-        var result = ExecuteWriteCommand(new AddOrderItemCommand(id, request, actor, idempotencyKey));
+        var result = await ExecuteWriteCommandAsync(new AddOrderItemCommand(id, request, actor, idempotencyKey));
         return BuildWriteResponse(result);
     }
 
@@ -126,14 +126,14 @@ public sealed class OrdersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
-    public ActionResult<SharedOrder> UpdateOrderItem(string id, string itemId, [FromBody] UpdateOrderItemRequest request)
+    public async Task<ActionResult<SharedOrder>> UpdateOrderItem(string id, string itemId, [FromBody] UpdateOrderItemRequest request)
     {
         if (request == null)
             return BadRequest(new { error = "request body is required" });
 
         var actor = GetCurrentActor();
         var idempotencyKey = ResolveIdempotencyKey();
-        var result = ExecuteWriteCommand(new UpdateOrderItemCommand(id, itemId, request, actor, idempotencyKey));
+        var result = await ExecuteWriteCommandAsync(new UpdateOrderItemCommand(id, itemId, request, actor, idempotencyKey));
         return BuildWriteResponse(result);
     }
 
@@ -144,14 +144,14 @@ public sealed class OrdersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
-    public ActionResult<SharedOrder> DeleteOrderItem(string id, string itemId, [FromBody] DeleteOrderItemRequest request)
+    public async Task<ActionResult<SharedOrder>> DeleteOrderItem(string id, string itemId, [FromBody] DeleteOrderItemRequest request)
     {
         if (request == null)
             return BadRequest(new { error = "request body is required" });
 
         var actor = GetCurrentActor();
         var idempotencyKey = ResolveIdempotencyKey();
-        var result = ExecuteWriteCommand(new DeleteOrderItemCommand(id, itemId, request, actor, idempotencyKey));
+        var result = await ExecuteWriteCommandAsync(new DeleteOrderItemCommand(id, itemId, request, actor, idempotencyKey));
         return BuildWriteResponse(result);
     }
 
@@ -162,14 +162,14 @@ public sealed class OrdersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
-    public ActionResult<SharedOrder> ReorderOrderItems(string id, [FromBody] ReorderOrderItemsRequest request)
+    public async Task<ActionResult<SharedOrder>> ReorderOrderItems(string id, [FromBody] ReorderOrderItemsRequest request)
     {
         if (request == null || request.OrderedItemIds == null)
             return BadRequest(new { error = "ordered item ids are required" });
 
         var actor = GetCurrentActor();
         var idempotencyKey = ResolveIdempotencyKey();
-        var result = ExecuteWriteCommand(new ReorderOrderItemsCommand(id, request, actor, idempotencyKey));
+        var result = await ExecuteWriteCommandAsync(new ReorderOrderItemsCommand(id, request, actor, idempotencyKey));
         return BuildWriteResponse(result);
     }
 
@@ -180,12 +180,12 @@ public sealed class OrdersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
-    public ActionResult<SharedOrder> StartOrderRun(string id, [FromBody] RunOrderRequest? request)
+    public async Task<ActionResult<SharedOrder>> StartOrderRun(string id, [FromBody] RunOrderRequest? request)
     {
         var actor = GetCurrentActor();
         var runRequest = request ?? new RunOrderRequest();
         var idempotencyKey = ResolveIdempotencyKey();
-        var result = ExecuteWriteCommand(new StartOrderRunCommand(id, runRequest, actor, idempotencyKey));
+        var result = await ExecuteWriteCommandAsync(new StartOrderRunCommand(id, runRequest, actor, idempotencyKey));
         return BuildWriteResponse(result);
     }
 
@@ -196,26 +196,26 @@ public sealed class OrdersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
-    public ActionResult<SharedOrder> StopOrderRun(string id, [FromBody] StopOrderRequest? request)
+    public async Task<ActionResult<SharedOrder>> StopOrderRun(string id, [FromBody] StopOrderRequest? request)
     {
         var actor = GetCurrentActor();
         var stopRequest = request ?? new StopOrderRequest();
         var idempotencyKey = ResolveIdempotencyKey();
-        var result = ExecuteWriteCommand(new StopOrderRunCommand(id, stopRequest, actor, idempotencyKey));
+        var result = await ExecuteWriteCommandAsync(new StopOrderRunCommand(id, stopRequest, actor, idempotencyKey));
         return BuildWriteResponse(result);
     }
 
-    private TResult ExecuteWriteCommand<TResult>(IRequest<TResult> command)
+    private Task<TResult> ExecuteWriteCommandAsync<TResult>(IRequest<TResult> command)
         where TResult : IReplicaApiOrderOperationResult
     {
         var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
-        return _mediator.Send(command, cancellationToken).GetAwaiter().GetResult();
+        return _mediator.Send(command, cancellationToken);
     }
 
-    private TResponse ExecuteQuery<TResponse>(IRequest<TResponse> query)
+    private Task<TResponse> ExecuteQueryAsync<TResponse>(IRequest<TResponse> query)
     {
         var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
-        return _mediator.Send(query, cancellationToken).GetAwaiter().GetResult();
+        return _mediator.Send(query, cancellationToken);
     }
 
     private string ResolveIdempotencyKey()

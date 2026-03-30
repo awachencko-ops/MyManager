@@ -217,12 +217,12 @@ public sealed class OrdersControllerActorValidationTests
     }
 
     [Fact]
-    public void CreateOrder_UsesActorFromCurrentUserContext()
+    public async Task CreateOrder_UsesActorFromCurrentUserContext()
     {
         var store = new StubLanOrderStore();
         var controller = CreateController(store, actorName: "operator3");
 
-        var result = controller.CreateOrder(new CreateOrderRequest { OrderNumber = "1004" });
+        var result = await controller.CreateOrder(new CreateOrderRequest { OrderNumber = "1004" });
 
         var created = Assert.IsType<CreatedAtActionResult>(result.Result);
         var order = Assert.IsType<SharedOrder>(created.Value);

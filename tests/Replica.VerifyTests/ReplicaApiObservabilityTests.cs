@@ -14,6 +14,8 @@ public sealed class ReplicaApiObservabilityTests
     [InlineData("/api/orders/abc123/items/item-7", "/api/orders/{id}/items/{itemId}")]
     [InlineData("/api/users", "/api/users")]
     [InlineData("/api/custom/12345", "/api/custom/{id}")]
+    [InlineData("/hubs/orders", "/hubs/orders")]
+    [InlineData("/hubs/orders/negotiate", "/hubs/orders/negotiate")]
     public void NormalizeRequestPath_NormalizesKnownRoutes(string rawPath, string expected)
     {
         var normalized = ReplicaApiObservability.NormalizeRequestPath(rawPath);
@@ -65,6 +67,26 @@ public sealed class ReplicaApiObservabilityTests
         Assert.True(after.HttpRequestsTotal >= before.HttpRequestsTotal + 1);
         Assert.True(afterBuckets >= beforeBuckets + 1);
         Assert.True(afterCommand.HttpCount >= beforeCommand.HttpCount + 1);
+    }
+
+    [Fact]
+    public void RecordHttpRequest_ForSignalRHub_DoesNotAffectLatencySloSample()
+    {
+        const string commandKey = "GET /hubs/orders";
+        var before = ReplicaApiObservability.GetSnapshot();
+        var beforeCommand = GetCommandSnapshot(before, commandKey);
+        var beforeBuckets = before.HttpLatencyBuckets.Values.Sum();
+
+        ReplicaApiObservability.RecordHttpRequest("GET", "/hubs/orders", 200, 12000);
+
+        var after = ReplicaApiObservability.GetSnapshot();
+        var afterCommand = GetCommandSnapshot(after, commandKey);
+        var afterBuckets = after.HttpLatencyBuckets.Values.Sum();
+
+        Assert.True(after.HttpRequestsTotal >= before.HttpRequestsTotal + 1);
+        Assert.True(afterCommand.HttpCount >= beforeCommand.HttpCount + 1);
+        Assert.Equal(before.HttpLatencySampleTotal, after.HttpLatencySampleTotal);
+        Assert.Equal(beforeBuckets, afterBuckets);
     }
 
     [Fact]

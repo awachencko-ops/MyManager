@@ -23,6 +23,7 @@ public static class ReplicaApiObservability
     private static long _httpRequestsTotal;
     private static long _httpRequests5xx;
     private static long _httpRequests4xx;
+    private static long _httpLatencySampleTotal;
     private static long _httpElapsedMsScaledTotal;
 
     private static long _writeCommandsTotal;
@@ -52,16 +53,17 @@ public static class ReplicaApiObservability
         else if (statusCode >= 400)
             Interlocked.Increment(ref _httpRequests4xx);
 
-        var scaledElapsed = elapsedMs <= 0 ? 0L : (long)Math.Round(elapsedMs * 1000.0, MidpointRounding.AwayFromZero);
-        Interlocked.Add(ref _httpElapsedMsScaledTotal, scaledElapsed);
-
-        var bucketIndex = ResolveLatencyBucketIndex(elapsedMs);
-        Interlocked.Increment(ref LatencyBuckets[bucketIndex]);
-
-        if (string.IsNullOrWhiteSpace(path))
-            return;
-
         var normalizedPath = NormalizeRequestPath(path);
+        if (ShouldIncludeInLatencySlo(normalizedPath))
+        {
+            Interlocked.Increment(ref _httpLatencySampleTotal);
+            var scaledElapsed = elapsedMs <= 0 ? 0L : (long)Math.Round(elapsedMs * 1000.0, MidpointRounding.AwayFromZero);
+            Interlocked.Add(ref _httpElapsedMsScaledTotal, scaledElapsed);
+
+            var bucketIndex = ResolveLatencyBucketIndex(elapsedMs);
+            Interlocked.Increment(ref LatencyBuckets[bucketIndex]);
+        }
+
         var key = $"{method?.Trim().ToUpperInvariant() ?? "UNKNOWN"} {normalizedPath}";
         var counters = CommandCountersByName.GetOrAdd(key, _ => new CommandCounters());
         Interlocked.Increment(ref counters.HttpCount);
@@ -169,6 +171,7 @@ public static class ReplicaApiObservability
         var httpTotal = Interlocked.Read(ref _httpRequestsTotal);
         var http5xx = Interlocked.Read(ref _httpRequests5xx);
         var http4xx = Interlocked.Read(ref _httpRequests4xx);
+        var latencySampleTotal = Interlocked.Read(ref _httpLatencySampleTotal);
         var elapsedScaled = Interlocked.Read(ref _httpElapsedMsScaledTotal);
 
         var writeTotal = Interlocked.Read(ref _writeCommandsTotal);
@@ -201,8 +204,8 @@ public static class ReplicaApiObservability
 
         var p95 = CalculatePercentileMs(95);
         var p50 = CalculatePercentileMs(50);
-        var avgMs = httpTotal > 0
-            ? (elapsedScaled / 1000.0) / httpTotal
+        var avgMs = latencySampleTotal > 0
+            ? (elapsedScaled / 1000.0) / latencySampleTotal
             : 0;
 
         var commandMetrics = CommandCountersByName
@@ -231,6 +234,7 @@ public static class ReplicaApiObservability
             HttpRequests4xx = http4xx,
             HttpRequests5xx = http5xx,
             HttpAvailabilityRatio = BuildRatio(httpTotal - http5xx, httpTotal),
+            HttpLatencySampleTotal = latencySampleTotal,
             HttpLatencyAvgMs = avgMs,
             HttpLatencyP50Ms = p50,
             HttpLatencyP95Ms = p95,
@@ -345,12 +349,25 @@ public static class ReplicaApiObservability
         return LatencyBucketUpperBoundsMs.Length;
     }
 
+    private static bool ShouldIncludeInLatencySlo(string normalizedPath)
+    {
+        if (string.IsNullOrWhiteSpace(normalizedPath))
+            return false;
+
+        // SignalR hub transport requests are often long-lived by design and
+        // should not degrade request/response API latency SLO.
+        if (normalizedPath.StartsWith("/hubs/", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        return true;
+    }
+
     private static double CalculatePercentileMs(int percentile)
     {
         if (percentile <= 0)
             return 0;
 
-        var total = Interlocked.Read(ref _httpRequestsTotal);
+        var total = Interlocked.Read(ref _httpLatencySampleTotal);
         if (total <= 0)
             return 0;
 
@@ -428,6 +445,7 @@ public sealed class ReplicaApiObservabilitySnapshot
     public long HttpRequests4xx { get; set; }
     public long HttpRequests5xx { get; set; }
     public double HttpAvailabilityRatio { get; set; }
+    public long HttpLatencySampleTotal { get; set; }
     public double HttpLatencyAvgMs { get; set; }
     public double HttpLatencyP50Ms { get; set; }
     public double HttpLatencyP95Ms { get; set; }
