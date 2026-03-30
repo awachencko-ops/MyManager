@@ -31,6 +31,14 @@ param(
     [string]$SettingsFilePath = "",
 
     [Parameter(Mandatory = $false)]
+    [ValidateRange(1, 600)]
+    [int]$TimeoutSec = 30,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateSet("Warn", "Fail")]
+    [string]$ApiPreflightPolicy = "Warn",
+
+    [Parameter(Mandatory = $false)]
     [string]$ResponsibleActor = "task-scheduler",
 
     [Parameter(Mandatory = $false)]
@@ -138,6 +146,8 @@ if ($Mode -eq "LiveSources") {
         "-ApiBearerToken", "`"$ApiBearerToken`"",
         "-HistoryFilePath", "`"$HistoryFilePath`"",
         "-SettingsFilePath", "`"$SettingsFilePath`"",
+        "-TimeoutSec", "`"$TimeoutSec`"",
+        "-ApiPreflightPolicy", "`"$ApiPreflightPolicy`"",
         "-ResponsibleActor", "`"$ResponsibleActor`""
     ) -join " "
 }
@@ -177,6 +187,8 @@ if ($DryRun) {
         Write-Host "ApiActor: $ApiActor"
         Write-Host "HistoryFilePath: $HistoryFilePath"
         Write-Host "SettingsFilePath: $SettingsFilePath"
+        Write-Host "TimeoutSec: $TimeoutSec"
+        Write-Host "ApiPreflightPolicy: $ApiPreflightPolicy"
     }
     Write-Host "Action: powershell.exe $psArgs"
     if ($existingTask) {

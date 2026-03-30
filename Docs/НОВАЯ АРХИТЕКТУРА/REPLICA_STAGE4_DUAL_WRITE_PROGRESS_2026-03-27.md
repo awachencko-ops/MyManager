@@ -56,6 +56,15 @@ Status: In progress
    - `scripts/stage4/Prepare-ReconciliationSnapshots.ps1`,
    - `scripts/stage4/Run-ReconciliationLive.ps1`,
    - registration script поддерживает `-Mode LiveSources` и переключён на этот режим.
+16. Добавлен операторский preflight-check API перед reconciliation:
+   - `Prepare-ReconciliationSnapshots.ps1` проверяет API через `/live` и `/api/orders`,
+   - добавлена политика preflight `Warn/Fail` (по умолчанию `Warn`),
+   - при недоступном API выводится человекочитаемое сообщение и reconciliation шаг останавливается с `exit code 1`,
+   - `Register-ReconciliationScheduledTask.ps1` поддерживает `-ApiPreflightPolicy` и `-TimeoutSec` для daily-задачи.
+17. Исправлена ложная массовая рассинхронизация в reconciliation I/O:
+   - чтение snapshots переведено на case-insensitive JSON десериализацию,
+   - добавлен verify-тест для `camelCase` snapshot payload,
+   - результат live-run после фикса: `missing_in_pg=0`, `missing_in_json=0`, осталось `payload_mismatch=1`.
 
 ## Test Evidence
 
@@ -83,14 +92,28 @@ Status: In progress
    Result: validated (prepare step invoked successfully, journal step skipped by design).
 12. `powershell -ExecutionPolicy Bypass -File scripts/stage4/Register-ReconciliationScheduledTask.ps1 -Mode LiveSources -ForceRecreate`  
    Result: validated (scheduled task action switched to `Run-ReconciliationLive.ps1`).
+13. `powershell -ExecutionPolicy Bypass -File scripts/stage4/Run-ReconciliationLive.ps1 -ApiPreflightPolicy Fail` (при недоступном API)  
+   Result: validated (preflight blocks run with clear operator message, `exit code 1`).
+14. `powershell -ExecutionPolicy Bypass -File scripts/stage4/Register-ReconciliationScheduledTask.ps1 -Mode LiveSources -ApiPreflightPolicy Fail -TimeoutSec 45 -ForceRecreate` + `Start-ScheduledTask`  
+   Result: validated (task action includes preflight policy/timeout; task fails fast when API is unreachable).
+15. `dotnet test tests/Replica.VerifyTests/Replica.VerifyTests.csproj --filter "ReplicaApiReconciliationReportBuilderTests"`  
+   Result: passed (`3/3`) including `camelCase` snapshot coverage.
+16. `powershell -ExecutionPolicy Bypass -File scripts/stage4/Run-ReconciliationLive.ps1 -ApiPreflightPolicy Fail -ResponsibleActor "codex-local"` (при доступном API)  
+   Result: validated (`missing_in_pg=0`, `missing_in_json=0`, `payload_mismatch=1`, `exit code 2`).
+17. `Start-ScheduledTask -TaskName "Replica Stage4 Reconciliation Daily"` (при доступном API)  
+   Result: validated (`LastTaskResult=2`, report/journal created by scheduler with same single payload mismatch).
 
 ## Open Notes
 
 1. Ранее падавшие run-workflow тесты восстановлены; полный `Verify` снова зелёный (`346/346`).
 2. Основной daily-контур перенесён на локальный Task Scheduler; GitHub workflow используется только как fallback.
-3. На момент последней проверки `http://localhost:5000/live` был недоступен; полный live-run от планировщика ожидает поднятый API-процесс.
+3. При текущей политике `ApiPreflightPolicy=Fail` non-zero `LastTaskResult` при недоступном API считается ожидаемым сигналом для оператора.
+4. После фикса case-insensitive parsing ложный `12/12` missing-блок устранён; остался один реальный mismatch:
+   - `internal_id=412296ad2a4249779be4f4a7d524c012`,
+   - field=`OrderNumber`,
+   - `pg_value="тест 1"`, `json_value=""`.
 
 ## Next Increment (planned)
 
-1. Выполнить первый успешный live-run через Task Scheduler при доступном API (`/live` reachable) и зафиксировать запись в execution journal.
-2. Добавить операторский check/алерт для недоступного API перед reconciliation-окном.
+1. Провести root-cause по единственному payload mismatch (`OrderNumber`) и выбрать remediation-путь (repair data vs mapping rule).
+2. После устранения mismatch подтвердить `is_zero_diff=true` на ручном и scheduled live-run и зафиксировать Go/No-Go запись.

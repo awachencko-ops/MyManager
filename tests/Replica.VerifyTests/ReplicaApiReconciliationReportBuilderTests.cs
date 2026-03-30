@@ -114,6 +114,7 @@ public sealed class ReplicaApiReconciliationReportBuilderTests
         Directory.CreateDirectory(tempDirectory);
         var arrayPath = Path.Combine(tempDirectory, "pg-snapshot.json");
         var envelopePath = Path.Combine(tempDirectory, "json-snapshot.json");
+        var camelArrayPath = Path.Combine(tempDirectory, "pg-snapshot-camel.json");
 
         try
         {
@@ -121,14 +122,19 @@ public sealed class ReplicaApiReconciliationReportBuilderTests
                 "[{\"InternalId\":\"ord-1\",\"OrderNumber\":\"1001\",\"Version\":1}]");
             await File.WriteAllTextAsync(envelopePath,
                 "{\"GeneratedAtUtc\":\"2026-03-27T00:00:00Z\",\"Orders\":[{\"InternalId\":\"ord-2\",\"OrderNumber\":\"1002\",\"Version\":2}]}");
+            await File.WriteAllTextAsync(camelArrayPath,
+                "[{\"internalId\":\"ord-3\",\"orderNumber\":\"1003\",\"version\":3}]");
 
             var arrayOrders = await ReplicaApiReconciliationReportIo.LoadOrdersFromSnapshotAsync(arrayPath);
             var envelopeOrders = await ReplicaApiReconciliationReportIo.LoadOrdersFromSnapshotAsync(envelopePath);
+            var camelArrayOrders = await ReplicaApiReconciliationReportIo.LoadOrdersFromSnapshotAsync(camelArrayPath);
 
             Assert.Single(arrayOrders);
             Assert.Equal("ord-1", arrayOrders[0].InternalId);
             Assert.Single(envelopeOrders);
             Assert.Equal("ord-2", envelopeOrders[0].InternalId);
+            Assert.Single(camelArrayOrders);
+            Assert.Equal("ord-3", camelArrayOrders[0].InternalId);
         }
         finally
         {

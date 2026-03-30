@@ -24,6 +24,10 @@ param(
     [int]$TimeoutSec = 30,
 
     [Parameter(Mandatory = $false)]
+    [ValidateSet("Warn", "Fail")]
+    [string]$ApiPreflightPolicy = "Warn",
+
+    [Parameter(Mandatory = $false)]
     [switch]$DryRun
 )
 
@@ -161,6 +165,118 @@ function Normalize-OrdersArray {
     return $normalizedOrders
 }
 
+function Get-ExceptionStatusCode {
+    param([System.Exception]$Exception)
+
+    if ($null -eq $Exception -or $null -eq $Exception.Response) {
+        return $null
+    }
+
+    try {
+        return [int]$Exception.Response.StatusCode
+    }
+    catch {
+        return $null
+    }
+}
+
+function Get-ExceptionMessage {
+    param([System.Exception]$Exception)
+
+    if ($null -eq $Exception) {
+        return "unknown error"
+    }
+
+    if ($null -ne $Exception.InnerException -and -not [string]::IsNullOrWhiteSpace($Exception.InnerException.Message)) {
+        return $Exception.InnerException.Message
+    }
+
+    return $Exception.Message
+}
+
+function Get-SloText {
+    param([object]$LivePayload)
+
+    $slo = Get-PropValue -Source $LivePayload -Names @("slo", "Slo") -Default $null
+    if ($null -eq $slo) {
+        return ""
+    }
+
+    if ($slo -is [string]) {
+        return $slo
+    }
+
+    $sloStatus = Get-PropValue -Source $slo -Names @("status", "Status") -Default ""
+    if (-not [string]::IsNullOrWhiteSpace([string]$sloStatus)) {
+        return [string]$sloStatus
+    }
+
+    return [string]$slo
+}
+
+function Invoke-ReplicaApiGet {
+    param(
+        [string]$Uri,
+        [hashtable]$Headers,
+        [int]$TimeoutSec,
+        [switch]$Allow404
+    )
+
+    try {
+        return Invoke-RestMethod -Method Get -Uri $Uri -Headers $Headers -TimeoutSec $TimeoutSec
+    }
+    catch {
+        $statusCode = Get-ExceptionStatusCode -Exception $_.Exception
+        if ($Allow404 -and $statusCode -eq 404) {
+            return $null
+        }
+
+        $message = Get-ExceptionMessage -Exception $_.Exception
+        throw "API request failed for '$Uri': $message"
+    }
+}
+
+function Test-ReplicaApiPreflight {
+    param(
+        [string]$ApiBaseUrl,
+        [hashtable]$Headers,
+        [int]$TimeoutSec,
+        [string]$Policy
+    )
+
+    $baseUrl = $ApiBaseUrl.TrimEnd("/")
+    $liveUrl = "$baseUrl/live"
+    $ordersUrl = "$baseUrl/api/orders"
+
+    $livePayload = Invoke-ReplicaApiGet -Uri $liveUrl -Headers $Headers -TimeoutSec $TimeoutSec -Allow404
+    if ($null -eq $livePayload) {
+        Write-Warning "Preflight: endpoint '/live' returned 404. Continuing with '/api/orders' probe."
+    }
+    else {
+        $ready = Get-PropValue -Source $livePayload -Names @("ready", "Ready") -Default $null
+        $status = [string](Get-PropValue -Source $livePayload -Names @("status", "Status") -Default "")
+        $sloText = [string](Get-SloText -LivePayload $livePayload)
+
+        $isReadyProblem = ($null -ne $ready -and -not [bool]$ready)
+        $isDegradedProblem = ($status -match "(?i)degraded")
+        $isSloProblem = (-not [string]::IsNullOrWhiteSpace($sloText) -and $sloText -notmatch "(?i)ok|healthy|ready")
+
+        if ($isReadyProblem -or $isDegradedProblem -or $isSloProblem) {
+            $humanWarning = "API is reachable but health flags are not ideal: ready=$ready, status='$status', slo='$sloText'."
+            if ($Policy -eq "Fail") {
+                throw "$humanWarning Preflight policy 'Fail' blocks snapshot creation."
+            }
+
+            Write-Warning "$humanWarning Continuing by preflight policy 'Warn'."
+        }
+        else {
+            Write-Host "Preflight /live: ok (ready=$ready, status='$status', slo='$sloText')."
+        }
+    }
+
+    return (Invoke-ReplicaApiGet -Uri $ordersUrl -Headers $Headers -TimeoutSec $TimeoutSec)
+}
+
 $repoRoot = Resolve-RepoRoot -ScriptPath $PSCommandPath
 
 $resolvedPgSnapshotPath = Resolve-PathFromRepo -RepoRoot $repoRoot -Candidate $PgSnapshotPath
@@ -223,6 +339,7 @@ if ([string]::IsNullOrWhiteSpace($resolvedHistoryPath) -or -not (Test-Path $reso
 if ($DryRun) {
     Write-Host "Dry run. No files written."
     Write-Host "ApiBaseUrl: $resolvedApiBaseUrl"
+    Write-Host "ApiPreflightPolicy: $ApiPreflightPolicy"
     Write-Host "HistoryFilePath: $resolvedHistoryPath"
     Write-Host "SettingsFilePath: $resolvedSettingsPath"
     Write-Host "PgSnapshotPath: $resolvedPgSnapshotPath"
@@ -233,7 +350,6 @@ if ($DryRun) {
 [System.IO.Directory]::CreateDirectory((Split-Path -Parent $resolvedPgSnapshotPath)) | Out-Null
 [System.IO.Directory]::CreateDirectory((Split-Path -Parent $resolvedJsonSnapshotPath)) | Out-Null
 
-$ordersUrl = "$($resolvedApiBaseUrl.TrimEnd('/'))/api/orders"
 $headers = @{
     "Accept" = "application/json"
 }
@@ -244,7 +360,19 @@ else {
     $headers["X-Current-User"] = $ApiActor
 }
 
-$pgOrders = Invoke-RestMethod -Method Get -Uri $ordersUrl -Headers $headers -TimeoutSec $TimeoutSec
+try {
+    $pgOrders = Test-ReplicaApiPreflight -ApiBaseUrl $resolvedApiBaseUrl -Headers $headers -TimeoutSec $TimeoutSec -Policy $ApiPreflightPolicy
+}
+catch {
+    Write-Host (@(
+        "Failed to prepare snapshot from API."
+        "Check that Replica.Api is running and reachable at '$resolvedApiBaseUrl'."
+        "Also verify LanApiBaseUrl in settings.json and port/network availability."
+        "Technical reason: $($_.Exception.Message)"
+    ) -join " ")
+    exit 1
+}
+
 $pgJson = $pgOrders | ConvertTo-Json -Depth 50
 [System.IO.File]::WriteAllText($resolvedPgSnapshotPath, $pgJson, (New-Object System.Text.UTF8Encoding($true)))
 

@@ -405,3 +405,11 @@ Replica.Client/
    - added `Run-ReconciliationLive.ps1` (prepare + journal chain for one run),
    - extended scheduler registration with mode switch (`LiveSources` / `StaticSnapshots`) and switched task action to `Run-ReconciliationLive.ps1`,
    - dry-run validation passed for `Prepare/Live/Register` path; first successful live scheduled run pending API availability.
+45. `2026-03-30`: Stage 4 API preflight guard increment:
+   - added API preflight checks in `Prepare-ReconciliationSnapshots.ps1` (`/live` + `/api/orders`) with operator-friendly diagnostics,
+   - introduced preflight policy (`Warn`/`Fail`) and timeout tuning, propagated to scheduler registration script,
+   - configured scheduled task with `ApiPreflightPolicy=Fail` for fail-fast signal when API is unavailable.
+46. `2026-03-30`: Stage 4 reconciliation parser + live-run verification increment:
+   - fixed snapshot deserialization mismatch by enabling case-insensitive JSON reading in reconciliation I/O,
+   - added verify coverage for `camelCase` snapshot payloads,
+   - executed manual + scheduled live runs with reachable API: missing buckets reduced from `12/12` to `0/0`, one payload mismatch remains (`OrderNumber`).

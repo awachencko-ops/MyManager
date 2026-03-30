@@ -33,6 +33,10 @@ param(
     [int]$TimeoutSec = 30,
 
     [Parameter(Mandatory = $false)]
+    [ValidateSet("Warn", "Fail")]
+    [string]$ApiPreflightPolicy = "Warn",
+
+    [Parameter(Mandatory = $false)]
     [switch]$DryRun
 )
 
@@ -84,6 +88,8 @@ $prepareArgs.Add("-ApiActor")
 $prepareArgs.Add($ApiActor)
 $prepareArgs.Add("-TimeoutSec")
 $prepareArgs.Add([string]$TimeoutSec)
+$prepareArgs.Add("-ApiPreflightPolicy")
+$prepareArgs.Add($ApiPreflightPolicy)
 Add-StringArgIfPresent -ArgsList $prepareArgs -Name "-ApiBaseUrl" -Value $ApiBaseUrl
 Add-StringArgIfPresent -ArgsList $prepareArgs -Name "-ApiBearerToken" -Value $ApiBearerToken
 Add-StringArgIfPresent -ArgsList $prepareArgs -Name "-HistoryFilePath" -Value $HistoryFilePath
@@ -111,6 +117,7 @@ if ($DryRun) {
 & powershell.exe @prepareArgs
 $prepareExitCode = $LASTEXITCODE
 if ($prepareExitCode -ne 0) {
+    Write-Host "Prepare step failed (exit code $prepareExitCode). Reconciliation journal step was not started."
     exit $prepareExitCode
 }
 

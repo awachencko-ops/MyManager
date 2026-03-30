@@ -173,6 +173,11 @@ public sealed class ReplicaApiReconciliationReportBuilder
 
 public static class ReplicaApiReconciliationReportIo
 {
+    private static readonly JsonSerializerOptions ReadJsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
     private static readonly JsonSerializerOptions WriteJsonOptions = new()
     {
         WriteIndented = true
@@ -219,13 +224,13 @@ public static class ReplicaApiReconciliationReportIo
 
         if (root.ValueKind == JsonValueKind.Array)
         {
-            return JsonSerializer.Deserialize<List<SharedOrder>>(root.GetRawText()) ?? [];
+            return JsonSerializer.Deserialize<List<SharedOrder>>(root.GetRawText(), ReadJsonOptions) ?? [];
         }
 
         if (root.ValueKind == JsonValueKind.Object)
         {
             if (TryGetOrdersProperty(root, out var ordersElement))
-                return JsonSerializer.Deserialize<List<SharedOrder>>(ordersElement.GetRawText()) ?? [];
+                return JsonSerializer.Deserialize<List<SharedOrder>>(ordersElement.GetRawText(), ReadJsonOptions) ?? [];
 
             return [];
         }

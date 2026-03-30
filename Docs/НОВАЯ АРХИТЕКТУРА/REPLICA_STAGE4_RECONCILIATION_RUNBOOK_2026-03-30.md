@@ -54,6 +54,8 @@ powershell -ExecutionPolicy Bypass -File scripts/stage4/Register-ReconciliationS
   -ApiBaseUrl "http://localhost:5000/" `
   -HistoryFilePath "C:\Path\To\history.json" `
   -SettingsFilePath "C:\Path\To\settings.json" `
+  -TimeoutSec 45 `
+  -ApiPreflightPolicy "Fail" `
   -ResponsibleActor "task-scheduler" `
   -ForceRecreate
 ```
@@ -81,6 +83,7 @@ powershell -ExecutionPolicy Bypass -File scripts/stage4/Unregister-Reconciliatio
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/stage4/Run-ReconciliationLive.ps1 `
+  -ApiPreflightPolicy "Fail" `
   -ResponsibleActor "<operator_name>"
 ```
 
@@ -107,6 +110,10 @@ Mismatch buckets:
 4. `payload_mismatch`
 5. `is_zero_diff`
 
+Preflight policy:
+1. `Warn` — при проблемном `/live` показывает warning и пытается продолжить.
+2. `Fail` — при проблемном/недоступном API останавливает run до reconciliation шага.
+
 ## Daily Operator Checklist
 
 1. Убедиться, что задача отработала (`LastTaskResult`).
@@ -118,6 +125,10 @@ Mismatch buckets:
    - создать incident,
    - остановить расширение rollout,
    - выполнить root-cause/replay по Stage 4 checklist.
+6. Если `LastTaskResult` non-zero:
+   - выполнить ручной `Run-ReconciliationLive.ps1` и считать сообщение preflight,
+   - проверить запуск API и `LanApiBaseUrl`,
+   - повторно запустить scheduled task после восстановления API.
 
 ## Optional Fallback (GitHub Actions)
 
