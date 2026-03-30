@@ -77,3 +77,31 @@ Status: Active
    - is_zero_diff = true
 4. Decision: Continue rollout preparation.
 5. Notes: report_path=C:\Users\user\Desktop\MyManager 1.0.1\artifacts\reconciliation\reports\reconciliation-20260330-110720.json; cli_exit_code=0.
+
+### 2026-03-30 11:35 (Asia/Vladivostok)
+
+1. Responsible actor: codex-assisted update.
+2. Operational mode update:
+   - Task Scheduler назначен основным ежедневным маршрутом reconciliation.
+   - GitHub Actions переведён в optional fallback режим.
+3. Tooling:
+   - added `scripts/stage4/Register-ReconciliationScheduledTask.ps1`,
+   - added `scripts/stage4/Unregister-ReconciliationScheduledTask.ps1`,
+   - setup command dry-run validated (`-DryRun`).
+4. Decision: Continue rollout preparation.
+5. Notes: следующий шаг — зарегистрировать daily задачу на production host с реальными snapshot путями.
+
+### 2026-03-30 11:38 (Asia/Vladivostok)
+
+1. Responsible actor: task-scheduler
+2. Backups:
+   - history.json immutable copy: available.
+   - pg snapshot: available.
+3. Reconciliation summary:
+   - missing_in_pg = 0
+   - missing_in_json = 0
+   - version_mismatch = 0
+   - payload_mismatch = 0
+   - is_zero_diff = true
+4. Decision: Continue rollout preparation.
+5. Notes: report_path=C:\Users\user\Desktop\MyManager 1.0.1\artifacts\reconciliation\reports\reconciliation-20260330-113819.json; cli_exit_code=0.

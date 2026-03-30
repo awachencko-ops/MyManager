@@ -389,3 +389,14 @@ Replica.Client/
 40. `2026-03-30`: Stage 4 daily-journal automation increment:
    - added helper script `scripts/stage4/Run-ReconciliationJournal.ps1` (`CLI run + report + journal append`),
    - validated script on sample snapshots with automatic entry creation in execution journal.
+41. `2026-03-30`: Stage 4 ops-plan pivot to Task Scheduler:
+   - Task Scheduler approved as primary daily execution path for reconciliation,
+   - GitHub workflow reclassified as optional fallback (non-primary).
+42. `2026-03-30`: Stage 4 scheduler tooling increment:
+   - added `scripts/stage4/Register-ReconciliationScheduledTask.ps1` (daily task setup),
+   - added `scripts/stage4/Unregister-ReconciliationScheduledTask.ps1` (task cleanup),
+   - dry-run validation passed for scheduler setup command resolution.
+43. `2026-03-30`: Stage 4 scheduler activation increment:
+   - registered scheduled task `Replica Stage4 Reconciliation Daily`,
+   - executed manual start with successful completion (`LastTaskResult=0`),
+   - execution journal entry appended by scheduled run (`Responsible actor: task-scheduler`).

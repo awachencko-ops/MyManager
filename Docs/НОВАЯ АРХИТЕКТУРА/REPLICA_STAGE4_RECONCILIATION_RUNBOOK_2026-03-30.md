@@ -8,57 +8,61 @@ Status: Active
 
 ## Purpose
 
-Операционный регламент запуска nightly reconciliation (`json vs pg`) и фиксации результата в Stage 4 execution journal.
+Операционный регламент ежедневной сверки `json vs pg` в режиме Dual-Write и фиксации результата в execution journal.
 
-## Workflow
+## Runtime Model (Primary)
 
-GitHub Actions workflow:
-`.github/workflows/stage4-reconciliation-nightly.yml`
+Основной путь эксплуатации: **локально на сервере/рабочем ПК через Windows Task Scheduler**.
 
-Triggers:
-1. `schedule` (daily, 09:15 Asia/Vladivostok).
-2. `workflow_dispatch` (manual run).
+1. По расписанию запускается `scripts/stage4/Run-ReconciliationJournal.ps1`.
+2. Скрипт вызывает reconciliation CLI.
+3. CLI строит JSON-отчёт с mismatch buckets.
+4. Скрипт автоматически дописывает запись в execution journal.
 
-## Required Repo Variables (for scheduled runs)
+GitHub Actions в этом контуре не обязателен и рассматривается только как опциональный внешний fallback.
 
-1. `REPLICA_PG_SNAPSHOT_PATH` — путь до snapshot PostgreSQL (JSON array of orders).
-2. `REPLICA_JSON_SNAPSHOT_PATH` — путь до JSON snapshot (`array` или `Orders/orders` envelope).
+## Scripts
 
-Set with GitHub CLI:
+1. `scripts/stage4/Run-ReconciliationJournal.ps1`  
+   Daily-run script: reconciliation + report + journal append.
+2. `scripts/stage4/Register-ReconciliationScheduledTask.ps1`  
+   Setup script: регистрация ежедневной задачи Task Scheduler.
 
-```powershell
-gh variable set REPLICA_PG_SNAPSHOT_PATH --body "artifacts/reconciliation/snapshots/pg.snapshot.json"
-gh variable set REPLICA_JSON_SNAPSHOT_PATH --body "artifacts/reconciliation/snapshots/json.snapshot.json"
-```
-
-Check values:
+## One-Time Setup (Task Scheduler)
 
 ```powershell
-gh variable list
+powershell -ExecutionPolicy Bypass -File scripts/stage4/Register-ReconciliationScheduledTask.ps1 `
+  -PgSnapshotPath "<real_pg_snapshot.json>" `
+  -JsonSnapshotPath "<real_json_snapshot.json>" `
+  -At "09:15" `
+  -ResponsibleActor "task-scheduler"
 ```
 
-## Manual Run
-
-Without custom inputs (uses repo vars/fallback):
+Проверить задачу:
 
 ```powershell
-gh workflow run "Stage4 Reconciliation Nightly"
+Get-ScheduledTask -TaskName "Replica Stage4 Reconciliation Daily"
+Get-ScheduledTaskInfo -TaskName "Replica Stage4 Reconciliation Daily" | Select-Object LastRunTime,LastTaskResult,NextRunTime
 ```
 
-With explicit snapshot paths:
+Проверка конфигурации без регистрации задачи:
 
 ```powershell
-gh workflow run "Stage4 Reconciliation Nightly" `
-  -f pg_snapshot_path="artifacts/reconciliation/snapshots/pg.snapshot.json" `
-  -f json_snapshot_path="artifacts/reconciliation/snapshots/json.snapshot.json"
+powershell -ExecutionPolicy Bypass -File scripts/stage4/Register-ReconciliationScheduledTask.ps1 -DryRun
 ```
 
-Local operator command (CLI + auto-journal entry):
+Удаление задачи (если нужно пересоздать/откатить):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/stage4/Unregister-ReconciliationScheduledTask.ps1
+```
+
+## Manual Run (Operator)
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/stage4/Run-ReconciliationJournal.ps1 `
-  -PgSnapshotPath "<pg_snapshot.json>" `
-  -JsonSnapshotPath "<json_snapshot.json>" `
+  -PgSnapshotPath "<real_pg_snapshot.json>" `
+  -JsonSnapshotPath "<real_json_snapshot.json>" `
   -ResponsibleActor "<operator_name>"
 ```
 
@@ -66,13 +70,10 @@ powershell -ExecutionPolicy Bypass -File scripts/stage4/Run-ReconciliationJourna
 
 CLI exit codes:
 1. `0` — zero-diff (`is_zero_diff=true`).
-2. `2` — mismatches detected (workflow marks run failed after artifact upload).
-3. `1` — execution error (invalid input/path/read/parse failure).
+2. `2` — mismatches detected.
+3. `1` — execution/runtime error.
 
-Published artifacts:
-1. `stage4-reconciliation-report-<run_id>` — JSON report with summary and mismatch buckets.
-
-Summary fields:
+Mismatch buckets:
 1. `missing_in_pg`
 2. `missing_in_json`
 3. `version_mismatch`
@@ -81,11 +82,18 @@ Summary fields:
 
 ## Daily Operator Checklist
 
-1. Убедиться, что workflow run завершён и artifact отчёт доступен.
-2. Проверить summary (особенно `is_zero_diff`).
-3. Зафиксировать результат в:
+1. Убедиться, что задача отработала (`LastTaskResult`).
+2. Проверить свежий reconciliation report в `artifacts/reconciliation/reports/`.
+3. Проверить последнюю запись в:
    - `Docs/НОВАЯ АРХИТЕКТУРА/REPLICA_STAGE4_EXECUTION_JOURNAL_2026-03-30.md`
 4. Если любое mismatch-поле > 0:
    - создать incident,
    - остановить расширение rollout,
-   - запустить root-cause/replay процедуру по Stage 4 checklist.
+   - выполнить root-cause/replay по Stage 4 checklist.
+
+## Optional Fallback (GitHub Actions)
+
+Если локальный scheduler временно недоступен, допустим fallback через:
+`.github/workflows/stage4-reconciliation-nightly.yml`.
+
+Этот fallback не заменяет основной локальный operational контур.
