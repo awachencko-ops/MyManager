@@ -190,7 +190,10 @@ namespace Replica
 
             var loadResult = await Task.Run(() =>
             {
-                if (!TryLoadHistoryFromConfiguredRepository(out var storageOrders))
+                if (!TryLoadHistoryFromConfiguredRepository(
+                        out var storageOrders,
+                        allowReadOnlyCacheFallback: false,
+                        out _))
                     return (Success: false, Orders: new List<OrderData>(), PostLoad: (OrdersHistoryPostLoadResult?)null);
 
                 var postLoad = _orderApplicationService.ApplyHistoryPostLoad(
@@ -222,7 +225,7 @@ namespace Replica
             IReadOnlyCollection<OrderData> storageOrders,
             OrdersHistoryPostLoadResult? postLoad)
         {
-            if (Disposing || IsDisposed)
+            if (Disposing || IsDisposed || !ShouldUseLanRunApi())
                 return;
 
             var selectedTag = dgvJobs.CurrentRow?.Tag?.ToString();

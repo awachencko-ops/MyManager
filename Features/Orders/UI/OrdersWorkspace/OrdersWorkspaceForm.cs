@@ -645,10 +645,10 @@ namespace Replica
 
             _ordersDataBootstrapCompleted = false;
             SetBottomStatus("Загрузка заказов...");
-            _ = BootstrapOrdersDataFlowAsync();
+            _ = BootstrapOrdersDataFlowAsync(force);
         }
 
-        private async Task BootstrapOrdersDataFlowAsync()
+        private async Task BootstrapOrdersDataFlowAsync(bool forceReload)
         {
             try
             {
@@ -658,12 +658,16 @@ namespace Replica
                 var defaultUserName = usersSnapshot[0];
                 var historyFilePath = StoragePaths.ResolveExistingFilePath(_jsonHistoryFile, "history.json");
                 _jsonHistoryFile = historyFilePath;
-                var historyCountBeforeBootstrap = _orderHistory.Count;
 
                 var result = await Task.Run(() =>
                 {
                     var loadedOrders = new List<OrderData>();
-                    if (TryLoadHistoryFromConfiguredRepository(out var repositoryOrders) && repositoryOrders.Count > 0)
+                    var loadedFromCache = false;
+                    if (TryLoadHistoryFromConfiguredRepository(
+                            out var repositoryOrders,
+                            allowReadOnlyCacheFallback: true,
+                            out loadedFromCache)
+                        && repositoryOrders.Count > 0)
                         loadedOrders.AddRange(repositoryOrders);
 
                     var postLoad = _orderApplicationService.ApplyHistoryPostLoad(
@@ -673,15 +677,15 @@ namespace Replica
                         onTopologyIssue: (order, issue) =>
                             Logger.Warn($"TOPOLOGY | order={order?.Id} | {issue}"));
 
-                    return (loadedOrders, postLoad);
+                    return (loadedOrders, postLoad, loadedFromCache);
                 }).ConfigureAwait(true);
 
                 if (Disposing || IsDisposed)
                     return;
 
-                if (_orderHistory.Count > 0 && _orderHistory.Count != historyCountBeforeBootstrap)
+                if (!forceReload && _orderHistory.Count > 0)
                 {
-                    Logger.Warn("UI-BOOTSTRAP | apply-skipped | reason=history-mutated-during-bootstrap");
+                    Logger.Warn("UI-BOOTSTRAP | apply-skipped | reason=history-already-present");
                     _ordersDataBootstrapCompleted = true;
                     SetBottomStatus($"Заказов загружено: {_orderHistory.Count}");
                     return;
@@ -690,6 +694,8 @@ namespace Replica
                 _jsonHistoryFile = historyFilePath;
                 _orderHistory.Clear();
                 _orderHistory.AddRange(result.loadedOrders);
+                if (result.loadedFromCache)
+                    SetBottomStatus("Сервер недоступен: показаны кэшированные данные (только чтение).");
 
                 if (result.postLoad.Changed)
                 {
@@ -913,10 +919,12 @@ namespace Replica
         {
             if (!ShouldUseLanRunApi()
                 && _serverHardLockActive
+                && _serverHardLockManagedByLan
                 && ((_serverHardLockOverlayPanelMain?.Visible ?? false)
                     || (_serverHardLockOverlayPanelQueue?.Visible ?? false)))
             {
                 _serverHardLockActive = false;
+                _serverHardLockManagedByLan = false;
                 if (_serverHardLockOverlayPanelMain != null)
                     _serverHardLockOverlayPanelMain.Visible = false;
                 if (_serverHardLockOverlayPanelQueue != null)

@@ -182,8 +182,12 @@ namespace Replica
             PropertyNameCaseInsensitive = true
         };
 
-        private bool TryLoadHistoryFromConfiguredRepository(out List<OrderData> orders)
+        private bool TryLoadHistoryFromConfiguredRepository(
+            out List<OrderData> orders,
+            bool allowReadOnlyCacheFallback,
+            out bool loadedFromCache)
         {
+            loadedFromCache = false;
             if (ShouldUseLanRunApi())
             {
                 if (TryLoadHistoryFromLanApi(out orders, out var apiError))
@@ -194,13 +198,16 @@ namespace Replica
                 }
 
                 Logger.Warn($"HISTORY | lan-api-load-failed | {apiError}");
-                if (TryLoadHistoryFromLocalCache(out orders, out var cacheError))
+                var cacheError = string.Empty;
+                if (allowReadOnlyCacheFallback
+                    && TryLoadHistoryFromLocalCache(out orders, out cacheError))
                 {
-                    Logger.Warn("HISTORY | lan-api-load-fallback | source=local-cache");
+                    loadedFromCache = true;
+                    Logger.Warn("HISTORY | lan-api-load-fallback | source=local-cache | mode=read-only");
                     return true;
                 }
 
-                if (!string.IsNullOrWhiteSpace(cacheError))
+                if (allowReadOnlyCacheFallback && !string.IsNullOrWhiteSpace(cacheError))
                     Logger.Warn($"HISTORY | local-cache-load-failed | {cacheError}");
 
                 orders = [];
@@ -484,8 +491,16 @@ namespace Replica
             _orderHistory.Clear();
             _jsonHistoryFile = StoragePaths.ResolveExistingFilePath(_jsonHistoryFile, "history.json");
 
-            if (TryLoadHistoryFromConfiguredRepository(out var loadedOrders) && loadedOrders.Count > 0)
+            if (TryLoadHistoryFromConfiguredRepository(
+                    out var loadedOrders,
+                    allowReadOnlyCacheFallback: true,
+                    out var loadedFromCache)
+                && loadedOrders.Count > 0)
+            {
                 _orderHistory.AddRange(loadedOrders);
+                if (loadedFromCache)
+                    Logger.Warn("HISTORY | load-startup | source=local-cache | mode=read-only");
+            }
 
             var postLoad = _orderApplicationService.ApplyHistoryPostLoad(
                 _orderHistory,
@@ -1554,7 +1569,10 @@ namespace Replica
             if (_ordersStorageBackend != OrdersStorageMode.LanPostgreSql)
                 return true;
 
-            if (!TryLoadHistoryFromConfiguredRepository(out var reloadedOrders))
+            if (!TryLoadHistoryFromConfiguredRepository(
+                    out var reloadedOrders,
+                    allowReadOnlyCacheFallback: false,
+                    out _))
             {
                 Logger.Warn($"HISTORY | snapshot-refresh-failed | reason={reason} | backend={_orderApplicationService.OrdersRepositoryBackendName}");
                 return false;

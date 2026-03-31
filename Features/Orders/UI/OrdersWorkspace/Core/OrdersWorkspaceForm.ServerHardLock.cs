@@ -91,9 +91,15 @@ namespace Replica
         private void ApplyServerHardLockState(bool shouldLock, string details)
         {
             EnsureServerHardLockOverlays();
+            var lanModeActive = ShouldUseLanRunApi();
 
-            if (!ShouldUseLanRunApi())
+            if (!lanModeActive)
                 shouldLock = false;
+
+            if (lanModeActive)
+                _serverHardLockManagedByLan = shouldLock;
+            else if (!shouldLock)
+                _serverHardLockManagedByLan = false;
 
             var normalizedDetails = string.IsNullOrWhiteSpace(details)
                 ? "\u041e\u043f\u0435\u0440\u0430\u0446\u0438\u0438 \u0432\u0440\u0435\u043c\u0435\u043d\u043d\u043e \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u043d\u044b."

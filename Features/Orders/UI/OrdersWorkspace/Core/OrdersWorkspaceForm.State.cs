@@ -137,6 +137,7 @@ namespace Replica
         private ToolStripItem? _trayStatusPopupTargetItem;
         private string _trayStatusPopupContent = string.Empty;
         private bool _serverHardLockActive;
+        private bool _serverHardLockManagedByLan;
         private DateTime _serverHardLockLastDialogUtc = DateTime.MinValue;
         private Panel? _serverHardLockOverlayPanelMain;
         private Panel? _serverHardLockOverlayPanelQueue;
