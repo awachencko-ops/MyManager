@@ -248,11 +248,15 @@ namespace Replica
         private CheckedListBox? _statusFilterCheckedList;
         private bool _isUpdatingStatusFilterList;
         private bool _suppressNextStatusFilterLabelClick;
+        private PictureBox? _statusFilterGlyph;
+        private Label? _statusFilterLabel;
         private ToolStripDropDown? _orderNoFilterDropDown;
         private TextBox? _orderNoFilterTextBox;
         private Button? _orderNoFilterClearButton;
         private Button? _orderNoFilterApplyButton;
         private bool _suppressNextOrderNoLabelClick;
+        private PictureBox? _orderNoFilterGlyph;
+        private Label? _orderNoFilterLabel;
         private PictureBox? _userFilterGlyph;
         private Label? _userFilterLabel;
         private ToolStripDropDown? _userFilterDropDown;

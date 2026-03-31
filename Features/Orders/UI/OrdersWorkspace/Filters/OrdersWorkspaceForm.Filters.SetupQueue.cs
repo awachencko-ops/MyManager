@@ -16,15 +16,85 @@ namespace Replica
     {
         private void InitializeStatusFilter()
         {
-            cbStatus.Click += LblFStatus_Click;
-            cbStatus.DropDown += (_, _) => ShowStatusFilterDropDown();
+            var insertIndex = flpFilters.Controls.IndexOf(cbStatus);
+            if (insertIndex >= 0)
+                flpFilters.Controls.Remove(cbStatus);
+
+            cbStatus.Visible = false;
+
+            _statusFilterGlyph = new PictureBox
+            {
+                Cursor = Cursors.Hand,
+                Margin = new Padding(3, 0, 0, 0),
+                Name = "picFStatusGlyph",
+                Size = new Size(24, 33),
+                SizeMode = PictureBoxSizeMode.CenterImage
+            };
+
+            _statusFilterLabel = new Label
+            {
+                Cursor = Cursors.Hand,
+                Margin = new Padding(0, 0, 3, 0),
+                Name = "lblFStatus",
+                Size = new Size(200, 33),
+                Text = StatusFilterLabelText,
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+
+            _statusFilterGlyph.Click += LblFStatus_Click;
+            _statusFilterLabel.Click += LblFStatus_Click;
+
+            flpFilters.Controls.Add(_statusFilterGlyph);
+            flpFilters.Controls.Add(_statusFilterLabel);
+            if (insertIndex >= 0)
+            {
+                flpFilters.Controls.SetChildIndex(_statusFilterGlyph, insertIndex);
+                flpFilters.Controls.SetChildIndex(_statusFilterLabel, insertIndex + 1);
+            }
+
+            ApplyStatusFilterChevronIcon();
             UpdateStatusFilterCaption();
         }
 
         private void InitializeOrderNoSearch()
         {
-            cbOrderNo.Click += LblFOrderNo_Click;
-            cbOrderNo.DropDown += (_, _) => ShowOrderNoFilterDropDown();
+            var insertIndex = flpFilters.Controls.IndexOf(cbOrderNo);
+            if (insertIndex >= 0)
+                flpFilters.Controls.Remove(cbOrderNo);
+
+            cbOrderNo.Visible = false;
+
+            _orderNoFilterGlyph = new PictureBox
+            {
+                Cursor = Cursors.Hand,
+                Margin = new Padding(3, 0, 0, 0),
+                Name = "picFOrderNoGlyph",
+                Size = new Size(24, 33),
+                SizeMode = PictureBoxSizeMode.CenterImage
+            };
+
+            _orderNoFilterLabel = new Label
+            {
+                Cursor = Cursors.Hand,
+                Margin = new Padding(0, 0, 3, 0),
+                Name = "lblFOrderNo",
+                Size = new Size(180, 33),
+                Text = OrderNoSearchLabelText,
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+
+            _orderNoFilterGlyph.Click += LblFOrderNo_Click;
+            _orderNoFilterLabel.Click += LblFOrderNo_Click;
+
+            flpFilters.Controls.Add(_orderNoFilterGlyph);
+            flpFilters.Controls.Add(_orderNoFilterLabel);
+            if (insertIndex >= 0)
+            {
+                flpFilters.Controls.SetChildIndex(_orderNoFilterGlyph, insertIndex);
+                flpFilters.Controls.SetChildIndex(_orderNoFilterLabel, insertIndex + 1);
+            }
+
+            ApplyOrderNoSearchIcon();
             UpdateOrderNoSearchCaption();
         }
 
@@ -149,6 +219,30 @@ namespace Replica
 
             ApplyReceivedDateFilterChevronIcon();
             UpdateReceivedDateFilterCaption();
+        }
+
+        private void ApplyStatusFilterChevronIcon()
+        {
+            if (_statusFilterGlyph == null || _statusFilterLabel == null)
+                return;
+
+            using var icon = CreateDropDownGlyphIcon(24);
+            _statusFilterGlyph.Image?.Dispose();
+            _statusFilterGlyph.Image = (Image)icon.Clone();
+            _statusFilterLabel.TextAlign = ContentAlignment.MiddleLeft;
+            _statusFilterLabel.Padding = new Padding(0, 3, 0, 0);
+        }
+
+        private void ApplyOrderNoSearchIcon()
+        {
+            if (_orderNoFilterGlyph == null || _orderNoFilterLabel == null)
+                return;
+
+            using var icon = CreateDropDownGlyphIcon(24);
+            _orderNoFilterGlyph.Image?.Dispose();
+            _orderNoFilterGlyph.Image = (Image)icon.Clone();
+            _orderNoFilterLabel.TextAlign = ContentAlignment.MiddleLeft;
+            _orderNoFilterLabel.Padding = new Padding(0, 3, 0, 0);
         }
 
         private void ApplyUserFilterChevronIcon()

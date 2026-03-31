@@ -19,10 +19,10 @@ namespace Replica
             EnsureStatusFilterDropDown();
             RefreshStatusFilterChecklist();
 
-            if (_statusFilterDropDown == null)
+            if (_statusFilterDropDown == null || _statusFilterGlyph == null)
                 return;
 
-            _statusFilterDropDown.Show(cbStatus, new Point(0, cbStatus.Height));
+            _statusFilterDropDown.Show(_statusFilterGlyph, new Point(0, _statusFilterGlyph.Height));
         }
 
         private void EnsureStatusFilterDropDown()
@@ -35,10 +35,10 @@ namespace Replica
                 CheckOnClick = true,
                 BorderStyle = BorderStyle.None,
                 IntegralHeight = false,
-                Font = cbStatus.Font,
+                Font = _statusFilterLabel?.Font ?? Font,
                 BackColor = Color.White,
                 ForeColor = Color.FromArgb(47, 53, 72),
-                Width = Math.Max(cbStatus.Width + 140, 280),
+                Width = Math.Max((_statusFilterLabel?.Width ?? 200) + 140, 280),
                 Height = 240
             };
             _statusFilterCheckedList.ItemCheck += StatusFilterCheckedList_ItemCheck;
@@ -65,8 +65,12 @@ namespace Replica
             if (e.CloseReason != ToolStripDropDownCloseReason.AppClicked)
                 return;
 
-            var comboRect = cbStatus.RectangleToScreen(cbStatus.ClientRectangle);
-            if (comboRect.Contains(Cursor.Position))
+            if (_statusFilterLabel == null || _statusFilterGlyph == null)
+                return;
+
+            var labelRect = _statusFilterLabel.RectangleToScreen(_statusFilterLabel.ClientRectangle);
+            var glyphRect = _statusFilterGlyph.RectangleToScreen(_statusFilterGlyph.ClientRectangle);
+            if (labelRect.Contains(Cursor.Position) || glyphRect.Contains(Cursor.Position))
                 _suppressNextStatusFilterLabelClick = true;
         }
 
@@ -121,11 +125,25 @@ namespace Replica
 
         private void UpdateStatusFilterCaption()
         {
+            if (_statusFilterLabel == null)
+                return;
+
+            if (string.Equals(_statusFilterLabel.Text, StatusFilterLabelText, StringComparison.Ordinal))
+                return;
+
+            _statusFilterLabel.Text = StatusFilterLabelText;
             AdjustFilterLabelWidths();
         }
 
         private void UpdateOrderNoSearchCaption()
         {
+            if (_orderNoFilterLabel == null)
+                return;
+
+            if (string.Equals(_orderNoFilterLabel.Text, OrderNoSearchLabelText, StringComparison.Ordinal))
+                return;
+
+            _orderNoFilterLabel.Text = OrderNoSearchLabelText;
             AdjustFilterLabelWidths();
         }
 
@@ -167,8 +185,8 @@ namespace Replica
 
         private void AdjustFilterLabelWidths()
         {
-            SetFilterLabelWidth(cbStatus, StatusFilterLabelText, 200);
-            SetFilterLabelWidth(cbOrderNo, OrderNoSearchLabelText, 180);
+            SetFilterLabelWidth(_statusFilterLabel, StatusFilterLabelText, 200);
+            SetFilterLabelWidth(_orderNoFilterLabel, OrderNoSearchLabelText, 180);
             SetFilterLabelWidth(_userFilterLabel, UserFilterLabelText, 150);
             SetFilterLabelWidth(_createdFilterLabel, CreatedDateFilterLabelText, 190);
             SetFilterLabelWidth(_receivedFilterLabel, ReceivedDateFilterLabelText, 190);

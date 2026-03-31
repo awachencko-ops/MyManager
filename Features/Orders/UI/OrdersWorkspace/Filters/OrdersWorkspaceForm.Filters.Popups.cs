@@ -104,10 +104,10 @@ namespace Replica
             EnsureOrderNoFilterDropDown();
             SyncOrderNoFilterPopupState();
 
-            if (_orderNoFilterDropDown == null)
+            if (_orderNoFilterDropDown == null || _orderNoFilterGlyph == null)
                 return;
 
-            _orderNoFilterDropDown.Show(cbOrderNo, new Point(0, cbOrderNo.Height));
+            _orderNoFilterDropDown.Show(_orderNoFilterGlyph, new Point(0, _orderNoFilterGlyph.Height));
             _orderNoFilterTextBox?.Focus();
             _orderNoFilterTextBox?.SelectAll();
         }
@@ -118,7 +118,7 @@ namespace Replica
                 _orderNoFilterTextBox != null)
                 return;
 
-            var popupWidth = Math.Max(cbOrderNo.Width + 100, 280);
+            var popupWidth = Math.Max((_orderNoFilterLabel?.Width ?? 180) + 100, 280);
             var popupHeight = 96;
 
             var panel = new Panel
@@ -134,7 +134,7 @@ namespace Replica
                 BorderStyle = BorderStyle.None,
                 Location = new Point(16, 16),
                 Size = new Size(popupWidth - 32, 24),
-                Font = cbOrderNo.Font
+                Font = _orderNoFilterLabel?.Font ?? Font
             };
             _orderNoFilterTextBox.TextChanged += (_, _) => UpdateOrderNoFilterActionButtonsState();
             _orderNoFilterTextBox.KeyDown += (_, e) =>
@@ -263,8 +263,12 @@ namespace Replica
             if (e.CloseReason != ToolStripDropDownCloseReason.AppClicked)
                 return;
 
-            var comboRect = cbOrderNo.RectangleToScreen(cbOrderNo.ClientRectangle);
-            if (comboRect.Contains(Cursor.Position))
+            if (_orderNoFilterLabel == null || _orderNoFilterGlyph == null)
+                return;
+
+            var labelRect = _orderNoFilterLabel.RectangleToScreen(_orderNoFilterLabel.ClientRectangle);
+            var glyphRect = _orderNoFilterGlyph.RectangleToScreen(_orderNoFilterGlyph.ClientRectangle);
+            if (labelRect.Contains(Cursor.Position) || glyphRect.Contains(Cursor.Position))
                 _suppressNextOrderNoLabelClick = true;
         }
 
