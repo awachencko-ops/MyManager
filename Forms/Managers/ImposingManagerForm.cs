@@ -26,15 +26,8 @@ namespace Replica
             // Настройка колонок таблицы
             if (dataGridView1.Columns.Count > 0)
             {
-                foreach (DataGridViewColumn col in dataGridView1.Columns)
-                    if (col.Name != "Name") col.Visible = false;
-
-                if (dataGridView1.Columns["Name"] != null)
-                {
-                    dataGridView1.Columns["Name"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
-                    dataGridView1.Columns["Name"].HeaderText = "Зарегистрированные Imposing сценарии";
-                }
-                dataGridView1.RowHeadersVisible = false;
+                GridStyleHelper.HideColumnsExcept(dataGridView1, "Name");
+                GridStyleHelper.ApplyTextColumnStyle(dataGridView1.Columns["Name"], "Зарегистрированные Imposing сценарии", fill: true);
             }
 
             dataGridView1.SelectionChanged += DataGridView1_SelectionChanged;

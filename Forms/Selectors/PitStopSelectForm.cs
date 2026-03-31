@@ -88,13 +88,12 @@ namespace Replica
 
         private void BuildGrid()
         {
-            grid.AutoGenerateColumns = false;
-            grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            grid.ReadOnly = true;
-            grid.RowHeadersVisible = false;
+            GridStyleHelper.ConfigureReadOnlyGrid(grid);
             grid.Columns.Clear();
-            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Name", HeaderText = "Action", AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill });
-            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "BaseFolder", HeaderText = "Base Folder", AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill });
+            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Name" });
+            grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "BaseFolder" });
+            GridStyleHelper.ApplyTextColumnStyle(grid.Columns[0], "Action", fill: true);
+            GridStyleHelper.ApplyTextColumnStyle(grid.Columns[1], "Base Folder", fill: true);
         }
     }
 }

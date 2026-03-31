@@ -1035,49 +1035,20 @@ namespace Replica
 
         private void InitializeOrdersGridVisuals()
         {
-            const int horizontalPadding = 10;
-            var unifiedPadding = new Padding(horizontalPadding, 0, horizontalPadding, 0);
-            var rightEdgeSafePadding = horizontalPadding + SystemInformation.VerticalScrollBarWidth + 4;
-
-            dgvJobs.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            dgvJobs.MultiSelect = true;
-            dgvJobs.AllowUserToResizeRows = false;
-            dgvJobs.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None;
-            dgvJobs.RowTemplate.Resizable = DataGridViewTriState.False;
-            dgvJobs.RowTemplate.Height = 42;
-            dgvJobs.AllowDrop = true;
-            dgvJobs.CellBorderStyle = DataGridViewCellBorderStyle.Single;
-            dgvJobs.GridColor = OrdersGridLineColor;
-            dgvJobs.DefaultCellStyle.BackColor = OrdersRowBaseBackColor;
-            dgvJobs.RowsDefaultCellStyle.BackColor = OrdersRowBaseBackColor;
-            dgvJobs.AlternatingRowsDefaultCellStyle.BackColor = OrdersRowZebraBackColor;
-            dgvJobs.DefaultCellStyle.SelectionBackColor = OrdersRowSelectedBackColor;
-            dgvJobs.RowsDefaultCellStyle.SelectionBackColor = OrdersRowSelectedBackColor;
-            dgvJobs.AlternatingRowsDefaultCellStyle.SelectionBackColor = OrdersRowSelectedBackColor;
-            dgvJobs.DefaultCellStyle.SelectionForeColor = Color.Black;
-            dgvJobs.RowsDefaultCellStyle.SelectionForeColor = Color.Black;
-            dgvJobs.AlternatingRowsDefaultCellStyle.SelectionForeColor = Color.Black;
-            dgvJobs.DefaultCellStyle.Padding = unifiedPadding;
-            dgvJobs.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
-            dgvJobs.DefaultCellStyle.WrapMode = DataGridViewTriState.False;
-            dgvJobs.EnableHeadersVisualStyles = true;
-            dgvJobs.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-            dgvJobs.ColumnHeadersHeight = dgvJobs.RowTemplate.Height;
-            dgvJobs.ColumnHeadersDefaultCellStyle.BackColor = Color.White;
-            dgvJobs.ColumnHeadersDefaultCellStyle.ForeColor = Color.Black;
-            dgvJobs.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.White;
-            dgvJobs.ColumnHeadersDefaultCellStyle.SelectionForeColor = Color.Black;
-            dgvJobs.ColumnHeadersDefaultCellStyle.Padding = unifiedPadding;
-            dgvJobs.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
-            dgvJobs.ColumnHeadersDefaultCellStyle.WrapMode = DataGridViewTriState.False;
-            ApplyLeftAlignedColumnStyle(colStatus, unifiedPadding.Left, unifiedPadding.Right);
-            ApplyRightAlignedNumericColumnStyle(colOrderNumber, unifiedPadding.Left, unifiedPadding.Right);
-            ApplyLeftAlignedColumnStyle(colPrep, unifiedPadding.Left, unifiedPadding.Right);
-            ApplyLeftAlignedColumnStyle(colPitstop, unifiedPadding.Left, unifiedPadding.Right);
-            ApplyLeftAlignedColumnStyle(colHotimposing, unifiedPadding.Left, unifiedPadding.Right);
-            ApplyLeftAlignedColumnStyle(colPrint, unifiedPadding.Left, unifiedPadding.Right);
-            ApplyRightAlignedNumericColumnStyle(colReceived, unifiedPadding.Left, unifiedPadding.Right);
-            ApplyRightAlignedNumericColumnStyle(colCreated, unifiedPadding.Left, rightEdgeSafePadding);
+            OrdersWorkspaceGridStyle.ConfigureJobsGrid(
+                dgvJobs,
+                OrdersRowBaseBackColor,
+                OrdersRowZebraBackColor,
+                OrdersRowSelectedBackColor,
+                OrdersGridLineColor,
+                colStatus,
+                colOrderNumber,
+                colPrep,
+                colPitstop,
+                colHotimposing,
+                colPrint,
+                colReceived,
+                colCreated);
 
             dgvJobs.CellPainting += DgvJobs_CellPainting;
             dgvJobs.CellFormatting += DgvJobs_CellFormatting;
@@ -1093,28 +1064,6 @@ namespace Replica
             dgvJobs.DragOver += DgvJobs_DragOver;
             dgvJobs.DragDrop += DgvJobs_DragDrop;
 
-        }
-
-        private static void ApplyRightAlignedNumericColumnStyle(DataGridViewColumn? column, int leftPadding, int rightPadding)
-        {
-            if (column == null)
-                return;
-
-            column.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
-            column.DefaultCellStyle.Padding = new Padding(leftPadding, 0, rightPadding, 0);
-            column.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleRight;
-            column.HeaderCell.Style.Padding = new Padding(leftPadding, 0, rightPadding, 0);
-        }
-
-        private static void ApplyLeftAlignedColumnStyle(DataGridViewColumn? column, int leftPadding, int rightPadding)
-        {
-            if (column == null)
-                return;
-
-            column.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
-            column.DefaultCellStyle.Padding = new Padding(leftPadding, 0, rightPadding, 0);
-            column.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleLeft;
-            column.HeaderCell.Style.Padding = new Padding(leftPadding, 0, rightPadding, 0);
         }
 
         private void InitializeActionButtonsState()

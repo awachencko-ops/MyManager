@@ -23,14 +23,8 @@ namespace Replica
 
             if (gridActions.Columns.Count > 0)
             {
-                foreach (DataGridViewColumn col in gridActions.Columns)
-                    if (col.Name != "Name") col.Visible = false;
-
-                if (gridActions.Columns["Name"] != null)
-                {
-                    gridActions.Columns["Name"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
-                    gridActions.Columns["Name"].HeaderText = "Зарегистрированные PitStop Actions";
-                }
+                GridStyleHelper.HideColumnsExcept(gridActions, "Name");
+                GridStyleHelper.ApplyTextColumnStyle(gridActions.Columns["Name"], "Зарегистрированные PitStop Actions", fill: true);
             }
 
             gridActions.SelectionChanged += GridActions_SelectionChanged;

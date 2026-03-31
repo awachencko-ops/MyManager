@@ -133,20 +133,15 @@ namespace Replica
 
         private void BuildGrid()
         {
-            grid.AutoGenerateColumns = false;
-            grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            grid.ReadOnly = true;
-            grid.RowHeadersVisible = false;
-            grid.AllowUserToAddRows = false;
+            GridStyleHelper.ConfigureReadOnlyGrid(grid);
             grid.Columns.Clear();
 
             // Оставляем только одну колонку с названием
             grid.Columns.Add(new DataGridViewTextBoxColumn
             {
-                DataPropertyName = "Name",
-                HeaderText = "Сценарий (Sequence)",
-                AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
+                DataPropertyName = "Name"
             });
+            GridStyleHelper.ApplyTextColumnStyle(grid.Columns[0], "Сценарий (Sequence)", fill: true);
         }
     }
 }
