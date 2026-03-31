@@ -39,6 +39,15 @@ internal static class GridStyleHelper
             column.Visible = visibleNames.Contains(column.Name);
     }
 
+    internal static void DisableSorting(DataGridView grid)
+    {
+        if (grid == null)
+            return;
+
+        foreach (DataGridViewColumn column in grid.Columns)
+            column.SortMode = DataGridViewColumnSortMode.NotSortable;
+    }
+
     internal static void ApplyTextColumnStyle(
         DataGridViewColumn? column,
         string? headerText = null,
@@ -77,7 +86,6 @@ internal static class GridStyleHelper
             column.AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
 
         var padding = new Padding(leftPadding, 0, rightPadding, 0);
-        column.SortMode = DataGridViewColumnSortMode.NotSortable;
         column.DefaultCellStyle.Alignment = alignment;
         column.DefaultCellStyle.Padding = padding;
         column.HeaderCell.Style.Alignment = alignment;

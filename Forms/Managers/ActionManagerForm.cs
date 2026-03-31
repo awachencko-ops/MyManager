@@ -25,6 +25,7 @@ namespace Replica
             {
                 GridStyleHelper.HideColumnsExcept(gridActions, "Name");
                 GridStyleHelper.ApplyTextColumnStyle(gridActions.Columns["Name"], "Зарегистрированные PitStop Actions", fill: true);
+                GridStyleHelper.DisableSorting(gridActions);
             }
 
             gridActions.SelectionChanged += GridActions_SelectionChanged;

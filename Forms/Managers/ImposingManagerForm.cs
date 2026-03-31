@@ -28,6 +28,7 @@ namespace Replica
             {
                 GridStyleHelper.HideColumnsExcept(dataGridView1, "Name");
                 GridStyleHelper.ApplyTextColumnStyle(dataGridView1.Columns["Name"], "Зарегистрированные Imposing сценарии", fill: true);
+                GridStyleHelper.DisableSorting(dataGridView1);
             }
 
             dataGridView1.SelectionChanged += DataGridView1_SelectionChanged;

@@ -142,6 +142,7 @@ namespace Replica
                 DataPropertyName = "Name"
             });
             GridStyleHelper.ApplyTextColumnStyle(grid.Columns[0], "Сценарий (Sequence)", fill: true);
+            GridStyleHelper.DisableSorting(grid);
         }
     }
 }

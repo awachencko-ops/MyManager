@@ -55,7 +55,7 @@ internal static class OrdersWorkspaceGridStyle
         grid.DefaultCellStyle.Padding = cellPadding;
         grid.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
         grid.DefaultCellStyle.WrapMode = DataGridViewTriState.False;
-        grid.EnableHeadersVisualStyles = true;
+        grid.EnableHeadersVisualStyles = false;
         grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
         grid.ColumnHeadersHeight = RowHeight;
         grid.ColumnHeadersDefaultCellStyle.BackColor = Color.White;
@@ -66,6 +66,7 @@ internal static class OrdersWorkspaceGridStyle
         grid.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
         grid.ColumnHeadersDefaultCellStyle.WrapMode = DataGridViewTriState.False;
 
+        GridStyleHelper.DisableSorting(grid);
         GridStyleHelper.ApplyTextColumnStyle(statusColumn);
         GridStyleHelper.ApplyTextColumnStyle(orderNumberColumn);
         GridStyleHelper.ApplyTextColumnStyle(prepColumn);

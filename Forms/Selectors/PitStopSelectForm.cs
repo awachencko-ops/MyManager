@@ -94,6 +94,7 @@ namespace Replica
             grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "BaseFolder" });
             GridStyleHelper.ApplyTextColumnStyle(grid.Columns[0], "Action", fill: true);
             GridStyleHelper.ApplyTextColumnStyle(grid.Columns[1], "Base Folder", fill: true);
+            GridStyleHelper.DisableSorting(grid);
         }
     }
 }
