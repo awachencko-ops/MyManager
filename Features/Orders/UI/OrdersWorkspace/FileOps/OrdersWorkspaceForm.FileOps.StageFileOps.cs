@@ -367,6 +367,7 @@ namespace Replica
                 statusUpdate.Reason,
                 persistHistory: false,
                 rebuildGrid: false);
+            TrySyncLanSingleOrderItemFromOrder(order, $"remove-order-file-stage-{stage}");
             AppendOrderOperationLog(
                 order,
                 OrderOperationNames.RemoveStageFile,
@@ -540,6 +541,7 @@ namespace Replica
                 statusUpdate.Reason,
                 persistHistory: false,
                 rebuildGrid: false);
+            TrySyncLanSingleOrderItemFromOrder(order, $"rename-order-file-stage-{stage}");
             AppendOrderOperationLog(
                 order,
                 OrderOperationNames.RenameStageFile,
@@ -661,6 +663,19 @@ namespace Replica
                 statusUpdate.Reason,
                 persistHistory: false,
                 rebuildGrid: false);
+            TrySyncLanSingleOrderItemFromOrder(order, $"update-order-file-stage-{stage}");
+        }
+
+        private void TrySyncLanSingleOrderItemFromOrder(OrderData order, string reason)
+        {
+            if (!ShouldUseLanRunApi() || order == null || OrderTopologyService.IsMultiOrder(order))
+                return;
+
+            var primaryItem = GetPrimaryItem(order);
+            if (primaryItem == null || string.IsNullOrWhiteSpace(primaryItem.ItemId))
+                return;
+
+            TrySyncLanOrderItemUpsert(order, primaryItem, reason);
         }
 
         private void UpdateItemFilePath(OrderData order, OrderFileItem item, int stage, string path)

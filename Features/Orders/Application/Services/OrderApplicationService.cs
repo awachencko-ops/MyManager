@@ -468,7 +468,7 @@ public sealed class OrderApplicationService : IOrderApplicationService
             lanApiBaseUrl,
             actor,
             normalizeUserName,
-            cancellationToken);
+            cancellationToken).ConfigureAwait(false);
 
         if (writeResult.IsSuccess && writeResult.Order != null)
         {
@@ -685,7 +685,7 @@ public sealed class OrderApplicationService : IOrderApplicationService
                 source: transition.Source,
                 reason: transition.Reason,
                 orderDisplayIdResolver,
-                cancellationToken);
+                cancellationToken).ConfigureAwait(false);
 
             if (persistOutcome.Logs.Count > 0)
                 logs.AddRange(persistOutcome.Logs);
@@ -955,7 +955,7 @@ public sealed class OrderApplicationService : IOrderApplicationService
                 order,
                 lanApiBaseUrl,
                 actor,
-                cancellationToken);
+                cancellationToken).ConfigureAwait(false);
 
             if (reorderResult.IsSuccess && reorderResult.Order != null)
             {
@@ -994,7 +994,7 @@ public sealed class OrderApplicationService : IOrderApplicationService
             item,
             lanApiBaseUrl,
             actor,
-            cancellationToken);
+            cancellationToken).ConfigureAwait(false);
 
         if (upsertResult.IsSuccess && upsertResult.Order != null)
         {
@@ -1035,7 +1035,7 @@ public sealed class OrderApplicationService : IOrderApplicationService
             item,
             lanApiBaseUrl,
             actor,
-            cancellationToken);
+            cancellationToken).ConfigureAwait(false);
 
         if (deleteResult.IsSuccess && deleteResult.Order != null)
         {

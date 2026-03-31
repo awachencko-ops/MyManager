@@ -31,7 +31,7 @@ public sealed class LanOrderWriteCommandService
             lanApiBaseUrl,
             request,
             actor,
-            cancellationToken);
+            cancellationToken).ConfigureAwait(false);
 
         return ToCommandResult(apiResult);
     }
@@ -56,7 +56,7 @@ public sealed class LanOrderWriteCommandService
             currentOrder.InternalId,
             request,
             actor,
-            cancellationToken);
+            cancellationToken).ConfigureAwait(false);
         if (apiResult.IsConflict && apiResult.CurrentVersion > 0 && apiResult.CurrentVersion != request.ExpectedVersion)
         {
             request.ExpectedVersion = apiResult.CurrentVersion;
@@ -65,7 +65,7 @@ public sealed class LanOrderWriteCommandService
                 currentOrder.InternalId,
                 request,
                 actor,
-                cancellationToken);
+                cancellationToken).ConfigureAwait(false);
         }
 
         return ToCommandResult(apiResult);
@@ -92,7 +92,7 @@ public sealed class LanOrderWriteCommandService
             order.InternalId,
             request,
             actor,
-            cancellationToken);
+            cancellationToken).ConfigureAwait(false);
         if (apiResult.IsConflict && apiResult.CurrentVersion > 0 && apiResult.CurrentVersion != request.ExpectedVersion)
         {
             request.ExpectedVersion = apiResult.CurrentVersion;
@@ -101,7 +101,7 @@ public sealed class LanOrderWriteCommandService
                 order.InternalId,
                 request,
                 actor,
-                cancellationToken);
+                cancellationToken).ConfigureAwait(false);
         }
 
         return ToCommandResult(apiResult);
@@ -137,7 +137,7 @@ public sealed class LanOrderWriteCommandService
             order.InternalId,
             request,
             actor,
-            cancellationToken);
+            cancellationToken).ConfigureAwait(false);
 
         return ToCommandResult(apiResult);
     }
@@ -166,7 +166,7 @@ public sealed class LanOrderWriteCommandService
                 item.ItemId,
                 updateRequest,
                 actor,
-                cancellationToken);
+                cancellationToken).ConfigureAwait(false);
         }
         else
         {
@@ -176,7 +176,7 @@ public sealed class LanOrderWriteCommandService
                 order.InternalId,
                 addRequest,
                 actor,
-                cancellationToken);
+                cancellationToken).ConfigureAwait(false);
         }
 
         return ToCommandResult(apiResult);
@@ -203,7 +203,7 @@ public sealed class LanOrderWriteCommandService
             item.ItemId,
             request,
             actor,
-            cancellationToken);
+            cancellationToken).ConfigureAwait(false);
 
         return ToCommandResult(apiResult);
     }
