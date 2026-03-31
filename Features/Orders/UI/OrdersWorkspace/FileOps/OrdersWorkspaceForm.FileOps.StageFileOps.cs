@@ -671,11 +671,61 @@ namespace Replica
             if (!ShouldUseLanRunApi() || order == null || OrderTopologyService.IsMultiOrder(order))
                 return;
 
-            var primaryItem = GetPrimaryItem(order);
+            var primaryItem = EnsureSingleOrderPrimaryItemForLanSync(order);
             if (primaryItem == null || string.IsNullOrWhiteSpace(primaryItem.ItemId))
                 return;
 
             TrySyncLanOrderItemUpsert(order, primaryItem, reason);
+        }
+
+        private OrderFileItem? EnsureSingleOrderPrimaryItemForLanSync(OrderData order)
+        {
+            var primaryItem = GetPrimaryItem(order);
+            if (primaryItem != null && !string.IsNullOrWhiteSpace(primaryItem.ItemId))
+                return primaryItem;
+
+            var hasAnyOrderFiles =
+                !string.IsNullOrWhiteSpace(order.SourcePath)
+                || !string.IsNullOrWhiteSpace(order.PreparedPath)
+                || !string.IsNullOrWhiteSpace(order.PrintPath);
+            if (!hasAnyOrderFiles)
+                return null;
+
+            order.Items ??= new List<OrderFileItem>();
+            if (order.Items.Count > 0)
+                return GetPrimaryItem(order);
+
+            var normalizedOrderStatus = NormalizeStatus(order.Status);
+            if (string.IsNullOrWhiteSpace(normalizedOrderStatus))
+                normalizedOrderStatus = ResolveWorkflowStatus(order.SourcePath, order.PreparedPath, order.PrintPath);
+
+            var bootstrapItem = new OrderFileItem
+            {
+                ItemId = Guid.NewGuid().ToString("N"),
+                StorageVersion = 0,
+                SequenceNo = 0,
+                ClientFileLabel = string.IsNullOrWhiteSpace(order.Id) ? string.Empty : order.Id.Trim(),
+                Variant = string.Empty,
+                SourcePath = order.SourcePath ?? string.Empty,
+                SourceFileSizeBytes = order.SourceFileSizeBytes,
+                SourceFileHash = order.SourceFileHash ?? string.Empty,
+                PreparedPath = order.PreparedPath ?? string.Empty,
+                PreparedFileSizeBytes = order.PreparedFileSizeBytes,
+                PreparedFileHash = order.PreparedFileHash ?? string.Empty,
+                PrintPath = order.PrintPath ?? string.Empty,
+                PrintFileSizeBytes = order.PrintFileSizeBytes,
+                PrintFileHash = order.PrintFileHash ?? string.Empty,
+                FileStatus = normalizedOrderStatus,
+                LastReason = order.LastStatusReason ?? string.Empty,
+                UpdatedAt = DateTime.Now,
+                PitStopAction = NormalizeAction(order.PitStopAction),
+                ImposingAction = NormalizeAction(order.ImposingAction)
+            };
+
+            order.Items.Add(bootstrapItem);
+            Logger.Info(
+                $"LAN-API | single-order-item-bootstrap | order={GetOrderDisplayId(order)} | reason=missing-primary-item | src={Path.GetFileName(bootstrapItem.SourcePath)} | prep={Path.GetFileName(bootstrapItem.PreparedPath)} | print={Path.GetFileName(bootstrapItem.PrintPath)}");
+            return bootstrapItem;
         }
 
         private void UpdateItemFilePath(OrderData order, OrderFileItem item, int stage, string path)
