@@ -682,7 +682,10 @@ namespace Replica
         {
             var primaryItem = GetPrimaryItem(order);
             if (primaryItem != null && !string.IsNullOrWhiteSpace(primaryItem.ItemId))
+            {
+                MirrorSingleOrderOrderFieldsToPrimaryItem(order, primaryItem);
                 return primaryItem;
+            }
 
             var hasAnyOrderFiles =
                 !string.IsNullOrWhiteSpace(order.SourcePath)
@@ -725,7 +728,31 @@ namespace Replica
             order.Items.Add(bootstrapItem);
             Logger.Info(
                 $"LAN-API | single-order-item-bootstrap | order={GetOrderDisplayId(order)} | reason=missing-primary-item | src={Path.GetFileName(bootstrapItem.SourcePath)} | prep={Path.GetFileName(bootstrapItem.PreparedPath)} | print={Path.GetFileName(bootstrapItem.PrintPath)}");
+            MirrorSingleOrderOrderFieldsToPrimaryItem(order, bootstrapItem);
             return bootstrapItem;
+        }
+
+        private static void MirrorSingleOrderOrderFieldsToPrimaryItem(OrderData order, OrderFileItem primaryItem)
+        {
+            if (order == null || primaryItem == null)
+                return;
+
+            primaryItem.SourcePath = order.SourcePath ?? string.Empty;
+            primaryItem.SourceFileSizeBytes = order.SourceFileSizeBytes;
+            primaryItem.SourceFileHash = order.SourceFileHash ?? string.Empty;
+            primaryItem.PreparedPath = order.PreparedPath ?? string.Empty;
+            primaryItem.PreparedFileSizeBytes = order.PreparedFileSizeBytes;
+            primaryItem.PreparedFileHash = order.PreparedFileHash ?? string.Empty;
+            primaryItem.PrintPath = order.PrintPath ?? string.Empty;
+            primaryItem.PrintFileSizeBytes = order.PrintFileSizeBytes;
+            primaryItem.PrintFileHash = order.PrintFileHash ?? string.Empty;
+            primaryItem.PitStopAction = NormalizeAction(order.PitStopAction);
+            primaryItem.ImposingAction = NormalizeAction(order.ImposingAction);
+            primaryItem.FileStatus = string.IsNullOrWhiteSpace(order.Status)
+                ? ResolveWorkflowStatus(order.SourcePath, order.PreparedPath, order.PrintPath)
+                : order.Status.Trim();
+            primaryItem.LastReason = order.LastStatusReason ?? string.Empty;
+            primaryItem.UpdatedAt = DateTime.Now;
         }
 
         private void UpdateItemFilePath(OrderData order, OrderFileItem item, int stage, string path)

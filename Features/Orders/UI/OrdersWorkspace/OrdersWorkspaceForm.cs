@@ -586,6 +586,60 @@ namespace Replica
             return true;
         }
 
+        private void TrySyncLanSingleOrderItemAfterProcessorStatus(OrderData order, string reason)
+        {
+            if (!ShouldUseLanRunApi() || order == null || string.IsNullOrWhiteSpace(order.InternalId))
+                return;
+
+            var currentOrder = FindOrderByInternalId(order.InternalId) ?? order;
+            if (currentOrder == null || OrderTopologyService.IsMultiOrder(currentOrder))
+                return;
+
+            var primaryItem = GetPrimaryItem(currentOrder);
+            if (!ShouldSyncSingleOrderItemFromOrder(currentOrder, primaryItem))
+                return;
+
+            var normalizedReason = string.IsNullOrWhiteSpace(reason)
+                ? "status"
+                : reason.Trim().Replace(' ', '-');
+            TrySyncLanSingleOrderItemFromOrder(currentOrder, $"processor-status-{normalizedReason}");
+        }
+
+        private static bool ShouldSyncSingleOrderItemFromOrder(OrderData order, OrderFileItem? primaryItem)
+        {
+            if (order == null)
+                return false;
+
+            var hasOrderPaths =
+                !string.IsNullOrWhiteSpace(CleanPath(order.SourcePath))
+                || !string.IsNullOrWhiteSpace(CleanPath(order.PreparedPath))
+                || !string.IsNullOrWhiteSpace(CleanPath(order.PrintPath));
+            if (primaryItem == null)
+                return hasOrderPaths;
+
+            return !PathValuesEqual(primaryItem.SourcePath, order.SourcePath)
+                   || !PathValuesEqual(primaryItem.PreparedPath, order.PreparedPath)
+                   || !PathValuesEqual(primaryItem.PrintPath, order.PrintPath)
+                   || primaryItem.SourceFileSizeBytes != order.SourceFileSizeBytes
+                   || primaryItem.PreparedFileSizeBytes != order.PreparedFileSizeBytes
+                   || primaryItem.PrintFileSizeBytes != order.PrintFileSizeBytes
+                   || !string.Equals(primaryItem.SourceFileHash ?? string.Empty, order.SourceFileHash ?? string.Empty, StringComparison.OrdinalIgnoreCase)
+                   || !string.Equals(primaryItem.PreparedFileHash ?? string.Empty, order.PreparedFileHash ?? string.Empty, StringComparison.OrdinalIgnoreCase)
+                   || !string.Equals(primaryItem.PrintFileHash ?? string.Empty, order.PrintFileHash ?? string.Empty, StringComparison.OrdinalIgnoreCase)
+                   || !string.Equals(NormalizeAction(primaryItem.PitStopAction), NormalizeAction(order.PitStopAction), StringComparison.Ordinal)
+                   || !string.Equals(NormalizeAction(primaryItem.ImposingAction), NormalizeAction(order.ImposingAction), StringComparison.Ordinal);
+        }
+
+        private static bool PathValuesEqual(string? leftPath, string? rightPath)
+        {
+            var left = CleanPath(leftPath);
+            var right = CleanPath(rightPath);
+            if (string.IsNullOrWhiteSpace(left) && string.IsNullOrWhiteSpace(right))
+                return true;
+
+            return PathsEqual(left, right);
+        }
+
         private void LoadSettings()
         {
             var settings = _settingsProvider.Load();
@@ -627,7 +681,9 @@ namespace Replica
                         return;
 
                     var persistStatus = ShouldUseLanRunApi();
-                    SetOrderStatus(order, status, OrderStatusSourceNames.Processor, reason, persistHistory: persistStatus, rebuildGrid: true);
+                    var statusApplied = SetOrderStatus(order, status, OrderStatusSourceNames.Processor, reason, persistHistory: persistStatus, rebuildGrid: true);
+                    if (persistStatus && statusApplied)
+                        TrySyncLanSingleOrderItemAfterProcessorStatus(order, reason);
                 }
 
                 if (InvokeRequired)
