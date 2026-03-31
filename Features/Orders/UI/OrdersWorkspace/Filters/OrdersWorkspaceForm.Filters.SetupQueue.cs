@@ -25,7 +25,7 @@ namespace Replica
             _statusFilterGlyph = new PictureBox
             {
                 Cursor = Cursors.Hand,
-                Margin = new Padding(3, 0, 0, 0),
+                Margin = Padding.Empty,
                 Name = "picFStatusGlyph",
                 Size = new Size(24, 33),
                 SizeMode = PictureBoxSizeMode.CenterImage
@@ -34,7 +34,7 @@ namespace Replica
             _statusFilterLabel = new Label
             {
                 Cursor = Cursors.Hand,
-                Margin = new Padding(0, 0, 3, 0),
+                Margin = Padding.Empty,
                 Name = "lblFStatus",
                 Size = new Size(200, 33),
                 Text = StatusFilterLabelText,
@@ -67,7 +67,7 @@ namespace Replica
             _orderNoFilterGlyph = new PictureBox
             {
                 Cursor = Cursors.Hand,
-                Margin = new Padding(3, 0, 0, 0),
+                Margin = Padding.Empty,
                 Name = "picFOrderNoGlyph",
                 Size = new Size(24, 33),
                 SizeMode = PictureBoxSizeMode.CenterImage
@@ -76,7 +76,7 @@ namespace Replica
             _orderNoFilterLabel = new Label
             {
                 Cursor = Cursors.Hand,
-                Margin = new Padding(0, 0, 3, 0),
+                Margin = Padding.Empty,
                 Name = "lblFOrderNo",
                 Size = new Size(180, 33),
                 Text = OrderNoSearchLabelText,
@@ -109,7 +109,7 @@ namespace Replica
             _userFilterGlyph = new PictureBox
             {
                 Cursor = Cursors.Hand,
-                Margin = new Padding(3, 0, 0, 0),
+                Margin = Padding.Empty,
                 Name = "picFUserGlyph",
                 Size = new Size(24, 33),
                 SizeMode = PictureBoxSizeMode.CenterImage
@@ -118,7 +118,7 @@ namespace Replica
             _userFilterLabel = new Label
             {
                 Cursor = Cursors.Hand,
-                Margin = new Padding(0, 0, 3, 0),
+                Margin = Padding.Empty,
                 Name = "lblFUser",
                 Size = new Size(150, 33),
                 TextAlign = ContentAlignment.MiddleLeft
@@ -150,7 +150,7 @@ namespace Replica
             _createdFilterGlyph = new PictureBox
             {
                 Cursor = Cursors.Hand,
-                Margin = new Padding(3, 0, 0, 0),
+                Margin = Padding.Empty,
                 Name = "picFCreatedGlyph",
                 Size = new Size(24, 33),
                 SizeMode = PictureBoxSizeMode.CenterImage
@@ -159,7 +159,7 @@ namespace Replica
             _createdFilterLabel = new Label
             {
                 Cursor = Cursors.Hand,
-                Margin = new Padding(0, 0, 3, 0),
+                Margin = Padding.Empty,
                 Name = "lblFCreated",
                 Size = new Size(170, 33),
                 TextAlign = ContentAlignment.MiddleLeft
@@ -191,7 +191,7 @@ namespace Replica
             _receivedFilterGlyph = new PictureBox
             {
                 Cursor = Cursors.Hand,
-                Margin = new Padding(3, 0, 0, 0),
+                Margin = Padding.Empty,
                 Name = "picFReceivedGlyph",
                 Size = new Size(24, 33),
                 SizeMode = PictureBoxSizeMode.CenterImage
@@ -200,7 +200,7 @@ namespace Replica
             _receivedFilterLabel = new Label
             {
                 Cursor = Cursors.Hand,
-                Margin = new Padding(0, 0, 3, 0),
+                Margin = Padding.Empty,
                 Name = "lblFReceived",
                 Size = new Size(170, 33),
                 TextAlign = ContentAlignment.MiddleLeft

@@ -203,7 +203,7 @@ namespace Replica
                 new Size(int.MaxValue, Math.Max(control.Height, 1)),
                 TextFormatFlags.NoPadding).Width;
 
-            control.Width = Math.Max(minWidth, measuredWidth + 16);
+            control.Width = Math.Max(minWidth, measuredWidth + 8);
         }
 
         private void ApplyStatusFilterToGrid()
