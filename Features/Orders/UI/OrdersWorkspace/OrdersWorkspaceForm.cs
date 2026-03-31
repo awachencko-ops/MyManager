@@ -450,10 +450,13 @@ namespace Replica
             if (!ShouldUseLanRunApi() || order == null || item == null)
                 return;
 
+            var desiredItem = CloneOrderItemForLanSync(item);
+            var currentOrder = order;
+            var currentItem = item;
             var syncOutcome = _orderApplicationService
                 .SyncLanOrderItemUpsertAsync(
-                    order,
-                    item,
+                    currentOrder,
+                    currentItem,
                     _lanApiBaseUrl,
                     ResolveLanApiActor(),
                     reason,
@@ -461,9 +464,84 @@ namespace Replica
                 .GetAwaiter()
                 .GetResult();
 
+            if (!syncOutcome.IsSuccess)
+            {
+                if (syncOutcome.ShouldRefreshSnapshot && !string.IsNullOrWhiteSpace(syncOutcome.SnapshotRefreshReason))
+                    TryRefreshRepositorySnapshotFromStorage(_orderHistory, syncOutcome.SnapshotRefreshReason);
+
+                var retryOrder = FindOrderByInternalId(order.InternalId);
+                var retryItem = retryOrder?.Items?.FirstOrDefault(x => x != null && string.Equals(x.ItemId, desiredItem.ItemId, StringComparison.Ordinal));
+                if (retryOrder != null && retryItem != null)
+                {
+                    ApplyOrderItemLanSyncState(retryItem, desiredItem);
+                    currentOrder = retryOrder;
+                    currentItem = retryItem;
+                    syncOutcome = _orderApplicationService
+                        .SyncLanOrderItemUpsertAsync(
+                            currentOrder,
+                            currentItem,
+                            _lanApiBaseUrl,
+                            ResolveLanApiActor(),
+                            $"{reason}-retry",
+                            GetOrderDisplayId)
+                        .GetAwaiter()
+                        .GetResult();
+                }
+            }
+
             ApplyOrderRunFeedbackLogs(syncOutcome.Logs);
             if (syncOutcome.ShouldRefreshSnapshot && !string.IsNullOrWhiteSpace(syncOutcome.SnapshotRefreshReason))
                 TryRefreshRepositorySnapshotFromStorage(_orderHistory, syncOutcome.SnapshotRefreshReason);
+        }
+
+        private static OrderFileItem CloneOrderItemForLanSync(OrderFileItem source)
+        {
+            return new OrderFileItem
+            {
+                ItemId = source.ItemId ?? string.Empty,
+                StorageVersion = source.StorageVersion,
+                SequenceNo = source.SequenceNo,
+                ClientFileLabel = source.ClientFileLabel ?? string.Empty,
+                Variant = source.Variant ?? string.Empty,
+                SourcePath = source.SourcePath ?? string.Empty,
+                SourceFileSizeBytes = source.SourceFileSizeBytes,
+                SourceFileHash = source.SourceFileHash ?? string.Empty,
+                PreparedPath = source.PreparedPath ?? string.Empty,
+                PreparedFileSizeBytes = source.PreparedFileSizeBytes,
+                PreparedFileHash = source.PreparedFileHash ?? string.Empty,
+                PrintPath = source.PrintPath ?? string.Empty,
+                PrintFileSizeBytes = source.PrintFileSizeBytes,
+                PrintFileHash = source.PrintFileHash ?? string.Empty,
+                FileStatus = source.FileStatus ?? string.Empty,
+                LastReason = source.LastReason ?? string.Empty,
+                UpdatedAt = source.UpdatedAt,
+                PitStopAction = source.PitStopAction ?? "-",
+                ImposingAction = source.ImposingAction ?? "-"
+            };
+        }
+
+        private static void ApplyOrderItemLanSyncState(OrderFileItem target, OrderFileItem source)
+        {
+            if (target == null || source == null)
+                return;
+
+            target.SequenceNo = source.SequenceNo;
+            target.ClientFileLabel = source.ClientFileLabel ?? string.Empty;
+            target.Variant = source.Variant ?? string.Empty;
+            target.SourcePath = source.SourcePath ?? string.Empty;
+            target.SourceFileSizeBytes = source.SourceFileSizeBytes;
+            target.SourceFileHash = source.SourceFileHash ?? string.Empty;
+            target.PreparedPath = source.PreparedPath ?? string.Empty;
+            target.PreparedFileSizeBytes = source.PreparedFileSizeBytes;
+            target.PreparedFileHash = source.PreparedFileHash ?? string.Empty;
+            target.PrintPath = source.PrintPath ?? string.Empty;
+            target.PrintFileSizeBytes = source.PrintFileSizeBytes;
+            target.PrintFileHash = source.PrintFileHash ?? string.Empty;
+            target.FileStatus = source.FileStatus ?? string.Empty;
+            target.LastReason = source.LastReason ?? string.Empty;
+            target.UpdatedAt = source.UpdatedAt;
+            target.PitStopAction = source.PitStopAction ?? "-";
+            target.ImposingAction = source.ImposingAction ?? "-";
         }
 
         private bool TrySyncLanOrderItemDelete(OrderData order, OrderFileItem item, string reason)
@@ -577,10 +655,23 @@ namespace Replica
             if (!writeOutcome.IsSuccess)
                 return false;
 
+            if (writeResult.IsSuccess && writeResult.Order != null && writeResult.Order.StorageVersion > 0)
+                currentOrder.StorageVersion = Math.Max(currentOrder.StorageVersion, writeResult.Order.StorageVersion);
+
+            currentOrder = FindOrderByInternalId(currentOrder.InternalId) ?? currentOrder;
+            currentOrder.PitStopAction = desiredPitStopAction;
+            currentOrder.ImposingAction = desiredImposingAction;
             if (syncAllItems && currentOrder.Items != null)
             {
-                foreach (var item in currentOrder.Items.Where(x => x != null))
+                var itemsSnapshot = currentOrder.Items
+                    .Where(x => x != null)
+                    .ToList();
+                foreach (var item in itemsSnapshot)
+                {
+                    item.PitStopAction = desiredPitStopAction;
+                    item.ImposingAction = desiredImposingAction;
                     TrySyncLanOrderItemUpsert(currentOrder, item, $"bulk-actions-{reason}");
+                }
             }
 
             return true;
