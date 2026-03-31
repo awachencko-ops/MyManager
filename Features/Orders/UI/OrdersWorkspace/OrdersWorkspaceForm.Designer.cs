@@ -65,9 +65,11 @@
             cbQueue = new ComboBox();
             pnlFilters = new Panel();
             flpFilters = new FlowLayoutPanel();
+            cbStatus = new ComboBox();
+            cbOrderNo = new ComboBox();
             cbUser = new ComboBox();
-            cbFCreated = new ComboBox();
             cbFReceived = new ComboBox();
+            cbFCreated = new ComboBox();
             pnlTray = new Panel();
             statusStrip1 = new StatusStrip();
             toolStatus = new ToolStripStatusLabel();
@@ -85,8 +87,6 @@
             tsbBrowse = new ToolStripButton();
             tsbConsole = new ToolStripButton();
             toolStripButton1 = new ToolStripButton();
-            cbStatus = new ComboBox();
-            cbOrderNo = new ComboBox();
             pnlSidebar.SuspendLayout();
             pnlDockLiterature.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)pictureBox4).BeginInit();
@@ -465,14 +465,34 @@
             flpFilters.Controls.Add(cbStatus);
             flpFilters.Controls.Add(cbOrderNo);
             flpFilters.Controls.Add(cbUser);
-            flpFilters.Controls.Add(cbFCreated);
             flpFilters.Controls.Add(cbFReceived);
+            flpFilters.Controls.Add(cbFCreated);
             flpFilters.Dock = DockStyle.Fill;
             flpFilters.Location = new Point(0, 0);
             flpFilters.Name = "flpFilters";
             flpFilters.Size = new Size(1743, 36);
             flpFilters.TabIndex = 0;
             flpFilters.WrapContents = false;
+            // 
+            // cbStatus
+            // 
+            cbStatus.DropDownStyle = ComboBoxStyle.DropDownList;
+            cbStatus.FormattingEnabled = true;
+            cbStatus.IntegralHeight = false;
+            cbStatus.Location = new Point(3, 3);
+            cbStatus.Name = "cbStatus";
+            cbStatus.Size = new Size(170, 33);
+            cbStatus.TabIndex = 7;
+            // 
+            // cbOrderNo
+            // 
+            cbOrderNo.DropDownStyle = ComboBoxStyle.DropDownList;
+            cbOrderNo.FormattingEnabled = true;
+            cbOrderNo.IntegralHeight = false;
+            cbOrderNo.Location = new Point(179, 3);
+            cbOrderNo.Name = "cbOrderNo";
+            cbOrderNo.Size = new Size(170, 33);
+            cbOrderNo.TabIndex = 8;
             // 
             // cbUser
             // 
@@ -484,25 +504,25 @@
             cbUser.Size = new Size(170, 33);
             cbUser.TabIndex = 4;
             // 
-            // cbFCreated
-            // 
-            cbFCreated.DropDownStyle = ComboBoxStyle.DropDownList;
-            cbFCreated.FormattingEnabled = true;
-            cbFCreated.IntegralHeight = false;
-            cbFCreated.Location = new Point(531, 3);
-            cbFCreated.Name = "cbFCreated";
-            cbFCreated.Size = new Size(170, 33);
-            cbFCreated.TabIndex = 5;
-            // 
             // cbFReceived
             // 
             cbFReceived.DropDownStyle = ComboBoxStyle.DropDownList;
             cbFReceived.FormattingEnabled = true;
             cbFReceived.IntegralHeight = false;
-            cbFReceived.Location = new Point(707, 3);
+            cbFReceived.Location = new Point(531, 3);
             cbFReceived.Name = "cbFReceived";
             cbFReceived.Size = new Size(170, 33);
             cbFReceived.TabIndex = 6;
+            // 
+            // cbFCreated
+            // 
+            cbFCreated.DropDownStyle = ComboBoxStyle.DropDownList;
+            cbFCreated.FormattingEnabled = true;
+            cbFCreated.IntegralHeight = false;
+            cbFCreated.Location = new Point(707, 3);
+            cbFCreated.Name = "cbFCreated";
+            cbFCreated.Size = new Size(170, 33);
+            cbFCreated.TabIndex = 5;
             // 
             // pnlTray
             // 
@@ -637,26 +657,6 @@
             toolStripButton1.Name = "toolStripButton1";
             toolStripButton1.Size = new Size(138, 29);
             toolStripButton1.Text = "Параметры";
-            // 
-            // cbStatus
-            // 
-            cbStatus.DropDownStyle = ComboBoxStyle.DropDownList;
-            cbStatus.FormattingEnabled = true;
-            cbStatus.IntegralHeight = false;
-            cbStatus.Location = new Point(3, 3);
-            cbStatus.Name = "cbStatus";
-            cbStatus.Size = new Size(170, 33);
-            cbStatus.TabIndex = 7;
-            // 
-            // cbOrderNo
-            // 
-            cbOrderNo.DropDownStyle = ComboBoxStyle.DropDownList;
-            cbOrderNo.FormattingEnabled = true;
-            cbOrderNo.IntegralHeight = false;
-            cbOrderNo.Location = new Point(179, 3);
-            cbOrderNo.Name = "cbOrderNo";
-            cbOrderNo.Size = new Size(170, 33);
-            cbOrderNo.TabIndex = 8;
             // 
             // OrdersWorkspaceForm
             // 

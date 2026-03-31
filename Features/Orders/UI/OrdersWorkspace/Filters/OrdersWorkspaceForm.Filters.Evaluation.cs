@@ -185,11 +185,11 @@ namespace Replica
 
         private void AdjustFilterLabelWidths()
         {
-            SetFilterLabelWidth(_statusFilterLabel, StatusFilterLabelText, 200);
-            SetFilterLabelWidth(_orderNoFilterLabel, OrderNoSearchLabelText, 180);
-            SetFilterLabelWidth(_userFilterLabel, UserFilterLabelText, 150);
-            SetFilterLabelWidth(_createdFilterLabel, CreatedDateFilterLabelText, 190);
-            SetFilterLabelWidth(_receivedFilterLabel, ReceivedDateFilterLabelText, 190);
+            SetFilterLabelWidth(_statusFilterLabel, StatusFilterLabelText, 170);
+            SetFilterLabelWidth(_orderNoFilterLabel, OrderNoSearchLabelText, 130);
+            SetFilterLabelWidth(_userFilterLabel, UserFilterLabelText, 130);
+            SetFilterLabelWidth(_createdFilterLabel, CreatedDateFilterLabelText, 125);
+            SetFilterLabelWidth(_receivedFilterLabel, ReceivedDateFilterLabelText, 125);
         }
 
         private static void SetFilterLabelWidth(Control? control, string text, int minWidth)
@@ -203,7 +203,7 @@ namespace Replica
                 new Size(int.MaxValue, Math.Max(control.Height, 1)),
                 TextFormatFlags.NoPadding).Width;
 
-            control.Width = Math.Max(minWidth, measuredWidth + 8);
+            control.Width = Math.Max(minWidth, measuredWidth + 4);
         }
 
         private void ApplyStatusFilterToGrid()
