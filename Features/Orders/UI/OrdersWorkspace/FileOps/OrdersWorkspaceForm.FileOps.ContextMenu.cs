@@ -570,6 +570,8 @@ namespace Replica
                     item.PitStopAction = "-";
             }
 
+            if (!TrySyncLanOrderActions(order, "pitstop-clear", syncAllItems: true))
+                return;
             PersistGridChanges(OrderGridLogic.BuildOrderTag(order.InternalId));
             AppendOrderOperationLog(
                 order,
@@ -590,6 +592,8 @@ namespace Replica
                     item.ImposingAction = "-";
             }
 
+            if (!TrySyncLanOrderActions(order, "imposing-clear", syncAllItems: true))
+                return;
             PersistGridChanges(OrderGridLogic.BuildOrderTag(order.InternalId));
             AppendOrderOperationLog(
                 order,
@@ -604,6 +608,7 @@ namespace Replica
                 return;
 
             item.PitStopAction = "-";
+            TrySyncLanOrderItemUpsert(order, item, "pitstop-clear-item");
             PersistGridChanges(OrderGridLogic.BuildItemTag(order.InternalId, item.ItemId));
             var itemLabel = string.IsNullOrWhiteSpace(item.ClientFileLabel) ? item.ItemId : item.ClientFileLabel;
             AppendOrderOperationLog(
@@ -619,6 +624,7 @@ namespace Replica
                 return;
 
             item.ImposingAction = "-";
+            TrySyncLanOrderItemUpsert(order, item, "imposing-clear-item");
             PersistGridChanges(OrderGridLogic.BuildItemTag(order.InternalId, item.ItemId));
             var itemLabel = string.IsNullOrWhiteSpace(item.ClientFileLabel) ? item.ItemId : item.ClientFileLabel;
             AppendOrderOperationLog(

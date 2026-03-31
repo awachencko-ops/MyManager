@@ -488,6 +488,104 @@ namespace Replica
             return syncOutcome.IsSuccess;
         }
 
+        private bool TrySyncLanOrderActions(OrderData order, string reason, bool syncAllItems)
+        {
+            if (!ShouldUseLanRunApi() || order == null)
+                return true;
+
+            var desiredPitStopAction = NormalizeAction(order.PitStopAction);
+            var desiredImposingAction = NormalizeAction(order.ImposingAction);
+
+            var currentOrder = order;
+            TryRefreshRepositorySnapshotFromStorage(new[] { order }, "lan-api-update-actions-preflight");
+            var refreshedOrder = FindOrderByInternalId(order.InternalId);
+            if (refreshedOrder != null)
+                currentOrder = refreshedOrder;
+
+            currentOrder.PitStopAction = desiredPitStopAction;
+            currentOrder.ImposingAction = desiredImposingAction;
+            if (syncAllItems && currentOrder.Items != null)
+            {
+                foreach (var entry in currentOrder.Items.Where(x => x != null))
+                {
+                    entry.PitStopAction = desiredPitStopAction;
+                    entry.ImposingAction = desiredImposingAction;
+                }
+            }
+
+            var updatedOrder = new OrderData
+            {
+                Id = currentOrder.Id,
+                OrderDate = currentOrder.OrderDate,
+                UserName = currentOrder.UserName,
+                Status = currentOrder.Status,
+                Keyword = currentOrder.Keyword,
+                FolderName = currentOrder.FolderName,
+                PitStopAction = desiredPitStopAction,
+                ImposingAction = desiredImposingAction
+            };
+
+            var writeResult = _orderApplicationService
+                .TryUpdateOrderViaLanApiAsync(
+                    currentOrder,
+                    updatedOrder,
+                    _lanApiBaseUrl,
+                    ResolveLanApiActor(),
+                    NormalizeOrderUserName)
+                .GetAwaiter()
+                .GetResult();
+            if (writeResult.IsConflict)
+            {
+                TryRefreshRepositorySnapshotFromStorage(new[] { currentOrder }, "lan-api-update-actions-conflict-retry");
+                var retryOrder = FindOrderByInternalId(currentOrder.InternalId);
+                if (retryOrder != null && writeResult.CurrentVersion > 0)
+                    retryOrder.StorageVersion = Math.Max(retryOrder.StorageVersion, writeResult.CurrentVersion);
+
+                if (retryOrder != null)
+                {
+                    retryOrder.PitStopAction = desiredPitStopAction;
+                    retryOrder.ImposingAction = desiredImposingAction;
+                    if (syncAllItems && retryOrder.Items != null)
+                    {
+                        foreach (var entry in retryOrder.Items.Where(x => x != null))
+                        {
+                            entry.PitStopAction = desiredPitStopAction;
+                            entry.ImposingAction = desiredImposingAction;
+                        }
+                    }
+
+                    writeResult = _orderApplicationService
+                        .TryUpdateOrderViaLanApiAsync(
+                            retryOrder,
+                            updatedOrder,
+                            _lanApiBaseUrl,
+                            ResolveLanApiActor(),
+                            NormalizeOrderUserName)
+                        .GetAwaiter()
+                        .GetResult();
+                    currentOrder = retryOrder;
+                }
+            }
+
+            var writeOutcome = _orderApplicationService.ApplyLanOrderWriteResult(
+                _orderHistory,
+                targetOrder: currentOrder,
+                writeResult,
+                operationCaption: "Изменение операций",
+                successSnapshotReason: $"lan-api-update-actions-{reason}");
+            ApplyLanOrderWriteOutcome(writeOutcome);
+            if (!writeOutcome.IsSuccess)
+                return false;
+
+            if (syncAllItems && currentOrder.Items != null)
+            {
+                foreach (var item in currentOrder.Items.Where(x => x != null))
+                    TrySyncLanOrderItemUpsert(currentOrder, item, $"bulk-actions-{reason}");
+            }
+
+            return true;
+        }
+
         private void LoadSettings()
         {
             var settings = _settingsProvider.Load();

@@ -582,6 +582,8 @@ namespace Replica
                     entry.PitStopAction = selected;
             }
 
+            if (!TrySyncLanOrderActions(order, "pitstop-select", syncAllItems: true))
+                return;
             PersistGridChanges(OrderGridLogic.BuildOrderTag(order.InternalId));
         }
 
@@ -603,6 +605,8 @@ namespace Replica
                     entry.ImposingAction = selected;
             }
 
+            if (!TrySyncLanOrderActions(order, "imposing-select", syncAllItems: true))
+                return;
             PersistGridChanges(OrderGridLogic.BuildOrderTag(order.InternalId));
         }
 
