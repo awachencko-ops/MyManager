@@ -22,7 +22,7 @@ namespace Replica
             if (_statusFilterDropDown == null)
                 return;
 
-            _statusFilterDropDown.Show(picFStatusGlyph, new Point(0, picFStatusGlyph.Height));
+            _statusFilterDropDown.Show(cbStatus, new Point(0, cbStatus.Height));
         }
 
         private void EnsureStatusFilterDropDown()
@@ -35,10 +35,10 @@ namespace Replica
                 CheckOnClick = true,
                 BorderStyle = BorderStyle.None,
                 IntegralHeight = false,
-                Font = lblFStatus.Font,
+                Font = cbStatus.Font,
                 BackColor = Color.White,
                 ForeColor = Color.FromArgb(47, 53, 72),
-                Width = Math.Max(lblFStatus.Width + 140, 280),
+                Width = Math.Max(cbStatus.Width + 140, 280),
                 Height = 240
             };
             _statusFilterCheckedList.ItemCheck += StatusFilterCheckedList_ItemCheck;
@@ -65,9 +65,8 @@ namespace Replica
             if (e.CloseReason != ToolStripDropDownCloseReason.AppClicked)
                 return;
 
-            var labelRect = lblFStatus.RectangleToScreen(lblFStatus.ClientRectangle);
-            var glyphRect = picFStatusGlyph.RectangleToScreen(picFStatusGlyph.ClientRectangle);
-            if (labelRect.Contains(Cursor.Position) || glyphRect.Contains(Cursor.Position))
+            var comboRect = cbStatus.RectangleToScreen(cbStatus.ClientRectangle);
+            if (comboRect.Contains(Cursor.Position))
                 _suppressNextStatusFilterLabelClick = true;
         }
 
@@ -122,19 +121,11 @@ namespace Replica
 
         private void UpdateStatusFilterCaption()
         {
-            if (string.Equals(lblFStatus.Text, StatusFilterLabelText, StringComparison.Ordinal))
-                return;
-
-            lblFStatus.Text = StatusFilterLabelText;
             AdjustFilterLabelWidths();
         }
 
         private void UpdateOrderNoSearchCaption()
         {
-            if (string.Equals(lblFOrderNo.Text, OrderNoSearchLabelText, StringComparison.Ordinal))
-                return;
-
-            lblFOrderNo.Text = OrderNoSearchLabelText;
             AdjustFilterLabelWidths();
         }
 
@@ -176,25 +167,25 @@ namespace Replica
 
         private void AdjustFilterLabelWidths()
         {
-            SetFilterLabelWidth(lblFStatus, StatusFilterLabelText, 200);
-            SetFilterLabelWidth(lblFOrderNo, OrderNoSearchLabelText, 180);
+            SetFilterLabelWidth(cbStatus, StatusFilterLabelText, 200);
+            SetFilterLabelWidth(cbOrderNo, OrderNoSearchLabelText, 180);
             SetFilterLabelWidth(_userFilterLabel, UserFilterLabelText, 150);
             SetFilterLabelWidth(_createdFilterLabel, CreatedDateFilterLabelText, 190);
             SetFilterLabelWidth(_receivedFilterLabel, ReceivedDateFilterLabelText, 190);
         }
 
-        private static void SetFilterLabelWidth(Label? label, string text, int minWidth)
+        private static void SetFilterLabelWidth(Control? control, string text, int minWidth)
         {
-            if (label == null)
+            if (control == null)
                 return;
 
             var measuredWidth = TextRenderer.MeasureText(
                 text,
-                label.Font,
-                new Size(int.MaxValue, Math.Max(label.Height, 1)),
+                control.Font,
+                new Size(int.MaxValue, Math.Max(control.Height, 1)),
                 TextFormatFlags.NoPadding).Width;
 
-            label.Width = Math.Max(minWidth, measuredWidth + 16);
+            control.Width = Math.Max(minWidth, measuredWidth + 16);
         }
 
         private void ApplyStatusFilterToGrid()

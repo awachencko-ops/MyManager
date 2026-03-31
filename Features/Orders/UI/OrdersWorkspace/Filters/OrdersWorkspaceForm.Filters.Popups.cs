@@ -107,7 +107,7 @@ namespace Replica
             if (_orderNoFilterDropDown == null)
                 return;
 
-            _orderNoFilterDropDown.Show(picFOrderNoGlyph, new Point(0, picFOrderNoGlyph.Height));
+            _orderNoFilterDropDown.Show(cbOrderNo, new Point(0, cbOrderNo.Height));
             _orderNoFilterTextBox?.Focus();
             _orderNoFilterTextBox?.SelectAll();
         }
@@ -118,7 +118,7 @@ namespace Replica
                 _orderNoFilterTextBox != null)
                 return;
 
-            var popupWidth = Math.Max(lblFOrderNo.Width + 100, 280);
+            var popupWidth = Math.Max(cbOrderNo.Width + 100, 280);
             var popupHeight = 96;
 
             var panel = new Panel
@@ -134,7 +134,7 @@ namespace Replica
                 BorderStyle = BorderStyle.None,
                 Location = new Point(16, 16),
                 Size = new Size(popupWidth - 32, 24),
-                Font = lblFOrderNo.Font
+                Font = cbOrderNo.Font
             };
             _orderNoFilterTextBox.TextChanged += (_, _) => UpdateOrderNoFilterActionButtonsState();
             _orderNoFilterTextBox.KeyDown += (_, e) =>
@@ -263,9 +263,8 @@ namespace Replica
             if (e.CloseReason != ToolStripDropDownCloseReason.AppClicked)
                 return;
 
-            var labelRect = lblFOrderNo.RectangleToScreen(lblFOrderNo.ClientRectangle);
-            var glyphRect = picFOrderNoGlyph.RectangleToScreen(picFOrderNoGlyph.ClientRectangle);
-            if (labelRect.Contains(Cursor.Position) || glyphRect.Contains(Cursor.Position))
+            var comboRect = cbOrderNo.RectangleToScreen(cbOrderNo.ClientRectangle);
+            if (comboRect.Contains(Cursor.Position))
                 _suppressNextOrderNoLabelClick = true;
         }
 

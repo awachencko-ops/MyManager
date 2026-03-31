@@ -65,10 +65,6 @@
             cbQueue = new ComboBox();
             pnlFilters = new Panel();
             flpFilters = new FlowLayoutPanel();
-            picFStatusGlyph = new PictureBox();
-            lblFStatus = new Label();
-            picFOrderNoGlyph = new PictureBox();
-            lblFOrderNo = new Label();
             cbUser = new ComboBox();
             cbFCreated = new ComboBox();
             cbFReceived = new ComboBox();
@@ -89,6 +85,8 @@
             tsbBrowse = new ToolStripButton();
             tsbConsole = new ToolStripButton();
             toolStripButton1 = new ToolStripButton();
+            cbStatus = new ComboBox();
+            cbOrderNo = new ComboBox();
             pnlSidebar.SuspendLayout();
             pnlDockLiterature.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)pictureBox4).BeginInit();
@@ -111,8 +109,6 @@
             pnlHeader.SuspendLayout();
             pnlFilters.SuspendLayout();
             flpFilters.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)picFStatusGlyph).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)picFOrderNoGlyph).BeginInit();
             pnlTray.SuspendLayout();
             statusStrip1.SuspendLayout();
             tsMainActions.SuspendLayout();
@@ -466,10 +462,8 @@
             // flpFilters
             // 
             flpFilters.AutoScroll = true;
-            flpFilters.Controls.Add(picFStatusGlyph);
-            flpFilters.Controls.Add(lblFStatus);
-            flpFilters.Controls.Add(picFOrderNoGlyph);
-            flpFilters.Controls.Add(lblFOrderNo);
+            flpFilters.Controls.Add(cbStatus);
+            flpFilters.Controls.Add(cbOrderNo);
             flpFilters.Controls.Add(cbUser);
             flpFilters.Controls.Add(cbFCreated);
             flpFilters.Controls.Add(cbFReceived);
@@ -480,56 +474,12 @@
             flpFilters.TabIndex = 0;
             flpFilters.WrapContents = false;
             // 
-            // picFStatusGlyph
-            // 
-            picFStatusGlyph.Cursor = Cursors.Hand;
-            picFStatusGlyph.Location = new Point(3, 0);
-            picFStatusGlyph.Margin = new Padding(3, 0, 0, 0);
-            picFStatusGlyph.Name = "picFStatusGlyph";
-            picFStatusGlyph.Size = new Size(24, 33);
-            picFStatusGlyph.SizeMode = PictureBoxSizeMode.CenterImage;
-            picFStatusGlyph.TabIndex = 0;
-            picFStatusGlyph.TabStop = false;
-            // 
-            // lblFStatus
-            // 
-            lblFStatus.Cursor = Cursors.Hand;
-            lblFStatus.Location = new Point(27, 0);
-            lblFStatus.Margin = new Padding(0, 0, 3, 0);
-            lblFStatus.Name = "lblFStatus";
-            lblFStatus.Size = new Size(196, 33);
-            lblFStatus.TabIndex = 1;
-            lblFStatus.Text = "Состояние задания";
-            lblFStatus.TextAlign = ContentAlignment.MiddleLeft;
-            // 
-            // picFOrderNoGlyph
-            // 
-            picFOrderNoGlyph.Cursor = Cursors.Hand;
-            picFOrderNoGlyph.Location = new Point(229, 0);
-            picFOrderNoGlyph.Margin = new Padding(3, 0, 0, 0);
-            picFOrderNoGlyph.Name = "picFOrderNoGlyph";
-            picFOrderNoGlyph.Size = new Size(24, 33);
-            picFOrderNoGlyph.SizeMode = PictureBoxSizeMode.CenterImage;
-            picFOrderNoGlyph.TabIndex = 2;
-            picFOrderNoGlyph.TabStop = false;
-            // 
-            // lblFOrderNo
-            // 
-            lblFOrderNo.Cursor = Cursors.Hand;
-            lblFOrderNo.Location = new Point(253, 0);
-            lblFOrderNo.Margin = new Padding(0, 0, 3, 0);
-            lblFOrderNo.Name = "lblFOrderNo";
-            lblFOrderNo.Size = new Size(196, 33);
-            lblFOrderNo.TabIndex = 3;
-            lblFOrderNo.Text = "Номер заказа";
-            lblFOrderNo.TextAlign = ContentAlignment.MiddleLeft;
-            // 
             // cbUser
             // 
             cbUser.DropDownStyle = ComboBoxStyle.DropDownList;
             cbUser.FormattingEnabled = true;
             cbUser.IntegralHeight = false;
-            cbUser.Location = new Point(455, 3);
+            cbUser.Location = new Point(355, 3);
             cbUser.Name = "cbUser";
             cbUser.Size = new Size(170, 33);
             cbUser.TabIndex = 4;
@@ -539,7 +489,7 @@
             cbFCreated.DropDownStyle = ComboBoxStyle.DropDownList;
             cbFCreated.FormattingEnabled = true;
             cbFCreated.IntegralHeight = false;
-            cbFCreated.Location = new Point(631, 3);
+            cbFCreated.Location = new Point(531, 3);
             cbFCreated.Name = "cbFCreated";
             cbFCreated.Size = new Size(170, 33);
             cbFCreated.TabIndex = 5;
@@ -549,7 +499,7 @@
             cbFReceived.DropDownStyle = ComboBoxStyle.DropDownList;
             cbFReceived.FormattingEnabled = true;
             cbFReceived.IntegralHeight = false;
-            cbFReceived.Location = new Point(807, 3);
+            cbFReceived.Location = new Point(707, 3);
             cbFReceived.Name = "cbFReceived";
             cbFReceived.Size = new Size(170, 33);
             cbFReceived.TabIndex = 6;
@@ -688,6 +638,26 @@
             toolStripButton1.Size = new Size(138, 29);
             toolStripButton1.Text = "Параметры";
             // 
+            // cbStatus
+            // 
+            cbStatus.DropDownStyle = ComboBoxStyle.DropDownList;
+            cbStatus.FormattingEnabled = true;
+            cbStatus.IntegralHeight = false;
+            cbStatus.Location = new Point(3, 3);
+            cbStatus.Name = "cbStatus";
+            cbStatus.Size = new Size(170, 33);
+            cbStatus.TabIndex = 7;
+            // 
+            // cbOrderNo
+            // 
+            cbOrderNo.DropDownStyle = ComboBoxStyle.DropDownList;
+            cbOrderNo.FormattingEnabled = true;
+            cbOrderNo.IntegralHeight = false;
+            cbOrderNo.Location = new Point(179, 3);
+            cbOrderNo.Name = "cbOrderNo";
+            cbOrderNo.Size = new Size(170, 33);
+            cbOrderNo.TabIndex = 8;
+            // 
             // OrdersWorkspaceForm
             // 
             AutoScaleDimensions = new SizeF(10F, 25F);
@@ -723,8 +693,6 @@
             pnlHeader.PerformLayout();
             pnlFilters.ResumeLayout(false);
             flpFilters.ResumeLayout(false);
-            ((System.ComponentModel.ISupportInitialize)picFStatusGlyph).EndInit();
-            ((System.ComponentModel.ISupportInitialize)picFOrderNoGlyph).EndInit();
             pnlTray.ResumeLayout(false);
             pnlTray.PerformLayout();
             statusStrip1.ResumeLayout(false);
@@ -747,10 +715,6 @@
         private Button btnViewTiles;
         private Button btnViewList;
         private FlowLayoutPanel flpFilters;
-        private PictureBox picFStatusGlyph;
-        private Label lblFStatus;
-        private PictureBox picFOrderNoGlyph;
-        private Label lblFOrderNo;
         private ComboBox cbUser;
         private ComboBox cbFReceived;
         private ToolStrip tsMainActions;
@@ -796,6 +760,8 @@
         private PictureBox pictureUser;
         private Label statusUserLabel;
         private Label userNameLabel;
+        private ComboBox cbStatus;
+        private ComboBox cbOrderNo;
     }
 }
 

@@ -16,26 +16,15 @@ namespace Replica
     {
         private void InitializeStatusFilter()
         {
-            lblFStatus.Click += LblFStatus_Click;
-            picFStatusGlyph.Click += LblFStatus_Click;
-            ApplyStatusFilterChevronIcon();
+            cbStatus.Click += LblFStatus_Click;
+            cbStatus.DropDown += (_, _) => ShowStatusFilterDropDown();
             UpdateStatusFilterCaption();
-        }
-
-        private void ApplyStatusFilterChevronIcon()
-        {
-            using var icon = CreateDropDownGlyphIcon(24);
-            picFStatusGlyph.Image?.Dispose();
-            picFStatusGlyph.Image = (Image)icon.Clone();
-            lblFStatus.TextAlign = ContentAlignment.MiddleLeft;
-            lblFStatus.Padding = new Padding(0, 3, 0, 0);
         }
 
         private void InitializeOrderNoSearch()
         {
-            lblFOrderNo.Click += LblFOrderNo_Click;
-            picFOrderNoGlyph.Click += LblFOrderNo_Click;
-            ApplyOrderNoSearchIcon();
+            cbOrderNo.Click += LblFOrderNo_Click;
+            cbOrderNo.DropDown += (_, _) => ShowOrderNoFilterDropDown();
             UpdateOrderNoSearchCaption();
         }
 
@@ -160,15 +149,6 @@ namespace Replica
 
             ApplyReceivedDateFilterChevronIcon();
             UpdateReceivedDateFilterCaption();
-        }
-
-        private void ApplyOrderNoSearchIcon()
-        {
-            using var icon = CreateDropDownGlyphIcon(24);
-            picFOrderNoGlyph.Image?.Dispose();
-            picFOrderNoGlyph.Image = (Image)icon.Clone();
-            lblFOrderNo.TextAlign = ContentAlignment.MiddleLeft;
-            lblFOrderNo.Padding = new Padding(0, 3, 0, 0);
         }
 
         private void ApplyUserFilterChevronIcon()
