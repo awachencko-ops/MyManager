@@ -15,6 +15,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using PdfiumViewer;
+using Replica.Shared;
+using Replica.Shared.Models;
 using Svg;
 
 namespace Replica
@@ -175,16 +177,252 @@ namespace Replica
             _orderApplicationService.ConfigureHistoryRepository(_ordersStorageBackend, _lanPostgreSqlConnectionString, _jsonHistoryFile);
         }
 
+        private static readonly JsonSerializerOptions LanHistoryJsonOptions = new(JsonSerializerDefaults.Web)
+        {
+            PropertyNameCaseInsensitive = true
+        };
+
         private bool TryLoadHistoryFromConfiguredRepository(out List<OrderData> orders)
         {
+            if (ShouldUseLanRunApi())
+            {
+                if (TryLoadHistoryFromLanApi(out orders, out var apiError))
+                {
+                    if (orders.Count > 0 || !File.Exists(StoragePaths.ResolveExistingFilePath(_jsonHistoryFile, "history.json")))
+                        TrySaveHistoryToLocalCache(orders, out _);
+                    return true;
+                }
+
+                Logger.Warn($"HISTORY | lan-api-load-failed | {apiError}");
+                if (TryLoadHistoryFromLocalCache(out orders, out var cacheError))
+                {
+                    Logger.Warn("HISTORY | lan-api-load-fallback | source=local-cache");
+                    return true;
+                }
+
+                if (!string.IsNullOrWhiteSpace(cacheError))
+                    Logger.Warn($"HISTORY | local-cache-load-failed | {cacheError}");
+
+                orders = [];
+                return false;
+            }
+
             EnsureOrdersRepository();
             return _orderApplicationService.TryLoadHistory(out orders);
         }
 
         private bool TrySaveHistoryToConfiguredRepository(out string error)
         {
+            if (ShouldUseLanRunApi())
+                return TrySaveHistoryToLocalCache(_orderHistory, out error);
+
             EnsureOrdersRepository();
             return _orderApplicationService.TrySaveHistory(_orderHistory, out error);
+        }
+
+        private bool TryLoadHistoryFromLanApi(out List<OrderData> orders, out string error)
+        {
+            orders = [];
+            error = string.Empty;
+
+            if (!ShouldUseLanRunApi())
+            {
+                error = "LAN API mode is disabled";
+                return false;
+            }
+
+            if (!TryResolveLanApiBaseUri(_lanApiBaseUrl, out var baseUri))
+            {
+                error = "invalid LAN API URL";
+                return false;
+            }
+
+            try
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(baseUri, "api/orders"));
+                request.Headers.TryAddWithoutValidation("Accept", "application/json");
+                AddLanApiActorHeaders(request);
+
+                using var response = _lanStatusHttpClient.Send(request);
+                var payload = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+                if (!response.IsSuccessStatusCode)
+                {
+                    error = $"HTTP {(int)response.StatusCode} ({response.StatusCode})";
+                    return false;
+                }
+
+                var sharedOrders = DeserializeSharedOrders(payload);
+                orders = sharedOrders
+                    .Where(order => order != null && !string.IsNullOrWhiteSpace(order.InternalId))
+                    .Select(MapSharedOrderToOrderData)
+                    .ToList();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                return false;
+            }
+        }
+
+        private bool TryLoadHistoryFromLocalCache(out List<OrderData> orders, out string error)
+        {
+            _jsonHistoryFile = StoragePaths.ResolveExistingFilePath(_jsonHistoryFile, "history.json");
+            var cacheRepository = OrdersRepositoryFactory.CreateFileSystem(_jsonHistoryFile);
+            return cacheRepository.TryLoadAll(out orders, out error);
+        }
+
+        private bool TrySaveHistoryToLocalCache(IReadOnlyCollection<OrderData> orders, out string error)
+        {
+            _jsonHistoryFile = StoragePaths.ResolveFilePath(_jsonHistoryFile, "history.json");
+            var cacheRepository = OrdersRepositoryFactory.CreateFileSystem(_jsonHistoryFile);
+            return cacheRepository.TrySaveAll(orders ?? [], out error);
+        }
+
+        private bool TryAppendHistoryEventToLocalCache(
+            string orderInternalId,
+            string itemId,
+            string eventType,
+            string eventSource,
+            string payloadJson,
+            out string error)
+        {
+            _jsonHistoryFile = StoragePaths.ResolveFilePath(_jsonHistoryFile, "history.json");
+            var cacheRepository = OrdersRepositoryFactory.CreateFileSystem(_jsonHistoryFile);
+            return cacheRepository.TryAppendEvent(
+                orderInternalId,
+                itemId,
+                eventType,
+                eventSource,
+                payloadJson,
+                out error);
+        }
+
+        private void AddLanApiActorHeaders(HttpRequestMessage request)
+        {
+            if (request == null)
+                return;
+
+            var actor = ResolveLanApiActor();
+            if (string.IsNullOrWhiteSpace(actor))
+                return;
+
+            var normalizedActor = actor.Trim();
+            if (CurrentUserHeaderCodec.RequiresEncoding(normalizedActor))
+            {
+                request.Headers.TryAddWithoutValidation(
+                    CurrentUserHeaderCodec.HeaderName,
+                    CurrentUserHeaderCodec.BuildAsciiFallback(normalizedActor));
+                request.Headers.TryAddWithoutValidation(
+                    CurrentUserHeaderCodec.EncodedHeaderName,
+                    CurrentUserHeaderCodec.Encode(normalizedActor));
+                return;
+            }
+
+            request.Headers.TryAddWithoutValidation(CurrentUserHeaderCodec.HeaderName, normalizedActor);
+        }
+
+        private static IReadOnlyList<SharedOrder> DeserializeSharedOrders(string payload)
+        {
+            if (string.IsNullOrWhiteSpace(payload))
+                return Array.Empty<SharedOrder>();
+
+            try
+            {
+                var direct = JsonSerializer.Deserialize<List<SharedOrder>>(payload, LanHistoryJsonOptions);
+                if (direct != null)
+                    return direct;
+            }
+            catch
+            {
+                // continue with object-wrapper parsing
+            }
+
+            try
+            {
+                using var document = JsonDocument.Parse(payload);
+                if (document.RootElement.ValueKind != JsonValueKind.Object)
+                    return Array.Empty<SharedOrder>();
+
+                if (!TryGetPropertyIgnoreCase(document.RootElement, "orders", out var ordersElement))
+                    return Array.Empty<SharedOrder>();
+
+                var parsed = JsonSerializer.Deserialize<List<SharedOrder>>(ordersElement.GetRawText(), LanHistoryJsonOptions);
+                return parsed ?? [];
+            }
+            catch
+            {
+                return Array.Empty<SharedOrder>();
+            }
+        }
+
+        private static OrderData MapSharedOrderToOrderData(SharedOrder source)
+        {
+            var firstItem = (source.Items ?? [])
+                .Where(item => item != null)
+                .OrderBy(item => item.SequenceNo)
+                .FirstOrDefault();
+
+            return new OrderData
+            {
+                InternalId = source.InternalId?.Trim() ?? string.Empty,
+                StorageVersion = source.Version,
+                Id = source.OrderNumber?.Trim() ?? string.Empty,
+                Keyword = source.Keyword?.Trim() ?? string.Empty,
+                UserName = source.UserName?.Trim() ?? string.Empty,
+                ArrivalDate = source.ArrivalDate == default ? DateTime.Now : source.ArrivalDate,
+                OrderDate = source.ManagerOrderDate == default ? OrderData.PlaceholderOrderDate : source.ManagerOrderDate,
+                FolderName = source.FolderName?.Trim() ?? string.Empty,
+                Status = NormalizeStatus(source.Status),
+                StartMode = (OrderStartMode)source.StartMode,
+                FileTopologyMarker = (OrderFileTopologyMarker)source.TopologyMarker,
+                LastStatusReason = source.LastStatusReason?.Trim() ?? string.Empty,
+                LastStatusSource = source.LastStatusSource?.Trim() ?? string.Empty,
+                LastStatusAt = source.LastStatusAt,
+                PitStopAction = NormalizeAction(source.PitStopAction),
+                ImposingAction = NormalizeAction(source.ImposingAction),
+                SourcePath = firstItem?.SourcePath?.Trim() ?? string.Empty,
+                SourceFileSizeBytes = firstItem?.SourceFileSizeBytes,
+                SourceFileHash = firstItem?.SourceFileHash?.Trim() ?? string.Empty,
+                PreparedPath = firstItem?.PreparedPath?.Trim() ?? string.Empty,
+                PreparedFileSizeBytes = firstItem?.PreparedFileSizeBytes,
+                PreparedFileHash = firstItem?.PreparedFileHash?.Trim() ?? string.Empty,
+                PrintPath = firstItem?.PrintPath?.Trim() ?? string.Empty,
+                PrintFileSizeBytes = firstItem?.PrintFileSizeBytes,
+                PrintFileHash = firstItem?.PrintFileHash?.Trim() ?? string.Empty,
+                Items = (source.Items ?? [])
+                    .Where(item => item != null)
+                    .Select(MapSharedOrderItemToOrderFileItem)
+                    .OrderBy(item => item.SequenceNo)
+                    .ToList()
+            };
+        }
+
+        private static OrderFileItem MapSharedOrderItemToOrderFileItem(SharedOrderItem source)
+        {
+            return new OrderFileItem
+            {
+                ItemId = source.ItemId?.Trim() ?? string.Empty,
+                StorageVersion = source.Version,
+                SequenceNo = source.SequenceNo,
+                ClientFileLabel = source.ClientFileLabel?.Trim() ?? string.Empty,
+                Variant = source.Variant?.Trim() ?? string.Empty,
+                SourcePath = source.SourcePath?.Trim() ?? string.Empty,
+                SourceFileSizeBytes = source.SourceFileSizeBytes,
+                SourceFileHash = source.SourceFileHash?.Trim() ?? string.Empty,
+                PreparedPath = source.PreparedPath?.Trim() ?? string.Empty,
+                PreparedFileSizeBytes = source.PreparedFileSizeBytes,
+                PreparedFileHash = source.PreparedFileHash?.Trim() ?? string.Empty,
+                PrintPath = source.PrintPath?.Trim() ?? string.Empty,
+                PrintFileSizeBytes = source.PrintFileSizeBytes,
+                PrintFileHash = source.PrintFileHash?.Trim() ?? string.Empty,
+                FileStatus = NormalizeStatus(source.FileStatus),
+                LastReason = source.LastReason?.Trim() ?? string.Empty,
+                UpdatedAt = source.UpdatedAt == default ? DateTime.Now : source.UpdatedAt,
+                PitStopAction = NormalizeAction(source.PitStopAction),
+                ImposingAction = NormalizeAction(source.ImposingAction),
+                TechnicalFiles = []
+            };
         }
 
         private void TryAppendRepositoryEvent(
@@ -197,7 +435,6 @@ namespace Replica
             if (order == null)
                 return;
 
-            EnsureOrdersRepository();
             var orderInternalId = order.InternalId ?? string.Empty;
             var correlationId = Logger.CurrentCorrelationId;
             var payloadJson = JsonSerializer.Serialize(new
@@ -206,13 +443,31 @@ namespace Replica
                 payload = payload ?? new { }
             });
 
-            if (_orderApplicationService.TryAppendHistoryEvent(
+            string appendError;
+            bool appendSucceeded;
+            if (ShouldUseLanRunApi())
+            {
+                appendSucceeded = TryAppendHistoryEventToLocalCache(
                     orderInternalId,
                     itemId ?? string.Empty,
                     eventType ?? string.Empty,
                     eventSource ?? string.Empty,
                     payloadJson,
-                    out var appendError))
+                    out appendError);
+            }
+            else
+            {
+                EnsureOrdersRepository();
+                appendSucceeded = _orderApplicationService.TryAppendHistoryEvent(
+                    orderInternalId,
+                    itemId ?? string.Empty,
+                    eventType ?? string.Empty,
+                    eventSource ?? string.Empty,
+                    payloadJson,
+                    out appendError);
+            }
+
+            if (appendSucceeded)
             {
                 return;
             }

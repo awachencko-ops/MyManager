@@ -657,13 +657,13 @@ namespace Replica
                     : new List<string> { UserIdentityResolver.DefaultDisplayName };
                 var defaultUserName = usersSnapshot[0];
                 var historyFilePath = StoragePaths.ResolveExistingFilePath(_jsonHistoryFile, "history.json");
+                _jsonHistoryFile = historyFilePath;
+                var historyCountBeforeBootstrap = _orderHistory.Count;
 
                 var result = await Task.Run(() =>
                 {
-                    _orderApplicationService.ConfigureHistoryRepository(_ordersStorageBackend, _lanPostgreSqlConnectionString, historyFilePath);
-
                     var loadedOrders = new List<OrderData>();
-                    if (_orderApplicationService.TryLoadHistory(out var repositoryOrders) && repositoryOrders.Count > 0)
+                    if (TryLoadHistoryFromConfiguredRepository(out var repositoryOrders) && repositoryOrders.Count > 0)
                         loadedOrders.AddRange(repositoryOrders);
 
                     var postLoad = _orderApplicationService.ApplyHistoryPostLoad(
@@ -678,6 +678,14 @@ namespace Replica
 
                 if (Disposing || IsDisposed)
                     return;
+
+                if (_orderHistory.Count > 0 && _orderHistory.Count != historyCountBeforeBootstrap)
+                {
+                    Logger.Warn("UI-BOOTSTRAP | apply-skipped | reason=history-mutated-during-bootstrap");
+                    _ordersDataBootstrapCompleted = true;
+                    SetBottomStatus($"Заказов загружено: {_orderHistory.Count}");
+                    return;
+                }
 
                 _jsonHistoryFile = historyFilePath;
                 _orderHistory.Clear();
@@ -903,6 +911,18 @@ namespace Replica
 
         private void UpdateActionButtonsState()
         {
+            if (!ShouldUseLanRunApi()
+                && _serverHardLockActive
+                && ((_serverHardLockOverlayPanelMain?.Visible ?? false)
+                    || (_serverHardLockOverlayPanelQueue?.Visible ?? false)))
+            {
+                _serverHardLockActive = false;
+                if (_serverHardLockOverlayPanelMain != null)
+                    _serverHardLockOverlayPanelMain.Visible = false;
+                if (_serverHardLockOverlayPanelQueue != null)
+                    _serverHardLockOverlayPanelQueue.Visible = false;
+            }
+
             if (_serverHardLockActive)
             {
                 tsbNewJob.Enabled = false;

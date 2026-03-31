@@ -179,6 +179,7 @@ namespace Replica
         {
             RefreshArchivedStatusesIfDue();
             RefreshUsersDirectoryIfNeeded();
+            EnsureLocalLanApiStartup(reason: "timer");
             RequestLanServerProbe("timer");
             UpdateTrayConnectionIndicator();
             UpdateTrayDiskIndicator();
@@ -340,6 +341,7 @@ namespace Replica
             var dependencyHealthLevel = GetWorstDependencyHealthLevel();
             if (ShouldUseLanRunApi())
             {
+                EnsureLocalLanApiStartup(reason: "indicator");
                 RequestLanServerProbe("status-refresh");
                 UpdateLanApiConnectionIndicator(dependencyHealthLevel);
                 return;
@@ -1271,12 +1273,34 @@ namespace Replica
                    || string.Equals(host, "::1", StringComparison.OrdinalIgnoreCase);
         }
 
-        private async void EnsureLocalLanApiStartup()
+        private async void EnsureLocalLanApiStartup(bool force = false, string reason = "startup")
         {
             if (!ShouldUseLanRunApi() || !IsLanApiLocalHost())
                 return;
 
-            await TryStartLocalLanApiIfNeededAsync();
+            if (Disposing || IsDisposed || _lanApiRecoveryInProgress)
+                return;
+
+            var snapshot = GetLanServerProbeSnapshot(out _, out _);
+            if (!force && snapshot.ApiReachable && snapshot.IsReady)
+                return;
+
+            var nowUtc = DateTime.UtcNow;
+            if (!force
+                && _lanApiAutoStartLastAttemptUtc > DateTime.MinValue
+                && nowUtc - _lanApiAutoStartLastAttemptUtc < LanApiAutoStartCooldown)
+            {
+                return;
+            }
+
+            _lanApiAutoStartLastAttemptUtc = nowUtc;
+            var started = await TryStartLocalLanApiIfNeededAsync();
+            Logger.Info($"LAN-API | auto-start-attempt | reason={reason} | started={(started ? 1 : 0)}");
+            if (!started)
+                return;
+
+            _lanApiAutoStartLastSuccessUtc = DateTime.UtcNow;
+            RequestLanServerProbe($"auto-start:{reason}", force: true);
         }
 
         private static IEnumerable<string> ResolveReplicaApiExecutableCandidates()

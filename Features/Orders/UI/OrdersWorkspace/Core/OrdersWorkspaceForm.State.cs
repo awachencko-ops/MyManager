@@ -103,6 +103,8 @@ namespace Replica
         private LanServerProbeSnapshot _lanServerProbeSnapshot = LanServerProbeSnapshot.CreateInitial();
         private bool _lanApiRecoveryInProgress;
         private bool _lanConnectionRecoveryActionEnabled;
+        private DateTime _lanApiAutoStartLastAttemptUtc = DateTime.MinValue;
+        private DateTime _lanApiAutoStartLastSuccessUtc = DateTime.MinValue;
         private bool _lanPushPressureAckActionEnabled;
         private readonly object _lanPushRefreshSync = new();
         private readonly object _lanPushMetricsSync = new();
@@ -186,6 +188,7 @@ namespace Replica
         private const int TrayIndicatorsRefreshIntervalMs = 15000;
         private const int LanServerProbeMinIntervalMs = 5000;
         private const int LanServerProbeFailureThreshold = 3;
+        private static readonly TimeSpan LanApiAutoStartCooldown = TimeSpan.FromSeconds(20);
         private const double LanSloAvailabilityTarget = 0.995;
         private const double LanSloLatencyP95TargetMs = 500;
         private const double LanSloWriteSuccessTarget = 0.99;

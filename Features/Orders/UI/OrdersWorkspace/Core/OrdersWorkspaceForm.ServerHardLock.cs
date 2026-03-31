@@ -14,8 +14,8 @@ namespace Replica
         {
             EnsureServerHardLockOverlays();
             ApplyServerHardLockState(
-                shouldLock: ShouldUseLanRunApi(),
-                details: "\u041f\u0440\u043e\u0432\u0435\u0440\u043a\u0430 \u043f\u043e\u0434\u043a\u043b\u044e\u0447\u0435\u043d\u0438\u044f \u043a \u0441\u0435\u0440\u0432\u0435\u0440\u0443 \u0432\u044b\u043f\u043e\u043b\u043d\u044f\u0435\u0442\u0441\u044f...");
+                shouldLock: false,
+                details: string.Empty);
         }
 
         private bool EnsureServerWriteAllowed(string operationCaption)
