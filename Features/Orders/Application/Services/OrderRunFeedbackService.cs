@@ -215,6 +215,24 @@ public sealed class OrderRunFeedbackService
         return preview;
     }
 
+    private static string BuildAlreadyActiveServerSkippedPreview(IReadOnlyCollection<string>? serverSkipped, int previewLimit = DefaultPreviewLimit)
+    {
+        var safePreviewLimit = Math.Max(1, previewLimit);
+        var skipped = (serverSkipped ?? Array.Empty<string>())
+            .Where(item => !string.IsNullOrWhiteSpace(item))
+            .Select(item => NormalizeAlreadyActiveSkipEntry(item.Trim()))
+            .Where(item => !string.IsNullOrWhiteSpace(item))
+            .ToList();
+        if (skipped.Count == 0)
+            return string.Empty;
+
+        var preview = string.Join(Environment.NewLine, skipped.Take(safePreviewLimit));
+        if (skipped.Count > safePreviewLimit)
+            preview += $"{Environment.NewLine}... ещё: {skipped.Count - safePreviewLimit}";
+
+        return preview;
+    }
+
     public string BuildSkippedDetails(OrderRunStateService.RunPlan runPlan, IReadOnlyCollection<string>? serverSkipped)
     {
         if (runPlan == null)
@@ -304,16 +322,18 @@ public sealed class OrderRunFeedbackService
             {
                 var skippedPreview = BuildServerSkippedPreview(preparation.SkippedByServer);
                 var allAlreadyActive = IsAlreadyActiveServerSkip(preparation.SkippedByServer);
+                if (allAlreadyActive)
+                    skippedPreview = BuildAlreadyActiveServerSkippedPreview(preparation.SkippedByServer);
                 var dialogMessage = string.IsNullOrWhiteSpace(skippedPreview)
                     ? (allAlreadyActive
-                        ? "Выбранные заказы уже запущены на сервере."
+                        ? "Выбранные заказы уже выполняются на сервере."
                         : "Сервер не подтвердил запуск выбранных заказов.")
                     : (allAlreadyActive
-                        ? $"Выбранные заказы уже запущены на сервере:{Environment.NewLine}{skippedPreview}"
+                        ? $"Выбранные заказы уже выполняются на сервере:{Environment.NewLine}{skippedPreview}"
                         : $"Сервер не подтвердил запуск выбранных заказов:{Environment.NewLine}{skippedPreview}");
                 return OrderRunStartUiFeedback.Abort(
                     bottomStatus: allAlreadyActive
-                        ? "Выбранные заказы уже запущены"
+                        ? "Заказы уже выполняются на сервере"
                         : "Сервер не подтвердил запуск выбранных заказов",
                     dialog: new OrderRunFeedbackDialog(
                         "Запуск",
@@ -386,12 +406,14 @@ public sealed class OrderRunFeedbackService
         {
             var skippedPreview = BuildServerSkippedPreview(serverSkipped);
             var allAlreadyActive = IsAlreadyActiveServerSkip(serverSkipped);
+            if (allAlreadyActive)
+                skippedPreview = BuildAlreadyActiveServerSkippedPreview(serverSkipped);
             var message = string.IsNullOrWhiteSpace(skippedPreview)
                 ? (allAlreadyActive
-                    ? "Часть заказов уже была запущена."
+                    ? "Часть заказов уже выполняется на сервере."
                     : "Часть заказов не запущена сервером.")
                 : (allAlreadyActive
-                    ? $"Часть заказов уже была запущена:{Environment.NewLine}{skippedPreview}"
+                    ? $"Часть заказов уже выполняется на сервере:{Environment.NewLine}{skippedPreview}"
                     : $"Часть заказов не запущена сервером:{Environment.NewLine}{skippedPreview}");
             dialog = new OrderRunFeedbackDialog("Запуск", message, OrderRunFeedbackSeverity.Information);
         }
@@ -634,14 +656,41 @@ public sealed class OrderRunFeedbackService
                 continue;
 
             hasAny = true;
-            var normalized = entry.Trim();
-            var isAlreadyActive = normalized.IndexOf("run already active", StringComparison.OrdinalIgnoreCase) >= 0
-                                  || normalized.IndexOf("уже запущен на сервере", StringComparison.OrdinalIgnoreCase) >= 0;
-            if (!isAlreadyActive)
+            if (!IsAlreadyActiveReason(entry.Trim()))
                 return false;
         }
 
         return hasAny;
+    }
+
+    private static string NormalizeAlreadyActiveSkipEntry(string entry)
+    {
+        if (string.IsNullOrWhiteSpace(entry))
+            return string.Empty;
+
+        var delimiterIndex = entry.IndexOf(':');
+        if (delimiterIndex <= 0 || delimiterIndex >= entry.Length - 1)
+            return entry.Trim();
+
+        var orderDisplayId = entry[..delimiterIndex].Trim();
+        var reason = entry[(delimiterIndex + 1)..].Trim();
+        if (string.IsNullOrWhiteSpace(orderDisplayId))
+            return entry.Trim();
+
+        return IsAlreadyActiveReason(reason)
+            ? orderDisplayId
+            : entry.Trim();
+    }
+
+    private static bool IsAlreadyActiveReason(string? reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+            return false;
+
+        var normalized = reason.Trim();
+        return normalized.IndexOf("run already active", StringComparison.OrdinalIgnoreCase) >= 0
+               || normalized.IndexOf("уже запущен на сервере", StringComparison.OrdinalIgnoreCase) >= 0
+               || normalized.IndexOf("уже выполняется", StringComparison.OrdinalIgnoreCase) >= 0;
     }
 
     public OrderRunStopUiFeedback BuildStopSelectionRequiredUiFeedback()

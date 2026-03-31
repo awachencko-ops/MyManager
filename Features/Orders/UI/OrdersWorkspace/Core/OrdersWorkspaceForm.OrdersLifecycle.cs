@@ -1310,6 +1310,17 @@ namespace Replica
             var startUiFeedback = _orderApplicationService.BuildRunStartUiFeedback(startPhase);
             if (!RenderRunStartUiFeedback(startUiFeedback))
             {
+                if (useLanApi
+                    && startPhase.Status == OrderRunStartPhaseStatus.ServerRejected
+                    && selectedOrders.Count > 0)
+                {
+                    var refreshed = TryRefreshRepositorySnapshotFromStorage(selectedOrders, "run-server-rejected");
+                    if (!refreshed)
+                    {
+                        ApplyOrderRunFeedbackLogs(
+                            _orderApplicationService.BuildRunSnapshotRefreshWarningUiFeedback("run-server-rejected").Logs);
+                    }
+                }
                 return;
             }
 

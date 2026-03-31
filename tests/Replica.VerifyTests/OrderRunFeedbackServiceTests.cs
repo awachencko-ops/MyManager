@@ -150,9 +150,11 @@ public sealed class OrderRunFeedbackServiceTests
         var feedback = service.BuildStartUiFeedback(startPhase);
 
         Assert.True(feedback.ShouldAbort);
-        Assert.Contains("уже запущены", feedback.BottomStatus);
+        Assert.Contains("выполняются", feedback.BottomStatus);
         Assert.NotNull(feedback.Dialog);
-        Assert.Contains("уже запущены", feedback.Dialog!.Message);
+        Assert.Contains("выполняются", feedback.Dialog!.Message);
+        Assert.DoesNotContain("00736: уже запущен на сервере", feedback.Dialog.Message);
+        Assert.Contains("00736", feedback.Dialog.Message);
         var log = Assert.Single(feedback.Logs);
         Assert.Contains("RUN | command-already-active", log.Message);
         Assert.False(log.IsWarning);
@@ -298,7 +300,9 @@ public sealed class OrderRunFeedbackServiceTests
             serverSkipped: new[] { "00736: run already active" });
 
         Assert.NotNull(feedback.Dialog);
-        Assert.Contains("уже была запущена", feedback.Dialog!.Message);
+        Assert.Contains("выполняется на сервере", feedback.Dialog!.Message);
+        Assert.DoesNotContain("run already active", feedback.Dialog.Message);
+        Assert.Contains("00736", feedback.Dialog.Message);
     }
 
     [Fact]
