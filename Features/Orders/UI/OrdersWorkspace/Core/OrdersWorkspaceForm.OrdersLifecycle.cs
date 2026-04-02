@@ -1137,6 +1137,9 @@ namespace Replica
 
         private void TryRestoreSelectedRowByTag(string selectedTag)
         {
+            if (_ordersGridAdapter?.TryRestoreSelectedRowByTag(selectedTag) == true)
+                return;
+
             OrderGridLogic.TryRestoreSelectedRowByTag(dgvJobs, colStatus.Index, selectedTag);
         }
 
@@ -1192,6 +1195,17 @@ namespace Replica
 
         private List<OrderData> GetSelectedOrders()
         {
+            if (_ordersGridAdapter != null)
+            {
+                var selectedOrderIds = _ordersGridAdapter.GetSelectedOrderInternalIds();
+                if (selectedOrderIds.Count > 0)
+                {
+                    return _orderHistory
+                        .Where(order => order != null && selectedOrderIds.Contains(order.InternalId, StringComparer.Ordinal))
+                        .ToList();
+                }
+            }
+
             return OrderGridLogic.GetSelectedOrders(dgvJobs, _orderHistory);
         }
 

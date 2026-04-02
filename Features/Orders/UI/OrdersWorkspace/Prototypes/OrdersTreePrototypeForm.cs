@@ -10,6 +10,7 @@ namespace Replica
         private readonly OrdersTreePrototypeControl _prototypeControl;
         private readonly Func<IReadOnlyList<OrdersTreePrototypeNode>>? _snapshotProvider;
         private readonly Label _lblHint = new();
+        public event EventHandler<OrdersPrototypeStageCellClickEventArgs>? StageCellClick;
 
         public OrdersTreePrototypeForm(
             IReadOnlyList<OrdersTreePrototypeNode> rootNodes,
@@ -18,12 +19,18 @@ namespace Replica
             _snapshotProvider = snapshotProvider;
             _prototypeControl = new OrdersTreePrototypeControl(rootNodes);
             _prototypeControl.RefreshRequested += (_, _) => RefreshSnapshot();
+            _prototypeControl.StageCellClick += (_, e) => StageCellClick?.Invoke(this, e);
             InitializeComponent();
         }
 
         public void LoadRoots(IReadOnlyList<OrdersTreePrototypeNode>? roots)
         {
             _prototypeControl.LoadRoots(roots);
+        }
+
+        public void RefreshFromSource()
+        {
+            RefreshSnapshot();
         }
 
         private void InitializeComponent()
@@ -44,7 +51,7 @@ namespace Replica
             _lblHint.Font = new Font("Segoe UI", 8.5f, FontStyle.Regular, GraphicsUnit.Point);
             _lblHint.ForeColor = Color.FromArgb(90, 97, 108);
             _lblHint.Padding = new Padding(8, 0, 10, 0);
-            _lblHint.Text = "F5: обновить снимок из рабочей таблицы";
+            _lblHint.Text = "Клик по файлу: открыть/добавить | F5: обновить снимок";
 
             Controls.Add(_lblHint);
             Controls.Add(_prototypeControl);

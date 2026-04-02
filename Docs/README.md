@@ -13,6 +13,7 @@
 - `Docs/REPLICA_ORDERS_GRID_FUNCTION_BINDINGS_2026-04-02.md`
 - `Docs/REPLICA_ORDERS_GRID_DESIGN_2026-04-02.md`
 - `Docs/REPLICA_ORDERS_GRID_MIGRATION_PLAN_OLV_2026-04-02.md`
+- `Docs/REPLICA_ORDERS_GRID_PARITY_CHECKLIST_2026-04-02.md`
 
 Обязательный режим внедрения OLV:
 - Новая таблица разрабатывается в отдельном окне, без изменения рабочего окна со старой таблицей.

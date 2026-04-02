@@ -145,6 +145,8 @@ namespace Replica
         private Label? _serverHardLockOverlayDetailsMain;
         private string _lastServerOpsProbeLogFingerprint = string.Empty;
         private OrdersViewMode _ordersViewMode = OrdersViewMode.List;
+        private IOrdersGridAdapter? _ordersGridAdapter;
+        private bool _useOlvOrdersGridFeatureFlag;
 
         private readonly List<string> _users = [UserIdentityResolver.DefaultDisplayName];
         private readonly List<string> _filterUsers = [UserIdentityResolver.DefaultDisplayName];

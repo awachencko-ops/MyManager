@@ -23,7 +23,78 @@ namespace Replica
         {
             var roots = BuildOrdersTreePrototypeSnapshot();
             using var prototypeForm = new OrdersTreePrototypeForm(roots, BuildOrdersTreePrototypeSnapshot);
+            prototypeForm.StageCellClick += PrototypeForm_StageCellClick;
             prototypeForm.ShowDialog(this);
+        }
+
+        private async void PrototypeForm_StageCellClick(object? sender, OrdersPrototypeStageCellClickEventArgs e)
+        {
+            if (e == null || e.Node == null || !OrderStages.IsFileStage(e.Stage))
+                return;
+
+            if (!EnsureServerWriteAllowed("Файловая операция"))
+                return;
+
+            var node = e.Node;
+            if (string.IsNullOrWhiteSpace(node.OrderInternalId))
+                return;
+
+            var order = FindOrderByInternalId(node.OrderInternalId);
+            if (order == null)
+            {
+                SetBottomStatus("Не удалось найти заказ для операции в OLV прототипе");
+                return;
+            }
+
+            try
+            {
+                if (OrderGridLogic.IsItemTag(node.RowTag))
+                {
+                    var itemId = node.ItemId;
+                    if (string.IsNullOrWhiteSpace(itemId))
+                        return;
+
+                    var item = order.Items?.FirstOrDefault(x => x != null && string.Equals(x.ItemId, itemId, StringComparison.Ordinal));
+                    if (item == null)
+                    {
+                        SetBottomStatus("Item не найден для выбранной строки OLV");
+                        return;
+                    }
+
+                    var itemPath = GetItemStagePath(item, e.Stage);
+                    if (HasExistingFile(itemPath))
+                        OpenFileDefault(itemPath);
+                    else
+                        await PickAndCopyFileForItemAsync(order, item, e.Stage);
+                }
+                else
+                {
+                    if (OrderTopologyService.IsMultiOrder(order))
+                    {
+                        SetBottomStatus("В group-order у контейнера файлы заполняются только в строках item");
+                        return;
+                    }
+
+                    var orderPath = ResolveSingleOrderDisplayPath(order, e.Stage);
+                    if (HasExistingFile(orderPath))
+                        OpenFileDefault(orderPath);
+                    else
+                        await PickAndCopyFileForOrderAsync(order, e.Stage);
+                }
+
+                if (sender is OrdersTreePrototypeForm prototypeForm)
+                    prototypeForm.RefreshFromSource();
+            }
+            catch (Exception ex)
+            {
+                SetBottomStatus($"Не удалось обработать действие по файлу (OLV): {ex.Message}");
+                MessageBox.Show(
+                    this,
+                    $"Не удалось обработать действие по файлу (OLV): {ex.Message}",
+                    "OLV prototype",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
         }
 
         private List<OrdersTreePrototypeNode> BuildOrdersTreePrototypeSnapshot()

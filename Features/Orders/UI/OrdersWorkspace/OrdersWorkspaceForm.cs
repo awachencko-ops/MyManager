@@ -53,6 +53,7 @@ namespace Replica
             InitializeReceivedDateFilter();
             InitializeQueueNavigation();
             InitializeOrdersGridVisuals();
+            InitializeOrdersGridAdapter();
             InitializeOrdersTilesView();
             InitializeOrdersViewScrollBar();
             InitializeViewModeSwitches();

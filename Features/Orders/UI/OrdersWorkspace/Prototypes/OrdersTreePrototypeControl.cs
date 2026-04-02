@@ -28,6 +28,7 @@ namespace Replica
         private OLVColumn? _defaultSortColumn;
 
         public event EventHandler? RefreshRequested;
+        public event EventHandler<OrdersPrototypeStageCellClickEventArgs>? StageCellClick;
 
         public OrdersTreePrototypeControl(IReadOnlyList<OrdersTreePrototypeNode>? rootNodes)
         {
@@ -129,6 +130,7 @@ namespace Replica
                     ? node.Children
                     : Array.Empty<OrdersTreePrototypeNode>();
             _treeListView.ItemActivate += TreeListView_ItemActivate;
+            _treeListView.CellClick += TreeListView_CellClick;
             _treeListView.KeyDown += TreeListView_KeyDown;
             _treeListView.MouseUp += TreeListView_MouseUp;
             _treeListView.TreeColumnRenderer = new TreeListView.TreeRenderer
@@ -340,6 +342,20 @@ namespace Replica
             }
         }
 
+        private void TreeListView_CellClick(object? sender, CellClickEventArgs e)
+        {
+            if (e.Model is not OrdersTreePrototypeNode node)
+                return;
+
+            var stage = ResolveStageByColumnIndex(e.ColumnIndex);
+            if (!OrderStages.IsFileStage(stage))
+                return;
+
+            StageCellClick?.Invoke(
+                this,
+                new OrdersPrototypeStageCellClickEventArgs(node, stage, e.ColumnIndex));
+        }
+
         private void ToggleSelectedNodeExpansion()
         {
             if (_treeListView.SelectedObject is not OrdersTreePrototypeNode node || !node.HasChildren)
@@ -428,6 +444,17 @@ namespace Replica
                 return $"{node.OrderInternalId}|{node.ItemId}";
 
             return node.Title ?? string.Empty;
+        }
+
+        private static int ResolveStageByColumnIndex(int columnIndex)
+        {
+            return columnIndex switch
+            {
+                2 => OrderStages.Source,
+                3 => OrderStages.Prepared,
+                6 => OrderStages.Print,
+                _ => OrderStages.None
+            };
         }
 
         private static OLVColumn BuildColumn(
