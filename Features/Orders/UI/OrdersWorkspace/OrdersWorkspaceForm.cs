@@ -56,6 +56,7 @@ namespace Replica
             InitializeOrdersTilesView();
             InitializeOrdersViewScrollBar();
             InitializeViewModeSwitches();
+            InitializeTreePrototypeLauncher();
             InitializeOrdersDataFlow();
             InitializeOrderRowContextMenu();
             InitializeActionButtonsState();

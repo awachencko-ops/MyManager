@@ -59,6 +59,7 @@
             colCreated = new DataGridViewTextBoxColumn();
             pnlScrollBar = new Panel();
             pnlHeader = new Panel();
+            btnTreePrototype = new Button();
             btnViewTiles = new Button();
             btnViewList = new Button();
             tbSearch = new TextBox();
@@ -403,6 +404,7 @@
             // 
             // pnlHeader
             // 
+            pnlHeader.Controls.Add(btnTreePrototype);
             pnlHeader.Controls.Add(btnViewTiles);
             pnlHeader.Controls.Add(btnViewList);
             pnlHeader.Controls.Add(tbSearch);
@@ -413,13 +415,23 @@
             pnlHeader.Size = new Size(1743, 36);
             pnlHeader.TabIndex = 0;
             // 
+            // btnTreePrototype
+            // 
+            btnTreePrototype.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            btnTreePrototype.Location = new Point(1550, 3);
+            btnTreePrototype.Name = "btnTreePrototype";
+            btnTreePrototype.Size = new Size(109, 33);
+            btnTreePrototype.TabIndex = 4;
+            btnTreePrototype.Text = "Tree proto";
+            btnTreePrototype.UseVisualStyleBackColor = true;
+            // 
             // btnViewTiles
             // 
             btnViewTiles.Image = (Image)resources.GetObject("btnViewTiles.Image");
             btnViewTiles.Location = new Point(1700, 3);
             btnViewTiles.Name = "btnViewTiles";
             btnViewTiles.Size = new Size(34, 33);
-            btnViewTiles.TabIndex = 3;
+            btnViewTiles.TabIndex = 5;
             btnViewTiles.UseVisualStyleBackColor = true;
             // 
             // btnViewList
@@ -428,17 +440,17 @@
             btnViewList.Location = new Point(1665, 3);
             btnViewList.Name = "btnViewList";
             btnViewList.Size = new Size(34, 33);
-            btnViewList.TabIndex = 2;
+            btnViewList.TabIndex = 3;
             btnViewList.UseVisualStyleBackColor = true;
             // 
             // tbSearch
             // 
             tbSearch.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Right;
             tbSearch.Font = new Font("Segoe UI", 9F, FontStyle.Italic, GraphicsUnit.Point, 204);
-            tbSearch.Location = new Point(1343, 5);
+            tbSearch.Location = new Point(1242, 5);
             tbSearch.Name = "tbSearch";
             tbSearch.Size = new Size(302, 31);
-            tbSearch.TabIndex = 1;
+            tbSearch.TabIndex = 2;
             // 
             // cbQueue
             // 
@@ -712,6 +724,7 @@
         private Panel pnlFilters;
         private DataGridView dgvJobs;
         private ComboBox cbQueue;
+        private Button btnTreePrototype;
         private Button btnViewTiles;
         private Button btnViewList;
         private FlowLayoutPanel flpFilters;
