@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
@@ -12,6 +13,9 @@ namespace Replica
         {
             btnTreePrototype.Click -= BtnTreePrototype_Click;
             btnTreePrototype.Click += BtnTreePrototype_Click;
+
+            btnAvaloniaPrototype.Click -= BtnAvaloniaPrototype_Click;
+            btnAvaloniaPrototype.Click += BtnAvaloniaPrototype_Click;
         }
 
         private void BtnTreePrototype_Click(object? sender, EventArgs e)
@@ -24,6 +28,104 @@ namespace Replica
             var roots = BuildOrdersTreePrototypeSnapshot();
             using var prototypeForm = new OrdersTreePrototypeForm(roots);
             prototypeForm.ShowDialog(this);
+        }
+
+        private void BtnAvaloniaPrototype_Click(object? sender, EventArgs e)
+        {
+            OpenAvaloniaPrototype();
+        }
+
+        private void OpenAvaloniaPrototype()
+        {
+            var repoRoot = TryResolveRepositoryRoot();
+            if (repoRoot == null)
+            {
+                MessageBox.Show(this,
+                    "Не удалось определить путь к репозиторию для запуска Avalonia-прототипа.",
+                    "Avalonia prototype",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return;
+            }
+
+            var prototypeProjectPath = Path.Combine(repoRoot, "Prototypes", "AvaloniaOrdersPrototype", "AvaloniaOrdersPrototype.csproj");
+            if (!File.Exists(prototypeProjectPath))
+            {
+                MessageBox.Show(this,
+                    $"Файл проекта не найден:\n{prototypeProjectPath}",
+                    "Avalonia prototype",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return;
+            }
+
+            var builtExecutable = FindBuiltAvaloniaExecutable(repoRoot);
+            if (builtExecutable != null)
+            {
+                StartProcessOrShowMessage(new ProcessStartInfo
+                {
+                    FileName = builtExecutable,
+                    WorkingDirectory = Path.GetDirectoryName(builtExecutable) ?? repoRoot,
+                    UseShellExecute = true
+                });
+                return;
+            }
+
+            StartProcessOrShowMessage(new ProcessStartInfo
+            {
+                FileName = "dotnet",
+                Arguments = $"run --project \"{prototypeProjectPath}\"",
+                WorkingDirectory = repoRoot,
+                UseShellExecute = true
+            });
+        }
+
+        private static string? TryResolveRepositoryRoot()
+        {
+            var currentDirectory = new DirectoryInfo(AppContext.BaseDirectory);
+            while (currentDirectory != null)
+            {
+                if (File.Exists(Path.Combine(currentDirectory.FullName, "Replica.csproj")))
+                    return currentDirectory.FullName;
+
+                currentDirectory = currentDirectory.Parent;
+            }
+
+            return null;
+        }
+
+        private static string? FindBuiltAvaloniaExecutable(string repositoryRoot)
+        {
+            static string BuildPath(string root, string configuration)
+            {
+                return Path.Combine(root, "Prototypes", "AvaloniaOrdersPrototype", "bin", configuration, "net8.0", "AvaloniaOrdersPrototype.exe");
+            }
+
+            var debugPath = BuildPath(repositoryRoot, "Debug");
+            if (File.Exists(debugPath))
+                return debugPath;
+
+            var releasePath = BuildPath(repositoryRoot, "Release");
+            if (File.Exists(releasePath))
+                return releasePath;
+
+            return null;
+        }
+
+        private void StartProcessOrShowMessage(ProcessStartInfo processStartInfo)
+        {
+            try
+            {
+                Process.Start(processStartInfo);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this,
+                    $"Не удалось запустить Avalonia-прототип.\n{ex.Message}",
+                    "Avalonia prototype",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
         }
 
         private List<OrdersTreePrototypeNode> BuildOrdersTreePrototypeSnapshot()

@@ -1,0 +1,49 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="720"
+        x:Class="AvaloniaOrdersPrototype.MainWindow"
+        Width="1200"
+        Height="720"
+        MinWidth="960"
+        MinHeight="540"
+        Title="Orders Tree Prototype (Avalonia)">
+    <Grid RowDefinitions="Auto,Auto,*">
+        <Border Margin="12,12,12,8" Padding="10" CornerRadius="8">
+            <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto">
+                <Button Grid.Column="0"
+                        Margin="0,0,8,0"
+                        Click="ExpandAllClick"
+                        Content="Expand all" />
+                <Button Grid.Column="1"
+                        Margin="0,0,8,0"
+                        Click="CollapseAllClick"
+                        Content="Collapse all" />
+                <Button Grid.Column="2"
+                        Margin="0,0,8,0"
+                        Click="AddGroupClick"
+                        Content="Add test group" />
+                <Button Grid.Column="3"
+                        Margin="0,0,12,0"
+                        Click="AddSingleClick"
+                        Content="Add single order" />
+
+                <TextBlock Grid.Column="5"
+                           VerticalAlignment="Center"
+                           x:Name="SummaryText"
+                           FontWeight="SemiBold"
+                           Text="Summary" />
+            </Grid>
+        </Border>
+
+        <TextBlock Grid.Row="1"
+                   Margin="12,0,12,8"
+                   Opacity="0.75"
+                   Text="Groups are expandable parent rows. Single orders are leaf rows." />
+
+        <TreeDataGrid x:Name="OrdersGrid"
+                      Grid.Row="2"
+                      Margin="12,0,12,12" />
+    </Grid>
+</Window>
