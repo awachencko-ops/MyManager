@@ -50,5 +50,45 @@ namespace Replica
                 .Distinct(StringComparer.Ordinal)
                 .ToList();
         }
+
+        public IReadOnlyList<OrdersGridVisibleRowSnapshot> GetVisibleOrderRows()
+        {
+            var snapshots = new List<OrdersGridVisibleRowSnapshot>(_grid.Rows.Count);
+            var orderNumberColumn = TryGetColumnByName("colOrderNumber");
+            var printColumn = TryGetColumnByName("colPrint");
+            var orderNumberColumnIndex = orderNumberColumn?.Index ?? -1;
+            var printColumnIndex = printColumn?.Index ?? -1;
+
+            foreach (DataGridViewRow row in _grid.Rows)
+            {
+                if (row.IsNewRow || !row.Visible)
+                    continue;
+
+                var rowTag = row.Tag?.ToString();
+                if (string.IsNullOrWhiteSpace(rowTag))
+                    continue;
+
+                var orderNumber = orderNumberColumnIndex >= 0 && orderNumberColumnIndex < row.Cells.Count
+                    ? row.Cells[orderNumberColumnIndex].Value?.ToString() ?? string.Empty
+                    : string.Empty;
+                var printDisplay = printColumnIndex >= 0 && printColumnIndex < row.Cells.Count
+                    ? row.Cells[printColumnIndex].Value?.ToString() ?? string.Empty
+                    : string.Empty;
+
+                snapshots.Add(new OrdersGridVisibleRowSnapshot(rowTag, orderNumber, printDisplay));
+            }
+
+            return snapshots;
+        }
+
+        private DataGridViewColumn? TryGetColumnByName(string columnName)
+        {
+            if (string.IsNullOrWhiteSpace(columnName))
+                return null;
+
+            return _grid.Columns.Contains(columnName)
+                ? _grid.Columns[columnName]
+                : null;
+        }
     }
 }

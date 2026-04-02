@@ -8,5 +8,6 @@ namespace Replica
         string? GetCurrentSelectedTag();
         bool TryRestoreSelectedRowByTag(string selectedTag);
         IReadOnlyList<string> GetSelectedOrderInternalIds();
+        IReadOnlyList<OrdersGridVisibleRowSnapshot> GetVisibleOrderRows();
     }
 }

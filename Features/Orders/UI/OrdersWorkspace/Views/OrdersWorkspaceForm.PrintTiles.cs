@@ -494,48 +494,40 @@ namespace Replica
 
             var preferredOrderInternalId = GetFocusedPrintTileOrderInternalId();
             if (string.IsNullOrWhiteSpace(preferredOrderInternalId))
-                preferredOrderInternalId = ExtractOrderInternalIdFromTag(dgvJobs.CurrentRow?.Tag?.ToString());
+            {
+                var currentTag = _ordersGridAdapter?.GetCurrentSelectedTag() ?? dgvJobs.CurrentRow?.Tag?.ToString();
+                preferredOrderInternalId = ExtractOrderInternalIdFromTag(currentTag);
+            }
 
             var nextTiles = new List<PrintTileTag>();
             var ordersByInternalId = OrderGridLogic.BuildOrderIndex(_orderHistory);
-            foreach (DataGridViewRow row in dgvJobs.Rows)
+            var adapterVisibleRows = _ordersGridAdapter?.GetVisibleOrderRows() ?? Array.Empty<OrdersGridVisibleRowSnapshot>();
+            if (adapterVisibleRows.Count > 0)
             {
-                if (row.IsNewRow || !row.Visible)
-                    continue;
+                foreach (var rowSnapshot in adapterVisibleRows)
+                {
+                    TryAppendVisibleOrderRowToTileSnapshot(
+                        rowTag: rowSnapshot.RowTag,
+                        orderNumberDisplay: rowSnapshot.OrderNumber,
+                        printDisplayValue: rowSnapshot.PrintDisplayValue,
+                        ordersByInternalId: ordersByInternalId,
+                        destination: nextTiles);
+                }
+            }
+            else
+            {
+                foreach (DataGridViewRow row in dgvJobs.Rows)
+                {
+                    if (row.IsNewRow || !row.Visible)
+                        continue;
 
-                var rowTag = row.Tag?.ToString();
-                if (!IsOrderTag(rowTag))
-                    continue;
-
-                var orderInternalId = ExtractOrderInternalIdFromTag(rowTag);
-                if (string.IsNullOrWhiteSpace(orderInternalId))
-                    continue;
-
-                var order = OrderGridLogic.FindOrderByInternalId(ordersByInternalId, orderInternalId);
-                if (order == null)
-                    continue;
-
-                var printPath = ResolveSingleOrderDisplayPath(order, 3);
-                if (!HasExistingFile(printPath))
-                    continue;
-
-                var printFileName = row.Cells[colPrint.Index].Value?.ToString();
-                if (string.IsNullOrWhiteSpace(printFileName) || string.Equals(printFileName, "...", StringComparison.Ordinal))
-                    printFileName = Path.GetFileName(printPath);
-
-                if (string.IsNullOrWhiteSpace(printFileName))
-                    continue;
-
-                var orderNumber = row.Cells[colOrderNumber.Index].Value?.ToString();
-                if (string.IsNullOrWhiteSpace(orderNumber))
-                    orderNumber = GetOrderDisplayId(order);
-
-                var cleanOrderNumber = orderNumber?.Trim();
-                if (string.IsNullOrWhiteSpace(cleanOrderNumber))
-                    cleanOrderNumber = "—";
-
-                var cleanPrintFileName = printFileName.Trim();
-                nextTiles.Add(new PrintTileTag(orderInternalId, cleanOrderNumber, printPath, cleanPrintFileName));
+                    TryAppendVisibleOrderRowToTileSnapshot(
+                        rowTag: row.Tag?.ToString(),
+                        orderNumberDisplay: row.Cells[colOrderNumber.Index].Value?.ToString(),
+                        printDisplayValue: row.Cells[colPrint.Index].Value?.ToString(),
+                        ordersByInternalId: ordersByInternalId,
+                        destination: nextTiles);
+                }
             }
 
             var shouldRebuildTiles = !ArePrintTilesItemsUpToDate(nextTiles);
@@ -578,6 +570,50 @@ namespace Replica
                 StartPdfThumbnailGeneration(nextTiles.Select(tile => tile.PrintPath));
 
             UpdateOrdersViewScrollBarFromActiveView();
+        }
+
+        private void TryAppendVisibleOrderRowToTileSnapshot(
+            string? rowTag,
+            string? orderNumberDisplay,
+            string? printDisplayValue,
+            IReadOnlyDictionary<string, OrderData> ordersByInternalId,
+            ICollection<PrintTileTag> destination)
+        {
+            if (!IsOrderTag(rowTag))
+                return;
+
+            var orderInternalId = ExtractOrderInternalIdFromTag(rowTag);
+            if (string.IsNullOrWhiteSpace(orderInternalId))
+                return;
+
+            var order = OrderGridLogic.FindOrderByInternalId(ordersByInternalId, orderInternalId);
+            if (order == null)
+                return;
+
+            var printPath = ResolveSingleOrderDisplayPath(order, OrderStages.Print);
+            if (!HasExistingFile(printPath))
+                return;
+
+            var printFileName = printDisplayValue;
+            if (string.IsNullOrWhiteSpace(printFileName) || string.Equals(printFileName, "...", StringComparison.Ordinal))
+                printFileName = Path.GetFileName(printPath);
+
+            if (string.IsNullOrWhiteSpace(printFileName))
+                return;
+
+            var orderNumber = orderNumberDisplay;
+            if (string.IsNullOrWhiteSpace(orderNumber))
+                orderNumber = GetOrderDisplayId(order);
+
+            var cleanOrderNumber = orderNumber?.Trim();
+            if (string.IsNullOrWhiteSpace(cleanOrderNumber))
+                cleanOrderNumber = "—";
+
+            destination.Add(new PrintTileTag(
+                orderInternalId,
+                cleanOrderNumber,
+                printPath,
+                printFileName.Trim()));
         }
 
         private bool ArePrintTilesItemsUpToDate(IReadOnlyList<PrintTileTag> expectedTiles)
@@ -633,6 +669,13 @@ namespace Replica
 
         private HashSet<string> GetSelectedOrderInternalIdsFromGrid()
         {
+            if (_ordersGridAdapter != null)
+            {
+                var adapterSelected = _ordersGridAdapter.GetSelectedOrderInternalIds();
+                if (adapterSelected.Count > 0)
+                    return new HashSet<string>(adapterSelected, StringComparer.Ordinal);
+            }
+
             var selectedOrderIds = new HashSet<string>(StringComparer.Ordinal);
             foreach (DataGridViewRow row in dgvJobs.SelectedRows)
             {
@@ -671,7 +714,8 @@ namespace Replica
                 return;
 
             var selectedOrderIds = GetSelectedOrderInternalIdsFromGrid();
-            var preferredOrderInternalId = ExtractOrderInternalIdFromTag(dgvJobs.CurrentRow?.Tag?.ToString());
+            var currentTag = _ordersGridAdapter?.GetCurrentSelectedTag() ?? dgvJobs.CurrentRow?.Tag?.ToString();
+            var preferredOrderInternalId = ExtractOrderInternalIdFromTag(currentTag);
             ApplyTileSelectionByOrderInternalIds(selectedOrderIds, preferredOrderInternalId, ensureVisible: false);
         }
 

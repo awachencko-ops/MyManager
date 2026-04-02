@@ -11,6 +11,8 @@ namespace Replica
         private readonly Func<IReadOnlyList<OrdersTreePrototypeNode>>? _snapshotProvider;
         private readonly Label _lblHint = new();
         public event EventHandler<OrdersPrototypeStageCellClickEventArgs>? StageCellClick;
+        public event EventHandler<OrdersPrototypeStageCellContextMenuEventArgs>? StageCellContextMenuRequested;
+        public event EventHandler<OrdersPrototypeStageFileDropEventArgs>? StageFileDropRequested;
 
         public OrdersTreePrototypeForm(
             IReadOnlyList<OrdersTreePrototypeNode> rootNodes,
@@ -20,6 +22,8 @@ namespace Replica
             _prototypeControl = new OrdersTreePrototypeControl(rootNodes);
             _prototypeControl.RefreshRequested += (_, _) => RefreshSnapshot();
             _prototypeControl.StageCellClick += (_, e) => StageCellClick?.Invoke(this, e);
+            _prototypeControl.StageCellContextMenuRequested += (_, e) => StageCellContextMenuRequested?.Invoke(this, e);
+            _prototypeControl.StageFileDropRequested += (_, e) => StageFileDropRequested?.Invoke(this, e);
             InitializeComponent();
         }
 

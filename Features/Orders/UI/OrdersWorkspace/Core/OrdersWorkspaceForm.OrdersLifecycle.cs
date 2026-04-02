@@ -1190,6 +1190,26 @@ namespace Replica
 
         private OrderData? GetSelectedOrder()
         {
+            if (_ordersGridAdapter != null)
+            {
+                var currentTag = _ordersGridAdapter.GetCurrentSelectedTag();
+                var currentOrderId = ExtractOrderInternalIdFromTag(currentTag);
+                if (!string.IsNullOrWhiteSpace(currentOrderId))
+                {
+                    var currentOrder = FindOrderByInternalId(currentOrderId);
+                    if (currentOrder != null)
+                        return currentOrder;
+                }
+
+                var selectedOrderIds = _ordersGridAdapter.GetSelectedOrderInternalIds();
+                if (selectedOrderIds.Count > 0)
+                {
+                    var firstSelectedOrder = FindOrderByInternalId(selectedOrderIds[0]);
+                    if (firstSelectedOrder != null)
+                        return firstSelectedOrder;
+                }
+            }
+
             return OrderGridLogic.GetSelectedOrder(dgvJobs, _orderHistory);
         }
 
@@ -1211,6 +1231,9 @@ namespace Replica
 
         private bool HasSelectedOrderContainerRow()
         {
+            if (_ordersGridAdapter != null && _ordersGridAdapter.GetSelectedOrderInternalIds().Count > 0)
+                return true;
+
             var currentRow = dgvJobs.CurrentRow;
             if (currentRow != null && !currentRow.IsNewRow && IsOrderTag(currentRow.Tag?.ToString()))
                 return true;

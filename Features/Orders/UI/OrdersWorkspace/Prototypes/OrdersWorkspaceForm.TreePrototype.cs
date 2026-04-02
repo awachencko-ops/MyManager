@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace Replica
@@ -24,6 +25,8 @@ namespace Replica
             var roots = BuildOrdersTreePrototypeSnapshot();
             using var prototypeForm = new OrdersTreePrototypeForm(roots, BuildOrdersTreePrototypeSnapshot);
             prototypeForm.StageCellClick += PrototypeForm_StageCellClick;
+            prototypeForm.StageCellContextMenuRequested += PrototypeForm_StageCellContextMenuRequested;
+            prototypeForm.StageFileDropRequested += PrototypeForm_StageFileDropRequested;
             prototypeForm.ShowDialog(this);
         }
 
@@ -36,51 +39,10 @@ namespace Replica
                 return;
 
             var node = e.Node;
-            if (string.IsNullOrWhiteSpace(node.OrderInternalId))
-                return;
-
-            var order = FindOrderByInternalId(node.OrderInternalId);
-            if (order == null)
-            {
-                SetBottomStatus("Не удалось найти заказ для операции в OLV прототипе");
-                return;
-            }
 
             try
             {
-                if (OrderGridLogic.IsItemTag(node.RowTag))
-                {
-                    var itemId = node.ItemId;
-                    if (string.IsNullOrWhiteSpace(itemId))
-                        return;
-
-                    var item = order.Items?.FirstOrDefault(x => x != null && string.Equals(x.ItemId, itemId, StringComparison.Ordinal));
-                    if (item == null)
-                    {
-                        SetBottomStatus("Item не найден для выбранной строки OLV");
-                        return;
-                    }
-
-                    var itemPath = GetItemStagePath(item, e.Stage);
-                    if (HasExistingFile(itemPath))
-                        OpenFileDefault(itemPath);
-                    else
-                        await PickAndCopyFileForItemAsync(order, item, e.Stage);
-                }
-                else
-                {
-                    if (OrderTopologyService.IsMultiOrder(order))
-                    {
-                        SetBottomStatus("В group-order у контейнера файлы заполняются только в строках item");
-                        return;
-                    }
-
-                    var orderPath = ResolveSingleOrderDisplayPath(order, e.Stage);
-                    if (HasExistingFile(orderPath))
-                        OpenFileDefault(orderPath);
-                    else
-                        await PickAndCopyFileForOrderAsync(order, e.Stage);
-                }
+                await OpenOrPickPrototypeStageFileAsync(node, e.Stage);
 
                 if (sender is OrdersTreePrototypeForm prototypeForm)
                     prototypeForm.RefreshFromSource();
@@ -95,6 +57,281 @@ namespace Replica
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
             }
+        }
+
+        private async void PrototypeForm_StageFileDropRequested(object? sender, OrdersPrototypeStageFileDropEventArgs e)
+        {
+            if (e == null || e.Node == null || !OrderStages.IsFileStage(e.Stage))
+                return;
+
+            if (!EnsureServerWriteAllowed("Drag&Drop"))
+                return;
+
+            var sourceFile = CleanPath(e.SourceFilePath);
+            if (string.IsNullOrWhiteSpace(sourceFile) || !File.Exists(sourceFile))
+                return;
+
+            try
+            {
+                await AddPrototypeFileToStageAsync(e.Node, e.Stage, sourceFile);
+
+                if (sender is OrdersTreePrototypeForm prototypeForm)
+                    prototypeForm.RefreshFromSource();
+            }
+            catch (Exception ex)
+            {
+                SetBottomStatus($"Не удалось добавить файл в OLV: {ex.Message}");
+                MessageBox.Show(
+                    this,
+                    $"Не удалось добавить файл в OLV: {ex.Message}",
+                    "OLV prototype",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+        }
+
+        private void PrototypeForm_StageCellContextMenuRequested(object? sender, OrdersPrototypeStageCellContextMenuEventArgs e)
+        {
+            if (e == null || e.Node == null || !OrderStages.IsFileStage(e.Stage))
+                return;
+
+            if (!TryResolvePrototypeNodeContext(e.Node, out var order, out var item))
+                return;
+
+            var menu = new ContextMenuStrip();
+            menu.Closed += (_, _) => menu.Dispose();
+
+            var currentPath = item != null
+                ? GetItemStagePath(item, e.Stage)
+                : ResolveSingleOrderDisplayPath(order, e.Stage);
+            var hasFile = HasExistingFile(currentPath);
+            var isGroupContainer = item == null && OrderTopologyService.IsMultiOrder(order);
+
+            AddPrototypeMenuItem(
+                menu,
+                "Открыть файл",
+                hasFile && !isGroupContainer ? () => OpenFileDefault(currentPath) : null,
+                hasFile && !isGroupContainer,
+                iconFolder: "file export",
+                iconHint: "file_export");
+
+            AddPrototypeMenuItem(
+                menu,
+                "Открыть папку этапа",
+                () =>
+                {
+                    if (item != null)
+                        OpenOrderStageFolder(order, item, e.Stage);
+                    else
+                        OpenOrderStageFolder(order, e.Stage);
+                },
+                enabled: true,
+                iconFolder: "folder open",
+                iconHint: "folder_open");
+
+            AddPrototypeMenuItem(
+                menu,
+                hasFile ? "Заменить файл..." : "Добавить файл...",
+                isGroupContainer
+                    ? null
+                    : async () =>
+                    {
+                        await OpenOrPickPrototypeStageFileAsync(e.Node, e.Stage);
+                        if (sender is OrdersTreePrototypeForm prototypeFormAfterPick)
+                            prototypeFormAfterPick.RefreshFromSource();
+                    },
+                enabled: !isGroupContainer,
+                iconFolder: "addfile",
+                iconHint: "attach_file_add");
+
+            AddPrototypeMenuItem(
+                menu,
+                "Удалить файл",
+                hasFile && !isGroupContainer
+                    ? () =>
+                    {
+                        if (item != null)
+                            RemoveFileFromItem(order, item, e.Stage);
+                        else
+                            RemoveFileFromOrder(order, e.Stage);
+
+                        if (sender is OrdersTreePrototypeForm prototypeFormAfterRemove)
+                            prototypeFormAfterRemove.RefreshFromSource();
+                    }
+                    : null,
+                hasFile && !isGroupContainer,
+                iconFolder: "delete",
+                iconHint: "delete");
+
+            AddPrototypeMenuItem(
+                menu,
+                "Переименовать файл",
+                hasFile && !isGroupContainer
+                    ? () =>
+                    {
+                        if (item != null)
+                            RenameFileForItem(order, item, e.Stage);
+                        else
+                            RenameFileForOrder(order, e.Stage);
+
+                        if (sender is OrdersTreePrototypeForm prototypeFormAfterRename)
+                            prototypeFormAfterRename.RefreshFromSource();
+                    }
+                    : null,
+                hasFile && !isGroupContainer,
+                iconFolder: "files",
+                iconHint: "files");
+
+            AddPrototypeMenuItem(
+                menu,
+                "Копировать путь",
+                !string.IsNullOrWhiteSpace(currentPath)
+                    ? () => CopyExistingPathToClipboard(currentPath)
+                    : null,
+                !string.IsNullOrWhiteSpace(currentPath),
+                iconFolder: "move to inbox",
+                iconHint: "move_to_inbox");
+
+            AddPrototypeMenuItem(
+                menu,
+                "Вставить из буфера",
+                isGroupContainer
+                    ? null
+                    : async () =>
+                    {
+                        if (item != null)
+                            await PasteFileFromClipboardAsync(order, item, e.Stage);
+                        else
+                            await PasteFileFromClipboardAsync(order, e.Stage);
+
+                        if (sender is OrdersTreePrototypeForm prototypeFormAfterPaste)
+                            prototypeFormAfterPaste.RefreshFromSource();
+                    },
+                enabled: !isGroupContainer,
+                iconFolder: "addbox",
+                iconHint: "add_box");
+
+            if (menu.Items.Count == 0)
+                return;
+
+            menu.Show(e.ScreenLocation);
+        }
+
+        private static void AddPrototypeMenuItem(
+            ContextMenuStrip menu,
+            string text,
+            Action? action,
+            bool enabled,
+            string? iconFolder = null,
+            string? iconHint = null)
+        {
+            var item = new ToolStripMenuItem(text)
+            {
+                Enabled = enabled
+            };
+
+            if (!string.IsNullOrWhiteSpace(iconFolder))
+            {
+                var icon = LoadStatusCellIcon(iconFolder, iconHint ?? string.Empty);
+                if (icon != null)
+                    item.Image = icon;
+            }
+
+            if (enabled && action != null)
+                item.Click += (_, _) => action();
+
+            menu.Items.Add(item);
+        }
+
+        private async Task OpenOrPickPrototypeStageFileAsync(OrdersTreePrototypeNode node, int stage)
+        {
+            if (!TryResolvePrototypeNodeContext(node, out var order, out var item))
+                return;
+
+            if (item == null && OrderTopologyService.IsMultiOrder(order))
+            {
+                SetBottomStatus("В group-order у контейнера файлы заполняются только в строках item");
+                return;
+            }
+
+            if (item != null)
+            {
+                var itemPath = GetItemStagePath(item, stage);
+                if (HasExistingFile(itemPath))
+                {
+                    OpenFileDefault(itemPath);
+                    return;
+                }
+
+                await PickAndCopyFileForItemAsync(order, item, stage);
+                return;
+            }
+
+            var orderPath = ResolveSingleOrderDisplayPath(order, stage);
+            if (HasExistingFile(orderPath))
+            {
+                OpenFileDefault(orderPath);
+                return;
+            }
+
+            await PickAndCopyFileForOrderAsync(order, stage);
+        }
+
+        private async Task AddPrototypeFileToStageAsync(OrdersTreePrototypeNode node, int stage, string sourceFile)
+        {
+            if (!TryResolvePrototypeNodeContext(node, out var order, out var item))
+                return;
+
+            if (item != null)
+            {
+                await AddFileToItemAsync(order, item, sourceFile, stage);
+                return;
+            }
+
+            if (OrderTopologyService.IsMultiOrder(order))
+            {
+                SetBottomStatus("В group-order добавляйте файлы в строки item");
+                return;
+            }
+
+            await AddFileToOrderAsync(order, sourceFile, stage);
+        }
+
+        private bool TryResolvePrototypeNodeContext(OrdersTreePrototypeNode node, out OrderData order, out OrderFileItem? item)
+        {
+            order = null!;
+            item = null;
+            if (node == null || string.IsNullOrWhiteSpace(node.OrderInternalId))
+                return false;
+
+            var resolvedOrder = FindOrderByInternalId(node.OrderInternalId);
+            if (resolvedOrder == null)
+            {
+                SetBottomStatus("Не удалось найти заказ для операции в OLV прототипе");
+                return false;
+            }
+
+            if (OrderGridLogic.IsItemTag(node.RowTag))
+            {
+                if (string.IsNullOrWhiteSpace(node.ItemId))
+                {
+                    SetBottomStatus("ItemId отсутствует в строке OLV");
+                    return false;
+                }
+
+                var resolvedItem = resolvedOrder.Items?
+                    .FirstOrDefault(x => x != null && string.Equals(x.ItemId, node.ItemId, StringComparison.Ordinal));
+                if (resolvedItem == null)
+                {
+                    SetBottomStatus("Item не найден для выбранной строки OLV");
+                    return false;
+                }
+
+                item = resolvedItem;
+            }
+
+            order = resolvedOrder;
+            return true;
         }
 
         private List<OrdersTreePrototypeNode> BuildOrdersTreePrototypeSnapshot()

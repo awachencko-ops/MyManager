@@ -22,5 +22,10 @@ namespace Replica
         {
             return Array.Empty<string>();
         }
+
+        public IReadOnlyList<OrdersGridVisibleRowSnapshot> GetVisibleOrderRows()
+        {
+            return Array.Empty<OrdersGridVisibleRowSnapshot>();
+        }
     }
 }
