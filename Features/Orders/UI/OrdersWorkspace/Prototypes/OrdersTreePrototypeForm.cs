@@ -9,17 +9,26 @@ namespace Replica
 {
     internal sealed class OrdersTreePrototypeForm : Form
     {
+        private readonly Panel _topPanel = new();
+        private readonly Button _btnExpandAll = new();
+        private readonly Button _btnCollapseAll = new();
+        private readonly Button _btnResetSort = new();
+        private readonly Label _lblQuickFilter = new();
+        private readonly TextBox _tbQuickFilter = new();
+        private readonly Label _lblSummary = new();
         private readonly TreeListView _treeListView = new();
         private readonly ImageList _statusImageList = new();
         private readonly IReadOnlyList<OrdersTreePrototypeNode> _rootNodes;
+        private OLVColumn? _defaultSortColumn;
 
         public OrdersTreePrototypeForm(IReadOnlyList<OrdersTreePrototypeNode> rootNodes)
         {
             _rootNodes = rootNodes ?? Array.Empty<OrdersTreePrototypeNode>();
 
             InitializeComponent();
+            ConfigureToolbar();
             ConfigureTreeListView();
-            PopulateTree();
+            ApplyQuickFilter();
         }
 
         private void InitializeComponent()
@@ -30,10 +39,62 @@ namespace Replica
             ClientSize = new Size(1480, 860);
             MinimumSize = new Size(1100, 600);
             StartPosition = FormStartPosition.CenterParent;
-            Text = "Прототип таблицы заказов (TreeListView)";
+            Text = "Прототип таблицы заказов (OLV TreeListView)";
 
             Controls.Add(_treeListView);
+            Controls.Add(_topPanel);
+
             ResumeLayout(performLayout: false);
+        }
+
+        private void ConfigureToolbar()
+        {
+            _topPanel.Dock = DockStyle.Top;
+            _topPanel.Height = 44;
+            _topPanel.Padding = new Padding(8, 6, 8, 6);
+
+            _btnExpandAll.Text = "Развернуть всё";
+            _btnExpandAll.Size = new Size(140, 32);
+            _btnExpandAll.Location = new Point(8, 6);
+            _btnExpandAll.Click += (_, _) => _treeListView.ExpandAll();
+
+            _btnCollapseAll.Text = "Свернуть всё";
+            _btnCollapseAll.Size = new Size(130, 32);
+            _btnCollapseAll.Location = new Point(156, 6);
+            _btnCollapseAll.Click += (_, _) => _treeListView.CollapseAll();
+
+            _btnResetSort.Text = "Сбросить сорт";
+            _btnResetSort.Size = new Size(125, 32);
+            _btnResetSort.Location = new Point(292, 6);
+            _btnResetSort.Click += (_, _) => ApplyDefaultSort();
+
+            _lblQuickFilter.Text = "Быстрый фильтр:";
+            _lblQuickFilter.AutoSize = true;
+            _lblQuickFilter.Location = new Point(434, 12);
+
+            _tbQuickFilter.Location = new Point(552, 8);
+            _tbQuickFilter.Size = new Size(320, 31);
+            _tbQuickFilter.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            _tbQuickFilter.TextChanged += (_, _) => ApplyQuickFilter();
+
+            _lblSummary.AutoSize = true;
+            _lblSummary.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            _lblSummary.Font = new Font("Segoe UI", 9f, FontStyle.Bold, GraphicsUnit.Point);
+            _lblSummary.Location = new Point(890, 12);
+
+            _topPanel.Controls.Add(_btnExpandAll);
+            _topPanel.Controls.Add(_btnCollapseAll);
+            _topPanel.Controls.Add(_btnResetSort);
+            _topPanel.Controls.Add(_lblQuickFilter);
+            _topPanel.Controls.Add(_tbQuickFilter);
+            _topPanel.Controls.Add(_lblSummary);
+
+            _topPanel.Resize += (_, _) =>
+            {
+                var summaryX = Math.Max(880, _topPanel.Width - _lblSummary.Width - 12);
+                _lblSummary.Location = new Point(summaryX, _lblSummary.Location.Y);
+                _tbQuickFilter.Width = Math.Max(220, summaryX - _tbQuickFilter.Left - 16);
+            };
         }
 
         private void ConfigureTreeListView()
@@ -45,6 +106,7 @@ namespace Replica
             _treeListView.MultiSelect = false;
             _treeListView.ShowGroups = false;
             _treeListView.View = View.Details;
+            _treeListView.ShowSortIndicators = true;
             _treeListView.UseAlternatingBackColors = true;
             _treeListView.AlternateRowBackColor = Color.FromArgb(251, 252, 254);
             _treeListView.EmptyListMsg = "Нет заказов для отображения в прототипе.";
@@ -89,18 +151,136 @@ namespace Replica
             _treeListView.Columns.Clear();
             _treeListView.AllColumns.AddRange(columns);
             _treeListView.Columns.AddRange(columns);
+            _defaultSortColumn = columns[8];
+            ApplyDefaultSort();
         }
 
-        private void PopulateTree()
+        private void PopulateTree(IReadOnlyList<OrdersTreePrototypeNode> roots)
         {
             _treeListView.BeginUpdate();
             try
             {
-                _treeListView.Roots = _rootNodes;
+                _treeListView.Roots = roots;
             }
             finally
             {
                 _treeListView.EndUpdate();
+            }
+
+            UpdateSummary(roots);
+        }
+
+        private void ApplyQuickFilter()
+        {
+            var filteredRoots = BuildFilteredRoots(_tbQuickFilter.Text);
+            PopulateTree(filteredRoots);
+            ApplyDefaultSort();
+        }
+
+        private void ApplyDefaultSort()
+        {
+            if (_defaultSortColumn == null)
+                return;
+
+            _treeListView.Sort(_defaultSortColumn, SortOrder.Descending);
+        }
+
+        private IReadOnlyList<OrdersTreePrototypeNode> BuildFilteredRoots(string? query)
+        {
+            var normalized = (query ?? string.Empty).Trim();
+            if (normalized.Length == 0)
+                return _rootNodes;
+
+            var result = new List<OrdersTreePrototypeNode>();
+            foreach (var root in _rootNodes)
+            {
+                if (TryBuildFilteredNode(root, normalized, out var filtered))
+                    result.Add(filtered);
+            }
+
+            return result;
+        }
+
+        private static bool TryBuildFilteredNode(
+            OrdersTreePrototypeNode source,
+            string query,
+            out OrdersTreePrototypeNode filtered)
+        {
+            var sourceMatches = NodeMatchesQuery(source, query);
+            if (sourceMatches)
+            {
+                filtered = source;
+                return true;
+            }
+
+            if (!source.HasChildren)
+            {
+                filtered = source;
+                return false;
+            }
+
+            var childMatches = new List<OrdersTreePrototypeNode>();
+            foreach (var child in source.Children)
+            {
+                if (TryBuildFilteredNode(child, query, out var filteredChild))
+                    childMatches.Add(filteredChild);
+            }
+
+            if (childMatches.Count > 0)
+            {
+                filtered = source.WithChildren(childMatches);
+                return true;
+            }
+
+            filtered = source;
+            return false;
+        }
+
+        private static bool NodeMatchesQuery(OrdersTreePrototypeNode node, string query)
+        {
+            return ContainsIgnoreCase(node.Title, query)
+                || ContainsIgnoreCase(node.Status, query)
+                || ContainsIgnoreCase(node.Source, query)
+                || ContainsIgnoreCase(node.Prepared, query)
+                || ContainsIgnoreCase(node.PitStop, query)
+                || ContainsIgnoreCase(node.Imposing, query)
+                || ContainsIgnoreCase(node.Print, query)
+                || ContainsIgnoreCase(node.Received, query)
+                || ContainsIgnoreCase(node.Created, query);
+        }
+
+        private static bool ContainsIgnoreCase(string value, string query)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
+
+            return value.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private void UpdateSummary(IReadOnlyList<OrdersTreePrototypeNode> roots)
+        {
+            var all = Flatten(roots);
+            var groups = 0;
+            var files = 0;
+            foreach (var node in all)
+            {
+                if (node.HasChildren)
+                    groups++;
+                else
+                    files++;
+            }
+
+            _lblSummary.Text = $"Строк: {groups + files} | Групп: {groups} | Одиночных: {files}";
+        }
+
+        private static IEnumerable<OrdersTreePrototypeNode> Flatten(IEnumerable<OrdersTreePrototypeNode> roots)
+        {
+            foreach (var root in roots)
+            {
+                yield return root;
+
+                foreach (var child in Flatten(root.Children))
+                    yield return child;
             }
         }
 
@@ -299,5 +479,21 @@ namespace Replica
         public bool IsContainer { get; }
         public IReadOnlyList<OrdersTreePrototypeNode> Children { get; }
         public bool HasChildren => Children.Count > 0;
+
+        public OrdersTreePrototypeNode WithChildren(IReadOnlyList<OrdersTreePrototypeNode> children)
+        {
+            return new OrdersTreePrototypeNode(
+                title: Title,
+                status: Status,
+                source: Source,
+                prepared: Prepared,
+                pitStop: PitStop,
+                imposing: Imposing,
+                print: Print,
+                received: Received,
+                created: Created,
+                isContainer: IsContainer,
+                children: children);
+        }
     }
 }

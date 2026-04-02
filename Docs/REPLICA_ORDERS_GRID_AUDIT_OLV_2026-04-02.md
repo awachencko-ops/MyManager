@@ -1,66 +1,46 @@
 ﻿<!-- DOC_ENCODING_REQUIREMENT_UTF8 -->
-# Аудит выбора стека таблицы: OLV vs Avalonia (2026-04-02)
+# Аудит миграции основной таблицы на OLV (ObjectListView.Repack.Core3) — 2026-04-02
 
-## Цель документа
-Принять техническое решение для основной таблицы заказов:
-1. `OLV` (ObjectListView.Repack.Core3) внутри текущего WinForms.
-2. `Avalonia` (TreeDataGrid) как новый UI-контур.
+## Цель
+Перевести основной list-контур заказов с `DataGridView` на `OLV` (`TreeListView`) без остановки работы текущей программы, снять фризы, вернуть стабильную сортировку и сохранить рабочие сценарии операторов.
 
-## Текущая база (по коду проекта)
-1. Основной экран заказов сейчас жестко завязан на `DataGridView dgvJobs` и 9 колонок (`Features/Orders/UI/OrdersWorkspace/OrdersWorkspaceForm.Designer.cs:324-346`).
-2. Таблица строится вручную через `RebuildOrdersGrid()` + `Rows.Clear/Add/Insert` (`Features/Orders/UI/OrdersWorkspace/Core/OrdersWorkspaceForm.OrdersLifecycle.cs:547`, `:921`, `:974`).
-3. Фильтрация и видимость делаются через обход UI-строк и `row.Visible` (`Features/Orders/UI/OrdersWorkspace/Filters/OrdersWorkspaceForm.Filters.Evaluation.cs:209`, `:286`, `:311`).
-4. На таблицу навешан плотный набор событий и drag-drop (`Features/Orders/UI/OrdersWorkspace/OrdersWorkspaceForm.cs:862-866`, `:1054-1066`, `:1072-1086`, `Features/Orders/UI/OrdersWorkspace/FileOps/OrdersWorkspaceForm.FileOps.GridInteractions.cs:261`, `:315`, `:642`, `:897`).
-5. Тесты сильно завязаны на приватные поля `dgvJobs/colStatus/colOrderNumber` (`tests/Replica.UiSmokeTests/MainFormCoreRegressionTests.cs:95`, `:615-617`, `:1480-1481`).
+## Текущая техническая база (as-is)
+1. Основной контрол: `dgvJobs` (`Features/Orders/UI/OrdersWorkspace/OrdersWorkspaceForm.Designer.cs:324`).
+2. Полная перестройка списка делается вручную через `RebuildOrdersGrid()` (`Features/Orders/UI/OrdersWorkspace/Core/OrdersWorkspaceForm.OrdersLifecycle.cs:547`, `:921`, `:974`).
+3. Иерархия group/item держится вручную через `Tag` и insert/remove строк (`...OrdersLifecycle.cs:932`, `:985`, `:1002-1098`).
+4. Фильтрация идет через `row.Visible` на UI-строках (`Features/Orders/UI/OrdersWorkspace/Filters/OrdersWorkspaceForm.Filters.Evaluation.cs:209-312`).
+5. Большой event-hub вокруг `dgvJobs` (клики, формат, рисование, drag-drop, selection) (`Features/Orders/UI/OrdersWorkspace/OrdersWorkspaceForm.cs:862-866`, `:1054-1066`, `:1072-1086`).
+6. Тесты завязаны на приватные поля `dgvJobs` и колонки (`tests/Replica.UiSmokeTests/MainFormCoreRegressionTests.cs:95`, `:615-617`, `:1480-1481`).
 
-## Прототипы, которые уже есть
-1. WinForms `TreeListView` прототип на OLV:
-- `Features/Orders/UI/OrdersWorkspace/Prototypes/OrdersTreePrototypeForm.cs:10`, `:39`, `:53-54`, `:78-85`.
-2. Avalonia `TreeDataGrid` прототип:
-- `Prototypes/AvaloniaOrdersPrototype/MainWindow.axaml.cs:24`, `:38`, `:41`, `:102`, `:132`.
-3. Отдельная кнопка запуска Avalonia из main UI:
-- `Features/Orders/UI/OrdersWorkspace/OrdersWorkspaceForm.Designer.cs:408`, `:422-427`.
-- `Features/Orders/UI/OrdersWorkspace/Prototypes/OrdersWorkspaceForm.TreePrototype.cs:33`, `:38`, `:62`.
+## Почему OLV лучше для текущего этапа
+1. `OLV` работает в текущем WinForms-контуре и не требует переписывания оболочки экрана.
+2. Есть нативная иерархия (`TreeListView`) вместо ручного `Rows.Insert/Remove`.
+3. Есть встроенная сортировка и sort indicators (`Sort`, `ShowSortIndicator(s)`).
+4. Есть event-модель, которая покрывает текущие сценарии (`CellClick`, `CellRightClick`, `CellToolTipShowing`, `FormatRow/FormatCell`, `CanDrop/Dropped`).
+5. Миграция может идти под feature-flag с быстрым rollback.
 
-## Внешние ограничения (подтверждено источниками)
-1. `Avalonia.Controls.TreeDataGrid` начиная с `11.2.0` требует лицензию Avalonia Accelerate.
-2. Для TreeDataGrid обязательно подключать theme include, иначе контрол не рендерится.
-3. `ObjectListView.Repack.Core3 2.9.3` совместим с `netcoreapp3.1` и `net5.0-windows7.0+`, значит для нашего `net8.0-windows` подходит.
+## Что уже готово в проекте
+1. Пакет подключен в основном проекте: `ObjectListView.Repack.Core3 2.9.3` (`Replica.csproj:17`).
+2. Есть рабочий OLV prototype form с tree-колонками и статусами:
+- `Features/Orders/UI/OrdersWorkspace/Prototypes/OrdersTreePrototypeForm.cs`.
+3. В основном UI есть кнопка запуска OLV прототипа:
+- `Features/Orders/UI/OrdersWorkspace/OrdersWorkspaceForm.Designer.cs` (`OLV proto`).
+- `Features/Orders/UI/OrdersWorkspace/Prototypes/OrdersWorkspaceForm.TreePrototype.cs`.
 
-## Сравнение вариантов
-| Критерий | OLV в WinForms | Avalonia TreeDataGrid |
-|---|---|---|
-| Объем изменений | Ниже (замена контрола/адаптер в существующей форме) | Выше (новый UI-стек, перенос интеракций и визуала) |
-| Риск регрессий | Средний | Высокий |
-| Скорость получения результата | Быстро | Медленнее |
-| Совместимость с текущими тестами | Проще адаптировать постепенно | Понадобится новый тестовый контур |
-| Лицензирование | Прозрачно для текущего пакета | Для актуальных версий TreeDataGrid есть лицензия |
-| Долгосрочный UX-потенциал | Ограничен WinForms | Выше (современный UI-стек) |
-| Итог для текущего релиза | Сильный кандидат | R&D/долгосрочный кандидат |
+## Риски миграции
+| Риск | Вероятность | Влияние | Как закрываем |
+|---|---|---|---|
+| Потеря паритета stage-кликов/drag-drop | Высокая | Высокое | Вынести stage-операции в отдельный interaction-service до замены контрола |
+| Регрессии фильтров/counters | Высокая | Высокое | Перевести фильтрацию и счетчики на модель данных, не на UI-строки |
+| Ломка выбора/синхронизации list/tiles | Средняя | Высокое | Единый `SelectionState` по `orderInternalId/itemId` |
+| Визуальная деградация статусов | Средняя | Среднее | Перенести палитру и статусный renderer через `FormatCell` |
+| Ломка smoke-тестов | Очень высокая | Высокое | Ввести adapter-level тесты и постепенно снять привязку к приватному `dgvJobs` |
 
-## Риски и что учесть
-| Риск | Где критичен | Вероятность | Влияние | Митигирование |
-|---|---|---|---|---|
-| Потеря паритета stage-кликов/drag-drop | OLV/Avalonia | Высокая | Высокое | Вынести stage-операции в отдельный `GridInteractionService` до смены UI |
-| Ломка group-order expand/collapse | OLV/Avalonia | Средняя | Высокое | Общий `RowModel` + явный контракт иерархии (`Order`/`Item`) |
-| Ломка тестов из-за `dgvJobs`-зависимости | OLV/Avalonia | Очень высокая | Высокое | Ввести adapter-тесты, потом постепенно снять рефлексию на приватных полях |
-| Проблемы лицензии/версии TreeDataGrid | Avalonia | Высокая | Высокое | Либо бюджет и лицензирование, либо заморозка на старой версии с осознанным техдолгом |
-| UX-деградация (визуал/скролл/tooltip) | OLV/Avalonia | Средняя | Среднее | Чек-лист визуального паритета + smoke прогон на реальных наборах |
+## Ключевые решения до начала кода
+1. Основной OLV-контрол: `TreeListView` (для group/item дерева).
+2. Источник истины: `OrdersGridRowModel` + builder, не UI-строки.
+3. Миграция только под `feature-flag` (`UseOlvOrdersGrid`) с rollback на DataGridView.
+4. Сначала перенос domain/presentation логики, потом замена UI-контрола.
 
-## Решение на сейчас (мое мнение)
-Для основной production-миграции лучше `OLV` как основной путь.
-
-Почему:
-1. Мы уже в WinForms-контуре, а table logic глубоко интегрирована с form/event/test слоями.
-2. OLV снижает стоимость перехода и позволяет закрыть текущую боль производительности быстрее.
-3. Avalonia сейчас разумнее держать как parallel R&D-трек для следующего большого UI-этапа, а не как срочный cutover основной таблицы.
-
-## Рекомендуемая стратегия
-1. `Primary track`: OLV миграция под feature-flag с поэтапным переносом логики.
-2. `R&D track`: Avalonia прототип развивать отдельно и проверять UX/производительность на тех же сценариях.
-3. `Decision gate`: к Avalonia production-cutover возвращаться после стабилизации OLV и снятия тестовой/адаптерной связности от `DataGridView`.
-
-## Источники
-1. Avalonia TreeDataGrid docs: https://docs.avaloniaui.net/controls/data-display/structured-data/treedatagrid
-2. NuGet Avalonia.Controls.TreeDataGrid: https://www.nuget.org/packages/Avalonia.Controls.TreeDataGrid/
-3. NuGet ObjectListView.Repack.Core3: https://www.nuget.org/packages/ObjectListView.Repack.Core3/
+## Мое мнение
+Для production-внедрения сейчас OLV — лучший вариант по рискам и скорости. Он дает нужную производительность и иерархию в текущем WinForms, без большого архитектурного взрыва.

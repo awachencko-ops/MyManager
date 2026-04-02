@@ -59,7 +59,6 @@
             colCreated = new DataGridViewTextBoxColumn();
             pnlScrollBar = new Panel();
             pnlHeader = new Panel();
-            btnAvaloniaPrototype = new Button();
             btnTreePrototype = new Button();
             btnViewTiles = new Button();
             btnViewList = new Button();
@@ -405,7 +404,6 @@
             // 
             // pnlHeader
             // 
-            pnlHeader.Controls.Add(btnAvaloniaPrototype);
             pnlHeader.Controls.Add(btnTreePrototype);
             pnlHeader.Controls.Add(btnViewTiles);
             pnlHeader.Controls.Add(btnViewList);
@@ -417,16 +415,6 @@
             pnlHeader.Size = new Size(1743, 36);
             pnlHeader.TabIndex = 0;
             // 
-            // btnAvaloniaPrototype
-            // 
-            btnAvaloniaPrototype.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            btnAvaloniaPrototype.Location = new Point(1435, 3);
-            btnAvaloniaPrototype.Name = "btnAvaloniaPrototype";
-            btnAvaloniaPrototype.Size = new Size(109, 33);
-            btnAvaloniaPrototype.TabIndex = 6;
-            btnAvaloniaPrototype.Text = "Avalonia";
-            btnAvaloniaPrototype.UseVisualStyleBackColor = true;
-            // 
             // btnTreePrototype
             // 
             btnTreePrototype.Anchor = AnchorStyles.Top | AnchorStyles.Right;
@@ -434,7 +422,7 @@
             btnTreePrototype.Name = "btnTreePrototype";
             btnTreePrototype.Size = new Size(109, 33);
             btnTreePrototype.TabIndex = 4;
-            btnTreePrototype.Text = "Tree proto";
+            btnTreePrototype.Text = "OLV proto";
             btnTreePrototype.UseVisualStyleBackColor = true;
             // 
             // btnViewTiles
@@ -461,7 +449,7 @@
             tbSearch.Font = new Font("Segoe UI", 9F, FontStyle.Italic, GraphicsUnit.Point, 204);
             tbSearch.Location = new Point(1242, 5);
             tbSearch.Name = "tbSearch";
-            tbSearch.Size = new Size(188, 31);
+            tbSearch.Size = new Size(302, 31);
             tbSearch.TabIndex = 2;
             // 
             // cbQueue
@@ -736,7 +724,6 @@
         private Panel pnlFilters;
         private DataGridView dgvJobs;
         private ComboBox cbQueue;
-        private Button btnAvaloniaPrototype;
         private Button btnTreePrototype;
         private Button btnViewTiles;
         private Button btnViewList;
