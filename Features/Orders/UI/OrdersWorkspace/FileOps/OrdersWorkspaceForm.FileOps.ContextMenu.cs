@@ -52,6 +52,37 @@ namespace Replica
             };
             _gridMenu.PickFile = (stage, fileType) => _ = PickFileFromContextAsync(stage);
             _gridMenu.RemoveFile = (stage) => RemoveFileFromContext(stage);
+            // Wrap RemoveFile with a confirmation dialog that shows filename when available
+            _gridMenu.RemoveFile = (stage) =>
+            {
+                // try to resolve file name under context (item or order)
+                string? fileName = null;
+                if (TryGetContextOrderItem(out var itemOrder, out var item))
+                {
+                    var path = GetItemStagePath(item!, stage);
+                    if (!string.IsNullOrWhiteSpace(path)) fileName = Path.GetFileName(path);
+                }
+                else
+                {
+                    var order = GetContextOrder();
+                    if (order != null)
+                    {
+                        var path = GetOrderStagePath(order, stage);
+                        if (!string.IsNullOrWhiteSpace(path)) fileName = Path.GetFileName(path);
+                    }
+                }
+
+                var prompt = fileName != null
+                    ? $"Вы уверены, что хотите удалить файл {fileName}?"
+                    : "Вы уверены, что хотите удалить файл?";
+
+                var decision = MessageBox.Show(this, prompt, "Удаление файла", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                if (decision != DialogResult.Yes)
+                    return;
+
+                // call core removal (RemoveFileFromContext will call core methods without additional prompt)
+                RemoveFileFromContext(stage);
+            };
             _gridMenu.RenameFile = (stage) => RenameFileFromContext(stage);
             _gridMenu.CopyPathToClipboard = (stage) => CopyPathFromContextToClipboard(stage);
             _gridMenu.PastePathFromClipboard = (stage) => _ = PastePathFromClipboardToContextAsync(stage);
