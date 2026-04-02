@@ -1,86 +1,65 @@
 ﻿<!-- DOC_ENCODING_REQUIREMENT_UTF8 -->
-# Привязка функций основной таблицы (2026-04-02)
+# Привязка функций таблицы: текущий контур, OLV target, Avalonia target (2026-04-02)
 
-## 1. Точки подписки на события таблицы
-### 1.1 Queue и derived refresh
-`Features/Orders/UI/OrdersWorkspace/OrdersWorkspaceForm.cs:861-865`
-1. `RowsAdded` -> `HandleOrdersGridChanged()`
-2. `RowsRemoved` -> `HandleOrdersGridChanged()`
-3. `DataBindingComplete` -> `HandleOrdersGridChanged()`
-4. `CellValueChanged` -> `DgvJobs_CellValueChanged`
-5. `CellDoubleClick` -> `DgvJobs_CellDoubleClick`
+## 1. Текущие привязки (DataGridView)
+### 1.1 Базовые события и refresh
+Источник: `Features/Orders/UI/OrdersWorkspace/OrdersWorkspaceForm.cs:862-866`, `:1072-1086`.
+1. `RowsAdded/RowsRemoved/DataBindingComplete` -> `HandleOrdersGridChanged()`.
+2. `CellValueChanged` -> derived-state refresh.
+3. `SelectionChanged/CurrentCellChanged` -> синхронизация selection/buttons/tray.
 
-### 1.2 Визуал/интеракции/drag-drop
-`Features/Orders/UI/OrdersWorkspace/OrdersWorkspaceForm.cs:1053-1065`
-1. `CellPainting` -> `DgvJobs_CellPainting`
-2. `CellFormatting` -> `DgvJobs_CellFormatting`
-3. `CellClick` -> `DgvJobs_CellClick`
-4. `CellToolTipTextNeeded` -> `DgvJobs_CellToolTipTextNeeded`
-5. `CellMouseEnter` -> `DgvJobs_CellMouseEnter`
-6. `CellMouseLeave` -> `DgvJobs_CellMouseLeave`
-7. `MouseLeave` -> `DgvJobs_MouseLeave`
-8. `MouseDown` -> `DgvJobs_MouseDown`
-9. `MouseMove` -> `DgvJobs_MouseMove`
-10. `MouseUp` -> `DgvJobs_MouseUp`
-11. `DragEnter` -> `DgvJobs_DragEnter`
-12. `DragOver` -> `DgvJobs_DragOver`
-13. `DragDrop` -> `DgvJobs_DragDrop`
+### 1.2 Интеракции и рендеринг
+Источник: `Features/Orders/UI/OrdersWorkspace/OrdersWorkspaceForm.cs:1054-1066`, `Features/Orders/UI/OrdersWorkspace/FileOps/OrdersWorkspaceForm.FileOps.GridInteractions.cs:261`, `:315`, `:642`, `:897`.
+1. `CellPainting` -> кастом статуса и декора.
+2. `CellFormatting` -> цвета, file-link поведение, missing-file визуал.
+3. `CellClick` -> group expand/collapse + stage actions.
+4. `DragEnter/DragOver/DragDrop` -> file import into stages.
 
-### 1.3 Состояние кнопок/выделения
-`Features/Orders/UI/OrdersWorkspace/OrdersWorkspaceForm.cs:1071-1086`
-1. `SelectionChanged` -> синхронизация list/tiles + `UpdateActionButtonsState()` + `UpdateTrayStatsIndicator()`
-2. `CurrentCellChanged` -> синхронизация list/tiles + `UpdateActionButtonsState()` + `UpdateTrayStatsIndicator()`
+### 1.3 Контекстное меню
+Источник: `Features/Orders/UI/OrdersWorkspace/FileOps/OrdersWorkspaceForm.FileOps.ContextMenu.cs:102`.
+1. `CellMouseDown` правой кнопкой -> выбор контекста и запуск меню команд.
 
-### 1.4 Контекстное меню
-`Features/Orders/UI/OrdersWorkspace/FileOps/OrdersWorkspaceForm.FileOps.ContextMenu.cs:102`
-1. `CellMouseDown` -> `DgvJobs_CellMouseDown` (правый клик, контекст row/column)
+## 2. OLV target: функциональная карта соответствия
+Источник по API OLV: `C:/Users/user/.nuget/packages/objectlistview.repack.core3/2.9.3/lib/net5.0-windows7.0/ObjectListView2019Core3.xml`.
 
-### 1.5 Кастомный скролл
-`Features/Orders/UI/OrdersWorkspace/Views/OrdersWorkspaceForm.OrdersViewScrollBar.cs:41-47`
-1. `Scroll` -> `DgvJobs_ScrollForCustomBar`
-2. `MouseWheel` -> `DgvJobs_MouseWheelForOrdersViewScrollBar`
-3. `RowsAdded/RowsRemoved/DataBindingComplete/SizeChanged/VisibleChanged` -> `UpdateOrdersViewScrollBarFromActiveView()`
-
-## 2. Карта поведения по основным обработчикам
-| Обработчик | Что делает | Ключевые зависимости |
+| Текущая задача | OLV событие/механика | Комментарий |
 |---|---|---|
-| `DgvJobs_CellClick` | Раскрытие group-order, open file, pick+copy file по stage, item/order branching | `GetStageByColumnIndex`, `ResolveOrderFromRowTag`, `PickAndCopyFileForOrderAsync`, `PickAndCopyFileForItemAsync` |
-| `DgvJobs_CellDoubleClick` | Выбор PitStop/Imposing action или редактирование заказа | `SelectPitStopActionFromGrid`, `SelectImposingActionFromGrid`, `EditOrderFromGridAsync` |
-| `DgvJobs_CellFormatting` | Цвета строк/ячеек, link-like текст для файлов, подсветка missing files | `ResolveOrderFromRowTag`, `TryResolveGridFilePathForFormatting`, `HasExistingFileCachedForUi` |
-| `DgvJobs_CellPainting` | Полный кастомный paint статуса и шапки, подавление focus rectangle | `TryPaintStatusCell` |
-| `DgvJobs_DragDrop` | Добавление файла drag-drop в order/item stage | `HandleGridFileDropAsync`, `TryResolveGridFileCell`, `AddDraggedFileToTargetAsync` |
-| `DgvJobs_CellToolTipTextNeeded` | Tooltip причины ошибки статуса | `GetOrderByRowIndex`, `NormalizeStatus` |
-| `DgvJobs_MouseDown/Move/Up` | Выделение, drag-init, hover/selection контроль | `TryResolveGridFileCell`, `CollapseDragSelectionToSingleRow` |
+| Клик по ячейке | `ObjectListView.CellClick` | Прямой перенос `stage` маршрутизации |
+| Правый клик | `ObjectListView.CellRightClick`/`ColumnRightClick` | Контекстное меню переносится без потери UX |
+| Tooltip | `ObjectListView.CellToolTipShowing` | Аналог `CellToolTipTextNeeded` |
+| Кастом стиль строк/ячеек | `ObjectListView.FormatRow`/`FormatCell` | Перенос палитры и статусного визуала |
+| Drag-drop | `CanDrop`/`Dropped` и/или `ModelCanDrop`/`ModelDropped` | Можно сделать безопаснее на model-id |
+| Сортировка + индикатор | `Sort(...)`, `ShowSortIndicators` | Встроенная поддержка toggles |
+| Иерархия group/item | `TreeListView.CanExpandGetter` + `ChildrenGetter` | Нативный tree-контур |
 
-Источник: `Features/Orders/UI/OrdersWorkspace/FileOps/OrdersWorkspaceForm.FileOps.GridInteractions.cs`.
+## 3. Avalonia target: функциональная карта соответствия
+Источники: `Prototypes/AvaloniaOrdersPrototype/MainWindow.axaml.cs:24`, `:38`, `:41`, `:102`, `:132`; `.../App.axaml:9`.
 
-## 3. Привязка действий контекстного меню
-`Features/Orders/UI/OrdersWorkspace/FileOps/OrdersWorkspaceForm.FileOps.ContextMenu.cs:24-100`
-1. Открыть папку -> `OpenOrderStageFolder(...)`
-2. Удалить заказ -> `RemoveSelectedOrderAsync()`
-3. Запустить/остановить -> `RunSelectedOrderAsync()` / `StopSelectedOrderAsync()`
-4. Pick/Remove/Rename/Paste file -> stage-specific file ops
-5. Watermark и CopyToGrandpa -> print-stage операции
-6. PitStop/Imposing manager -> manager forms
-7. Лог заказа -> `OpenOrderLogForOrderOnly(...)`
+| Текущая задача | Avalonia механизм | Комментарий |
+|---|---|---|
+| Иерархия group/item | `HierarchicalTreeDataGridSource<T>` + `HierarchicalExpanderColumn<T>` | Чистая tree-модель |
+| Сортировка | сортировка колонок `TreeDataGrid` | Нативно, без ручного `DisableSorting` |
+| Выделение | `RowSelection.SelectionChanged` | Selection-логику нужно маппить в текущий workflow |
+| Кнопки действий | `Click` handlers / Commands | Уже в прототипе `Expand/Collapse/Add` |
+| Рендеринг | стили Avalonia + templates | Визуал придется собирать заново |
+| Theme-зависимость | `StyleInclude ... TreeDataGrid ...` | Без этого таблица не рисуется |
 
-## 4. Системные привязки после изменения данных
-| Точка | Что срабатывает |
-|---|---|
-| `RebuildOrdersGrid()` | Полная перестройка строк + `HandleOrdersGridChanged()` |
-| `PersistGridChanges()` | Применяет `OrderGridMutationUiPlan`: save, fast-refresh или rebuild |
-| `HandleOrdersGridChanged()` | Инвалидация кешей + coalesced derived refresh |
-| `ApplyOrdersGridDerivedRefreshCore()` | Фильтры, captions, queue presentation, tiles refresh, tray indicators |
+## 4. Что обязательно отвязать до миграции (для обоих путей)
+1. Stage-операции от прямой зависимости на конкретный контрол.
+2. Идентификацию строк через `Tag` на явный row-model.
+3. Фильтрацию и counters от обхода UI-строк.
+4. Тесты от приватных полей `dgvJobs`.
 
-Источники: `Features/Orders/UI/OrdersWorkspace/Core/OrdersWorkspaceForm.OrdersLifecycle.cs:91-173`, `:547-603`, `Features/Orders/UI/OrdersWorkspace/FileOps/OrdersWorkspaceForm.FileOps.StageFileOps.cs:262-288`.
+## 5. Рекомендуемый контракт привязок
+Ввести единый функциональный интерфейс, например:
+1. `BindRows(IEnumerable<OrdersGridRowModel>)`
+2. `RestoreSelection(RowKey key)`
+3. `TryGetCurrentCellContext(out GridCellContext)`
+4. `SetSort(GridSortSpec spec)`
+5. `SetFilter(GridFilterSpec spec)`
+6. `event CellActionRequested`
+7. `event ContextActionRequested`
+8. `event FilesDropped`
 
-## 5. Тестовые привязки (важно для миграции)
-1. Тесты напрямую ожидают приватные поля `dgvJobs`, `colStatus`, `colOrderNumber`, `colPrep`, `colPrint` и др.
-2. Тесты вызывают приватные методы формы рефлексией.
-
-Источники: `tests/Replica.UiSmokeTests/MainFormCoreRegressionTests.cs:95`, `:615-619`, `:796-800`, `tests/Replica.UiSmokeTests/MainFormTestHarness.cs:94-139`.
-
-## 6. Вывод для миграции
-1. Привязок много и они широкие: таблица — центральный event-hub формы.
-2. При миграции нельзя просто заменить контрол в Designer; нужен adapter-слой с совместимыми API для обработчиков и тестов.
-3. Лучшая последовательность: сначала вынести domain-операции из `dgvJobs`-обработчиков, потом подключать OLV.
+## 6. Вывод
+Для текущего релиза функционально дешевле и безопаснее закрыть карту привязок через OLV-адаптер. Avalonia потребует не просто замену событий, а новый UI-layer и новый тестовый контур.

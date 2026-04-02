@@ -1,59 +1,60 @@
 ﻿<!-- DOC_ENCODING_REQUIREMENT_UTF8 -->
-# Структура основной таблицы заказов (2026-04-02)
+# Структура таблицы заказов: as-is и target для OLV/Avalonia (2026-04-02)
 
-## 1. Положение в UI
-1. Таблица встроена в `pnlTable` и занимает центральную область формы (`Features/Orders/UI/OrdersWorkspace/OrdersWorkspaceForm.Designer.cs:303-330`).
-2. Справа расположен отдельный контейнер `pnlScrollBar` под кастомный вертикальный скролл (`...Designer.cs:396-402`).
-3. Над таблицей отдельные панели queue/search/filters, влияющие на видимость строк (`...Designer.cs:404-450` и `Features/Orders/UI/OrdersWorkspace/Filters/*`).
+## 1. As-is структура (текущий production)
+1. Центральный list-контур: `DataGridView dgvJobs` внутри `pnlTable` (`Features/Orders/UI/OrdersWorkspace/OrdersWorkspaceForm.Designer.cs:324`).
+2. Колонки в таблице фиксированы (`colStatus`..`colCreated`) (`Features/Orders/UI/OrdersWorkspace/OrdersWorkspaceForm.Designer.cs:334-394`).
+3. Идентификация строк через `Tag` и ручное разруливание `order/item` (`Features/Orders/UI/OrdersWorkspace/Core/OrdersWorkspaceForm.OrdersLifecycle.cs:932`, `:985`).
+4. Group-order разворот/сворачивание реализован вручную (`ToggleOrderExpanded`, `TryToggleOrderExpandedRowsInPlace`) (`Features/Orders/UI/OrdersWorkspace/Core/OrdersWorkspaceForm.OrdersLifecycle.cs:1002-1098`).
+5. Есть параллельный tiles-режим, который связан с list-режимом (`Features/Orders/UI/OrdersWorkspace/Views/OrdersWorkspaceForm.PrintTiles.cs`).
 
-## 2. Колонки
-| Поле | Заголовок | Смысл | Заполнение для order-строки | Заполнение для item-строки |
-|---|---|---|---|---|
-| `colStatus` | `Состояние` | Текущий workflow статус | `displayStatus` (`ApplyOrderRowValues`) | `itemStatus` (`ApplyOrderItemRowValues`) |
-| `colOrderNumber` | `№ заказа` | Номер заказа | `BuildOrderRowCaption(order, isExpanded)` | `order.Id` |
-| `colSource` | `Исходные` | Файл source | `ResolveSingleOrderDisplayPath(OrderStages.Source)` | `item.SourcePath` |
-| `colPrep` | `Заголовок задания` | Файл prepared | `ResolveSingleOrderDisplayPath(OrderStages.Prepared)` | `item.PreparedPath` |
-| `colPitstop` | `Проверка файлов` | Действие PitStop | `ResolveSingleOrderDisplayAction(...)` | item-level с fallback на order |
-| `colHotimposing` | `Спуск полос` | Действие Imposing | `ResolveSingleOrderDisplayAction(...)` | item-level с fallback на order |
-| `colPrint` | `Готов к печати` | Файл print | `ResolveSingleOrderDisplayPath(OrderStages.Print)` | `item.PrintPath` |
-| `colReceived` | `Заказ принят` | Дата заказа | `FormatDate(order.OrderDate)` | `FormatDate(order.OrderDate)` |
-| `colCreated` | `В препрессе` | Дата прихода в препресс | `FormatDate(order.ArrivalDate)` | `FormatDate(order.ArrivalDate)` |
+## 2. OLV target-структура (рекомендуемый production путь)
+### 2.1 UI слой
+1. `OrdersWorkspaceForm` остается основным shell (минимальный организационный риск).
+2. В `pnlTable` меняется только реализация list-контрола (`DataGridView` -> `TreeListView`/`FastObjectListView`).
 
-Источники: `Features/Orders/UI/OrdersWorkspace/OrdersWorkspaceForm.Designer.cs:332-394`, `Features/Orders/UI/OrdersWorkspace/Core/OrdersWorkspaceForm.OrdersLifecycle.cs:705-778`, `:921-986`.
+### 2.2 Presentation слой
+1. Ввести единый `OrdersGridRowModel` с явными полями:
+- `RowType` (`Order`/`Item`),
+- `OrderInternalId`, `ItemId`,
+- значения всех колонок,
+- флаги визуальных состояний.
+2. Ввести `OrdersGridBuilder`, который формирует коллекцию row-model из `_orderHistory`.
+3. Ввести `IOrdersGridAdapter` (две реализации):
+- `DataGridViewOrdersAdapter` для fallback,
+- `OlvOrdersAdapter` для нового контура.
 
-## 3. Типы строк и идентификация
-1. Контейнер заказа: `Tag = order|{orderInternalId}`.
-2. Строка item: `Tag = item|{orderInternalId}|{itemId}`.
-3. Парсинг тегов и восстановление сущностей делается через `OrderGridLogic`.
+### 2.3 Interaction слой
+1. Все stage-операции вынести из обработчиков контрола в сервис (например, `OrdersGridInteractionService`).
+2. Контрол только маршрутизирует событие в сервис и обновляет selection.
+3. Фильтры/сортировка считаются на модели, не на UI-строках.
 
-Источник: `Features/Orders/UI/OrdersWorkspace/Core/OrderGridLogic.cs:11-59`, `Features/Orders/UI/OrdersWorkspace/Core/OrdersWorkspaceForm.OrdersLifecycle.cs:932`, `:985`.
+## 3. Avalonia target-структура (R&D/долгосрочно)
+### 3.1 Текущее состояние
+1. Отдельный проект-прототип: `Prototypes/AvaloniaOrdersPrototype`.
+2. Структура:
+- `MainWindow.axaml` + `TreeDataGrid` (`Prototypes/AvaloniaOrdersPrototype/MainWindow.axaml:45`),
+- `HierarchicalTreeDataGridSource<OrderNode>` (`.../MainWindow.axaml.cs:24`, `:38`),
+- `OrderNode` + demo-factory (`.../OrderNode.cs:10`, `:96`).
+3. Theme include обязателен (`.../App.axaml:9`).
 
-## 4. Сборка данных в таблицу
-1. Полный rebuild:
-- сортировка history по `ArrivalDate` убыв. (`OrdersLifecycle.cs:566-568`);
-- поиск по `tbSearch` через `OrderMatchesSearch` (`:570-576`);
-- полная очистка `dgvJobs.Rows.Clear()` (`:564`);
-- добавление order/item строк (`:585-587`, `:921-986`).
-2. Инкрементальное обновление:
-- `TryRefreshGridRowsWithoutRebuild` обновляет значения в существующих строках (`:619-703`).
-3. Частичное раскрытие/сворачивание group-order:
-- `ToggleOrderExpanded` + `TryToggleOrderExpandedRowsInPlace` (`:1002-1057`).
+### 3.2 Если идти в production на Avalonia
+1. Нужен отдельный frontend-модуль (не встраивать в текущую WinForms форму).
+2. Нужен контракт обмена состоянием list/tiles/actions с текущим application-слоем.
+3. Нужен отдельный тестовый UI-harness (текущие smoke-тесты привязаны к WinForms).
 
-## 5. Фильтрация и видимость
-1. Фильтры применяются после построения таблицы: `ApplyStatusFilterToGrid()`.
-2. Сначала проход по order-строкам, затем второй проход по item-строкам.
-3. Видимость меняется через `row.Visible`, а счетчики кешируются отдельно.
+## 4. Сравнение структурного воздействия
+| Область | OLV в WinForms | Avalonia |
+|---|---|---|
+| UI shell | Сохраняется | Меняется |
+| Слой событий | Рефакторинг локально | Переписывается |
+| Тестовый контур | Эволюционный переход | Новый контур |
+| Риск для текущего релиза | Ниже | Выше |
 
-Источник: `Features/Orders/UI/OrdersWorkspace/Filters/OrdersWorkspaceForm.Filters.Evaluation.cs:209-327`, `:522-575`.
+## 5. Рекомендуемая целевая структура проекта
+1. Краткосрок: `OLV + adapter + row-model` в текущем WinForms.
+2. Среднесрок: убрать прямую бизнес-логику из событий контрола.
+3. Долгосрок: Avalonia рассматривать как полноценный UI-модуль после стабилизации adapter-границы.
 
-## 6. Связь с другими представлениями
-1. Есть параллельный tiles-view (`ImageListView`) со своим набором элементов.
-2. Tiles строятся из `visible` order-строк таблицы.
-3. Синхронизация выделения двусторонняя: `grid -> tiles` и `tiles -> grid`.
-
-Источник: `Features/Orders/UI/OrdersWorkspace/Views/OrdersWorkspaceForm.PrintTiles.cs:486-581`, `:665-809`.
-
-## 7. Что важно для миграции
-1. Таблица сейчас не просто «рисует», а хранит много вычисленного состояния (видимость, selection, Tag-идентификацию).
-2. Замена контрола потребует переноса этой логики в модельный/adapter слой.
-3. Без этого миграция станет переносом technical debt в другой UI-компонент.
+## 6. Практический вывод
+Лучший структурный компромисс на сегодня: сделать migration-направление через OLV, но проектировать слой адаптера так, чтобы потом без повторного «большого взрыва» можно было подключить Avalonia-клиент.
