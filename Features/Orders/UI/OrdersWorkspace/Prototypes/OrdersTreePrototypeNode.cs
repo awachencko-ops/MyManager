@@ -16,7 +16,16 @@ namespace Replica
             string received,
             string created,
             bool isContainer,
-            IReadOnlyList<OrdersTreePrototypeNode>? children)
+            IReadOnlyList<OrdersTreePrototypeNode>? children,
+            string? rowTag = null,
+            string? orderInternalId = null,
+            string? itemId = null,
+            string? orderNumber = null,
+            long receivedSortTicks = 0,
+            long createdSortTicks = 0,
+            string? sourcePath = null,
+            string? preparedPath = null,
+            string? printPath = null)
         {
             Title = title ?? string.Empty;
             Status = status ?? string.Empty;
@@ -29,6 +38,15 @@ namespace Replica
             Created = created ?? string.Empty;
             IsContainer = isContainer;
             Children = children ?? Array.Empty<OrdersTreePrototypeNode>();
+            RowTag = rowTag ?? string.Empty;
+            OrderInternalId = orderInternalId ?? string.Empty;
+            ItemId = itemId ?? string.Empty;
+            OrderNumber = orderNumber ?? string.Empty;
+            ReceivedSortTicks = receivedSortTicks;
+            CreatedSortTicks = createdSortTicks;
+            SourcePath = sourcePath ?? string.Empty;
+            PreparedPath = preparedPath ?? string.Empty;
+            PrintPath = printPath ?? string.Empty;
         }
 
         public string Title { get; }
@@ -42,6 +60,15 @@ namespace Replica
         public string Created { get; }
         public bool IsContainer { get; }
         public IReadOnlyList<OrdersTreePrototypeNode> Children { get; }
+        public string RowTag { get; }
+        public string OrderInternalId { get; }
+        public string ItemId { get; }
+        public string OrderNumber { get; }
+        public long ReceivedSortTicks { get; }
+        public long CreatedSortTicks { get; }
+        public string SourcePath { get; }
+        public string PreparedPath { get; }
+        public string PrintPath { get; }
         public bool HasChildren => Children.Count > 0;
 
         public OrdersTreePrototypeNode WithChildren(IReadOnlyList<OrdersTreePrototypeNode> children)
@@ -57,7 +84,16 @@ namespace Replica
                 received: Received,
                 created: Created,
                 isContainer: IsContainer,
-                children: children);
+                children: children,
+                rowTag: RowTag,
+                orderInternalId: OrderInternalId,
+                itemId: ItemId,
+                orderNumber: OrderNumber,
+                receivedSortTicks: ReceivedSortTicks,
+                createdSortTicks: CreatedSortTicks,
+                sourcePath: SourcePath,
+                preparedPath: PreparedPath,
+                printPath: PrintPath);
         }
     }
 }

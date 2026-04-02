@@ -1,7 +1,9 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Linq;
 using System.Windows.Forms;
 using BrightIdeasSoftware;
 
@@ -13,13 +15,19 @@ namespace Replica
         private readonly Button _btnExpandAll = new();
         private readonly Button _btnCollapseAll = new();
         private readonly Button _btnResetSort = new();
+        private readonly Button _btnRefresh = new();
         private readonly Label _lblQuickFilter = new();
         private readonly TextBox _tbQuickFilter = new();
         private readonly Label _lblSummary = new();
         private readonly TreeListView _treeListView = new();
         private readonly ImageList _statusImageList = new();
+        private readonly ContextMenuStrip _rowContextMenu = new();
         private IReadOnlyList<OrdersTreePrototypeNode> _rootNodes;
+        private HashSet<string> _expandedNodeKeys = new(StringComparer.Ordinal);
+        private string? _selectedNodeKey;
         private OLVColumn? _defaultSortColumn;
+
+        public event EventHandler? RefreshRequested;
 
         public OrdersTreePrototypeControl(IReadOnlyList<OrdersTreePrototypeNode>? rootNodes)
         {
@@ -65,11 +73,16 @@ namespace Replica
             _btnResetSort.Location = new Point(292, 6);
             _btnResetSort.Click += (_, _) => ApplyDefaultSort();
 
+            _btnRefresh.Text = "Обновить";
+            _btnRefresh.Size = new Size(125, 32);
+            _btnRefresh.Location = new Point(423, 6);
+            _btnRefresh.Click += (_, _) => RefreshRequested?.Invoke(this, EventArgs.Empty);
+
             _lblQuickFilter.Text = "Быстрый фильтр:";
             _lblQuickFilter.AutoSize = true;
-            _lblQuickFilter.Location = new Point(434, 12);
+            _lblQuickFilter.Location = new Point(556, 12);
 
-            _tbQuickFilter.Location = new Point(552, 8);
+            _tbQuickFilter.Location = new Point(674, 8);
             _tbQuickFilter.Size = new Size(320, 31);
             _tbQuickFilter.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             _tbQuickFilter.TextChanged += (_, _) => ApplyQuickFilter();
@@ -82,6 +95,7 @@ namespace Replica
             _topPanel.Controls.Add(_btnExpandAll);
             _topPanel.Controls.Add(_btnCollapseAll);
             _topPanel.Controls.Add(_btnResetSort);
+            _topPanel.Controls.Add(_btnRefresh);
             _topPanel.Controls.Add(_lblQuickFilter);
             _topPanel.Controls.Add(_tbQuickFilter);
             _topPanel.Controls.Add(_lblSummary);
@@ -116,6 +130,7 @@ namespace Replica
                     : Array.Empty<OrdersTreePrototypeNode>();
             _treeListView.ItemActivate += TreeListView_ItemActivate;
             _treeListView.KeyDown += TreeListView_KeyDown;
+            _treeListView.MouseUp += TreeListView_MouseUp;
             _treeListView.TreeColumnRenderer = new TreeListView.TreeRenderer
             {
                 IsShowGlyphs = true,
@@ -126,23 +141,35 @@ namespace Replica
             ConfigureStatusImageList();
             _treeListView.SmallImageList = _statusImageList;
 
+            var colOrderOrFile = BuildColumn(
+                title: "Заказ / файл",
+                width: 320,
+                aspectGetter: row => ((OrdersTreePrototypeNode)row).Title,
+                imageGetter: row => ResolveStatusIconKey((OrdersTreePrototypeNode)row),
+                textAlign: HorizontalAlignment.Left,
+                fillsFreeSpace: true);
+            var colStatus = BuildColumn("Состояние", 140, row => ((OrdersTreePrototypeNode)row).Status);
+            var colSource = BuildColumn("Прием файла", 220, row => ((OrdersTreePrototypeNode)row).Source);
+            var colPrepared = BuildColumn("Подготовка", 220, row => ((OrdersTreePrototypeNode)row).Prepared);
+            var colPitStop = BuildColumn("Проверка файлов", 150, row => ((OrdersTreePrototypeNode)row).PitStop);
+            var colImposing = BuildColumn("Спуск полос", 130, row => ((OrdersTreePrototypeNode)row).Imposing);
+            var colPrint = BuildColumn("Готов к печати", 220, row => ((OrdersTreePrototypeNode)row).Print);
+            var colReceived = BuildColumn("Заказ принят", 120, row => ((OrdersTreePrototypeNode)row).ReceivedSortTicks, HorizontalAlignment.Center);
+            var colCreated = BuildColumn("В препрессе", 120, row => ((OrdersTreePrototypeNode)row).CreatedSortTicks, HorizontalAlignment.Center);
+            colReceived.AspectToStringConverter = FormatDateFromSortTicks;
+            colCreated.AspectToStringConverter = FormatDateFromSortTicks;
+
             var columns = new[]
             {
-                BuildColumn(
-                    title: "Заказ / файл",
-                    width: 320,
-                    aspectGetter: row => ((OrdersTreePrototypeNode)row).Title,
-                    imageGetter: row => ResolveStatusIconKey((OrdersTreePrototypeNode)row),
-                    textAlign: HorizontalAlignment.Left,
-                    fillsFreeSpace: true),
-                BuildColumn("Состояние", 140, row => ((OrdersTreePrototypeNode)row).Status),
-                BuildColumn("Прием файла", 220, row => ((OrdersTreePrototypeNode)row).Source),
-                BuildColumn("Подготовка", 220, row => ((OrdersTreePrototypeNode)row).Prepared),
-                BuildColumn("Проверка файлов", 150, row => ((OrdersTreePrototypeNode)row).PitStop),
-                BuildColumn("Спуск полос", 130, row => ((OrdersTreePrototypeNode)row).Imposing),
-                BuildColumn("Готов к печати", 220, row => ((OrdersTreePrototypeNode)row).Print),
-                BuildColumn("Заказ принят", 120, row => ((OrdersTreePrototypeNode)row).Received, HorizontalAlignment.Center),
-                BuildColumn("В препрессе", 120, row => ((OrdersTreePrototypeNode)row).Created, HorizontalAlignment.Center)
+                colOrderOrFile,
+                colStatus,
+                colSource,
+                colPrepared,
+                colPitStop,
+                colImposing,
+                colPrint,
+                colReceived,
+                colCreated
             };
 
             _treeListView.AllColumns.Clear();
@@ -170,9 +197,11 @@ namespace Replica
 
         private void ApplyQuickFilter()
         {
+            SaveInteractionState();
             var filteredRoots = BuildFilteredRoots(_tbQuickFilter.Text);
             PopulateTree(filteredRoots);
             ApplyDefaultSort();
+            RestoreInteractionState(filteredRoots);
         }
 
         private void ApplyDefaultSort()
@@ -341,6 +370,66 @@ namespace Replica
             _treeListView.Collapse(node);
         }
 
+        private void SaveInteractionState()
+        {
+            if (_treeListView.SelectedObject is OrdersTreePrototypeNode selectedNode)
+                _selectedNodeKey = BuildNodeIdentity(selectedNode);
+            else
+                _selectedNodeKey = null;
+
+            if (_treeListView.Roots is not IEnumerable roots)
+                return;
+
+            var expanded = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var node in Flatten(roots.OfType<OrdersTreePrototypeNode>()))
+            {
+                if (!node.HasChildren || !_treeListView.IsExpanded(node))
+                    continue;
+
+                var key = BuildNodeIdentity(node);
+                if (!string.IsNullOrWhiteSpace(key))
+                    expanded.Add(key);
+            }
+
+            _expandedNodeKeys = expanded;
+        }
+
+        private void RestoreInteractionState(IReadOnlyList<OrdersTreePrototypeNode> roots)
+        {
+            foreach (var node in Flatten(roots))
+            {
+                if (!node.HasChildren)
+                    continue;
+
+                var key = BuildNodeIdentity(node);
+                if (string.IsNullOrWhiteSpace(key) || !_expandedNodeKeys.Contains(key))
+                    continue;
+
+                _treeListView.Expand(node);
+            }
+
+            if (string.IsNullOrWhiteSpace(_selectedNodeKey))
+                return;
+
+            var selectedNode = Flatten(roots)
+                .FirstOrDefault(node => string.Equals(BuildNodeIdentity(node), _selectedNodeKey, StringComparison.Ordinal));
+            if (selectedNode == null)
+                return;
+
+            _treeListView.SelectedObject = selectedNode;
+        }
+
+        private static string BuildNodeIdentity(OrdersTreePrototypeNode node)
+        {
+            if (!string.IsNullOrWhiteSpace(node.RowTag))
+                return node.RowTag;
+
+            if (!string.IsNullOrWhiteSpace(node.OrderInternalId) || !string.IsNullOrWhiteSpace(node.ItemId))
+                return $"{node.OrderInternalId}|{node.ItemId}";
+
+            return node.Title ?? string.Empty;
+        }
+
         private static OLVColumn BuildColumn(
             string title,
             int width,
@@ -358,6 +447,89 @@ namespace Replica
                 AspectGetter = aspectGetter,
                 ImageGetter = imageGetter
             };
+        }
+
+        private void TreeListView_MouseUp(object? sender, MouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Right)
+                return;
+
+            var hit = _treeListView.OlvHitTest(e.X, e.Y);
+            if (hit?.RowObject is not OrdersTreePrototypeNode node)
+                return;
+
+            _treeListView.SelectedObject = node;
+            ShowRowContextMenu(node, e.Location);
+        }
+
+        private void ShowRowContextMenu(OrdersTreePrototypeNode node, Point location)
+        {
+            _rowContextMenu.Items.Clear();
+
+            if (node.HasChildren)
+            {
+                var isExpanded = _treeListView.IsExpanded(node);
+                var caption = isExpanded ? "Свернуть группу" : "Развернуть группу";
+                AddRowContextMenuItem(caption, () =>
+                {
+                    if (isExpanded)
+                        _treeListView.Collapse(node);
+                    else
+                        _treeListView.Expand(node);
+                });
+                _rowContextMenu.Items.Add(new ToolStripSeparator());
+            }
+
+            if (!string.IsNullOrWhiteSpace(node.OrderNumber))
+                AddRowContextMenuItem("Копировать номер заказа", () => TryCopyToClipboard(node.OrderNumber));
+
+            if (!node.HasChildren && !string.IsNullOrWhiteSpace(node.Title))
+                AddRowContextMenuItem("Копировать имя файла", () => TryCopyToClipboard(node.Title));
+
+            if (!string.IsNullOrWhiteSpace(node.Status))
+                AddRowContextMenuItem("Копировать статус", () => TryCopyToClipboard(node.Status));
+
+            if (!string.IsNullOrWhiteSpace(node.SourcePath))
+                AddRowContextMenuItem("Копировать путь приема", () => TryCopyToClipboard(node.SourcePath));
+
+            if (!string.IsNullOrWhiteSpace(node.PreparedPath))
+                AddRowContextMenuItem("Копировать путь подготовки", () => TryCopyToClipboard(node.PreparedPath));
+
+            if (!string.IsNullOrWhiteSpace(node.PrintPath))
+                AddRowContextMenuItem("Копировать путь печати", () => TryCopyToClipboard(node.PrintPath));
+
+            if (_rowContextMenu.Items.Count > 0
+                && _rowContextMenu.Items[_rowContextMenu.Items.Count - 1] is ToolStripSeparator)
+            {
+                _rowContextMenu.Items.RemoveAt(_rowContextMenu.Items.Count - 1);
+            }
+
+            if (_rowContextMenu.Items.Count == 0)
+                return;
+
+            _rowContextMenu.Show(_treeListView, location);
+        }
+
+        private void AddRowContextMenuItem(string text, Action onClick)
+        {
+            var item = new ToolStripMenuItem(text);
+            item.Click += (_, _) => onClick();
+            _rowContextMenu.Items.Add(item);
+        }
+
+        private void TryCopyToClipboard(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return;
+
+            try
+            {
+                Clipboard.SetText(text);
+            }
+            catch (Exception)
+            {
+                // Clipboard can be temporarily unavailable; keep prototype stable.
+            }
         }
 
         private void ConfigureStatusImageList()
@@ -420,6 +592,24 @@ namespace Replica
             return "status-waiting";
         }
 
+        private static string FormatDateFromSortTicks(object value)
+        {
+            var ticks = 0L;
+            try
+            {
+                ticks = Convert.ToInt64(value);
+            }
+            catch (Exception)
+            {
+                return string.Empty;
+            }
+
+            if (ticks <= 0)
+                return string.Empty;
+
+            return new DateTime(ticks).ToString("dd.MM.yyyy");
+        }
+
         private static void PrototypeRowFormatter(OLVListItem item)
         {
             if (item.RowObject is not OrdersTreePrototypeNode node)
@@ -434,6 +624,14 @@ namespace Replica
 
             if (node.HasChildren)
                 item.BackColor = Color.FromArgb(255, 252, 244);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+                _rowContextMenu.Dispose();
+
+            base.Dispose(disposing);
         }
     }
 }

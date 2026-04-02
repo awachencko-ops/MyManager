@@ -22,7 +22,7 @@ namespace Replica
         private void OpenOrdersTreePrototype()
         {
             var roots = BuildOrdersTreePrototypeSnapshot();
-            using var prototypeForm = new OrdersTreePrototypeForm(roots);
+            using var prototypeForm = new OrdersTreePrototypeForm(roots, BuildOrdersTreePrototypeSnapshot);
             prototypeForm.ShowDialog(this);
         }
 
@@ -53,6 +53,11 @@ namespace Replica
         private OrdersTreePrototypeNode BuildPrototypeOrderNode(OrderData order)
         {
             var isMultiOrder = OrderTopologyService.IsMultiOrder(order);
+            var orderInternalId = (order.InternalId ?? string.Empty).Trim();
+            var orderNumber = string.IsNullOrWhiteSpace(order.Id) ? "-" : order.Id.Trim();
+            var rowTag = string.IsNullOrWhiteSpace(orderInternalId)
+                ? string.Empty
+                : OrderGridLogic.BuildOrderTag(orderInternalId);
             var orderStatus = ResolveOrderStatusForPrototype(order, isMultiOrder);
             var pitStopAction = NormalizeAction(order.PitStopAction);
             var imposingAction = NormalizeAction(order.ImposingAction);
@@ -60,12 +65,15 @@ namespace Replica
             var sourceDisplay = "-";
             var preparedDisplay = "-";
             var printDisplay = "-";
+            var sourcePath = string.Empty;
+            var preparedPath = string.Empty;
+            var printPath = string.Empty;
 
             if (!isMultiOrder)
             {
-                var sourcePath = ResolveSingleOrderDisplayPath(order, OrderStages.Source);
-                var preparedPath = ResolveSingleOrderDisplayPath(order, OrderStages.Prepared);
-                var printPath = ResolveSingleOrderDisplayPath(order, OrderStages.Print);
+                sourcePath = ResolveSingleOrderDisplayPath(order, OrderStages.Source);
+                preparedPath = ResolveSingleOrderDisplayPath(order, OrderStages.Prepared);
+                printPath = ResolveSingleOrderDisplayPath(order, OrderStages.Print);
 
                 sourceDisplay = GetFileName(sourcePath);
                 preparedDisplay = GetFileName(preparedPath);
@@ -89,7 +97,16 @@ namespace Replica
                 received: FormatDate(order.OrderDate),
                 created: FormatDate(order.ArrivalDate),
                 isContainer: true,
-                children: children);
+                children: children,
+                rowTag: rowTag,
+                orderInternalId: orderInternalId,
+                itemId: null,
+                orderNumber: orderNumber,
+                receivedSortTicks: order.OrderDate.Ticks,
+                createdSortTicks: order.ArrivalDate.Ticks,
+                sourcePath: sourcePath,
+                preparedPath: preparedPath,
+                printPath: printPath);
         }
 
         private List<OrdersTreePrototypeNode> BuildPrototypeItemNodes(OrderData order)
@@ -97,6 +114,9 @@ namespace Replica
             var children = new List<OrdersTreePrototypeNode>();
             if (order.Items == null || order.Items.Count == 0)
                 return children;
+
+            var orderInternalId = (order.InternalId ?? string.Empty).Trim();
+            var orderNumber = string.IsNullOrWhiteSpace(order.Id) ? "-" : order.Id.Trim();
 
             var orderedItems = order.Items
                 .Where(item => item != null)
@@ -106,6 +126,10 @@ namespace Replica
             for (var index = 0; index < orderedItems.Count; index++)
             {
                 var item = orderedItems[index];
+                var itemId = (item.ItemId ?? string.Empty).Trim();
+                var rowTag = string.IsNullOrWhiteSpace(orderInternalId) || string.IsNullOrWhiteSpace(itemId)
+                    ? string.Empty
+                    : OrderGridLogic.BuildItemTag(orderInternalId, itemId);
                 var itemStatus = NormalizeStatus(item.FileStatus) ?? (item.FileStatus ?? string.Empty).Trim();
                 if (string.IsNullOrWhiteSpace(itemStatus))
                     itemStatus = WorkflowStatusNames.Waiting;
@@ -129,7 +153,16 @@ namespace Replica
                     received: FormatDate(order.OrderDate),
                     created: FormatDate(order.ArrivalDate),
                     isContainer: false,
-                    children: null));
+                    children: null,
+                    rowTag: rowTag,
+                    orderInternalId: orderInternalId,
+                    itemId: itemId,
+                    orderNumber: orderNumber,
+                    receivedSortTicks: order.OrderDate.Ticks,
+                    createdSortTicks: order.ArrivalDate.Ticks,
+                    sourcePath: item.SourcePath,
+                    preparedPath: item.PreparedPath,
+                    printPath: item.PrintPath));
             }
 
             return children;
