@@ -61,14 +61,14 @@ namespace Replica
                 DockWorkspaceGroup.Literature,
                 pnlDockLiterature,
                 pictureBox4,
-                "action",
-                "description");
+                "maps",
+                "menu_book");
             ConfigureWorkspaceDockButton(
                 DockWorkspaceGroup.Utilities,
                 pnlDockUtilities,
                 pictureBox3,
                 "action",
-                "settings");
+                "settings_applications");
 
             SetDockWorkspace(DockWorkspaceGroup.Orders);
         }

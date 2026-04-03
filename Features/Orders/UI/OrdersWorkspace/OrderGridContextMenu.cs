@@ -33,6 +33,7 @@ namespace Replica
         public ContextMenuStrip Build(string colName, bool allowCopyToGrandpa = true)
         {
             _menu.Items.Clear();
+            _menu.ImageScalingSize = new Size(GetMenuIconSize(), GetMenuIconSize());
 
             var currentStage = OrderGridColumnNames.ResolveStage(colName);
 
@@ -61,8 +62,8 @@ namespace Replica
                     break;
 
                 case OrderGridColumnNames.Print:
-                    AddItem("Водяной знак (сверху)", ApplyWatermark, "image", "branding_watermark");
-                    AddItem("Водяной знак (слева)", ApplyWatermarkLeft, "image", "branding_watermark");
+                    AddItem("Водяной знак (сверху)", ApplyWatermark, "toggle", "radio_button_checked");
+                    AddItem("Водяной знак (слева)", ApplyWatermarkLeft, "toggle", "radio_button_checked");
                     AddItem("Переименовать файл", () => RenameFile?.Invoke(OrderStages.Print), "file", "drive_file_rename_outline");
                     AddItem("Копировать путь в буфер", () => CopyPathToClipboard?.Invoke(OrderStages.Print), "content", "content_copy");
                     if (allowCopyToGrandpa)
@@ -106,7 +107,10 @@ namespace Replica
             {
                 var icon = GetMenuIcon(iconFolder, iconHint ?? string.Empty);
                 if (icon != null)
+                {
                     item.Image = icon;
+                    item.ImageScaling = ToolStripItemImageScaling.None;
+                }
             }
 
             item.Click += (_, _) => action();
@@ -115,16 +119,24 @@ namespace Replica
 
         private Image? GetMenuIcon(string iconFolder, string iconHint)
         {
-            var cacheKey = $"{iconFolder}|{iconHint}";
+            var iconSize = GetMenuIconSize();
+            var cacheKey = $"{iconFolder}|{iconHint}|{iconSize}";
             if (_iconCache.TryGetValue(cacheKey, out var cached))
                 return new Bitmap(cached);
 
-            var icon = OrdersWorkspaceIconCatalog.LoadIcon(iconFolder, iconHint, size: 16);
+            var icon = OrdersWorkspaceIconCatalog.LoadIcon(iconFolder, iconHint, size: iconSize);
             if (icon == null)
                 return null;
 
             _iconCache[cacheKey] = new Bitmap(icon);
             return icon;
+        }
+
+        private int GetMenuIconSize()
+        {
+            var scale = _menu.DeviceDpi > 0 ? _menu.DeviceDpi / 96f : 1f;
+            var size = (int)Math.Round(16f * scale);
+            return Math.Max(16, Math.Min(32, size));
         }
     }
 }

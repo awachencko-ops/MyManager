@@ -220,6 +220,7 @@ namespace Replica
         {
             _groupOrderContextMenu.Items.Clear();
             _groupOrderContextMenu.ShowItemToolTips = true;
+            _groupOrderContextMenu.ImageScalingSize = new Size(GetGroupMenuIconSize(), GetGroupMenuIconSize());
 
             var isExpanded = _expandedOrderIds.Contains(order.InternalId);
             var expandCaption = isExpanded ? "Свернуть" : "Развернуть";
@@ -257,9 +258,12 @@ namespace Replica
 
             if (!string.IsNullOrWhiteSpace(iconFolder))
             {
-                var icon = OrdersWorkspaceIconCatalog.LoadIcon(iconFolder, iconHint ?? string.Empty, size: 16);
+                var icon = OrdersWorkspaceIconCatalog.LoadIcon(iconFolder, iconHint ?? string.Empty, size: GetGroupMenuIconSize());
                 if (icon != null)
+                {
                     menuItem.Image = icon;
+                    menuItem.ImageScaling = ToolStripItemImageScaling.None;
+                }
             }
 
             if (!string.IsNullOrWhiteSpace(toolTipText))
@@ -269,6 +273,13 @@ namespace Replica
                 menuItem.Click += (_, _) => action();
 
             _groupOrderContextMenu.Items.Add(menuItem);
+        }
+
+        private int GetGroupMenuIconSize()
+        {
+            var scale = _groupOrderContextMenu.DeviceDpi > 0 ? _groupOrderContextMenu.DeviceDpi / 96f : 1f;
+            var size = (int)Math.Round(16f * scale);
+            return Math.Max(16, Math.Min(32, size));
         }
 
         private void OpenOrderLogForOrderOnly(OrderData? order)

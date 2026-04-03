@@ -344,6 +344,7 @@ namespace Replica
         private void ShowPrintTileContextMenu(OrderData order, PrintTileTag tileTag, Point location)
         {
             _printTilesContextMenu.Items.Clear();
+            _printTilesContextMenu.ImageScalingSize = new Size(GetPrintTilesMenuIconSize(), GetPrintTilesMenuIconSize());
             AddPrintTileMenuItem("Открыть папку", () => OpenPrintTileFolder(order, tileTag), "file", "folder_open");
             _printTilesContextMenu.Items.Add(new ToolStripSeparator());
             AddPrintTileMenuItem("Переименовать файл", () => RenamePrintTileFile(order, tileTag), "file", "drive_file_rename_outline");
@@ -356,13 +357,23 @@ namespace Replica
             var menuItem = new ToolStripMenuItem(text);
             if (!string.IsNullOrWhiteSpace(iconFolder))
             {
-                var icon = OrdersWorkspaceIconCatalog.LoadIcon(iconFolder, iconHint ?? string.Empty, size: 16);
+                var icon = OrdersWorkspaceIconCatalog.LoadIcon(iconFolder, iconHint ?? string.Empty, size: GetPrintTilesMenuIconSize());
                 if (icon != null)
+                {
                     menuItem.Image = icon;
+                    menuItem.ImageScaling = ToolStripItemImageScaling.None;
+                }
             }
 
             menuItem.Click += (_, _) => onClick();
             _printTilesContextMenu.Items.Add(menuItem);
+        }
+
+        private int GetPrintTilesMenuIconSize()
+        {
+            var scale = _printTilesContextMenu.DeviceDpi > 0 ? _printTilesContextMenu.DeviceDpi / 96f : 1f;
+            var size = (int)Math.Round(16f * scale);
+            return Math.Max(16, Math.Min(32, size));
         }
 
         private void OpenPrintTileFolder(OrderData order, PrintTileTag tileTag)

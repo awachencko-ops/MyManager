@@ -74,7 +74,7 @@ namespace Replica
 
                 RegisterStatusCellVisual(
                     status: WorkflowStatusNames.Cancelled,
-                    icon: LoadStatusCellIcon("cancel", "cancel", ("file export", "cancel"), ("stop", "stop")),
+                    icon: LoadStatusCellIcon("action", "block", ("action", "cancel")),
                     iconBackgroundColor: iconBackCancelled,
                     textColor: Color.Black);
 
@@ -97,7 +97,7 @@ namespace Replica
                     textColor: Color.Black);
 
                 _groupOrderCellIcon?.Dispose();
-                _groupOrderCellIcon = LoadStatusCellIcon("files", "files", ("files FILES", "files"));
+                _groupOrderCellIcon = LoadStatusCellIcon("file", "folder_open", ("files", "folder_open"), ("file", "folder"));
             }
             catch (Exception ex)
             {
