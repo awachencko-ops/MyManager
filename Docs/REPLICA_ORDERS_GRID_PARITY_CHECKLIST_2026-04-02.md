@@ -38,8 +38,8 @@
 ## Блок E. Остаток до production-переноса
 - [x] Drag&Drop между stage-ячейками в OLV.
 - [x] Stage-context-menu в OLV для file-stage (открыть/добавить/удалить/rename/copy-path/paste/open-folder).
-- [ ] Полная синхронизация `list <-> tiles` на базе адаптера (частично: selected ids/current tag + visible rows для tiles уже читаются через `IOrdersGridAdapter`).
-- [ ] Переключение рабочего окна на OLV через feature-flag без прототипной формы.
+- [x] Полная синхронизация `list <-> tiles` на базе адаптера (добавлены write-операции адаптера: применение/очистка выделения в grid).
+- [x] Переключение рабочего окна на OLV через feature-flag без прототипной формы (встроенный OLV-контрол в `pnlTable`, DGV оставлен как backend для безопасной совместимости).
 - [ ] Smoke-тесты на адаптерный слой + регрессии UI.
 
 ## Правило перехода в рабочее окно

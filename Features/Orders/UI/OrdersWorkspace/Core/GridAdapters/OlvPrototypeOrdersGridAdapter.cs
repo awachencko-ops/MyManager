@@ -40,5 +40,18 @@ namespace Replica
         {
             return _fallbackDataGridAdapter.GetVisibleOrderRows();
         }
+
+        public bool ApplySelectionByOrderInternalIds(ISet<string> selectedOrderInternalIds, string? preferredOrderInternalId, int preferredColumnIndex)
+        {
+            return _fallbackDataGridAdapter.ApplySelectionByOrderInternalIds(
+                selectedOrderInternalIds,
+                preferredOrderInternalId,
+                preferredColumnIndex);
+        }
+
+        public void ClearSelection()
+        {
+            _fallbackDataGridAdapter.ClearSelection();
+        }
     }
 }

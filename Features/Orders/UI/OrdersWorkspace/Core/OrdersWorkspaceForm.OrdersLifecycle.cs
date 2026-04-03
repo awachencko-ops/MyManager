@@ -158,6 +158,7 @@ namespace Replica
             UpdateUserFilterCaption();
             UpdateCreatedDateFilterCaption();
             UpdateReceivedDateFilterCaption();
+            RefreshEmbeddedOrdersTreePrototypeSnapshot();
             if (_statusFilterDropDown?.Visible == true)
                 RefreshStatusFilterChecklist();
             if (_userFilterDropDown?.Visible == true)

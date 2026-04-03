@@ -134,14 +134,23 @@ namespace Replica
             _ordersViewMode = mode;
 
             var isTilesMode = _ordersViewMode == OrdersViewMode.Tiles;
+            var useEmbeddedPrototypeList = IsEmbeddedOrdersTreePrototypeEnabled();
             tableLayoutPanel1.SuspendLayout();
             try
             {
                 RefreshPrintTilesFromVisibleRows();
-                dgvJobs.Visible = !isTilesMode;
+                dgvJobs.Visible = !isTilesMode && !useEmbeddedPrototypeList;
+                if (useEmbeddedPrototypeList)
+                {
+                    _embeddedOrdersTreePrototypeControl!.Visible = !isTilesMode;
+                    if (!isTilesMode)
+                        RefreshEmbeddedOrdersTreePrototypeSnapshot();
+                }
                 _lvPrintTiles.Visible = isTilesMode;
                 if (isTilesMode)
                     _lvPrintTiles.BringToFront();
+                else if (useEmbeddedPrototypeList)
+                    _embeddedOrdersTreePrototypeControl!.BringToFront();
                 else
                     dgvJobs.BringToFront();
 
@@ -811,6 +820,15 @@ namespace Replica
 
             try
             {
+                var preferredColumnIndex = colPrint.Index >= 0 ? colPrint.Index : colStatus.Index;
+                if (_ordersGridAdapter != null)
+                {
+                    return _ordersGridAdapter.ApplySelectionByOrderInternalIds(
+                        selectedOrderInternalIds,
+                        preferredOrderInternalId,
+                        preferredColumnIndex);
+                }
+
                 dgvJobs.ClearSelection();
 
                 if (selectedOrderInternalIds.Count == 0)
@@ -819,7 +837,6 @@ namespace Replica
                     return false;
                 }
 
-                var targetColumnIndex = colPrint.Index >= 0 ? colPrint.Index : colStatus.Index;
                 DataGridViewRow? firstSelectedRow = null;
                 DataGridViewRow? preferredSelectedRow = null;
 
@@ -852,7 +869,7 @@ namespace Replica
                     return false;
                 }
 
-                dgvJobs.CurrentCell = rowToFocus.Cells[targetColumnIndex];
+                dgvJobs.CurrentCell = rowToFocus.Cells[preferredColumnIndex];
                 return true;
             }
             finally
@@ -875,6 +892,12 @@ namespace Replica
             _isSyncingGridSelection = true;
             try
             {
+                if (_ordersGridAdapter != null)
+                {
+                    _ordersGridAdapter.ClearSelection();
+                    return;
+                }
+
                 dgvJobs.ClearSelection();
                 dgvJobs.CurrentCell = null;
             }

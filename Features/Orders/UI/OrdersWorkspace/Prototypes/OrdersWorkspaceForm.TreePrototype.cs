@@ -11,6 +11,15 @@ namespace Replica
     {
         private void InitializeTreePrototypeLauncher()
         {
+            if (_useOlvOrdersGridFeatureFlag)
+            {
+                btnTreePrototype.Visible = false;
+                EnsureEmbeddedOrdersTreePrototypeControl();
+                RefreshEmbeddedOrdersTreePrototypeSnapshot();
+                return;
+            }
+
+            btnTreePrototype.Visible = true;
             btnTreePrototype.Click -= BtnTreePrototype_Click;
             btnTreePrototype.Click += BtnTreePrototype_Click;
         }
@@ -30,6 +39,69 @@ namespace Replica
             prototypeForm.ShowDialog(this);
         }
 
+        private void EnsureEmbeddedOrdersTreePrototypeControl()
+        {
+            if (_embeddedOrdersTreePrototypeControl != null && !_embeddedOrdersTreePrototypeControl.IsDisposed)
+                return;
+
+            _embeddedOrdersTreePrototypeControl = new OrdersTreePrototypeControl(BuildOrdersTreePrototypeSnapshot())
+            {
+                Visible = false
+            };
+            _embeddedOrdersTreePrototypeControl.RefreshRequested += (_, _) => RefreshEmbeddedOrdersTreePrototypeSnapshot();
+            _embeddedOrdersTreePrototypeControl.StageCellClick += PrototypeForm_StageCellClick;
+            _embeddedOrdersTreePrototypeControl.StageCellContextMenuRequested += PrototypeForm_StageCellContextMenuRequested;
+            _embeddedOrdersTreePrototypeControl.StageFileDropRequested += PrototypeForm_StageFileDropRequested;
+            _embeddedOrdersTreePrototypeControl.SelectionRowTagChanged += EmbeddedOrdersTreePrototypeControl_SelectionRowTagChanged;
+            pnlTable.Controls.Add(_embeddedOrdersTreePrototypeControl);
+        }
+
+        private bool IsEmbeddedOrdersTreePrototypeEnabled()
+        {
+            return _useOlvOrdersGridFeatureFlag
+                && _embeddedOrdersTreePrototypeControl != null
+                && !_embeddedOrdersTreePrototypeControl.IsDisposed;
+        }
+
+        private void RefreshEmbeddedOrdersTreePrototypeSnapshot()
+        {
+            if (!IsEmbeddedOrdersTreePrototypeEnabled())
+                return;
+
+            _embeddedOrdersTreePrototypeControl!.LoadRoots(BuildOrdersTreePrototypeSnapshot());
+        }
+
+        private void RefreshPrototypeSurfaceFromSender(object? sender)
+        {
+            if (sender is OrdersTreePrototypeForm prototypeForm)
+            {
+                prototypeForm.RefreshFromSource();
+                return;
+            }
+
+            if (sender is OrdersTreePrototypeControl prototypeControl)
+            {
+                prototypeControl.LoadRoots(BuildOrdersTreePrototypeSnapshot());
+                return;
+            }
+
+            RefreshEmbeddedOrdersTreePrototypeSnapshot();
+        }
+
+        private void EmbeddedOrdersTreePrototypeControl_SelectionRowTagChanged(object? sender, string? selectedRowTag)
+        {
+            if (!_useOlvOrdersGridFeatureFlag)
+                return;
+
+            if (string.IsNullOrWhiteSpace(selectedRowTag))
+            {
+                _ordersGridAdapter?.ClearSelection();
+                return;
+            }
+
+            _ordersGridAdapter?.TryRestoreSelectedRowByTag(selectedRowTag);
+        }
+
         private async void PrototypeForm_StageCellClick(object? sender, OrdersPrototypeStageCellClickEventArgs e)
         {
             if (e == null || e.Node == null || !OrderStages.IsFileStage(e.Stage))
@@ -43,9 +115,7 @@ namespace Replica
             try
             {
                 await OpenOrPickPrototypeStageFileAsync(node, e.Stage);
-
-                if (sender is OrdersTreePrototypeForm prototypeForm)
-                    prototypeForm.RefreshFromSource();
+                RefreshPrototypeSurfaceFromSender(sender);
             }
             catch (Exception ex)
             {
@@ -74,9 +144,7 @@ namespace Replica
             try
             {
                 await AddPrototypeFileToStageAsync(e.Node, e.Stage, sourceFile);
-
-                if (sender is OrdersTreePrototypeForm prototypeForm)
-                    prototypeForm.RefreshFromSource();
+                RefreshPrototypeSurfaceFromSender(sender);
             }
             catch (Exception ex)
             {
@@ -137,8 +205,7 @@ namespace Replica
                     : async () =>
                     {
                         await OpenOrPickPrototypeStageFileAsync(e.Node, e.Stage);
-                        if (sender is OrdersTreePrototypeForm prototypeFormAfterPick)
-                            prototypeFormAfterPick.RefreshFromSource();
+                        RefreshPrototypeSurfaceFromSender(sender);
                     },
                 enabled: !isGroupContainer,
                 iconFolder: "addfile",
@@ -154,9 +221,7 @@ namespace Replica
                             RemoveFileFromItem(order, item, e.Stage);
                         else
                             RemoveFileFromOrder(order, e.Stage);
-
-                        if (sender is OrdersTreePrototypeForm prototypeFormAfterRemove)
-                            prototypeFormAfterRemove.RefreshFromSource();
+                        RefreshPrototypeSurfaceFromSender(sender);
                     }
                     : null,
                 hasFile && !isGroupContainer,
@@ -173,9 +238,7 @@ namespace Replica
                             RenameFileForItem(order, item, e.Stage);
                         else
                             RenameFileForOrder(order, e.Stage);
-
-                        if (sender is OrdersTreePrototypeForm prototypeFormAfterRename)
-                            prototypeFormAfterRename.RefreshFromSource();
+                        RefreshPrototypeSurfaceFromSender(sender);
                     }
                     : null,
                 hasFile && !isGroupContainer,
@@ -203,9 +266,7 @@ namespace Replica
                             await PasteFileFromClipboardAsync(order, item, e.Stage);
                         else
                             await PasteFileFromClipboardAsync(order, e.Stage);
-
-                        if (sender is OrdersTreePrototypeForm prototypeFormAfterPaste)
-                            prototypeFormAfterPaste.RefreshFromSource();
+                        RefreshPrototypeSurfaceFromSender(sender);
                     },
                 enabled: !isGroupContainer,
                 iconFolder: "addbox",

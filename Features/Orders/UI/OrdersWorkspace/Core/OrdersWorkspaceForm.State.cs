@@ -58,6 +58,7 @@ namespace Replica
         private readonly ContextMenuStrip _groupOrderContextMenu = new();
         private readonly ContextMenuStrip _printTilesContextMenu = new();
         private readonly Manina.Windows.Forms.ImageListView _lvPrintTiles = new();
+        private OrdersTreePrototypeControl? _embeddedOrdersTreePrototypeControl;
         private readonly ImageList _printTilesImageList = new();
         private PdfAwareFileSystemAdaptor? _pdfThumbnailAdaptor;
         private OrdersViewWarmupCoordinator? _ordersViewWarmupCoordinator;

@@ -40,6 +40,7 @@ namespace Replica
         public event EventHandler<OrdersPrototypeStageCellClickEventArgs>? StageCellClick;
         public event EventHandler<OrdersPrototypeStageCellContextMenuEventArgs>? StageCellContextMenuRequested;
         public event EventHandler<OrdersPrototypeStageFileDropEventArgs>? StageFileDropRequested;
+        public event EventHandler<string?>? SelectionRowTagChanged;
 
         private const string InternalDragSourceRowTagData = "ReplicaOlvSourceRowTag";
         private const string InternalDragSourceStageData = "ReplicaOlvSourceStage";
@@ -209,6 +210,7 @@ namespace Replica
             _treeListView.KeyDown += TreeListView_KeyDown;
             _treeListView.MouseMove += TreeListView_MouseMove;
             _treeListView.MouseUp += TreeListView_MouseUp;
+            _treeListView.SelectedIndexChanged += TreeListView_SelectedIndexChanged;
             _treeListView.DragEnter += TreeListView_DragEnter;
             _treeListView.DragOver += TreeListView_DragOver;
             _treeListView.DragDrop += TreeListView_DragDrop;
@@ -836,6 +838,12 @@ namespace Replica
             }
 
             ShowRowContextMenu(node, e.Location);
+        }
+
+        private void TreeListView_SelectedIndexChanged(object? sender, EventArgs e)
+        {
+            var selectedNode = _treeListView.SelectedObject as OrdersTreePrototypeNode;
+            SelectionRowTagChanged?.Invoke(this, selectedNode?.RowTag);
         }
 
         private void ShowRowContextMenu(OrdersTreePrototypeNode node, Point location)

@@ -9,5 +9,7 @@ namespace Replica
         bool TryRestoreSelectedRowByTag(string selectedTag);
         IReadOnlyList<string> GetSelectedOrderInternalIds();
         IReadOnlyList<OrdersGridVisibleRowSnapshot> GetVisibleOrderRows();
+        bool ApplySelectionByOrderInternalIds(ISet<string> selectedOrderInternalIds, string? preferredOrderInternalId, int preferredColumnIndex);
+        void ClearSelection();
     }
 }
