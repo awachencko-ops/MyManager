@@ -39,6 +39,8 @@ namespace Replica
             _lanApiIdentityService = services.LanApiIdentityService;
             _lanOrderPushClient = services.LanOrderPushClient;
             InitializeComponent();
+            OrdersWorkspaceIconCatalog.QueueWarmup();
+            InitializeMainToolbarIcons();
             InitializeDockSidebar();
             InitializeStatusCellVisuals();
             InitializeUserProfilePanel();

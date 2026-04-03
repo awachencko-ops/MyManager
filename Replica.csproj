@@ -14,7 +14,6 @@
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="8.0.8" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.8" />
     <PackageReference Include="Npgsql" Version="8.0.4" />
-    <PackageReference Include="ObjectListView.Repack.Core3" Version="2.9.3" />
     <PackageReference Include="PdfiumViewer.Native.x86_64.v8-xfa" Version="2018.4.8.256" />
     <PackageReference Include="PdfiumViewer.Updated" Version="2.14.5" />
     <PackageReference Include="PDFsharp" Version="6.2.4" />
@@ -29,6 +28,7 @@
     <Compile Remove="Replica.Shared\**\*.cs" />
     <Compile Remove="tools\**\*.cs" />
     <Compile Remove=".codex_build_out\**\*.cs" />
+    <Compile Remove="lib\**\*.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -38,8 +38,10 @@
     <EmbeddedResource Remove="Features\Orders\UI\OrdersWorkspace\FileOps\OrdersWorkspaceForm.FileOps.GridInteractions.resx" />
     <EmbeddedResource Remove="tests\**\*.resx" />
     <EmbeddedResource Remove=".codex_build_out\**\*.resx" />
+    <EmbeddedResource Remove="lib\**\*.resx" />
     <None Remove="Features\Orders\UI\OrdersWorkspace\Core\OrdersWorkspaceForm.ArchiveSync.resx" />
     <None Remove="Features\Orders\UI\OrdersWorkspace\FileOps\OrdersWorkspaceForm.FileOps.GridInteractions.resx" />
+    <None Remove="lib\**\*" />
   </ItemGroup>
 
   <ItemGroup>
@@ -68,6 +70,7 @@
 
   <ItemGroup>
     <ProjectReference Include="Replica.Shared\Replica.Shared.csproj" />
+    <ProjectReference Include="lib\ObjectListViewRepack\cs\trunk\ObjectListView\ObjectListView2019Core3.csproj" />
   </ItemGroup>
 
 </Project>

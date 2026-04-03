@@ -283,42 +283,8 @@ namespace Replica
 
         private static Bitmap CreateDropDownGlyphIcon(int iconSize)
         {
-            var svgPath = ResolveDropDownGlyphSvgPath();
-            if (!string.IsNullOrWhiteSpace(svgPath))
-            {
-                try
-                {
-                    var svg = SvgDocument.Open<SvgDocument>(svgPath);
-                    svg.Width = iconSize;
-                    svg.Height = iconSize;
-                    var rendered = svg.Draw(iconSize, iconSize);
-                    if (rendered != null)
-                        return rendered;
-                }
-                catch
-                {
-                    // Если SVG недоступен/поврежден, используем внутреннюю отрисовку.
-                }
-            }
-
+            // Restore previous compact "галочка" style used in legacy filters.
             return CreateFallbackDropDownGlyphIcon(iconSize);
-        }
-
-        private static string? ResolveDropDownGlyphSvgPath()
-        {
-            var candidates = new[]
-            {
-                Path.Combine(AppContext.BaseDirectory, "Icons", "arrow_drop_down.svg"),
-                Path.Combine(AppContext.BaseDirectory, "arrow_drop_down.svg")
-            };
-
-            foreach (var candidate in candidates)
-            {
-                if (File.Exists(candidate))
-                    return candidate;
-            }
-
-            return null;
         }
 
         private static Bitmap CreateFallbackDropDownGlyphIcon(int iconSize)

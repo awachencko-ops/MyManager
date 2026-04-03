@@ -16,7 +16,7 @@
 1. Иерархия: `TreeListView`.
 2. Визуал: `FormatRow/FormatCell` + row/header palette, `RowHeight`, `CellPadding`.
 3. Сортировка: включена, с индикаторами.
-4. Статусные иконки в первой колонке (`SmallImageList` + `ImageGetter`).
+4. Статусная колонка рисуется кастомно через `RendererDelegate` (иконка + фон + маркер активности) без `SmallImageList`, чтобы не было лишнего tree-отступа в первой колонке.
 5. Stage UX: `hand` cursor и tooltip в file-stage ячейках.
 6. Контекстные меню строки и stage-ячеек с иконками и быстрыми действиями.
 

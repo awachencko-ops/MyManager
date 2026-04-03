@@ -344,16 +344,23 @@ namespace Replica
         private void ShowPrintTileContextMenu(OrderData order, PrintTileTag tileTag, Point location)
         {
             _printTilesContextMenu.Items.Clear();
-            AddPrintTileMenuItem("📁 Открыть папку", () => OpenPrintTileFolder(order, tileTag));
+            AddPrintTileMenuItem("Открыть папку", () => OpenPrintTileFolder(order, tileTag), "file", "folder_open");
             _printTilesContextMenu.Items.Add(new ToolStripSeparator());
-            AddPrintTileMenuItem("✏️ Переименовать файл", () => RenamePrintTileFile(order, tileTag));
-            AddPrintTileMenuItem("📋 Копировать путь в буфер", () => CopyExistingPathToClipboard(tileTag.PrintPath));
+            AddPrintTileMenuItem("Переименовать файл", () => RenamePrintTileFile(order, tileTag), "file", "drive_file_rename_outline");
+            AddPrintTileMenuItem("Копировать путь в буфер", () => CopyExistingPathToClipboard(tileTag.PrintPath), "content", "content_copy");
             _printTilesContextMenu.Show(_lvPrintTiles, location);
         }
 
-        private void AddPrintTileMenuItem(string text, Action onClick)
+        private void AddPrintTileMenuItem(string text, Action onClick, string? iconFolder = null, string? iconHint = null)
         {
             var menuItem = new ToolStripMenuItem(text);
+            if (!string.IsNullOrWhiteSpace(iconFolder))
+            {
+                var icon = OrdersWorkspaceIconCatalog.LoadIcon(iconFolder, iconHint ?? string.Empty, size: 16);
+                if (icon != null)
+                    menuItem.Image = icon;
+            }
+
             menuItem.Click += (_, _) => onClick();
             _printTilesContextMenu.Items.Add(menuItem);
         }

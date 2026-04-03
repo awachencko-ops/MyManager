@@ -51,6 +51,7 @@ namespace Replica
         private static readonly Color OrdersLinkTextColor = Color.FromArgb(95, 126, 168);
         private static readonly Color OrdersHeaderBackColor = Color.White;
         private static readonly Color OrdersHeaderTextColor = Color.Black;
+        private static readonly Color OrdersActiveMarkerColor = Color.FromArgb(122, 167, 217);
         private static readonly Color GroupOrderRowBackColor = Color.FromArgb(255, 252, 244);
         private static readonly Color GroupOrderRowSelectedBackColor = Color.FromArgb(255, 246, 232);
         private static readonly Color GroupOrderItemRowBaseBackColor = Color.FromArgb(255, 255, 255);
@@ -86,7 +87,7 @@ namespace Replica
             _topPanel.Height = 44;
             _topPanel.Padding = new Padding(8, 6, 8, 6);
 
-            _btnExpandAll.Text = "Развернуть всё";
+            _btnExpandAll.Text = "Развернуть";
             _btnExpandAll.Size = new Size(140, 32);
             _btnExpandAll.Location = new Point(8, 6);
             _btnExpandAll.Click += (_, _) => _treeListView.ExpandAll();
@@ -96,7 +97,7 @@ namespace Replica
             _btnCollapseAll.Location = new Point(156, 6);
             _btnCollapseAll.Click += (_, _) => _treeListView.CollapseAll();
 
-            _btnResetSort.Text = "Сбросить сорт";
+            _btnResetSort.Text = "Сбросить";
             _btnResetSort.Size = new Size(125, 32);
             _btnResetSort.Location = new Point(292, 6);
             _btnResetSort.Click += (_, _) => ApplyDefaultSort();
@@ -142,10 +143,12 @@ namespace Replica
             _treeListView.FullRowSelect = true;
             _treeListView.HideSelection = false;
             _treeListView.GridLines = true;
+            _treeListView.AllowColumnReorder = false;
             _treeListView.MultiSelect = false;
             _treeListView.ShowGroups = false;
             _treeListView.View = View.Details;
             _treeListView.AllowDrop = true;
+            _treeListView.OwnerDraw = true;
             _treeListView.ShowSortIndicators = true;
             _treeListView.UseAlternatingBackColors = true;
             _treeListView.BackColor = OrdersRowBaseBackColor;
@@ -210,39 +213,53 @@ namespace Replica
             _treeListView.DragOver += TreeListView_DragOver;
             _treeListView.DragDrop += TreeListView_DragDrop;
             _treeListView.MouseLeave += (_, _) => _treeListView.Cursor = Cursors.Default;
-            _treeListView.TreeColumnRenderer = new TreeListView.TreeRenderer
-            {
-                IsShowGlyphs = true,
-                IsShowLines = true,
-                UseTriangles = true
-            };
-
             ConfigureStatusImageList();
-            _treeListView.SmallImageList = _statusImageList;
 
-            var colOrderOrFile = BuildColumn(
-                title: "№ заказа",
-                width: 320,
-                aspectGetter: row => ((OrdersTreePrototypeNode)row).Title,
-                imageGetter: row => ResolveStatusIconKey((OrdersTreePrototypeNode)row),
+            var colStatus = BuildColumn(
+                title: "Состояние",
+                width: 170,
+                aspectGetter: row => ((OrdersTreePrototypeNode)row).Status,
                 textAlign: HorizontalAlignment.Left,
+                fillsFreeSpace: false);
+            colStatus.Renderer = new StatusCellRenderer(_statusImageList);
+            var colOrderNumber = BuildColumn(
+                title: "№ заказа",
+                width: 160,
+                aspectGetter: row => ((OrdersTreePrototypeNode)row).Title,
+                textAlign: HorizontalAlignment.Left,
+                fillsFreeSpace: false);
+            var colSource = BuildColumn("Исходные", 220, row => ((OrdersTreePrototypeNode)row).Source);
+            var colPrepared = BuildColumn(
+                "Заголовок задания",
+                300,
+                row => ((OrdersTreePrototypeNode)row).Prepared,
+                HorizontalAlignment.Left,
                 fillsFreeSpace: true);
-            var colStatus = BuildColumn("Состояние", 140, row => ((OrdersTreePrototypeNode)row).Status);
-            var colSource = BuildColumn("Прием файла", 220, row => ((OrdersTreePrototypeNode)row).Source);
-            var colPrepared = BuildColumn("Подготовка", 220, row => ((OrdersTreePrototypeNode)row).Prepared);
-            var colPitStop = BuildColumn("Проверка файлов", 150, row => ((OrdersTreePrototypeNode)row).PitStop);
-            var colImposing = BuildColumn("Спуск полос", 130, row => ((OrdersTreePrototypeNode)row).Imposing);
-            var colPrint = BuildColumn("Готов к печати", 220, row => ((OrdersTreePrototypeNode)row).Print);
-            var colReceived = BuildColumn("Заказ принят", 120, row => ((OrdersTreePrototypeNode)row).ReceivedSortTicks, HorizontalAlignment.Center);
-            var colCreated = BuildColumn("В препрессе", 120, row => ((OrdersTreePrototypeNode)row).CreatedSortTicks, HorizontalAlignment.Center);
+            var colPitStop = BuildColumn("Проверка файлов", 180, row => ((OrdersTreePrototypeNode)row).PitStop);
+            var colImposing = BuildColumn("Спуск полос", 175, row => ((OrdersTreePrototypeNode)row).Imposing);
+            var colPrint = BuildColumn("Готов к печати", 170, row => ((OrdersTreePrototypeNode)row).Print);
+            var colReceived = BuildColumn("Заказ принят", 130, row => ((OrdersTreePrototypeNode)row).ReceivedSortTicks, HorizontalAlignment.Center);
+            var colCreated = BuildColumn("В препрессе", 130, row => ((OrdersTreePrototypeNode)row).CreatedSortTicks, HorizontalAlignment.Center);
             colReceived.AspectToStringConverter = FormatDateFromSortTicks;
             colCreated.AspectToStringConverter = FormatDateFromSortTicks;
 
-            var columns = new[]
+            var allColumns = new[]
             {
-                colOrderOrFile,
                 colStatus,
+                colOrderNumber,
                 colSource,
+                colPrepared,
+                colPitStop,
+                colImposing,
+                colPrint,
+                colReceived,
+                colCreated
+            };
+
+            var visibleColumns = new[]
+            {
+                colStatus,
+                colOrderNumber,
                 colPrepared,
                 colPitStop,
                 colImposing,
@@ -253,12 +270,19 @@ namespace Replica
 
             _treeListView.AllColumns.Clear();
             _treeListView.Columns.Clear();
-            _treeListView.AllColumns.AddRange(columns);
-            _treeListView.Columns.AddRange(columns);
+            _treeListView.AllColumns.AddRange(allColumns);
+            _treeListView.Columns.AddRange(visibleColumns);
             _sourceStageColumn = colSource;
             _preparedStageColumn = colPrepared;
             _printStageColumn = colPrint;
-            _defaultSortColumn = columns[8];
+            _defaultSortColumn = colCreated;
+            _treeListView.TreeColumnRenderer = new TreeListView.TreeRenderer
+            {
+                Column = colOrderNumber,
+                IsShowGlyphs = true,
+                IsShowLines = false,
+                UseTriangles = true
+            };
             ApplyDefaultSort();
         }
 
@@ -658,9 +682,8 @@ namespace Replica
         {
             return columnIndex switch
             {
-                2 => OrderStages.Source,
-                3 => OrderStages.Prepared,
-                6 => OrderStages.Print,
+                2 => OrderStages.Prepared,
+                5 => OrderStages.Print,
                 _ => OrderStages.None
             };
         }
@@ -863,7 +886,7 @@ namespace Replica
                     iconFolder: "files",
                     iconHint: "files");
 
-            if (!node.HasChildren && !string.IsNullOrWhiteSpace(node.Title))
+            if (!node.HasChildren && !node.IsContainer && !string.IsNullOrWhiteSpace(node.Title))
                 AddRowContextMenuItem(
                     "Копировать имя файла",
                     () => TryCopyToClipboard(node.Title),
@@ -1058,40 +1081,8 @@ namespace Replica
 
         private static Bitmap? TryLoadStatusIcon(string iconFolder, string fileHint)
         {
-            var searchFolders = new[]
-            {
-                Path.Combine(AppContext.BaseDirectory, "Icons", iconFolder),
-                Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "Icons", iconFolder),
-                Path.Combine(Environment.CurrentDirectory, "Icons", iconFolder)
-            };
-
-            foreach (var folder in searchFolders.Distinct(StringComparer.OrdinalIgnoreCase))
-            {
-                try
-                {
-                    var full = Path.GetFullPath(folder);
-                    if (!Directory.Exists(full))
-                        continue;
-
-                    var candidate = Directory.GetFiles(full, "*.png", SearchOption.TopDirectoryOnly)
-                        .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
-                        .FirstOrDefault(path => Path.GetFileName(path).Contains(fileHint, StringComparison.OrdinalIgnoreCase))
-                        ?? Directory.GetFiles(full, "*.png", SearchOption.TopDirectoryOnly)
-                            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
-                            .FirstOrDefault();
-                    if (string.IsNullOrWhiteSpace(candidate))
-                        continue;
-
-                    using var raw = Image.FromFile(candidate);
-                    return new Bitmap(raw, new Size(16, 16));
-                }
-                catch
-                {
-                    // Ignore bad icon candidates and continue with fallbacks.
-                }
-            }
-
-            return null;
+            var icon = OrdersWorkspaceIconCatalog.LoadIcon(iconFolder, fileHint, size: 16);
+            return icon != null ? new Bitmap(icon) : null;
         }
 
         private string BuildStageCellToolTip(OLVColumn column, object modelObject)
@@ -1191,6 +1182,153 @@ namespace Replica
             return "status-waiting";
         }
 
+        private static Color ResolveStatusIconBackColor(OrdersTreePrototypeNode node)
+        {
+            if (node == null)
+                return Color.White;
+
+            if (node.HasChildren)
+                return Color.FromArgb(247, 200, 119);
+
+            var normalized = WorkflowStatusNames.Normalize(node.Status);
+            if (string.IsNullOrWhiteSpace(normalized))
+                return Color.White;
+
+            if (string.Equals(normalized, WorkflowStatusNames.Completed, StringComparison.Ordinal)
+                || string.Equals(normalized, WorkflowStatusNames.Printed, StringComparison.Ordinal))
+            {
+                return Color.FromArgb(198, 234, 198);
+            }
+
+            if (string.Equals(normalized, WorkflowStatusNames.Processed, StringComparison.Ordinal))
+                return Color.FromArgb(255, 232, 205);
+
+            if (string.Equals(normalized, WorkflowStatusNames.Processing, StringComparison.Ordinal))
+                return Color.FromArgb(255, 248, 205);
+
+            if (string.Equals(normalized, WorkflowStatusNames.Error, StringComparison.Ordinal))
+                return Color.FromArgb(255, 204, 204);
+
+            return Color.White;
+        }
+
+        private static Image? ResolveStatusImage(ImageList imageList, OrdersTreePrototypeNode node)
+        {
+            if (imageList == null)
+                return null;
+
+            var key = ResolveStatusIconKey(node);
+            return imageList.Images.ContainsKey(key)
+                ? imageList.Images[key]
+                : null;
+        }
+
+        private static void DrawStatusCellCore(
+            Graphics g,
+            Rectangle r,
+            OrdersTreePrototypeNode node,
+            bool isSelected,
+            Color rowBackColor,
+            Font? font,
+            ImageList imageList)
+        {
+            var contentBounds = Rectangle.Inflate(r, -1, -1);
+            if (contentBounds.Width <= 0 || contentBounds.Height <= 0)
+                return;
+
+            using (var backBrush = new SolidBrush(rowBackColor))
+            {
+                g.FillRectangle(backBrush, contentBounds);
+            }
+
+            const int markerWidth = 3;
+            var markerRect = new Rectangle(contentBounds.Left, contentBounds.Top, markerWidth, contentBounds.Height);
+            if (isSelected)
+            {
+                using var markerBrush = new SolidBrush(OrdersActiveMarkerColor);
+                g.FillRectangle(markerBrush, markerRect);
+            }
+
+            var iconBackWidth = Math.Min(40, Math.Max(28, contentBounds.Width / 4));
+            var iconBackRect = new Rectangle(
+                markerRect.Right,
+                contentBounds.Top,
+                iconBackWidth,
+                contentBounds.Height);
+            using (var iconBackBrush = new SolidBrush(ResolveStatusIconBackColor(node)))
+            {
+                g.FillRectangle(iconBackBrush, iconBackRect);
+            }
+
+            var icon = ResolveStatusImage(imageList, node);
+            if (icon != null)
+            {
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                var iconSize = Math.Max(12, Math.Min(18, iconBackRect.Height - 8));
+                var iconRect = new Rectangle(
+                    iconBackRect.Left + (iconBackRect.Width - iconSize) / 2,
+                    iconBackRect.Top + (iconBackRect.Height - iconSize) / 2,
+                    iconSize,
+                    iconSize);
+                g.DrawImage(icon, iconRect);
+            }
+
+            var textBounds = new Rectangle(
+                iconBackRect.Right + 8,
+                contentBounds.Top,
+                Math.Max(0, contentBounds.Right - (iconBackRect.Right + 10)),
+                contentBounds.Height);
+            TextRenderer.DrawText(
+                g,
+                node.Status ?? string.Empty,
+                font ?? SystemFonts.MessageBoxFont,
+                textBounds,
+                Color.Black,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+        }
+
+        private sealed class StatusCellRenderer : BaseRenderer
+        {
+            private readonly ImageList _imageList;
+
+            public StatusCellRenderer(ImageList imageList)
+            {
+                _imageList = imageList ?? throw new ArgumentNullException(nameof(imageList));
+            }
+
+            public override bool RenderSubItem(
+                DrawListViewSubItemEventArgs e,
+                Graphics g,
+                Rectangle r,
+                object rowObject)
+            {
+                if (rowObject is not OrdersTreePrototypeNode node)
+                    return base.RenderSubItem(e, g, r, rowObject);
+
+                var rowBackColor = e.SubItem?.BackColor ?? e.Item?.BackColor ?? OrdersRowBaseBackColor;
+                var font = e.SubItem?.Font ?? e.Item?.Font;
+                var isSelected = e.Item?.Selected ?? false;
+                DrawStatusCellCore(g, r, node, isSelected, rowBackColor, font, _imageList);
+                return true;
+            }
+
+            public override bool RenderItem(
+                DrawListViewItemEventArgs e,
+                Graphics g,
+                Rectangle r,
+                object rowObject)
+            {
+                if (rowObject is not OrdersTreePrototypeNode node)
+                    return base.RenderItem(e, g, r, rowObject);
+
+                var rowBackColor = e.Item?.BackColor ?? OrdersRowBaseBackColor;
+                var font = e.Item?.Font;
+                var isSelected = e.Item?.Selected ?? false;
+                DrawStatusCellCore(g, r, node, isSelected, rowBackColor, font, _imageList);
+                return true;
+            }
+        }
+
         private static string FormatDateFromSortTicks(object value)
         {
             var ticks = 0L;
@@ -1220,6 +1358,7 @@ namespace Replica
             if (node.HasChildren)
             {
                 item.BackColor = item.Selected ? GroupOrderRowSelectedBackColor : GroupOrderRowBackColor;
+                PaintStatusSubItem(item, node);
                 PaintStageSubItems(item, node, isGroupContainer: true);
                 return;
             }
@@ -1228,19 +1367,30 @@ namespace Replica
             {
                 var baseBack = item.Index % 2 == 0 ? GroupOrderItemRowBaseBackColor : GroupOrderItemRowZebraBackColor;
                 item.BackColor = item.Selected ? GroupOrderItemRowSelectedBackColor : baseBack;
+                PaintStatusSubItem(item, node);
                 PaintStageSubItems(item, node, isGroupContainer: false);
                 return;
             }
 
             item.BackColor = item.Selected ? OrdersRowSelectedBackColor : (item.Index % 2 == 0 ? OrdersRowBaseBackColor : OrdersRowZebraBackColor);
+            PaintStatusSubItem(item, node);
             PaintStageSubItems(item, node, isGroupContainer: false);
+        }
+
+        private static void PaintStatusSubItem(OLVListItem item, OrdersTreePrototypeNode node)
+        {
+            if (item.SubItems.Count <= 0)
+                return;
+
+            var subItem = item.SubItems[0];
+            subItem.ForeColor = Color.Black;
+            subItem.BackColor = item.BackColor;
         }
 
         private static void PaintStageSubItems(OLVListItem item, OrdersTreePrototypeNode node, bool isGroupContainer)
         {
-            PaintStageSubItem(item, node, stage: OrderStages.Source, subItemIndex: 2, isGroupContainer);
-            PaintStageSubItem(item, node, stage: OrderStages.Prepared, subItemIndex: 3, isGroupContainer);
-            PaintStageSubItem(item, node, stage: OrderStages.Print, subItemIndex: 6, isGroupContainer);
+            PaintStageSubItem(item, node, stage: OrderStages.Prepared, subItemIndex: 2, isGroupContainer);
+            PaintStageSubItem(item, node, stage: OrderStages.Print, subItemIndex: 5, isGroupContainer);
         }
 
         private static void PaintStageSubItem(

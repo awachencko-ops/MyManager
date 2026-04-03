@@ -223,16 +223,18 @@ namespace Replica
 
             var isExpanded = _expandedOrderIds.Contains(order.InternalId);
             var expandCaption = isExpanded ? "Свернуть" : "Развернуть";
-            AddGroupOrderMenuItem(expandCaption, () => ToggleOrderExpanded(order.InternalId));
+            AddGroupOrderMenuItem(expandCaption, () => ToggleOrderExpanded(order.InternalId), iconFolder: "navigation", iconHint: "expand_more");
 
             var hasCommonFolder = TryGetBrowseFolderPathForOrder(order, out var commonFolderPath, out var folderReason);
             AddGroupOrderMenuItem(
                 "Открыть папку",
                 hasCommonFolder ? () => OpenOrderFolderPath(commonFolderPath) : null,
                 hasCommonFolder,
-                folderReason);
+                folderReason,
+                iconFolder: "file",
+                iconHint: "folder_open");
 
-            AddGroupOrderMenuItem("Открыть лог заказа", () => OpenOrderLogForOrderOnly(order));
+            AddGroupOrderMenuItem("Открыть лог заказа", () => OpenOrderLogForOrderOnly(order), iconFolder: "action", iconHint: "terminal");
 
             if (_groupOrderContextMenu.Items.Count == 0)
                 return;
@@ -240,12 +242,25 @@ namespace Replica
             _groupOrderContextMenu.Show(Cursor.Position);
         }
 
-        private void AddGroupOrderMenuItem(string text, Action? action, bool enabled = true, string? toolTipText = null)
+        private void AddGroupOrderMenuItem(
+            string text,
+            Action? action,
+            bool enabled = true,
+            string? toolTipText = null,
+            string? iconFolder = null,
+            string? iconHint = null)
         {
             var menuItem = new ToolStripMenuItem(text)
             {
                 Enabled = enabled
             };
+
+            if (!string.IsNullOrWhiteSpace(iconFolder))
+            {
+                var icon = OrdersWorkspaceIconCatalog.LoadIcon(iconFolder, iconHint ?? string.Empty, size: 16);
+                if (icon != null)
+                    menuItem.Image = icon;
+            }
 
             if (!string.IsNullOrWhiteSpace(toolTipText))
                 menuItem.ToolTipText = toolTipText;

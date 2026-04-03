@@ -54,18 +54,21 @@ namespace Replica
                 DockWorkspaceGroup.Orders,
                 pnl_Orders,
                 pictureBox1,
-                Path.Combine("Icons", "cards", "cards_24dp_1F1F1F_FILL0_wght400_GRAD0_opsz24.png"));
+                "action",
+                "view_cozy");
 
             ConfigureWorkspaceDockButton(
                 DockWorkspaceGroup.Literature,
                 pnlDockLiterature,
                 pictureBox4,
-                Path.Combine("Icons", "file export", "file_export_24dp_1F1F1F_FILL0_wght400_GRAD0_opsz24.png"));
+                "action",
+                "description");
             ConfigureWorkspaceDockButton(
                 DockWorkspaceGroup.Utilities,
                 pnlDockUtilities,
                 pictureBox3,
-                Path.Combine("Icons", "settings", "settings_24dp_1F1F1F_FILL1_wght400_GRAD0_opsz24.png"));
+                "action",
+                "settings");
 
             SetDockWorkspace(DockWorkspaceGroup.Orders);
         }
@@ -93,7 +96,8 @@ namespace Replica
             DockWorkspaceGroup workspace,
             Panel buttonPanel,
             PictureBox iconHost,
-            string iconRelativePath)
+            string iconFolder,
+            string iconHint)
         {
             buttonPanel.BackColor = DockButtonBackColor;
             buttonPanel.Tag = workspace;
@@ -105,7 +109,7 @@ namespace Replica
             iconHost.TabStop = false;
             iconHost.Cursor = Cursors.Hand;
             iconHost.Tag = workspace;
-            RegisterDockWorkspaceIcons(workspace, iconHost, iconRelativePath);
+            RegisterDockWorkspaceIcons(workspace, iconHost, iconFolder, iconHint);
 
             WireWorkspaceDockControl(buttonPanel);
             WireWorkspaceDockControl(iconHost);
@@ -264,11 +268,12 @@ namespace Replica
         private void RegisterDockWorkspaceIcons(
             DockWorkspaceGroup workspace,
             PictureBox iconHost,
-            string iconRelativePath)
+            string iconFolder,
+            string iconHint)
         {
             DisposeDockWorkspaceIcons(workspace);
 
-            var baseIcon = LoadDockIcon(iconRelativePath, 30);
+            var baseIcon = LoadDockIcon(iconFolder, iconHint, 30);
             _dockInactiveIconsByWorkspace[workspace] = RecolorDockIcon(baseIcon, DockButtonIconColor);
             _dockHoverIconsByWorkspace[workspace] = RecolorDockIcon(baseIcon, DockButtonHoverIconColor);
             _dockActiveIconsByWorkspace[workspace] = RecolorDockIcon(baseIcon, DockButtonActiveIconColor);
@@ -374,22 +379,11 @@ namespace Replica
             return new Bitmap(SystemIcons.Application.ToBitmap(), new Size(targetSize, targetSize));
         }
 
-        private static Image LoadDockIcon(string relativePath, int targetSize)
+        private static Image LoadDockIcon(string iconFolder, string iconHint, int targetSize)
         {
-            try
-            {
-                var iconPath = Path.Combine(AppContext.BaseDirectory, relativePath);
-                if (File.Exists(iconPath))
-                {
-                    using var stream = File.OpenRead(iconPath);
-                    using var image = Image.FromStream(stream);
-                    return new Bitmap(image, new Size(targetSize, targetSize));
-                }
-            }
-            catch
-            {
-                // fallback below
-            }
+            var icon = OrdersWorkspaceIconCatalog.LoadIcon(iconFolder, iconHint, targetSize);
+            if (icon != null)
+                return new Bitmap(icon, new Size(targetSize, targetSize));
 
             return new Bitmap(SystemIcons.Application.ToBitmap(), new Size(targetSize, targetSize));
         }

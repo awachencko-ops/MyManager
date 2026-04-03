@@ -13,7 +13,12 @@ namespace Replica
             Func<int> focusColumnIndexProvider)
         {
             if (useOlvAdapter)
-                return new OlvPrototypeOrdersGridAdapter();
+            {
+                return new OlvPrototypeOrdersGridAdapter(
+                    dataGrid,
+                    orderHistoryProvider,
+                    focusColumnIndexProvider);
+            }
 
             return new DataGridViewOrdersGridAdapter(dataGrid, orderHistoryProvider, focusColumnIndexProvider);
         }

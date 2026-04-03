@@ -2,8 +2,6 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
-using System.IO;
-using System.Linq;
 using System.Windows.Forms;
 
 namespace Replica
@@ -134,77 +132,7 @@ namespace Replica
 
         private static Image? LoadStatusCellIcon(string iconFolder, string fileNameHint, params (string Folder, string FileNameHint)[] fallbacks)
         {
-            var iconSources = new List<(string Folder, string FileNameHint)> { (iconFolder, fileNameHint) };
-            if (fallbacks != null && fallbacks.Length > 0)
-                iconSources.AddRange(fallbacks);
-
-            foreach (var source in iconSources)
-            {
-                if (string.IsNullOrWhiteSpace(source.Folder))
-                    continue;
-
-                var icon = LoadStatusCellIconFromFolder(source.Folder, source.FileNameHint);
-                if (icon != null)
-                    return icon;
-            }
-
-            return null;
-        }
-
-        private static Image? LoadStatusCellIconFromFolder(string iconFolder, string fileNameHint)
-        {
-            var searchFolders = new[]
-            {
-                Path.Combine(AppContext.BaseDirectory, "Icons", iconFolder),
-                Path.Combine(AppContext.BaseDirectory, iconFolder),
-                Path.Combine(Environment.CurrentDirectory, "Icons", iconFolder),
-                Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "Icons", iconFolder)
-            };
-
-            foreach (var searchFolder in searchFolders.Distinct(StringComparer.OrdinalIgnoreCase))
-            {
-                try
-                {
-                    var fullFolderPath = Path.GetFullPath(searchFolder);
-                    if (!Directory.Exists(fullFolderPath))
-                        continue;
-
-                    var iconPath = ResolveIconPath(fullFolderPath, fileNameHint);
-                    if (string.IsNullOrWhiteSpace(iconPath))
-                        continue;
-
-                    using var memory = new MemoryStream(File.ReadAllBytes(iconPath));
-                    using var loaded = Image.FromStream(memory);
-                    return new Bitmap(loaded);
-                }
-                catch
-                {
-                    // Ignore invalid or inaccessible candidates.
-                }
-            }
-
-            return null;
-        }
-
-        private static string? ResolveIconPath(string folderPath, string? fileNameHint)
-        {
-            var pngFiles = Directory.GetFiles(folderPath, "*.png", SearchOption.TopDirectoryOnly)
-                .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-            if (pngFiles.Length == 0)
-                return null;
-
-            if (string.IsNullOrWhiteSpace(fileNameHint))
-                return pngFiles[0];
-
-            foreach (var pngFile in pngFiles)
-            {
-                var fileName = Path.GetFileName(pngFile);
-                if (fileName.Contains(fileNameHint, StringComparison.OrdinalIgnoreCase))
-                    return pngFile;
-            }
-
-            return null;
+            return OrdersWorkspaceIconCatalog.LoadIcon(iconFolder, fileNameHint, size: 16, fallbacks);
         }
 
         private bool TryPaintStatusCell(DataGridViewCellPaintingEventArgs e)
